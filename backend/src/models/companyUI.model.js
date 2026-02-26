@@ -1,0 +1,77 @@
+import mongoose from "mongoose";
+
+const companyUISchema = new mongoose.Schema(
+  {
+    headerLogo: {
+      public_id: String,
+      url: String,
+    },
+    footerLogo: {
+      public_id: String,
+      url: String,
+    },
+    signature: {
+      public_id: String,
+      url: String,
+    },
+
+    qrCodes: [
+      {
+        name: String,
+        color: String,
+        public_id: String,
+        url: String
+      }
+    ],
+
+    // ✅ NEW TESTIMONIAL FIELD
+    testimonials: [
+      {
+        name: { type: String, required: true },
+        address: { type: String },
+        words: { type: String },
+        photo: {
+          public_id: String,
+          url: String,
+        },
+      },
+    ],
+
+    companyName: { 
+      type: String, 
+      required: true, 
+      default: "Iconic Yatra" 
+    },
+
+    contactPerson: String,
+    call: String,
+    support: String,
+    email: String,
+    address: String,
+    website: String,
+    gst: String,
+    about: String,
+    note: String,
+    invoiceTerms: String,
+    pdfFooter: String,
+    currency: String,
+
+    bankIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Bank"
+      }
+    ],
+
+    stats: {
+      staff: { type: String, default: "0/10" },
+      vendor: { type: String, default: "0/10" },
+      agent: { type: String, default: "0/10" },
+      referral: { type: String, default: "0/10" },
+      client: { type: String, default: "0/10" },
+    },
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model("CompanyUI", companyUISchema);
