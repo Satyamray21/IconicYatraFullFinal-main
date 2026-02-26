@@ -102,6 +102,9 @@ app.use("/api/v1/vehicleQT", vehicleQuotationRouter);
 import galleryRoutes from "./src/routers/gallery.routes.js";
 
 app.use("/api/v1/gallery", galleryRoutes);
+
+import careerRoutes from "./src/routers/career.routes.js";
+app.use("/api/v1/career", careerRoutes);
 // ✅ Fix: Load JSON without import
 const swaggerDocument = JSON.parse(fs.readFileSync("./swagger-output.json", "utf-8"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));

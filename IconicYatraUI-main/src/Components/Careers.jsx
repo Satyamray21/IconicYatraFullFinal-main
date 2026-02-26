@@ -33,6 +33,7 @@ import teamImage1 from "../assets/Banner/banner1.jpg";
 import teamImage2 from "../assets/Banner/banner2.jpg";
 import teamImage3 from "../assets/Banner/banner3.jpg";
 import teamImage4 from "../assets/Banner/banner4.jpg";
+import axios from "axios";
 
 // Animation for floating elements
 const float = keyframes`
@@ -44,6 +45,7 @@ const float = keyframes`
 export default function CareersPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const API_URL = `${import.meta.env.VITE_BASE_URL}/api/v1/career/apply`;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -139,61 +141,81 @@ export default function CareersPage() {
   };
 
   // Handle form submit
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    // Basic validation
-    if (
-      !formData.name ||
-      !formData.mobile ||
-      !formData.email ||
-      !formData.subject ||
-      !formData.resume
-    ) {
-      setSnackbarMessage("Please fill in all fields and upload your resume");
-      setSnackbarSeverity("error");
-      setOpenSnackbar(true);
-      return;
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setSnackbarMessage("Please enter a valid email address");
-      setSnackbarSeverity("error");
-      setOpenSnackbar(true);
-      return;
-    }
-
-    // Mobile validation (10 digits)
-    const mobileRegex = /^\d{10}$/;
-    if (!mobileRegex.test(formData.mobile)) {
-      setSnackbarMessage("Please enter a valid 10-digit mobile number");
-      setSnackbarSeverity("error");
-      setOpenSnackbar(true);
-      return;
-    }
-
-    // Show success message
-    setSnackbarMessage(
-      "Application submitted successfully! We'll get back to you soon.",
-    );
-    setSnackbarSeverity("success");
+  // Basic validation
+  if (
+    !formData.name ||
+    !formData.mobile ||
+    !formData.email ||
+    !formData.subject ||
+    !formData.resume
+  ) {
+    setSnackbarMessage("Please fill in all fields and upload your resume");
+    setSnackbarSeverity("error");
     setOpenSnackbar(true);
+    return;
+  }
 
-    // Reset form
-    setFormData({
-      name: "",
-      mobile: "",
-      email: "",
-      subject: "",
-      resume: null,
-    });
-    setResumeName("");
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(formData.email)) {
+    setSnackbarMessage("Please enter a valid email address");
+    setSnackbarSeverity("error");
+    setOpenSnackbar(true);
+    return;
+  }
 
-    // Here you would typically send the data to your backend
-    console.log("Form submitted:", formData);
-  };
+  const mobileRegex = /^\d{10}$/;
+  if (!mobileRegex.test(formData.mobile)) {
+    setSnackbarMessage("Please enter a valid 10-digit mobile number");
+    setSnackbarSeverity("error");
+    setOpenSnackbar(true);
+    return;
+  }
+
+  try {
+    const data = new FormData();
+    data.append("name", formData.name);
+    data.append("mobile", formData.mobile);
+    data.append("email", formData.email);
+    data.append("subject", formData.subject);
+    data.append("resume", formData.resume);
+
+    const response = await axios.post(
+      `${import.meta.env.VITE_BASE_URL}/api/v1/career/apply`,
+      data,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    if (response.data.success) {
+      setSnackbarMessage("Application submitted successfully!");
+      setSnackbarSeverity("success");
+      setOpenSnackbar(true);
+
+      // Reset form
+      setFormData({
+        name: "",
+        mobile: "",
+        email: "",
+        subject: "",
+        resume: null,
+      });
+      setResumeName("");
+    }
+  } catch (error) {
+    setSnackbarMessage(
+      error.response?.data?.message || "Something went wrong"
+    );
+    setSnackbarSeverity("error");
+    setOpenSnackbar(true);
+  }
+};
+
 
   // Handle snackbar close
   const handleCloseSnackbar = (event, reason) => {
@@ -426,7 +448,7 @@ export default function CareersPage() {
               <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
-                  label="Subject"
+                  label="Applying for Role"
                   name="subject"
                   value={formData.subject}
                   onChange={handleInputChange}

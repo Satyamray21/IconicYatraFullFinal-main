@@ -9,6 +9,7 @@ import BusinessIcon from "@mui/icons-material/Business";
 import CollectionsBookmarkIcon from '@mui/icons-material/CollectionsBookmark';
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import AddIcon from "@mui/icons-material/Add";
+import GroupsIcon from "@mui/icons-material/Groups";
 
 const ProfileSidebar = ({ user, activeTab, setActiveTab }) => {
 
@@ -25,7 +26,7 @@ const ProfileSidebar = ({ user, activeTab, setActiveTab }) => {
     };
 
     const activeStyle = {
-        bgcolor: "#e0ebff",
+        bgcolor: "#243e6e",
         borderLeft: "4px solid #1976d2",
         transform: "translateX(4px)"
     };
@@ -95,6 +96,20 @@ const ProfileSidebar = ({ user, activeTab, setActiveTab }) => {
                         <ListItemIcon><CollectionsBookmarkIcon color={activeTab === "gallery" ? "primary" : "inherit"} /></ListItemIcon>
                         <ListItemText primary="Gallery" />
                     </ListItem>
+                    <ListItem
+    sx={{
+        ...menuItemStyle,
+        ...(activeTab === "candidates" && activeStyle)
+    }}
+    onClick={() => setActiveTab("candidates")}
+>
+    <ListItemIcon>
+        <GroupsIcon
+            color={activeTab === "candidates" ? "primary" : "inherit"}
+        />
+    </ListItemIcon>
+    <ListItemText primary="Candidates" />
+</ListItem>
 
                     <ListItem
                         sx={{ ...menuItemStyle, ...(activeTab === "bankDetails" && activeStyle) }}

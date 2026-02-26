@@ -8,6 +8,7 @@ import ProfileDetails from "./components/ProfileDetails";
 import CompanyInfo from "./components/CompanyInfo";
 import AddressDetails from "./components/AddressDetails";
 import CreateAdminForm from "./components/CreateAdminForm";
+import CareerDashboard from "./components/CareerDashboard";
 import BankDetailsPage from "./Bank/Form/BankCard";
 
 const Profile = () => {
@@ -64,6 +65,7 @@ const Profile = () => {
                         {activeTab === "profile" && "My Profile"}
                         {activeTab === "company" && "Company Information"}
                         {activeTab === "gallery" && "Gallery Upload"}
+                         {activeTab === "candidates" && "Candidate Applications"}
                         {/* {activeTab === "address" && "Address Details"} */}
                         {activeTab === "bankDetails" && "Bank Details"}
                         {activeTab === "admin" && "Create New User"}
@@ -82,6 +84,7 @@ const Profile = () => {
                     {activeTab === "profile" && <ProfileDetails user={user} />}
                     {activeTab === "company" && <CompanyInfo />}
                     {activeTab === "gallery" && <AddressDetails user={user} />}
+                    {activeTab === "candidates" && <CareerDashboard />}
                     {activeTab === "admin" && user?.userRole === "Admin" && <CreateAdminForm />}
                     {activeTab === "bankDetails" && <BankDetailsPage />}
                 </Box>

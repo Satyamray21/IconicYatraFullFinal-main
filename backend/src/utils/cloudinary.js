@@ -8,29 +8,33 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const uploadOnCloudinary = async (localFilePath) => {
-    try {
-        if (!localFilePath || !fs.existsSync(localFilePath)) {
-            console.log("No file found at:", localFilePath);
-            return null;
-        }
-
-        const response = await cloudinary.uploader.upload(localFilePath, {
-            resource_type: "auto"
-        });
-
-        fs.unlinkSync(localFilePath);
-        return response;
-
-    } catch (error) {
-        console.error("Upload error:", error.message);
-
-        if (localFilePath && fs.existsSync(localFilePath)) {
-            fs.unlinkSync(localFilePath);
-        }
-
-        return null;
+const uploadOnCloudinary = async (localFilePath, mimetype) => {
+  try {
+    if (!localFilePath || !fs.existsSync(localFilePath)) {
+      console.log("No file found at:", localFilePath);
+      return null;
     }
+
+    const resourceType = mimetype === "application/pdf" ? "raw" : "image";
+
+    const response = await cloudinary.uploader.upload(localFilePath, {
+      resource_type: resourceType,
+    });
+
+    fs.unlinkSync(localFilePath);
+    return response;
+
+  } catch (error) {
+    console.error("Upload error:", error.message);
+
+    if (localFilePath && fs.existsSync(localFilePath)) {
+      fs.unlinkSync(localFilePath);
+    }
+
+    return null;
+  }
 };
+
+
 
 export { uploadOnCloudinary };
