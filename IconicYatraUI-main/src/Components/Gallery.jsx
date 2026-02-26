@@ -1,28 +1,19 @@
-import React from 'react';
+import React,{useEffect} from 'react';
 import Slider from 'react-slick';
 import { Box, Typography, Container } from '@mui/material';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
-import  img1 from "../assets/Gellary/G1.jpeg";
-import  img2 from "../assets/Gellary/G11.jpg";
-import  img3 from "../assets/Gellary/G12.jpg"
-import  img4 from "../assets/Gellary/G9.jpg"
-import  img5 from "../assets/Gellary/G14.jpeg"
-import  img6 from "../assets/Gellary/G6.jpg"
-import  img7 from "../assets/Gellary/G18.jpg"
-import  img8 from "../assets/Gellary/G5.jpeg"
-const galleryImages = [
- img1,
- img2,
- img3,
- img4,
- img5,
- img6,
- img7,
- img8
-];
+import { useDispatch, useSelector } from "react-redux";
+import { fetchGallery } from "../Features/gallerySlice";
 
 const Gallery = () => {
+  const dispatch = useDispatch();
+const { images = [], loading } = useSelector((state) => state.gallery);
+
+useEffect(() => {
+  dispatch(fetchGallery());
+}, [dispatch]);
+
   const settings = {
     dots: false,
     infinite: true,
@@ -32,22 +23,22 @@ const Gallery = () => {
     autoplaySpeed: 2500,
     arrows: false,
     pauseOnHover: true,
-    slidesToShow: 4, // Desktop par 4 images
+    slidesToShow: 4, 
     responsive: [
       {
-        breakpoint: 1200, // large tablets / small desktops
+        breakpoint: 1200, 
         settings: {
           slidesToShow: 3,
         },
       },
       {
-        breakpoint: 900, // tablets
+        breakpoint: 900, 
         settings: {
           slidesToShow: 2,
         },
       },
       {
-        breakpoint: 600, // mobile
+        breakpoint: 600, 
         settings: {
           slidesToShow: 1,
         },
@@ -72,7 +63,7 @@ const Gallery = () => {
       </Typography>
 
       <Slider {...settings}>
-        {galleryImages.map((img, index) => (
+        {images.map((img, index) => (
           <Box
             key={index}
             sx={{
@@ -84,7 +75,7 @@ const Gallery = () => {
           >
             <Box
               component="img"
-              src={img}
+              src={img.url}
               alt={`Gallery ${index + 1}`}
               sx={{
                 width: '100%',
