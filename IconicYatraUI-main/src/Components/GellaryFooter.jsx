@@ -372,7 +372,7 @@ function Gallery() {
             >
               <CardMedia
                 component="img"
-                image={displayedImages[currentIndex].imagePath}
+                image={displayedImages[currentIndex].url}
                 alt="Full Size"
                 sx={{
                   maxWidth: "100%",
