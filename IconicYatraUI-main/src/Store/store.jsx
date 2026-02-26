@@ -5,7 +5,7 @@ import razorpayReducer from "../Features/razorpaySlice";
 import packageReducer from "../Features/packageSlice";
 import paymentReducer from "../Features/paymentSlice";
 import companyUIReducer from "../Features/companyUISlice";
-
+import galleryReducer from "../Features/gallerySlice";
 export const store = configureStore({
     reducer: {
         auth: authReducer,
@@ -13,6 +13,7 @@ export const store = configureStore({
         razorpay: razorpayReducer,
         packages: packageReducer,
         payment: paymentReducer,
-        companyUI:companyUIReducer
+        companyUI:companyUIReducer,
+         gallery: galleryReducer,
     }
 });

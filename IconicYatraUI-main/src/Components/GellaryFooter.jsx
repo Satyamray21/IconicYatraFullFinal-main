@@ -20,7 +20,8 @@ import {
   ArrowForwardIos,
 } from "@mui/icons-material";
 import React, { useState, useEffect } from "react";
-import Gellary from "../Data/Gellary";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchGallery } from "../Features/gallerySlice";
 import galleryBanner from "../assets/Banner/galleryBanner.jpg"
 
 const ITEMS_PER_PAGE = 8;
@@ -29,16 +30,23 @@ function Gallery() {
   const [page, setPage] = useState(1);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [loadedImages, setLoadedImages] = useState({});
-  const totalPages = Math.ceil(Gellary.length / ITEMS_PER_PAGE);
+  const dispatch = useDispatch();
+   const { images = [], loading } = useSelector((state) => state.gallery);
+  const totalPages = Math.ceil(images.length / ITEMS_PER_PAGE);
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  useEffect(() => {
+  dispatch(fetchGallery());
+}, [dispatch]);
 
+ 
   const handleChange = (event, value) => {
     setPage(value);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const displayedImages = Gellary.slice(
+  const displayedImages = images.slice(
     (page - 1) * ITEMS_PER_PAGE,
     page * ITEMS_PER_PAGE
   );
@@ -89,6 +97,13 @@ function Gallery() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [currentIndex]);
+  if (loading) {
+  return (
+    <Typography align="center" sx={{ mt: 10 }}>
+      Loading...
+    </Typography>
+  );
+}
 
   return (
     <>
@@ -202,7 +217,7 @@ function Gallery() {
                     >
                       <CardMedia
                         component="img"
-                        image={photo.imagePath}
+                        image={photo.url}
                         sx={{
                           height: "100%",
                           width: "100%",
