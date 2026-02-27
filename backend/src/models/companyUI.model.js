@@ -20,11 +20,11 @@ const companyUISchema = new mongoose.Schema(
         name: String,
         color: String,
         public_id: String,
-        url: String
-      }
+        url: String,
+      },
     ],
 
-    // ✅ NEW TESTIMONIAL FIELD
+    // ✅ TESTIMONIALS
     testimonials: [
       {
         name: { type: String, required: true },
@@ -37,10 +37,32 @@ const companyUISchema = new mongoose.Schema(
       },
     ],
 
-    companyName: { 
-      type: String, 
-      required: true, 
-      default: "Iconic Yatra" 
+    // ✅ OUR TEAM
+    ourTeam: [
+      {
+        name: { type: String, required: true },
+        designation: { type: String },
+        description: { type: String },
+        photo: {
+          public_id: String,
+          url: String,
+        },
+      },
+    ],
+
+    // ✅ VISION & MISSION
+    ourVision: {
+      type: String,
+    },
+
+    ourMission: {
+      type: String,
+    },
+
+    companyName: {
+      type: String,
+      required: true,
+      default: "Iconic Yatra",
     },
 
     contactPerson: String,
@@ -59,8 +81,8 @@ const companyUISchema = new mongoose.Schema(
     bankIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Bank"
-      }
+        ref: "Bank",
+      },
     ],
 
     stats: {

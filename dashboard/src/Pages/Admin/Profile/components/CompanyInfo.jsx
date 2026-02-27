@@ -46,6 +46,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import PersonIcon from "@mui/icons-material/Person";
 import DeleteIcon from "@mui/icons-material/Delete";
+import GroupIcon from "@mui/icons-material/Group";
 
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -109,10 +110,15 @@ const CompanyProfile = () => {
   const [qrInputs, setQrInputs] = useState([
     { name: "", color: "#1976d2", file: null, preview: null },
   ]);
-const [testimonialInputs, setTestimonialInputs] = useState([
-  { name: "", address: "", words: "", file: null, preview: null },
-]);
-const [editingTestimonial, setEditingTestimonial] = useState(null);
+  const [testimonialInputs, setTestimonialInputs] = useState([
+    { name: "", address: "", words: "", file: null, preview: null },
+  ]);
+  const [teamInputs, setTeamInputs] = useState([
+    { name: "", designation: "", description: "", file: null, preview: null },
+  ]);
+  const [editingTestimonial, setEditingTestimonial] = useState(null);
+  const [editingTeam, setEditingTeam] = useState(null);
+  const [editingQR, setEditingQR] = useState(null);
 
   const formatLabel = (text) =>
     text
@@ -168,16 +174,44 @@ const [editingTestimonial, setEditingTestimonial] = useState(null);
     dispatch(getCompany());
   };
 
+  // ============================
+  // QR CODES FUNCTIONS
+  // ============================
+  
+  // DELETE QR code
+  const handleDeleteQR = async (index) => {
+    const updatedQRCodes = [...companyData.qrCodes];
+    updatedQRCodes.splice(index, 1);
+
+    const formData = new FormData();
+    formData.append("qrCodes", JSON.stringify(updatedQRCodes));
+
+    await dispatch(upsertCompany(formData));
+    dispatch(getCompany());
+  };
+
+  // SAVE edited QR code
+  const handleSaveEditedQR = async (index) => {
+    const updatedQRCodes = [...companyData.qrCodes];
+    updatedQRCodes[index] = {
+      ...updatedQRCodes[index],
+      name: editingQR.name,
+      color: editingQR.color,
+    };
+
+    const formData = new FormData();
+    formData.append("qrCodes", JSON.stringify(updatedQRCodes));
+
+    await dispatch(upsertCompany(formData));
+    dispatch(getCompany());
+
+    setEditingQR(null);
+  };
+
   // Add new QR row
   const addQrField = () => {
     setQrInputs([...qrInputs, { name: "", color: "#1976d2", file: null, preview: null }]);
   };
-const addTestimonialField = () => {
-  setTestimonialInputs([
-    ...testimonialInputs,
-    { name: "", address: "", words: "", file: null, preview: null },
-  ]);
-};
 
   // Handle QR input change
   const handleQrChange = (index, key, value) => {
@@ -211,62 +245,146 @@ const addTestimonialField = () => {
     // reset
     setQrInputs([{ name: "", color: "#1976d2", file: null, preview: null }]);
   };
-const handleTestimonialChange = (index, key, value) => {
-  const updated = [...testimonialInputs];
+  
+  // ============================
+  // TESTIMONIALS FUNCTIONS
+  // ============================
+  
+  const handleTestimonialChange = (index, key, value) => {
+    const updated = [...testimonialInputs];
 
-  if (key === "file" && value) {
-    updated[index][key] = value;
-    updated[index].preview = URL.createObjectURL(value);
-  } else {
-    updated[index][key] = value;
-  }
-
-  setTestimonialInputs(updated);
-};
-const handleTestimonialUpload = async () => {
-  const formData = new FormData();
-
-  testimonialInputs.forEach((t) => {
-    if (t.file) {
-      formData.append("testimonialPhotos", t.file);
-      formData.append("testimonialNames[]", t.name);
-      formData.append("testimonialAddresses[]", t.address);
-      formData.append("testimonialWords[]", t.words);
+    if (key === "file" && value) {
+      updated[index][key] = value;
+      updated[index].preview = URL.createObjectURL(value);
+    } else {
+      updated[index][key] = value;
     }
-  });
 
-  await dispatch(upsertCompany(formData));
-  dispatch(getCompany());
+    setTestimonialInputs(updated);
+  };
+  
+  const handleTestimonialUpload = async () => {
+    const formData = new FormData();
 
-  setTestimonialInputs([
-    { name: "", address: "", words: "", file: null, preview: null },
-  ]);
-};
-// DELETE testimonial
-const handleDeleteExistingTestimonial = async (index) => {
-  const updatedTestimonials = [...companyData.testimonials];
-  updatedTestimonials.splice(index, 1);
+    testimonialInputs.forEach((t) => {
+      if (t.file) {
+        formData.append("testimonialPhotos", t.file);
+        formData.append("testimonialNames[]", t.name);
+        formData.append("testimonialAddresses[]", t.address);
+        formData.append("testimonialWords[]", t.words);
+      }
+    });
 
-  const formData = new FormData();
-  formData.append("testimonials", JSON.stringify(updatedTestimonials));
+    await dispatch(upsertCompany(formData));
+    dispatch(getCompany());
 
-  await dispatch(upsertCompany(formData));
-  dispatch(getCompany());
-};
+    setTestimonialInputs([
+      { name: "", address: "", words: "", file: null, preview: null },
+    ]);
+  };
+  
+  // DELETE testimonial
+  const handleDeleteExistingTestimonial = async (index) => {
+    const updatedTestimonials = [...companyData.testimonials];
+    updatedTestimonials.splice(index, 1);
 
-// SAVE edited testimonial
-const handleSaveExistingTestimonial = async (index) => {
-  const updatedTestimonials = [...companyData.testimonials];
-  updatedTestimonials[index] = editingTestimonial;
+    const formData = new FormData();
+    formData.append("testimonials", JSON.stringify(updatedTestimonials));
 
-  const formData = new FormData();
-  formData.append("testimonials", JSON.stringify(updatedTestimonials));
+    await dispatch(upsertCompany(formData));
+    dispatch(getCompany());
+  };
 
-  await dispatch(upsertCompany(formData));
-  dispatch(getCompany());
+  // SAVE edited testimonial
+  const handleSaveExistingTestimonial = async (index) => {
+    const updatedTestimonials = [...companyData.testimonials];
+    updatedTestimonials[index] = editingTestimonial;
 
-  setEditingTestimonial(null);
-};
+    const formData = new FormData();
+    formData.append("testimonials", JSON.stringify(updatedTestimonials));
+
+    await dispatch(upsertCompany(formData));
+    dispatch(getCompany());
+
+    setEditingTestimonial(null);
+  };
+
+  const addTestimonialField = () => {
+    setTestimonialInputs([
+      ...testimonialInputs,
+      { name: "", address: "", words: "", file: null, preview: null },
+    ]);
+  };
+
+  // ============================
+  // TEAM MEMBERS FUNCTIONS
+  // ============================
+  
+  const handleTeamChange = (index, key, value) => {
+    const updated = [...teamInputs];
+
+    if (key === "file" && value) {
+      updated[index][key] = value;
+      updated[index].preview = URL.createObjectURL(value);
+    } else {
+      updated[index][key] = value;
+    }
+
+    setTeamInputs(updated);
+  };
+
+  const handleTeamUpload = async () => {
+    const formData = new FormData();
+
+    teamInputs.forEach((member) => {
+      if (member.file) {
+        formData.append("teamPhotos", member.file);
+        formData.append("teamNames[]", member.name);
+        formData.append("teamDesignations[]", member.designation);
+        formData.append("teamDescriptions[]", member.description);
+      }
+    });
+
+    await dispatch(upsertCompany(formData));
+    dispatch(getCompany());
+
+    setTeamInputs([
+      { name: "", designation: "", description: "", file: null, preview: null },
+    ]);
+  };
+
+  // DELETE team member
+  const handleDeleteExistingTeam = async (index) => {
+    const updatedTeam = [...companyData.ourTeam];
+    updatedTeam.splice(index, 1);
+
+    const formData = new FormData();
+    formData.append("ourTeam", JSON.stringify(updatedTeam));
+
+    await dispatch(upsertCompany(formData));
+    dispatch(getCompany());
+  };
+
+  // SAVE edited team member
+  const handleSaveExistingTeam = async (index) => {
+    const updatedTeam = [...companyData.ourTeam];
+    updatedTeam[index] = editingTeam;
+
+    const formData = new FormData();
+    formData.append("ourTeam", JSON.stringify(updatedTeam));
+
+    await dispatch(upsertCompany(formData));
+    dispatch(getCompany());
+
+    setEditingTeam(null);
+  };
+
+  const addTeamField = () => {
+    setTeamInputs([
+      ...teamInputs,
+      { name: "", designation: "", description: "", file: null, preview: null },
+    ]);
+  };
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
@@ -453,290 +571,653 @@ const handleSaveExistingTestimonial = async (index) => {
                       </Grid>
                     </CardContent>
                   </Card>
-                        {/* Testimonials Section */}
-<Card
-  elevation={0}
-  sx={{
-    mb: 4,
-    borderRadius: 3,
-    border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-  }}
->
-  <CardContent>
-    <Typography
-      variant="h6"
-      mb={3}
-      sx={{ display: "flex", alignItems: "center", gap: 1 }}
-    >
-      <PersonIcon color="primary" />
-      Testimonials
-    </Typography>
+                  
+                  {/* Testimonials Section */}
+                  <Card
+                    elevation={0}
+                    sx={{
+                      mb: 4,
+                      borderRadius: 3,
+                      border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                    }}
+                  >
+                    <CardContent>
+                      <Typography
+                        variant="h6"
+                        mb={3}
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <PersonIcon color="primary" />
+                        Testimonials
+                      </Typography>
 
-    {/* Existing Testimonials */}
-    {/* Existing Testimonials */}
-<Grid container spacing={2} mb={4}>
-  {companyData?.testimonials?.map((t, index) => (
-    <Grid item xs={12} sm={6} md={4} key={index}>
-      <Card
-        elevation={0}
-        sx={{
-          p: 2,
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          borderRadius: 2,
-          position: "relative",
-        }}
-      >
-        {/* DELETE BUTTON */}
-        <IconButton
-          size="small"
-          color="error"
-          sx={{ position: "absolute", top: 5, right: 5 }}
-          onClick={() =>
-            handleDeleteExistingTestimonial(index)
-          }
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
+                      {/* Existing Testimonials */}
+                      <Grid container spacing={2} mb={4}>
+                        {companyData?.testimonials?.map((t, index) => (
+                          <Grid item xs={12} sm={6} md={4} key={index}>
+                            <Card
+                              elevation={0}
+                              sx={{
+                                p: 2,
+                                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                                borderRadius: 2,
+                                position: "relative",
+                              }}
+                            >
+                              {/* DELETE BUTTON */}
+                              <IconButton
+                                size="small"
+                                color="error"
+                                sx={{ position: "absolute", top: 5, right: 5 }}
+                                onClick={() =>
+                                  handleDeleteExistingTestimonial(index)
+                                }
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
 
-        {editingTestimonial &&
-        editingTestimonial.index === index ? (
-          <>
-            <TextField
-              fullWidth
-              size="small"
-              label="Name"
-              sx={{ mb: 1 }}
-              value={editingTestimonial.name}
-              onChange={(e) =>
-                setEditingTestimonial({
-                  ...editingTestimonial,
-                  name: e.target.value,
-                })
-              }
-            />
+                              {editingTestimonial &&
+                              editingTestimonial.index === index ? (
+                                <>
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Name"
+                                    sx={{ mb: 1 }}
+                                    value={editingTestimonial.name}
+                                    onChange={(e) =>
+                                      setEditingTestimonial({
+                                        ...editingTestimonial,
+                                        name: e.target.value,
+                                      })
+                                    }
+                                  />
 
-            <TextField
-              fullWidth
-              size="small"
-              label="Address"
-              sx={{ mb: 1 }}
-              value={editingTestimonial.address}
-              onChange={(e) =>
-                setEditingTestimonial({
-                  ...editingTestimonial,
-                  address: e.target.value,
-                })
-              }
-            />
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Address"
+                                    sx={{ mb: 1 }}
+                                    value={editingTestimonial.address}
+                                    onChange={(e) =>
+                                      setEditingTestimonial({
+                                        ...editingTestimonial,
+                                        address: e.target.value,
+                                      })
+                                    }
+                                  />
 
-            <TextField
-              fullWidth
-              size="small"
-              multiline
-              rows={2}
-              label="Words"
-              sx={{ mb: 2 }}
-              value={editingTestimonial.words}
-              onChange={(e) =>
-                setEditingTestimonial({
-                  ...editingTestimonial,
-                  words: e.target.value,
-                })
-              }
-            />
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    multiline
+                                    rows={2}
+                                    label="Words"
+                                    sx={{ mb: 2 }}
+                                    value={editingTestimonial.words}
+                                    onChange={(e) =>
+                                      setEditingTestimonial({
+                                        ...editingTestimonial,
+                                        words: e.target.value,
+                                      })
+                                    }
+                                  />
 
-            <Button
-              size="small"
-              variant="contained"
-              onClick={() =>
-                handleSaveExistingTestimonial(index)
-              }
-              sx={{ mr: 1 }}
-            >
-              Save
-            </Button>
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() =>
+                                      handleSaveExistingTestimonial(index)
+                                    }
+                                    sx={{ mr: 1 }}
+                                  >
+                                    Save
+                                  </Button>
 
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() =>
-                setEditingTestimonial(null)
-              }
-            >
-              Cancel
-            </Button>
-          </>
-        ) : (
-          <>
-            <Avatar
-              src={t.photo?.url}
-              sx={{ width: 70, height: 70, mb: 2 }}
-            />
-            <Typography fontWeight={600}>
-              {t.name}
-            </Typography>
-            <Typography
-              variant="body2"
-              color="textSecondary"
-            >
-              {t.address}
-            </Typography>
-            <Typography variant="body2" mt={1}>
-              {t.words}
-            </Typography>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() =>
+                                      setEditingTestimonial(null)
+                                    }
+                                  >
+                                    Cancel
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Avatar
+                                    src={t.photo?.url}
+                                    sx={{ width: 70, height: 70, mb: 2 }}
+                                  />
+                                  <Typography fontWeight={600}>
+                                    {t.name}
+                                  </Typography>
+                                  <Typography
+                                    variant="body2"
+                                    color="textSecondary"
+                                  >
+                                    {t.address}
+                                  </Typography>
+                                  <Typography variant="body2" mt={1}>
+                                    {t.words}
+                                  </Typography>
 
-            <Button
-              size="small"
-              variant="outlined"
-              sx={{ mt: 2 }}
-              onClick={() =>
-                setEditingTestimonial({
-                  ...t,
-                  index,
-                })
-              }
-            >
-              Edit
-            </Button>
-          </>
-        )}
-      </Card>
-    </Grid>
-  ))}
-</Grid>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ mt: 2 }}
+                                    onClick={() =>
+                                      setEditingTestimonial({
+                                        ...t,
+                                        index,
+                                      })
+                                    }
+                                  >
+                                    Edit
+                                  </Button>
+                                </>
+                              )}
+                            </Card>
+                          </Grid>
+                        ))}
+                      </Grid>
 
+                      {/* Add New Testimonials */}
+                      <Typography
+                        variant="subtitle1"
+                        gutterBottom
+                        sx={{ fontWeight: 600, mb: 2 }}
+                      >
+                        Add New Testimonials
+                      </Typography>
 
-    {/* Add New Testimonials */}
-    <Typography
-      variant="subtitle1"
-      gutterBottom
-      sx={{ fontWeight: 600, mb: 2 }}
-    >
-      Add New Testimonials
-    </Typography>
+                      {testimonialInputs.map((t, index) => (
+                        <Paper
+                          key={index}
+                          elevation={0}
+                          sx={{
+                            p: 2,
+                            mb: 2,
+                            backgroundColor: alpha(theme.palette.primary.main, 0.02),
+                            borderRadius: 2,
+                          }}
+                        >
+                          <Grid container spacing={2} alignItems="center">
+                            {/* Name */}
+                            <Grid item xs={12} md={3}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Name"
+                                value={t.name}
+                                onChange={(e) =>
+                                  handleTestimonialChange(index, "name", e.target.value)
+                                }
+                              />
+                            </Grid>
 
-    {testimonialInputs.map((t, index) => (
-      <Paper
-        key={index}
-        elevation={0}
-        sx={{
-          p: 2,
-          mb: 2,
-          backgroundColor: alpha(theme.palette.primary.main, 0.02),
-          borderRadius: 2,
-        }}
-      >
-        <Grid container spacing={2} alignItems="center">
-  {/* Name */}
-  <Grid item xs={12} md={3}>
-    <TextField
-      fullWidth
-      size="small"
-      label="Name"
-      value={t.name}
-      onChange={(e) =>
-        handleTestimonialChange(index, "name", e.target.value)
-      }
-    />
-  </Grid>
+                            {/* Address */}
+                            <Grid item xs={12} md={3}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Address"
+                                value={t.address}
+                                onChange={(e) =>
+                                  handleTestimonialChange(index, "address", e.target.value)
+                                }
+                              />
+                            </Grid>
 
-  {/* Address */}
-  <Grid item xs={12} md={3}>
-    <TextField
-      fullWidth
-      size="small"
-      label="Address"
-      value={t.address}
-      onChange={(e) =>
-        handleTestimonialChange(index, "address", e.target.value)
-      }
-    />
-  </Grid>
+                            {/* Words */}
+                            <Grid item xs={12} md={4}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                multiline
+                                rows={2}
+                                label="Words"
+                                value={t.words}
+                                onChange={(e) =>
+                                  handleTestimonialChange(index, "words", e.target.value)
+                                }
+                              />
+                            </Grid>
 
-  {/* Words */}
-  <Grid item xs={12} md={4}>
-    <TextField
-      fullWidth
-      size="small"
-      multiline
-      rows={2}
-      label="Words"
-      value={t.words}
-      onChange={(e) =>
-        handleTestimonialChange(index, "words", e.target.value)
-      }
-    />
-  </Grid>
+                            {/* Upload + Preview */}
+                            <Grid
+                              item
+                              xs={12}
+                              md={2}
+                              sx={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                minHeight: 90,
+                              }}
+                            >
+                              <Button
+                                variant="outlined"
+                                component="label"
+                                size="small"
+                                fullWidth
+                                startIcon={<ImageIcon />}
+                                sx={{ borderRadius: 2 }}
+                              >
+                                Upload
+                                <input
+                                  hidden
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) =>
+                                    handleTestimonialChange(
+                                      index,
+                                      "file",
+                                      e.target.files[0]
+                                    )
+                                  }
+                                />
+                              </Button>
 
-  {/* Upload + Preview */}
-  <Grid
-    item
-    xs={12}
-    md={2}
-    sx={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      minHeight: 90,
-    }}
-  >
-    <Button
-      variant="outlined"
-      component="label"
-      size="small"
-      fullWidth
-      startIcon={<ImageIcon />}
-      sx={{ borderRadius: 2 }}
-    >
-      Upload
-      <input
-        hidden
-        type="file"
-        accept="image/*"
-        onChange={(e) =>
-          handleTestimonialChange(
-            index,
-            "file",
-            e.target.files[0]
-          )
-        }
-      />
-    </Button>
+                              <Box sx={{ height: 60, mt: 1 }}>
+                                {t.preview && (
+                                  <Avatar
+                                    src={t.preview}
+                                    sx={{ width: 50, height: 50 }}
+                                  />
+                                )}
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </Paper>
+                      ))}
 
-    <Box sx={{ height: 60, mt: 1 }}>
-      {t.preview && (
-        <Avatar
-          src={t.preview}
-          sx={{ width: 50, height: 50 }}
-        />
-      )}
-    </Box>
-  </Grid>
-</Grid>
+                      <Box sx={{ display: "flex", gap: 2, mt: 2 }}>
+                        <Button
+                          variant="text"
+                          onClick={addTestimonialField}
+                          startIcon={<AddIcon />}
+                        >
+                          Add Another
+                        </Button>
 
-      </Paper>
-    ))}
+                        <Button
+                          variant="contained"
+                          onClick={handleTestimonialUpload}
+                          startIcon={<SaveIcon />}
+                        >
+                          Save Testimonials
+                        </Button>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                      
+                  {/* Vision & Mission Section */}
+                  <Card
+                    elevation={0}
+                    sx={{
+                      mb: 4,
+                      borderRadius: 3,
+                      border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                    }}
+                  >
+                    <CardContent>
+                      <Typography
+                        variant="h6"
+                        mb={3}
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <InfoIcon color="primary" />
+                        Vision & Mission
+                      </Typography>
 
-    <Box sx={{ display: "flex", gap: 2, mt: 2 }}>
-      <Button
-        variant="text"
-        onClick={addTestimonialField}
-        startIcon={<AddIcon />}
-      >
-        Add Another
-      </Button>
+                      {/* Vision */}
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          p: 2,
+                          mb: 2,
+                          backgroundColor: alpha(theme.palette.primary.main, 0.02),
+                          borderRadius: 2,
+                          position: "relative",
+                        }}
+                      >
+                        <Typography fontWeight={600}>Our Vision</Typography>
+                        <Typography variant="body2" mt={1}>
+                          {companyData?.ourVision || "-"}
+                        </Typography>
 
-      <Button
-        variant="contained"
-        onClick={handleTestimonialUpload}
-        startIcon={<SaveIcon />}
-      >
-        Save Testimonials
-      </Button>
-    </Box>
-  </CardContent>
-</Card>
+                        <IconButton
+                          size="small"
+                          sx={{ position: "absolute", top: 5, right: 5 }}
+                          onClick={() =>
+                            setEditDialog({
+                              open: true,
+                              field: "ourVision",
+                              value: companyData?.ourVision || "",
+                            })
+                          }
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Paper>
+
+                      {/* Mission */}
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          p: 2,
+                          backgroundColor: alpha(theme.palette.primary.main, 0.02),
+                          borderRadius: 2,
+                          position: "relative",
+                        }}
+                      >
+                        <Typography fontWeight={600}>Our Mission</Typography>
+                        <Typography variant="body2" mt={1}>
+                          {companyData?.ourMission || "-"}
+                        </Typography>
+
+                        <IconButton
+                          size="small"
+                          sx={{ position: "absolute", top: 5, right: 5 }}
+                          onClick={() =>
+                            setEditDialog({
+                              open: true,
+                              field: "ourMission",
+                              value: companyData?.ourMission || "",
+                            })
+                          }
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Paper>
+                    </CardContent>
+                  </Card>
+
+                  {/* Our Team Section */}
+                  <Card
+                    elevation={0}
+                    sx={{
+                      mb: 4,
+                      borderRadius: 3,
+                      border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                    }}
+                  >
+                    <CardContent>
+                      <Typography
+                        variant="h6"
+                        mb={3}
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <GroupIcon color="primary" />
+                        Our Team
+                      </Typography>
+
+                      {/* Existing Team Members */}
+                      <Grid container spacing={2} mb={4}>
+                        {companyData?.ourTeam?.map((member, index) => (
+                          <Grid item xs={12} sm={6} md={4} key={index}>
+                            <Card
+                              elevation={0}
+                              sx={{
+                                p: 2,
+                                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                                borderRadius: 2,
+                                position: "relative",
+                              }}
+                            >
+                              {/* DELETE BUTTON */}
+                              <IconButton
+                                size="small"
+                                color="error"
+                                sx={{ position: "absolute", top: 5, right: 5 }}
+                                onClick={() =>
+                                  handleDeleteExistingTeam(index)
+                                }
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+
+                              {editingTeam &&
+                              editingTeam.index === index ? (
+                                <>
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Name"
+                                    sx={{ mb: 1 }}
+                                    value={editingTeam.name}
+                                    onChange={(e) =>
+                                      setEditingTeam({
+                                        ...editingTeam,
+                                        name: e.target.value,
+                                      })
+                                    }
+                                  />
+
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Designation"
+                                    sx={{ mb: 1 }}
+                                    value={editingTeam.designation}
+                                    onChange={(e) =>
+                                      setEditingTeam({
+                                        ...editingTeam,
+                                        designation: e.target.value,
+                                      })
+                                    }
+                                  />
+
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    multiline
+                                    rows={2}
+                                    label="Description"
+                                    sx={{ mb: 2 }}
+                                    value={editingTeam.description}
+                                    onChange={(e) =>
+                                      setEditingTeam({
+                                        ...editingTeam,
+                                        description: e.target.value,
+                                      })
+                                    }
+                                  />
+
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() =>
+                                      handleSaveExistingTeam(index)
+                                    }
+                                    sx={{ mr: 1 }}
+                                  >
+                                    Save
+                                  </Button>
+
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() =>
+                                      setEditingTeam(null)
+                                    }
+                                  >
+                                    Cancel
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Avatar
+                                    src={member.photo?.url}
+                                    sx={{ width: 70, height: 70, mb: 2 }}
+                                  />
+                                  <Typography fontWeight={600}>
+                                    {member.name}
+                                  </Typography>
+                                  <Typography
+                                    variant="body2"
+                                    color="primary"
+                                    fontWeight={500}
+                                  >
+                                    {member.designation}
+                                  </Typography>
+                                  <Typography variant="body2" mt={1}>
+                                    {member.description}
+                                  </Typography>
+
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ mt: 2 }}
+                                    onClick={() =>
+                                      setEditingTeam({
+                                        ...member,
+                                        index,
+                                      })
+                                    }
+                                  >
+                                    Edit
+                                  </Button>
+                                </>
+                              )}
+                            </Card>
+                          </Grid>
+                        ))}
+                      </Grid>
+
+                      {/* Add New Team Members */}
+                      <Typography
+                        variant="subtitle1"
+                        gutterBottom
+                        sx={{ fontWeight: 600, mb: 2 }}
+                      >
+                        Add New Team Members
+                      </Typography>
+
+                      {teamInputs.map((member, index) => (
+                        <Paper
+                          key={index}
+                          elevation={0}
+                          sx={{
+                            p: 2,
+                            mb: 2,
+                            backgroundColor: alpha(theme.palette.primary.main, 0.02),
+                            borderRadius: 2,
+                          }}
+                        >
+                          <Grid container spacing={2} alignItems="center">
+                            {/* Name */}
+                            <Grid item xs={12} md={3}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Name"
+                                value={member.name}
+                                onChange={(e) =>
+                                  handleTeamChange(index, "name", e.target.value)
+                                }
+                              />
+                            </Grid>
+
+                            {/* Designation */}
+                            <Grid item xs={12} md={3}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Designation"
+                                value={member.designation}
+                                onChange={(e) =>
+                                  handleTeamChange(index, "designation", e.target.value)
+                                }
+                              />
+                            </Grid>
+
+                            {/* Description */}
+                            <Grid item xs={12} md={4}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                multiline
+                                rows={2}
+                                label="Description"
+                                value={member.description}
+                                onChange={(e) =>
+                                  handleTeamChange(index, "description", e.target.value)
+                                }
+                              />
+                            </Grid>
+
+                            {/* Upload + Preview */}
+                            <Grid
+                              item
+                              xs={12}
+                              md={2}
+                              sx={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                minHeight: 90,
+                              }}
+                            >
+                              <Button
+                                variant="outlined"
+                                component="label"
+                                size="small"
+                                fullWidth
+                                startIcon={<ImageIcon />}
+                                sx={{ borderRadius: 2 }}
+                              >
+                                Upload
+                                <input
+                                  hidden
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) =>
+                                    handleTeamChange(
+                                      index,
+                                      "file",
+                                      e.target.files[0]
+                                    )
+                                  }
+                                />
+                              </Button>
+
+                              <Box sx={{ height: 60, mt: 1 }}>
+                                {member.preview && (
+                                  <Avatar
+                                    src={member.preview}
+                                    sx={{ width: 50, height: 50 }}
+                                  />
+                                )}
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </Paper>
+                      ))}
+
+                      <Box sx={{ display: "flex", gap: 2, mt: 2 }}>
+                        <Button
+                          variant="text"
+                          onClick={addTeamField}
+                          startIcon={<AddIcon />}
+                        >
+                          Add Another Member
+                        </Button>
+
+                        <Button
+                          variant="contained"
+                          onClick={handleTeamUpload}
+                          startIcon={<SaveIcon />}
+                        >
+                          Save Team Members
+                        </Button>
+                      </Box>
+                    </CardContent>
+                  </Card>
 
                   {/* Images */}
                   <Card 
@@ -846,48 +1327,132 @@ const handleSaveExistingTestimonial = async (index) => {
                       <Grid container spacing={2} mb={4}>
                         {companyData?.qrCodes?.map((qr, index) => (
                           <Grid item xs={12} sm={6} md={3} key={index}>
-                            <Card 
+                            <Card
                               elevation={0}
-                              sx={{ 
-                                p: 2, 
+                              sx={{
+                                p: 2,
                                 textAlign: "center",
                                 border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
                                 borderRadius: 2,
-                                transition: 'all 0.2s',
-                                '&:hover': {
-                                  transform: 'translateY(-2px)',
+                                position: "relative",
+                                transition: "all 0.2s",
+                                "&:hover": {
+                                  transform: "translateY(-2px)",
                                   boxShadow: theme.shadows[4],
                                 },
                               }}
                             >
-                              <Typography fontWeight={600} color="primary" gutterBottom>
-                                {qr.name}
-                              </Typography>
+                              {/* DELETE BUTTON */}
+                              <IconButton
+                                size="small"
+                                color="error"
+                                sx={{ position: "absolute", top: 5, right: 5 }}
+                                onClick={() => handleDeleteQR(index)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
 
-                              <Avatar
-                                src={qr.url}
-                                variant="rounded"
-                                sx={{ 
-                                  width: 120, 
-                                  height: 120, 
-                                  mx: "auto", 
-                                  my: 1,
-                                  border: `2px solid ${qr.color}`,
-                                }}
-                              />
+                              {editingQR && editingQR.index === index ? (
+                                <>
+                                  {/* EDIT MODE */}
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="QR Name"
+                                    value={editingQR.name}
+                                    sx={{ mb: 1 }}
+                                    onChange={(e) =>
+                                      setEditingQR({
+                                        ...editingQR,
+                                        name: e.target.value,
+                                      })
+                                    }
+                                  />
 
-                              <Box
-                                sx={{
-                                  width: 30,
-                                  height: 30,
-                                  backgroundColor: qr.color,
-                                  borderRadius: "50%",
-                                  mx: "auto",
-                                  mt: 1,
-                                  border: `2px solid ${alpha(theme.palette.common.white, 0.5)}`,
-                                  boxShadow: theme.shadows[2],
-                                }}
-                              />
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    type="color"
+                                    label="Color"
+                                    value={editingQR.color}
+                                    onChange={(e) =>
+                                      setEditingQR({
+                                        ...editingQR,
+                                        color: e.target.value,
+                                      })
+                                    }
+                                    InputLabelProps={{ shrink: true }}
+                                    sx={{ mb: 2 }}
+                                  />
+
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => handleSaveEditedQR(index)}
+                                    sx={{ mr: 1 }}
+                                  >
+                                    Save
+                                  </Button>
+
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => setEditingQR(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  {/* VIEW MODE */}
+                                  <Typography fontWeight={600} color="primary" gutterBottom>
+                                    {qr.name}
+                                  </Typography>
+
+                                  <Avatar
+                                    src={qr.url}
+                                    variant="rounded"
+                                    sx={{
+                                      width: 120,
+                                      height: 120,
+                                      mx: "auto",
+                                      my: 1,
+                                      border: `2px solid ${qr.color}`,
+                                    }}
+                                  />
+
+                                  <Box
+                                    sx={{
+                                      width: 30,
+                                      height: 30,
+                                      backgroundColor: qr.color,
+                                      borderRadius: "50%",
+                                      mx: "auto",
+                                      mt: 1,
+                                      border: `2px solid ${alpha(
+                                        theme.palette.common.white,
+                                        0.5
+                                      )}`,
+                                      boxShadow: theme.shadows[2],
+                                    }}
+                                  />
+
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ mt: 2 }}
+                                    onClick={() =>
+                                      setEditingQR({
+                                        index,
+                                        name: qr.name,
+                                        color: qr.color,
+                                      })
+                                    }
+                                  >
+                                    Edit
+                                  </Button>
+                                </>
+                              )}
                             </Card>
                           </Grid>
                         ))}
