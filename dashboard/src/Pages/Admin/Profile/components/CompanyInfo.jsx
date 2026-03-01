@@ -179,72 +179,123 @@ const CompanyProfile = () => {
   // ============================
   
   // DELETE QR code
-  const handleDeleteQR = async (index) => {
-    const updatedQRCodes = [...companyData.qrCodes];
-    updatedQRCodes.splice(index, 1);
+ // ============================
+// QR CODES FUNCTIONS
+// ============================
 
-    const formData = new FormData();
-    formData.append("qrCodes", JSON.stringify(updatedQRCodes));
+// DELETE QR code
+// ============================
+// QR CODES FUNCTIONS
+// ============================
 
-    await dispatch(upsertCompany(formData));
-    dispatch(getCompany());
-  };
+// DELETE QR code
+const handleDeleteQR = async (index) => {
+  const updatedQRCodes = [...companyData.qrCodes];
+  updatedQRCodes.splice(index, 1);
 
-  // SAVE edited QR code
-  const handleSaveEditedQR = async (index) => {
-    const updatedQRCodes = [...companyData.qrCodes];
-    updatedQRCodes[index] = {
-      ...updatedQRCodes[index],
-      name: editingQR.name,
-      color: editingQR.color,
-    };
-
-    const formData = new FormData();
-    formData.append("qrCodes", JSON.stringify(updatedQRCodes));
-
-    await dispatch(upsertCompany(formData));
-    dispatch(getCompany());
-
-    setEditingQR(null);
-  };
-
-  // Add new QR row
-  const addQrField = () => {
-    setQrInputs([...qrInputs, { name: "", color: "#1976d2", file: null, preview: null }]);
-  };
-
-  // Handle QR input change
-  const handleQrChange = (index, key, value) => {
-    const updated = [...qrInputs];
-    
-    if (key === 'file' && value) {
-      updated[index][key] = value;
-      updated[index].preview = URL.createObjectURL(value);
-    } else {
-      updated[index][key] = value;
+  const formData = new FormData();
+  
+  // Send as individual fields instead of JSON string
+  updatedQRCodes.forEach((qr, idx) => {
+    formData.append(`qrCodes[${idx}][name]`, qr.name);
+    formData.append(`qrCodes[${idx}][color]`, qr.color);
+    if (qr.public_id) {
+      formData.append(`qrCodes[${idx}][public_id]`, qr.public_id);
     }
-    
-    setQrInputs(updated);
+    if (qr.url) {
+      formData.append(`qrCodes[${idx}][url]`, qr.url);
+    }
+  });
+
+  await dispatch(upsertCompany(formData));
+  dispatch(getCompany());
+};
+
+// SAVE edited QR code
+const handleSaveEditedQR = async (index) => {
+  const updatedQRCodes = [...companyData.qrCodes];
+  updatedQRCodes[index] = {
+    ...updatedQRCodes[index],
+    name: editingQR.name,
+    color: editingQR.color,
   };
 
-  // Upload Multiple QR
-  const handleQrUpload = async () => {
-    const formData = new FormData();
+  const formData = new FormData();
+  
+  // Send all QR codes with updated values
+  updatedQRCodes.forEach((qr, idx) => {
+    formData.append(`qrCodes[${idx}][name]`, qr.name);
+    formData.append(`qrCodes[${idx}][color]`, qr.color);
+    if (qr.public_id) {
+      formData.append(`qrCodes[${idx}][public_id]`, qr.public_id);
+    }
+    if (qr.url) {
+      formData.append(`qrCodes[${idx}][url]`, qr.url);
+    }
+  });
 
-    qrInputs.forEach((qr) => {
-      if (qr.file) {
-        formData.append("qrCodes", qr.file);
-        formData.append("qrNames[]", qr.name);
-        formData.append("qrColors[]", qr.color);
+  await dispatch(upsertCompany(formData));
+  dispatch(getCompany());
+
+  setEditingQR(null);
+};
+
+// Add new QR row
+const addQrField = () => {
+  setQrInputs([...qrInputs, { name: "", color: "#1976d2", file: null, preview: null }]);
+};
+
+// Handle QR input change
+const handleQrChange = (index, key, value) => {
+  const updated = [...qrInputs];
+  
+  if (key === 'file' && value) {
+    updated[index][key] = value;
+    updated[index].preview = URL.createObjectURL(value);
+  } else {
+    updated[index][key] = value;
+  }
+  
+  setQrInputs(updated);
+};
+
+// Upload Multiple QR
+const handleQrUpload = async () => {
+  const formData = new FormData();
+
+  // First, append all existing QR codes
+  if (companyData?.qrCodes?.length > 0) {
+    companyData.qrCodes.forEach((qr, idx) => {
+      formData.append(`qrCodes[${idx}][name]`, qr.name);
+      formData.append(`qrCodes[${idx}][color]`, qr.color);
+      if (qr.public_id) {
+        formData.append(`qrCodes[${idx}][public_id]`, qr.public_id);
+      }
+      if (qr.url) {
+        formData.append(`qrCodes[${idx}][url]`, qr.url);
       }
     });
+  }
 
-    await dispatch(upsertCompany(formData));
-    dispatch(getCompany());
+  // Then append new QR codes with files
+  const startIndex = companyData?.qrCodes?.length || 0;
+  qrInputs.forEach((qr, index) => {
+    if (qr.file) {
+      const currentIndex = startIndex + index;
+      formData.append(`qrCodes`, qr.file); // For file upload
+      formData.append(`qrCodes[${currentIndex}][name]`, qr.name);
+      formData.append(`qrCodes[${currentIndex}][color]`, qr.color);
+    }
+  });
 
-    // reset
-    setQrInputs([{ name: "", color: "#1976d2", file: null, preview: null }]);
-  };
+  await dispatch(upsertCompany(formData));
+  dispatch(getCompany());
+
+  // reset
+  setQrInputs([{ name: "", color: "#1976d2", file: null, preview: null }]);
+};
+
+ 
   
   // ============================
   // TESTIMONIALS FUNCTIONS
