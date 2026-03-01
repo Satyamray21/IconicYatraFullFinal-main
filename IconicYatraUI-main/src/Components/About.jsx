@@ -41,27 +41,8 @@ import aboutBanner from "../assets/Banner/aboutBanner.jpeg";
 import about from "../assets/Banner/about.jpeg";
 // Add this import for the new image
 import legendaryTravel from "../assets/Banner/about.jpg";
+import { useDispatch, useSelector } from "react-redux";
 
-const team = [
-  {
-    name: "Amit Sharma",
-    role: "Founder & CEO",
-    img: "https://randomuser.me/api/portraits/men/32.jpg",
-    bio: "Travel enthusiast with 15+ years of industry experience",
-  },
-  {
-    name: "Priya Kapoor",
-    role: "Travel Consultant",
-    img: "https://randomuser.me/api/portraits/women/44.jpg",
-    bio: "Specialist in luxury and adventure travel packages",
-  },
-  {
-    name: "Ravi Verma",
-    role: "Tour Manager",
-    img: "https://randomuser.me/api/portraits/men/76.jpg",
-    bio: "Expert in cultural immersion experiences",
-  },
-];
 
 const values = [
   {
@@ -115,6 +96,14 @@ const AboutUs = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.1 });
+  const { data, status } = useSelector(
+    (state) => state.companyUI
+  );
+ const team = data?.company?.ourTeam || [];
+
+ const vision = data?.company?.ourVision;
+
+  const mission = data?.company?.ourMission;
 
   useEffect(() => {
     if (inView) {
@@ -305,11 +294,7 @@ const AboutUs = () => {
               fontSize: { xs: "0.9rem", sm: "1rem", md: "1.1rem" },
             }}
           >
-            To provide exceptional and personalized travel experiences that
-            inspire exploration, foster cultural understanding, and create
-            lifelong memories. We are committed to delivering unmatched service,
-            innovative itineraries, and meticulous attention to detail, ensuring
-            every journey is enjoyable, safe, and unforgettable.
+           {mission}
           </Typography>
         </Box>
 
@@ -400,11 +385,7 @@ const AboutUs = () => {
                     fontSize: { xs: "0.9rem", sm: "1rem", md: "1.1rem" }
                   }}
                 >
-                  To become a globally recognized travel company, renowned for
-                  innovation, reliability, and excellence in customer service.
-                  We envision a world where every traveler experiences the true
-                  essence of destinations, connecting deeply with cultures,
-                  nature, and people.
+                  {vision}
                 </Typography>
                 <Typography
                   variant="body1"
@@ -705,7 +686,7 @@ const AboutUs = () => {
                 }}
               >
                 <Avatar
-                  src={member.img}
+                  src={member.photo?.url}
                   alt={member.name}
                   sx={{
                     width: { xs: 80, sm: 100, md: 120 },
@@ -732,14 +713,14 @@ const AboutUs = () => {
                     gutterBottom
                     sx={{ fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
                   >
-                    {member.role}
+                    {member.designation}
                   </Typography>
                   <Typography
                     variant="body2"
                     color="text.secondary"
                     sx={{ fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
                   >
-                    {member.bio}
+                    {member.description}
                   </Typography>
                   <Box sx={{ mt: 2 }}>
                     <IconButton
