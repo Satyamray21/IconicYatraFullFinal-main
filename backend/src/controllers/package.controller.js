@@ -34,9 +34,14 @@ function calculateStatus(validFrom, validTill, isNewPackage = false) {
 
 // ✅ UPDATED: Tour Type Validation Helper
 function validateTourType(tourType) {
-    const validTourTypes = ["Domestic", "International", "Yatra", "Holiday", "Special", "Latest"];
-    return validTourTypes.includes(tourType) ? tourType : "Domestic"; // Default to Domestic if invalid
+    const validTourTypes = ["Domestic", "International"];
+    return validTourTypes.includes(tourType) ? tourType : "Domestic";
 }
+function validatePackageCategory(category) {
+    const valid = ["Spiritual", "Holiday", "Latest", "Yatra", "Special"];
+    return valid.includes(category) ? category : "Holiday";
+}
+
 
 // ----------------------
 // Enhanced Normalize helpers
@@ -167,13 +172,72 @@ function normalizePackageUrls(packageData) {
 export const createPackage = asyncHandler(async (req, res) => {
     const data = { ...req.body };
 
-    // ✅ VALIDATE TOUR TYPE
-    if (data.tourType) {
-        data.tourType = validateTourType(data.tourType);
+    // -----------------------------------
+    // ✅ PARSE JSON FIELDS (multipart fix)
+    // -----------------------------------
+    try {
+        if (typeof data.days === "string") {
+            data.days = JSON.parse(data.days);
+        }
+
+        if (typeof data.destinationNights === "string") {
+            data.destinationNights = JSON.parse(data.destinationNights);
+        }
+
+        if (typeof data.policy === "string") {
+            data.policy = JSON.parse(data.policy);
+        }
+
+        if (typeof data.mealPlan === "string") {
+            data.mealPlan = JSON.parse(data.mealPlan);
+        }
+
+        if (typeof data.packageSubType === "string") {
+            data.packageSubType = JSON.parse(data.packageSubType);
+        }
+    } catch (err) {
+        return res.status(400).json({
+            message: "Invalid JSON format in request body"
+        });
     }
 
-    // Handle multiple images from 'images' field
-    if (req.files && req.files.images) {
+    // -----------------------------------
+    // ✅ REQUIRED FIELD VALIDATION
+    // -----------------------------------
+    if (!data.sector?.trim()) {
+        return res.status(400).json({ message: "sector is required" });
+    }
+
+    if (!Array.isArray(data.packageSubType) || data.packageSubType.length === 0) {
+        return res.status(400).json({ message: "packageSubType is required" });
+    }
+
+    if (!data.tourType) {
+        return res.status(400).json({ message: "tourType is required" });
+    }
+
+    // -----------------------------------
+    // ✅ VALIDATE TOUR TYPE (ONLY 2)
+    // -----------------------------------
+    const validTourTypes = ["Domestic", "International"];
+    if (!validTourTypes.includes(data.tourType)) {
+        return res.status(400).json({
+            message: "tourType must be Domestic or International"
+        });
+    }
+
+    // -----------------------------------
+    // ✅ VALIDATE PACKAGE CATEGORY
+    // -----------------------------------
+    const validCategories = ["Spiritual", "Holiday", "Latest", "Yatra", "Special"];
+    if (data.packageCategory && !validCategories.includes(data.packageCategory)) {
+        data.packageCategory = "Holiday";
+    }
+
+    // -----------------------------------
+    // ✅ HANDLE FILE UPLOADS
+    // -----------------------------------
+    if (req.files?.images) {
         const uploadedImages = [];
 
         for (const file of req.files.images) {
@@ -189,7 +253,6 @@ export const createPackage = asyncHandler(async (req, res) => {
         if (uploadedImages.length > 0) {
             data.images = uploadedImages;
 
-            // Set thumbnail as first image if not specified
             if (!data.thumbnail && uploadedImages[0]) {
                 data.thumbnail = uploadedImages[0].url;
                 data.thumbnailPublicId = uploadedImages[0].publicId;
@@ -197,8 +260,7 @@ export const createPackage = asyncHandler(async (req, res) => {
         }
     }
 
-    // Handle thumbnail from 'thumbnail' field
-    if (req.files && req.files.thumbnail) {
+    if (req.files?.thumbnail) {
         const thumbnailUpload = await uploadOnCloudinary(req.files.thumbnail[0].path);
         if (thumbnailUpload) {
             data.thumbnail = thumbnailUpload.secure_url;
@@ -206,8 +268,7 @@ export const createPackage = asyncHandler(async (req, res) => {
         }
     }
 
-    // Handle banner from 'banner' field
-    if (req.files && req.files.banner) {
+    if (req.files?.banner) {
         const bannerUpload = await uploadOnCloudinary(req.files.banner[0].path);
         if (bannerUpload) {
             data.bannerImage = bannerUpload.secure_url;
@@ -215,36 +276,56 @@ export const createPackage = asyncHandler(async (req, res) => {
         }
     }
 
-    // Normalize all data
+    // -----------------------------------
+    // ✅ NORMALIZE DATA
+    // -----------------------------------
     data.days = normalizeDays(data.days);
     data.mealPlan = normalizeMealPlan(data.mealPlan);
     data.destinationNights = normalizeDestinationNights(data.destinationNights);
     data.policy = normalizePolicy(data.policy);
 
-    // ✅ FIX: Normalize dates first, then calculate status for NEW package
+    // -----------------------------------
+    // ✅ DATE NORMALIZATION
+    // -----------------------------------
     normalizeDates(data);
-    data.status = calculateStatus(data.validFrom, data.validTill, true); // Pass true for new package
 
-    // ✅ UPDATED: Validation for International packages
-    if (data.tourType === "International" && !data.destinationCountry?.trim()) {
-        return res.status(400).json({
-            message: "destinationCountry is required for International tours"
-        });
-    }
-
-    // ✅ UPDATED: Auto-set India for Domestic, Yatra, Holiday, Special, Latest tours
-    if (["Domestic", "Yatra", "Holiday", "Special", "Latest"].includes(data.tourType)) {
+    // -----------------------------------
+    // ✅ COUNTRY LOGIC
+    // -----------------------------------
+    if (data.tourType === "International") {
+        if (!data.destinationCountry?.trim()) {
+            return res.status(400).json({
+                message: "destinationCountry is required for International tours"
+            });
+        }
+    } else {
         data.destinationCountry = "India";
     }
 
-    const doc = await Package.create(data);
-    const responseData = normalizePackageUrls(doc.toObject());
+    // -----------------------------------
+    // ✅ STATUS CALCULATION
+    // -----------------------------------
+    data.status = calculateStatus(data.validFrom, data.validTill, true);
 
-    res.status(201).json({
-        message: "Package created successfully",
-        package: responseData
-    });
+    // -----------------------------------
+    // ✅ CREATE PACKAGE
+    // -----------------------------------
+    try {
+        const doc = await Package.create(data);
+        const responseData = normalizePackageUrls(doc.toObject());
+
+        return res.status(201).json({
+            message: "Package created successfully",
+            package: responseData
+        });
+    } catch (err) {
+        return res.status(400).json({
+            message: "Validation failed",
+            error: err.message
+        });
+    }
 });
+
 
 // ----------------------
 // UPDATE STEP 1 (UPDATED FOR NEW TOUR TYPES)
@@ -536,6 +617,38 @@ export const getPackagesByTourType = asyncHandler(async (req, res) => {
 
     res.json({
         tourType: validatedTourType,
+        items: responseItems,
+        total,
+        page: Number(page),
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum)
+    });
+});
+
+
+export const getPackagesByCategory = asyncHandler(async (req, res) => {
+    const { packageCategory } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    const skip = (Math.max(1, Number(page)) - 1) * Math.max(1, Number(limit));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+
+    const [items, total] = await Promise.all([
+        Package.find({ packageCategory, status: "active" })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limitNum),
+        Package.countDocuments({ packageCategory, status: "active" })
+    ]);
+
+    const responseItems = items.map(doc => {
+        const packageData = doc.toObject();
+        packageData.status = calculateStatus(packageData.validFrom, packageData.validTill);
+        return normalizePackageUrls(packageData);
+    });
+
+    res.json({
+        packageCategory,
         items: responseItems,
         total,
         page: Number(page),

@@ -11,6 +11,7 @@ import {
     remove,
     getPopularTours,
     makeAllPopular,
+    getPackagesByCategory,
     getPackagesByTourType // ✅ NEW: Import the new function
 } from "../controllers/package.controller.js";
 
@@ -37,6 +38,35 @@ router.get("/tour-type/latest", (req, res) => getPackagesByTourType({ params: { 
 
 // ✅ NEW: Dynamic route for any tour type
 router.get("/tour-type/:tourType", getPackagesByTourType);
+
+router.get("/category/yatra", (req, res) =>
+  getPackagesByCategory(
+    { params: { packageCategory: "Yatra" }, query: req.query },
+    res
+  )
+);
+
+router.get("/category/holiday", (req, res) =>
+  getPackagesByCategory(
+    { params: { packageCategory: "Holiday" }, query: req.query },
+    res
+  )
+);
+
+router.get("/category/special", (req, res) =>
+  getPackagesByCategory(
+    { params: { packageCategory: "Special" }, query: req.query },
+    res
+  )
+);
+
+router.get("/category/latest", (req, res) =>
+  getPackagesByCategory(
+    { params: { packageCategory: "Latest" }, query: req.query },
+    res
+  )
+);
+
 router.get("/popular", getPopularTours);
 router.get("/make-all-popular", makeAllPopular);
 // read

@@ -42,56 +42,58 @@ export const fetchInternationalPackages = createAsyncThunk(
 );
 
 // ✅ Fetch yatra packages
+// ✅ Fetch Yatra packages (by packageCategory)
 export const fetchYatraPackages = createAsyncThunk(
-    "packages/fetchYatraPackages",
-    async (_, { rejectWithValue }) => {
-        try {
-            const res = await packagesAxios.get("/tour-type/yatra");
-            return res.data;
-        } catch (err) {
-            return rejectWithValue(err.response?.data?.message || err.message);
-        }
+  "packages/fetchYatraPackages",
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await packagesAxios.get("/category/yatra");
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
+  }
 );
 
-// ✅ Fetch holiday packages
+// ✅ Fetch Holiday packages
 export const fetchHolidayPackages = createAsyncThunk(
-    "packages/fetchHolidayPackages",
-    async (_, { rejectWithValue }) => {
-        try {
-            const res = await packagesAxios.get("/tour-type/holiday");
-            return res.data;
-        } catch (err) {
-            return rejectWithValue(err.response?.data?.message || err.message);
-        }
+  "packages/fetchHolidayPackages",
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await packagesAxios.get("/category/holiday");
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
+  }
 );
 
-// ✅ Fetch special packages
+// ✅ Fetch Special packages
 export const fetchSpecialPackages = createAsyncThunk(
-    "packages/fetchSpecialPackages",
-    async (_, { rejectWithValue }) => {
-        try {
-            const res = await packagesAxios.get("/tour-type/special");
-            return res.data;
-        } catch (err) {
-            return rejectWithValue(err.response?.data?.message || err.message);
-        }
+  "packages/fetchSpecialPackages",
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await packagesAxios.get("/category/special");
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
+  }
 );
 
-// ✅ Fetch latest packages
+// ✅ Fetch Latest packages
 export const fetchLatestPackages = createAsyncThunk(
-    "packages/fetchLatestPackages",
-    async (_, { rejectWithValue }) => {
-        try {
-            const res = await packagesAxios.get("/tour-type/latest");
-            return res.data;
-        } catch (err) {
-            return rejectWithValue(err.response?.data?.message || err.message);
-        }
+  "packages/fetchLatestPackages",
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await packagesAxios.get("/category/latest");
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
+  }
 );
+
 
 // ✅ Fetch single package
 export const fetchPackageById = createAsyncThunk(
