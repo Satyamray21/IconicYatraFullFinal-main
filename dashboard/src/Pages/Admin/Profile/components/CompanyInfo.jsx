@@ -47,7 +47,7 @@ import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import PersonIcon from "@mui/icons-material/Person";
 import DeleteIcon from "@mui/icons-material/Delete";
 import GroupIcon from "@mui/icons-material/Group";
-
+import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   getCompany,
@@ -57,6 +57,7 @@ import {
 const CompanyProfile = () => {
   const theme = useTheme();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { data: company, status } = useSelector(
     (state) => state.companyUI
   );
@@ -81,7 +82,7 @@ const CompanyProfile = () => {
     { text: "Email Notification", icon: <MailIcon />, color: "#f57c00" },
     { text: "Account & Billing", icon: <AccountBalanceIcon />, color: "#7b1fa2" },
     { text: "Banking & Status", icon: <AccountBalanceIcon />, color: "#d32f2f" },
-    { text: "Terms & Condition", icon: <GavelIcon />, color: "#0288d1" },
+    { text: "Terms & Condition", icon: <GavelIcon />, color: "#0288d1" ,path: "/terms&condition"},
     { text: "Package", icon: <WorkIcon />, color: "#00796b" },
   ];
 
@@ -460,7 +461,12 @@ const handleQrUpload = async () => {
                 <ListItemButton
                   key={item.text}
                   selected={selected === item.text}
-                  onClick={() => setSelected(item.text)}
+                 onClick={() => {
+        setSelected(item.text);
+        if (item.path) {
+          navigate(item.path); // Navigate if path exists
+        }
+      }}
                   sx={{
                     '&.Mui-selected': {
                       backgroundColor: alpha(item.color, 0.1),

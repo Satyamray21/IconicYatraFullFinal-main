@@ -106,6 +106,8 @@ import enquiryRoutes from "./src/routers/enquiry.routes.js";
 app.use("/api/v1/enquiry", enquiryRoutes);
 import careerRoutes from "./src/routers/career.routes.js";
 app.use("/api/v1/career", careerRoutes);
+import globalSettingsRoutes from "./src/routers/globalSettings.routes.js";
+app.use("/api/v1/global-settings", globalSettingsRoutes);
 // ✅ Fix: Load JSON without import
 const swaggerDocument = JSON.parse(fs.readFileSync("./swagger-output.json", "utf-8"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));

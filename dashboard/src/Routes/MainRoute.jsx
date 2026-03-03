@@ -142,6 +142,9 @@ const QuickFinalize = lazy(() =>
   import("../Pages/Admin/Quotation/QuickQuotation/QuickFinalize")
 );
 
+const GlobalSettings = lazy(()=>
+import("../Pages/Admin/Profile/components/GlobalSettings")
+);
 /* ========================== */
 /*        MAIN ROUTE          */
 /* ========================== */
@@ -363,6 +366,7 @@ const MainRoute = () => {
           <Route path="/hotelfinalize/:id" element={<HotelFinalize />} />
           <Route path="/customfinalize/:id" element={<CustomFinalize />} />
           <Route path="/quickfinalize/:id" element={<QuickFinalize />} />
+          <Route path="/terms&condition" element={<GlobalSettings />} />
           );
 <Route
   path="/company-website-enquiry"
