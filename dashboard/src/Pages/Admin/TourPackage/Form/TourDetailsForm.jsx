@@ -57,14 +57,54 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     const [departureSearch, setDepartureSearch] = useState("");
     const [filteredArrivalCities, setFilteredArrivalCities] = useState([]);
     const [filteredDepartureCities, setFilteredDepartureCities] = useState([]);
-    const [policyInputs, setPolicyInputs] = useState({
-        inclusionPolicy: initialData?.policy?.inclusionPolicy?.join('\n') || "",
-        exclusionPolicy: initialData?.policy?.exclusionPolicy?.join('\n') || "",
-        paymentPolicy: initialData?.policy?.paymentPolicy?.join('\n') || "",
-        cancellationPolicy: initialData?.policy?.cancellationPolicy?.join('\n') || "",
-        termsAndConditions: initialData?.policy?.termsAndConditions?.join('\n') || ""
-    });
+    // Keep your existing policyInputs useState with initialData only
+const [policyInputs, setPolicyInputs] = useState({
+    inclusionPolicy: initialData?.policy?.inclusionPolicy?.join('\n') || "",
+    exclusionPolicy: initialData?.policy?.exclusionPolicy?.join('\n') || "",
+    paymentPolicy: initialData?.policy?.paymentPolicy?.join('\n') || "",
+    cancellationPolicy: initialData?.policy?.cancellationPolicy?.join('\n') || "",
+    termsAndConditions: initialData?.policy?.termsAndConditions?.join('\n') || ""
+});
 
+// Add globalSettings state
+const [globalSettings, setGlobalSettings] = useState({
+    inclusionPolicy: "",
+    exclusionPolicy: "",
+    paymentPolicy: "",
+    cancellationPolicy: "",
+    termsAndConditions: ""
+});
+
+// Fetch global settings
+const fetchGlobalSettings = async () => {
+    try {
+        const res = await axios.get("/global-settings");
+        const settings = {
+            inclusionPolicy: res.data.inclusions?.join('\n') || "",
+            exclusionPolicy: res.data.exclusions?.join('\n') || "",
+            paymentPolicy: res.data.paymentPolicy || "",
+            cancellationPolicy: res.data.cancellationPolicy || "",
+            termsAndConditions: res.data.termsAndConditions || ""
+        };
+        setGlobalSettings(settings);
+        
+        // Only set global settings if no initial data exists
+        setPolicyInputs(prev => ({
+            inclusionPolicy: prev.inclusionPolicy || settings.inclusionPolicy,
+            exclusionPolicy: prev.exclusionPolicy || settings.exclusionPolicy,
+            paymentPolicy: prev.paymentPolicy || settings.paymentPolicy,
+            cancellationPolicy: prev.cancellationPolicy || settings.cancellationPolicy,
+            termsAndConditions: prev.termsAndConditions || settings.termsAndConditions
+        }));
+    } catch (err) {
+        console.error("Failed to fetch global settings:", err);
+    }
+};
+
+// Add useEffect to fetch settings
+useEffect(() => {
+    fetchGlobalSettings();
+}, []);
     // Add New Dialog states
     const [openDialog, setOpenDialog] = useState(false);
     const [currentField, setCurrentField] = useState("");
