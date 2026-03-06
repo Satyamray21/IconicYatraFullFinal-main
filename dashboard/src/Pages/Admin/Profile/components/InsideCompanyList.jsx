@@ -15,11 +15,14 @@ import {
 
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
-import { fetchCompanies } from "../../../../features/company/InsideCompany";
+import { fetchCompanies, deleteCompany } from "../../../../features/company/InsideCompany";
+
+import { toast } from "react-toastify";
 
 const InsideCompanyList = () => {
 
@@ -40,10 +43,34 @@ const InsideCompanyList = () => {
     c.phone?.toLowerCase().includes(search.toLowerCase())
   );
 
+  /* ================= DELETE ================= */
+
+  const handleDelete = async (id) => {
+
+    const confirmDelete = window.confirm("Are you sure you want to delete this company?");
+
+    if (!confirmDelete) return;
+
+    try {
+
+      await dispatch(deleteCompany(id)).unwrap();
+
+      toast.success("Company deleted successfully");
+
+      dispatch(fetchCompanies());
+
+    } catch (error) {
+
+      toast.error(error || "Delete failed");
+
+    }
+  };
+
   return (
     <Paper sx={{ p: 4 }}>
 
       {/* Header */}
+
       <Box
         sx={{
           display: "flex",
@@ -53,10 +80,13 @@ const InsideCompanyList = () => {
         }}
       >
         <Box>
+
           <Typography variant="h5">Inside Companies</Typography>
+
           <Typography variant="body2" color="text.secondary">
             {companies?.length || 0} companies
           </Typography>
+
         </Box>
 
         <Button
@@ -66,9 +96,11 @@ const InsideCompanyList = () => {
         >
           Add Company
         </Button>
+
       </Box>
 
       {/* Search */}
+
       <TextField
         fullWidth
         placeholder="Search by company name, email or phone..."
@@ -80,21 +112,28 @@ const InsideCompanyList = () => {
       {/* Table */}
 
       <Table>
+
         <TableHead>
+
           <TableRow>
+
             <TableCell>Sr No.</TableCell>
             <TableCell>Company Name</TableCell>
             <TableCell>Phone Number</TableCell>
             <TableCell>Email</TableCell>
             <TableCell>Status</TableCell>
             <TableCell>Actions</TableCell>
+
           </TableRow>
+
         </TableHead>
 
         <TableBody>
 
           {filteredCompanies?.length > 0 ? (
+
             filteredCompanies.map((company, index) => (
+
               <TableRow key={company._id}>
 
                 <TableCell>{index + 1}</TableCell>
@@ -111,6 +150,8 @@ const InsideCompanyList = () => {
 
                 <TableCell>
 
+                  {/* EDIT */}
+
                   <IconButton
                     color="primary"
                     onClick={() =>
@@ -120,12 +161,25 @@ const InsideCompanyList = () => {
                     <EditIcon />
                   </IconButton>
 
+                  {/* DELETE */}
+
+                  <IconButton
+                    color="error"
+                    onClick={() => handleDelete(company._id)}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+
                 </TableCell>
 
               </TableRow>
+
             ))
+
           ) : (
+
             <TableRow>
+
               <TableCell colSpan={6} align="center">
 
                 <Typography sx={{ py: 4 }}>
@@ -139,10 +193,13 @@ const InsideCompanyList = () => {
                 </Typography>
 
               </TableCell>
+
             </TableRow>
+
           )}
 
         </TableBody>
+
       </Table>
 
     </Paper>

@@ -377,7 +377,7 @@ const MainRoute = () => {
           <Route path="/admin/inside-company" element={<InsideCompanyList />} />
 
 <Route path="/admin/inside-company/add" element={<CompanyForm />} />
-          
+<Route path="/admin/inside-company/edit/:id" element={<CompanyForm />} />    
 <Route
   path="/company-website-enquiry"
   element={<CompanyWebsiteEnquiry />}

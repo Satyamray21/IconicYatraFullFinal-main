@@ -15,6 +15,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL
 console.log("Final BASE_URL being used:", BASE_URL);
 
 const initialState = {
+
   companies: [],
   company: null,
   loading: false,
@@ -37,7 +38,7 @@ export const createCompany = createAsyncThunk(
       
       const { data } = await axios.post(BASE_URL, formData, {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 10000, // Add timeout to see if it's hanging
+      
       });
       
       console.log("✅ API Response:", data);
@@ -158,6 +159,10 @@ const companySlice = createSlice({
     resetSuccess: (state) => {
       state.success = false;
     },
+    clearCompany: (state) => {
+  state.company = null;
+},
+
   },
   extraReducers: (builder) => {
     builder
@@ -251,5 +256,5 @@ const companySlice = createSlice({
   },
 });
 
-export const { clearCompanyData, resetSuccess } = companySlice.actions;
+export const { clearCompanyData,clearCompany, resetSuccess } = companySlice.actions;
 export default companySlice.reducer;

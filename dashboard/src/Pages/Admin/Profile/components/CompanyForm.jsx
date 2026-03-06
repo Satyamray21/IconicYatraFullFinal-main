@@ -5,8 +5,11 @@ import {
   Button,
   Typography,
   Paper,
-  Alert
+  Alert,
+  Switch,
+  FormControlLabel
 } from "@mui/material";
+
 import { useDispatch, useSelector } from "react-redux";
 import { Formik } from "formik";
 import * as Yup from "yup";
@@ -16,10 +19,12 @@ import {
   createCompany,
   getCompanyById,
   updateCompany,
-  resetSuccess
+  resetSuccess,
+  clearCompany
 } from "../../../../features/company/InsideCompany";
 
 const CompanyForm = () => {
+
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { id } = useParams();
@@ -30,16 +35,24 @@ const CompanyForm = () => {
 
   const isEditMode = !!id;
 
-  // Fetch company when editing
+  /* ================= FETCH COMPANY ================= */
+
   useEffect(() => {
+
     if (isEditMode) {
       dispatch(getCompanyById(id));
+    } else {
+      dispatch(clearCompany());
     }
+
   }, [dispatch, id, isEditMode]);
 
-  // Redirect after success
+  /* ================= SUCCESS ================= */
+
   useEffect(() => {
+
     if (success) {
+
       alert(
         isEditMode
           ? "Company updated successfully!"
@@ -49,30 +62,40 @@ const CompanyForm = () => {
       dispatch(resetSuccess());
 
       navigate("/admin/inside-company");
+
     }
+
   }, [success, dispatch, navigate, isEditMode]);
 
+  /* ================= INITIAL VALUES ================= */
+
   const initialValues = {
-    companyName: company?.companyName || "",
-    address: company?.address || "",
-    phone: company?.phone || "",
-    email: company?.email || "",
-    gstin: company?.gstin || "",
-    stateCode: company?.stateCode || "",
-    signName: company?.authorizedSignatory?.name || "",
-    signDesignation: company?.authorizedSignatory?.designation || "",
-    termsConditions: company?.termsConditions || "",
-    paymentLink: company?.paymentLink || "",
+
+    companyName: isEditMode ? company?.companyName || "" : "",
+    address: isEditMode ? company?.address || "" : "",
+    phone: isEditMode ? company?.phone || "" : "",
+    email: isEditMode ? company?.email || "" : "",
+    gstin: isEditMode ? company?.gstin || "" : "",
+    stateCode: isEditMode ? company?.stateCode || "" : "",
+    termsConditions: isEditMode ? company?.termsConditions || "" : "",
+    paymentLink: isEditMode ? company?.paymentLink || "" : "",
+    isActive: isEditMode ? company?.isActive ?? true : true,
     logo: null,
-    signature: null
+    signatureImage: null
+
   };
+
+  /* ================= VALIDATION ================= */
 
   const validationSchema = Yup.object({
     companyName: Yup.string().required("Company name is required"),
     address: Yup.string().required("Address is required")
   });
 
+  /* ================= SUBMIT ================= */
+
   const handleSubmit = (values) => {
+
     const formData = new FormData();
 
     formData.append("companyName", values.companyName);
@@ -83,24 +106,25 @@ const CompanyForm = () => {
     formData.append("stateCode", values.stateCode);
     formData.append("termsConditions", values.termsConditions);
     formData.append("paymentLink", values.paymentLink);
+    formData.append("isActive", values.isActive);
 
-    formData.append(
-      "authorizedSignatory",
-      JSON.stringify({
-        name: values.signName,
-        designation: values.signDesignation
-      })
-    );
+    if (values.logo) {
+      formData.append("logo", values.logo);
+    }
 
-    if (values.logo) formData.append("logo", values.logo);
-    if (values.signature) formData.append("signature", values.signature);
+    if (values.signatureImage) {
+      formData.append("signatureImage", values.signatureImage);
+    }
 
     if (isEditMode) {
       dispatch(updateCompany({ id, formData }));
     } else {
       dispatch(createCompany(formData));
     }
+
   };
+
+  /* ================= LOADING ================= */
 
   if (isEditMode && loading && !company) {
     return (
@@ -112,6 +136,7 @@ const CompanyForm = () => {
 
   return (
     <Paper sx={{ p: 4, maxWidth: 1000, mx: "auto", mt: 4 }}>
+
       <Typography variant="h5" mb={3}>
         {isEditMode ? "Edit Company" : "Add Company"}
       </Typography>
@@ -132,9 +157,11 @@ const CompanyForm = () => {
           setFieldValue,
           handleSubmit
         }) => (
+
           <form onSubmit={handleSubmit}>
+
             <Grid container spacing={3}>
-              
+
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
@@ -211,23 +238,29 @@ const CompanyForm = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Signatory Name"
-                  name="signName"
-                  value={values.signName}
+                  label="Terms & Conditions"
+                  name="termsConditions"
+                  multiline
+                  rows={3}
+                  value={values.termsConditions}
                   onChange={handleChange}
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Signatory Designation"
-                  name="signDesignation"
-                  value={values.signDesignation}
-                  onChange={handleChange}
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={values.isActive}
+                      onChange={(e) =>
+                        setFieldValue("isActive", e.target.checked)
+                      }
+                    />
+                  }
+                  label="Active Company"
                 />
               </Grid>
 
@@ -253,22 +286,10 @@ const CompanyForm = () => {
                     type="file"
                     accept="image/*"
                     onChange={(e) =>
-                      setFieldValue("signature", e.target.files[0])
+                      setFieldValue("signatureImage", e.target.files[0])
                     }
                   />
                 </Button>
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Terms & Conditions"
-                  name="termsConditions"
-                  multiline
-                  rows={3}
-                  value={values.termsConditions}
-                  onChange={handleChange}
-                />
               </Grid>
 
               <Grid item xs={12} md={6}>
@@ -297,9 +318,12 @@ const CompanyForm = () => {
               </Grid>
 
             </Grid>
+
           </form>
+
         )}
       </Formik>
+
     </Paper>
   );
 };

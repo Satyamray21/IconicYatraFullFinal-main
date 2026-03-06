@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Box,
   Grid,
@@ -31,7 +31,8 @@ import AssociatesForm from "../../Associates/Form/AssociatesForm";
 import dayjs from "dayjs";
 import { fetchCountries, fetchStatesByCountry, fetchCitiesByState, clearStates, clearCities } from '../../../../features/location/locationSlice';
 import { fetchAllAssociates } from "../../../../features/associate/associateSlice";
-import { fetchAllStaff } from "../../../../features/staff/staffSlice"
+import { fetchAllStaff } from "../../../../features/staff/staffSlice";
+
 // Validation schema combining both steps
 const validationSchema = Yup.object({
   // Step 1 fields
@@ -45,8 +46,11 @@ const validationSchema = Yup.object({
   destination: Yup.string().required("Destination is required"),
   services: Yup.string().required("Services are required"),
   adults: Yup.number().required("Required").min(1, "At least 1 adult"),
-  arrivalDate: Yup.date().required("Arrival date is required"),
-  departureDate: Yup.date().required("Departure date is required"),
+  arrivalDate: Yup.date().required("Arrival date is required").nullable(),
+  departureDate: Yup.date()
+    .required("Departure date is required")
+    .nullable()
+    .min(Yup.ref('arrivalDate'), "Departure date must be after arrival date"),
   sharingType: Yup.string().required("Sharing type is required"),
   noOfRooms: Yup.number().required("Required").min(1, "At least 1 room"),
   country: Yup.string().when("tourType", {
@@ -62,7 +66,7 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     countries,
     states,
     cities,
-    loading,
+    loading: locationLoading,
   } = useSelector((state) => state.location);
   const { list: staffList = [], loading: staffLoading } = useSelector(
     (state) => state.staffs
@@ -82,25 +86,22 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     source: ["Direct", "Referral", "Agent's"],
     referralBy: [],
     agentName: [],
-    assignedTo: ["Staff A", "Staff B"],
+    assignedTo: [],
     priority: ["High", "Medium", "Low"],
-    country: ["India", "USA", "Canada"],
-    state: ["Karnataka", "Maharashtra"],
-    city: ["Bangalore", "Mumbai"],
-    // Step 2 dropdowns
-    destination: ["Delhi", "Paris"],
-    services: ["Hotel", "Transport"],
-    arrivalCity: ["Mumbai", "Delhi"],
-    arrivalLocation: ["Airport"],
-    departureCity: ["Delhi"],
-    departureLocation: ["Hotel"],
-    hotelType: ["3 Star", "5 Star"],
-    mealPlan: ["Breakfast"],
-    sharingType: ["Twin"],
+    destination: [],
+    services: ["Hotel", "Transport", "Sightseeing", "Meals", "Guide"],
+    arrivalCity: [],
+    arrivalLocation: ["Airport", "Railway Station", "Hotel", "Bus Stand"],
+    departureCity: [],
+    departureLocation: ["Airport", "Railway Station", "Hotel", "Bus Stand"],
+    hotelType: ["3 Star", "4 Star", "5 Star", "Luxury", "Budget"],
+    mealPlan: ["Breakfast", "Half Board", "Full Board", "All Inclusive"],
+    sharingType: ["Single", "Double", "Triple", "Quad"],
   });
 
   const [customItems, setCustomItems] = useState({
-    country: [],
+    referralBy: [],
+    agentName: [],
     destination: [],
     services: [],
     arrivalCity: [],
@@ -164,11 +165,9 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
   const transformApiDataToForm = (apiData) => {
     if (!apiData) return defaultInitialData;
 
-    console.log("📥 Raw API Data received:", apiData);
-
     const { personalDetails, location, address, officialDetail, tourDetails } = apiData;
 
-    const transformedData = {
+    return {
       // Step 1 fields
       fullName: personalDetails?.fullName || "",
       mobile: personalDetails?.mobile || "",
@@ -195,10 +194,10 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
       tourType: tourDetails?.tourType || "Domestic",
       destination: tourDetails?.tourDestination || "",
       services: tourDetails?.servicesRequired?.[0] || "",
-      adults: tourDetails?.members?.adults || "",
-      children: tourDetails?.members?.children || "",
-      kidsWithoutMattress: tourDetails?.members?.kidsWithoutMattress || "",
-      infants: tourDetails?.members?.infants || "",
+      adults: tourDetails?.members?.adults?.toString() || "",
+      children: tourDetails?.members?.children?.toString() || "",
+      kidsWithoutMattress: tourDetails?.members?.kidsWithoutMattress?.toString() || "",
+      infants: tourDetails?.members?.infants?.toString() || "",
       arrivalDate: tourDetails?.pickupDrop?.arrivalDate ? dayjs(tourDetails.pickupDrop.arrivalDate) : null,
       arrivalCity: tourDetails?.pickupDrop?.arrivalCity || "",
       arrivalLocation: tourDetails?.pickupDrop?.arrivalLocation || "",
@@ -209,35 +208,24 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
       mealPlan: tourDetails?.accommodation?.mealPlan || "",
       transport: tourDetails?.accommodation?.transport ? "Yes" : "No",
       sharingType: tourDetails?.accommodation?.sharingType || "",
-      noOfRooms: tourDetails?.accommodation?.noOfRooms || "",
-      noOfMattress: tourDetails?.accommodation?.noOfMattress || "0",
-      noOfNights: tourDetails?.accommodation?.noOfNights || "",
+      noOfRooms: tourDetails?.accommodation?.noOfRooms?.toString() || "",
+      noOfMattress: tourDetails?.accommodation?.noOfMattress?.toString() || "0",
+      noOfNights: tourDetails?.accommodation?.noOfNights?.toString() || "",
       requirementNote: tourDetails?.accommodation?.requirementNote || "",
     };
-
-    console.log("🔄 Transformed Form Data:", transformedData);
-    return transformedData;
   };
 
   // Update dropdown options with API data
   const updateDropdownOptionsWithApiData = (apiData) => {
     if (!apiData) return;
 
-    const { location, officialDetail, tourDetails } = apiData;
+    const { officialDetail, tourDetails } = apiData;
 
     setDropdownOptions(prev => ({
       ...prev,
-      // Update location options
-      country: [...new Set([...prev.country, location?.country].filter(Boolean))],
-      state: [...new Set([...prev.state, location?.state].filter(Boolean))],
-      city: [...new Set([...prev.city, location?.city].filter(Boolean))],
-
-      // Update official detail options
       referralBy: [...new Set([...prev.referralBy, officialDetail?.referredBy].filter(Boolean))],
       assignedTo: [...new Set([...prev.assignedTo, officialDetail?.assignedTo].filter(Boolean))],
       agentName: [...new Set([...prev.agentName, officialDetail?.agentName].filter(Boolean))],
-
-      // Update tour detail options
       destination: [...new Set([...prev.destination, tourDetails?.tourDestination].filter(Boolean))],
       arrivalCity: [...new Set([...prev.arrivalCity, tourDetails?.pickupDrop?.arrivalCity].filter(Boolean))],
       arrivalLocation: [...new Set([...prev.arrivalLocation, tourDetails?.pickupDrop?.arrivalLocation].filter(Boolean))],
@@ -253,9 +241,8 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
   const formik = useFormik({
     initialValues: defaultInitialData,
     validationSchema,
+    enableReinitialize: true,
     onSubmit: (values) => {
-      console.log("✅ Form submitted:", values);
-      // Transform form data back to API format
       const updateData = {
         personalDetails: {
           fullName: values.fullName,
@@ -287,7 +274,7 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
         tourDetails: {
           tourType: values.tourType,
           tourDestination: values.destination,
-          servicesRequired: [values.services],
+          servicesRequired: values.services ? [values.services] : [],
           members: {
             adults: parseInt(values.adults) || 0,
             children: parseInt(values.children) || 0,
@@ -303,7 +290,7 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
             departureLocation: values.departureLocation,
           },
           accommodation: {
-            hotelType: [values.hotelType],
+            hotelType: values.hotelType ? [values.hotelType] : [],
             mealPlan: values.mealPlan,
             transport: values.transport === "Yes",
             sharingType: values.sharingType,
@@ -314,8 +301,6 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
           },
         },
       };
-
-      console.log("📤 Update Data to API:", updateData);
 
       dispatch(updateLead({ leadId, updateData }))
         .unwrap()
@@ -336,7 +321,6 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
       dispatch(viewLeadById(leadId));
     }
 
-    // Cleanup function
     return () => {
       dispatch(resetViewStatus());
       dispatch(resetUpdateStatus());
@@ -346,42 +330,32 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
   // Update form when viewedLead data changes
   useEffect(() => {
     if (viewedLead) {
-      console.log("🎯 Received viewedLead:", viewedLead);
-
-      // Update dropdown options with API data first
       updateDropdownOptionsWithApiData(viewedLead);
-
-      // Then set form values
       const formData = transformApiDataToForm(viewedLead);
-      console.log("🔄 Setting form values:", formData);
       formik.setValues(formData);
     }
   }, [viewedLead]);
+
   useEffect(() => {
     if (formik.values.source === "Referral") {
       dispatch(fetchAllAssociates());
     }
   }, [formik.values.source, dispatch]);
+
   useEffect(() => {
     dispatch(fetchAllStaff());
   }, [dispatch]);
+
   useEffect(() => {
     dispatch(fetchCountries());
   }, [dispatch]);
 
   useEffect(() => {
-    if (formik.values.country) {
+    if (formik.values.country && formik.values.country !== "Loading countries...") {
       dispatch(fetchStatesByCountry(formik.values.country));
-      formik.setFieldValue("state", "");
-      formik.setFieldValue("city", "");
-      dispatch(clearCities());
-    } else {
-      dispatch(clearStates());
-      dispatch(clearCities());
     }
   }, [formik.values.country, dispatch]);
 
-  // Fetch cities when state changes
   useEffect(() => {
     if (formik.values.state && formik.values.country) {
       dispatch(
@@ -390,13 +364,11 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
           stateName: formik.values.state,
         })
       );
-    } else {
-      dispatch(clearCities());
     }
   }, [formik.values.state, formik.values.country, dispatch]);
+
   const steps = ['Customer Details', 'Tour Details', 'Review'];
 
-  // Handles +Add New option
   const handleAddNewClick = (field) => {
     if (["assignedTo", "referralBy", "agentName"].includes(field)) {
       setActiveField(field);
@@ -434,6 +406,15 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
       handleAddNewClick(name);
     } else {
       formik.setFieldValue(name, value);
+      
+      // Clear dependent fields
+      if (name === "country") {
+        formik.setFieldValue("state", "");
+        formik.setFieldValue("city", "");
+      }
+      if (name === "state") {
+        formik.setFieldValue("city", "");
+      }
     }
   };
 
@@ -446,91 +427,16 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     formik.setFieldValue(activeField, newName);
     setShowAssociateForm(false);
   };
-  const renderSelectField = (label, name, options = []) => (
-    <TextField
-      fullWidth
-      select
-      label={label}
-      name={name}
-      value={formik.values[name]}
-      onChange={handleFieldChange}
-      onBlur={formik.handleBlur}
-      error={formik.touched[name] && Boolean(formik.errors[name])}
-      helperText={formik.touched[name] && formik.errors[name]}
-      sx={{ mb: 2 }}
-      disabled={
-        (name === "referralBy" && associatesLoading) ||
-        (name === "assignedTo" && staffLoading)
-      }
-    >
-      {name === "referralBy" && associatesLoading && (
-        <MenuItem disabled>Loading associates...</MenuItem>
-      )}
-
-      {/* Show loading message for assignedTo */}
-      {name === "assignedTo" && staffLoading && (
-        <MenuItem disabled>Loading staff...</MenuItem>
-      )}
-
-      {/* Show normal options when not loading */}
-      {!associatesLoading &&
-        !staffLoading &&
-        options.map((opt) => (
-          <MenuItem key={opt} value={opt}>
-            {opt}
-          </MenuItem>
-        ))}
-
-      {name !== "priority" && (
-        <MenuItem value="__add_new__">➕ Add New</MenuItem>
-      )}
-    </TextField>
-  );
-  const getStepContent = (step) => {
-    switch (step) {
-      case 0:
-        return (
-          <Step1Content
-            formik={formik}
-            dropdownOptions={dropdownOptions}
-            onFieldChange={handleFieldChange}
-            onAddNewClick={handleAddNewClick}
-            countries={countries} // Add this line
-            states={states} // Add this line
-            cities={cities}
-            staffList={staffList} // Add this
-            staffLoading={staffLoading} // Add this
-            associates={associates} // Add this
-            associatesLoading={associatesLoading} // Add this
-          />
-        );
-      case 1:
-        return (
-          <Step2Content
-            formik={formik}
-            dropdownOptions={dropdownOptions}
-            customItems={customItems}
-            onFieldChange={handleFieldChange}
-            onAddNewClick={handleAddNewClick}
-            countries={countries}
-          />
-        );
-      case 2:
-        return <ReviewContent formik={formik} />;
-      default:
-        return null;
-    }
-  };
 
   const handleNext = () => {
-    let isValid = true;
+    const errors = [];
 
     if (activeStep === 0) {
       const step1Fields = ['fullName', 'source', 'assignedTo'];
       step1Fields.forEach(field => {
         if (!formik.values[field]) {
           formik.setFieldTouched(field, true);
-          isValid = false;
+          errors.push(field);
         }
       });
     } else if (activeStep === 1) {
@@ -538,17 +444,17 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
       step2Fields.forEach(field => {
         if (!formik.values[field]) {
           formik.setFieldTouched(field, true);
-          isValid = false;
+          errors.push(field);
         }
       });
 
       if (formik.values.tourType === "International" && !formik.values.country) {
         formik.setFieldTouched('country', true);
-        isValid = false;
+        errors.push('country');
       }
     }
 
-    if (isValid) {
+    if (errors.length === 0) {
       setActiveStep((prev) => prev + 1);
     }
   };
@@ -557,7 +463,6 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     setActiveStep((prev) => prev - 1);
   };
 
-  // Show loading while fetching data
   if (viewLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -567,7 +472,6 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     );
   }
 
-  // Show error if fetch fails
   if (viewError) {
     return (
       <Box p={2}>
@@ -582,54 +486,97 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
   }
 
   return (
-    <Box component="form" onSubmit={formik.handleSubmit} p={2}>
-      <Typography variant="h5" gutterBottom>
-        Edit Lead - {viewedLead?.leadId}
-      </Typography>
+    <Box sx={{ 
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      bgcolor: 'background.paper',
+      zIndex: 1300,
+      overflow: 'auto',
+      p: 3
+    }}>
+      <Box component="form" onSubmit={formik.handleSubmit}>
+        <Typography variant="h5" gutterBottom>
+          Edit Lead - {viewedLead?.leadId || 'Loading...'}
+        </Typography>
 
-      {updateError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {updateError}
-        </Alert>
-      )}
+        {updateError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {updateError}
+          </Alert>
+        )}
 
-      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-        {steps.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+          {steps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
 
-      {getStepContent(activeStep)}
+        {activeStep === 0 && (
+          <Step1Content
+            formik={formik}
+            dropdownOptions={dropdownOptions}
+            onFieldChange={handleFieldChange}
+            countries={countries}
+            states={states}
+            cities={cities}
+            locationLoading={locationLoading}
+            staffList={staffList}
+            staffLoading={staffLoading}
+            associates={associates}
+            associatesLoading={associatesLoading}
+          />
+        )}
 
-      <Box display="flex" justifyContent="space-between" mt={4}>
-        <Button
-          disabled={activeStep === 0}
-          onClick={handleBack}
-          variant="outlined"
-        >
-          Back
-        </Button>
+        {activeStep === 1 && (
+          <Step2Content
+            formik={formik}
+            dropdownOptions={dropdownOptions}
+            customItems={customItems}
+            onFieldChange={handleFieldChange}
+            onAddNewClick={handleAddNewClick}
+            countries={countries}
+            states={states}
+            locationLoading={locationLoading}
+          />
+        )}
 
-        <Box display="flex" gap={2}>
-          <Button variant="outlined" onClick={onCancel} disabled={updateLoading}>
-            Cancel
+        {activeStep === 2 && (
+          <ReviewContent formik={formik} />
+        )}
+
+        <Box display="flex" justifyContent="space-between" mt={4}>
+          <Button
+            disabled={activeStep === 0}
+            onClick={handleBack}
+            variant="outlined"
+          >
+            Back
           </Button>
 
-          {activeStep === steps.length - 1 ? (
-            <Button
-              variant="contained"
-              type="submit"
-              disabled={updateLoading}
-            >
-              {updateLoading ? <CircularProgress size={24} /> : "Update Lead"}
+          <Box display="flex" gap={2}>
+            <Button variant="outlined" onClick={onCancel} disabled={updateLoading}>
+              Cancel
             </Button>
-          ) : (
-            <Button variant="contained" onClick={handleNext}>
-              Next
-            </Button>
-          )}
+
+            {activeStep === steps.length - 1 ? (
+              <Button
+                variant="contained"
+                type="submit"
+                disabled={updateLoading || !formik.isValid}
+              >
+                {updateLoading ? <CircularProgress size={24} /> : "Update Lead"}
+              </Button>
+            ) : (
+              <Button variant="contained" onClick={handleNext}>
+                Next
+              </Button>
+            )}
+          </Box>
         </Box>
       </Box>
 
@@ -679,16 +626,20 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
 };
 
 // Step 1 Content Component
-const Step1Content = ({ formik, dropdownOptions, onFieldChange, onAddNewClick, countries, // Add this prop
-  states,    // Add this prop
+const Step1Content = ({ 
+  formik, 
+  dropdownOptions, 
+  onFieldChange, 
+  countries, 
+  states, 
   cities,
-  staffList, // Add this prop
-  staffLoading, // Add this prop
-  associates, // Add this prop
-  associatesLoading
+  locationLoading,
+  staffList, 
+  staffLoading, 
+  associates, 
+  associatesLoading 
 }) => {
-  const renderSelectField = (label, name, options = []) => {
-    // Combine dropdown options and current value to ensure it appears
+  const renderSelectField = (label, name, options = [], loading = false) => {
     const allOptions = [...new Set([...options, formik.values[name]].filter(Boolean))];
 
     return (
@@ -697,89 +648,100 @@ const Step1Content = ({ formik, dropdownOptions, onFieldChange, onAddNewClick, c
         select
         label={label}
         name={name}
-        value={formik.values[name]}
+        value={formik.values[name] || ''}
         onChange={onFieldChange}
+        onBlur={formik.handleBlur}
         error={formik.touched[name] && Boolean(formik.errors[name])}
         helperText={formik.touched[name] && formik.errors[name]}
         sx={{ mb: 2 }}
-        disabled={
-          (name === "referralBy" && associatesLoading) ||
-          (name === "assignedTo" && staffLoading)
-        }
+        disabled={loading}
       >
-        {/* Show loading message for referralBy */}
-        {name === "referralBy" && associatesLoading && (
-          <MenuItem disabled>Loading associates...</MenuItem>
+        {loading && (
+          <MenuItem disabled>Loading...</MenuItem>
         )}
-
-        {/* Show loading message for assignedTo */}
-        {name === "assignedTo" && staffLoading && (
-          <MenuItem disabled>Loading staff...</MenuItem>
-        )}
-
-        {/* Show normal options when not loading */}
-        {!associatesLoading && !staffLoading && allOptions.map((opt) => (
+        
+        {!loading && allOptions.map((opt) => (
           <MenuItem key={opt} value={opt}>
             {opt}
           </MenuItem>
         ))}
 
-        <MenuItem value="__add_new__">➕ Add New</MenuItem>
+        {name !== "priority" && name !== "title" && !loading && (
+          <MenuItem value="__add_new__">➕ Add New</MenuItem>
+        )}
       </TextField>
     );
   };
 
-  const renderTextField = (label, name) => (
+  const renderTextField = (label, name, type = "text") => (
     <TextField
       fullWidth
       label={label}
       name={name}
-      value={formik.values[name]}
+      type={type}
+      value={formik.values[name] || ''}
       onChange={formik.handleChange}
+      onBlur={formik.handleBlur}
       error={formik.touched[name] && Boolean(formik.errors[name])}
       helperText={formik.touched[name] && formik.errors[name]}
       sx={{ mb: 2 }}
     />
   );
 
+  const getCountryOptions = () => {
+    if (!countries || countries.length === 0) return ["India"];
+    return countries.map(c => c.name);
+  };
+
+  const getStateOptions = () => {
+    if (locationLoading) return ["Loading states..."];
+    if (!states || states.length === 0) return ["No states available"];
+    return states.map(s => s.name);
+  };
+
+  const getCityOptions = () => {
+    if (locationLoading) return ["Loading cities..."];
+    if (!cities || cities.length === 0) return ["No cities available"];
+    return cities.map(c => c.name);
+  };
+
   return (
     <Box>
       {/* Personal Details */}
-      <Box border={1} borderRadius={1} p={2} mb={2}>
+      <Box border={1} borderRadius={1} p={2} mb={2} borderColor="grey.300">
         <Typography fontWeight="bold" mb={2}>
           Personal Details
         </Typography>
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Grid size={{xs:12, sm:6, md:4}} >
             {renderSelectField("Title", "title", dropdownOptions.title)}
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Grid size={{xs:12, sm:6, md:4}}>
             {renderTextField("Full Name *", "fullName")}
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Grid size={{xs:12, sm:6, md:4}}>
             {renderTextField("Mobile", "mobile")}
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Grid size={{xs:12, sm:6, md:4}}>
             {renderTextField("Alternate Number", "alternateNumber")}
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Grid size={{xs:12, sm:6, md:4}}>
             {renderTextField("Email", "email")}
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Grid size={{xs:12, sm:6, md:4}}>
             <LocalizationProvider dateAdapter={AdapterDayjs}>
               <DatePicker
                 label="Date Of Birth"
                 value={formik.values.dob}
                 onChange={(value) => formik.setFieldValue("dob", value)}
-                renderInput={(params) => (
-                  <TextField
-                    fullWidth
-                    sx={{ mb: 2 }}
-                    {...params}
-                    error={formik.touched.dob && Boolean(formik.errors.dob)}
-                    helperText={formik.touched.dob && formik.errors.dob}
-                  />
-                )}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    sx: { mb: 2 },
+                    error: formik.touched.dob && Boolean(formik.errors.dob),
+                    helperText: formik.touched.dob && formik.errors.dob
+                  }
+                }}
               />
             </LocalizationProvider>
           </Grid>
@@ -787,47 +749,27 @@ const Step1Content = ({ formik, dropdownOptions, onFieldChange, onAddNewClick, c
       </Box>
 
       {/* Location */}
-      <Box border={1} borderRadius={1} p={2} mb={2}>
+      <Box border={1} borderRadius={1} p={2} mb={2} borderColor="grey.300">
         <Typography fontWeight="bold" mb={2}>
           Location
         </Typography>
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, sm: 4 }}>
-            {renderSelectField(
-              "Country",
-              "country",
-              countries && countries.length > 0
-                ? countries.map((c) => c.name)
-                : ["Loading countries..."]
-            )}
+          <Grid size={{xs:12, sm:4}}>
+            {renderSelectField("Country", "country", getCountryOptions())}
           </Grid>
-          <Grid size={{ xs: 12, sm: 4 }}>
-            {renderSelectField(
-              "State",
-              "state",
-              states && states.length > 0
-                ? states.map((s) => s.name) // ✅ Fetch full state names from API
-                : ["No states available"]
-            )}
-
+          <Grid size={{xs:12, sm:4}}>
+            {renderSelectField("State", "state", getStateOptions(), locationLoading)}
           </Grid>
-          <Grid size={{ xs: 12, sm: 4 }}>
-            {renderSelectField(
-              "City",
-              "city",
-              cities && cities.length > 0
-                ? cities.map((c) => c.name) // ✅ Always fetch from API
-                : ["No cities available"]
-            )}
-
+          <Grid size={{xs:12, sm:4}}>
+            {renderSelectField("City", "city", getCityOptions(), locationLoading)}
           </Grid>
         </Grid>
       </Box>
 
       {/* Address & Official Detail */}
       <Grid container spacing={2} mb={2}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Box border={1} borderRadius={1} p={2} height="100%">
+        <Grid size={{xs:12, md:6}}>
+          <Box border={1} borderRadius={1} p={2} height="100%" borderColor="grey.300">
             <Typography fontWeight="bold" mb={2}>
               Address
             </Typography>
@@ -838,8 +780,8 @@ const Step1Content = ({ formik, dropdownOptions, onFieldChange, onAddNewClick, c
           </Box>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Box border={1} borderRadius={1} p={2}>
+        <Grid size={{xs:12, md:6}}>
+          <Box border={1} borderRadius={1} p={2} borderColor="grey.300">
             <Typography fontWeight="bold" mb={2}>
               Official Detail
             </Typography>
@@ -860,45 +802,42 @@ const Step1Content = ({ formik, dropdownOptions, onFieldChange, onAddNewClick, c
             {renderSelectField("Priority", "priority", dropdownOptions.priority)}
             {renderSelectField("Source *", "source", dropdownOptions.source)}
 
-            {formik.values.businessType === "B2B" &&
-              formik.values.source === "Referral" &&
+            {formik.values.businessType === "B2B" && formik.values.source === "Referral" && (
               renderSelectField(
                 "Referral By",
                 "referralBy",
+                associatesLoading 
+                  ? ["Loading..."] 
+                  : associates.map((a) => a.personalDetails?.fullName || a.name).filter(Boolean),
                 associatesLoading
-                  ? ["Loading associates..."] // Empty while loading
-                  : associates.map((a) => a.personalDetails.fullName) // ✅ Use correct field from API
-              )}
+              )
+            )}
 
-
-            {formik.values.businessType === "B2B" &&
-              formik.values.source === "Agent's" &&
-              renderSelectField(
-                "Agent Name",
-                "agentName",
-                dropdownOptions.agentName
-              )}
+            {formik.values.businessType === "B2B" && formik.values.source === "Agent's" && (
+              renderSelectField("Agent Name", "agentName", dropdownOptions.agentName)
+            )}
 
             {renderSelectField(
               "Assigned To *",
               "assignedTo",
               staffLoading
-                ? []
-                : staffList.map((staff) => staff.personalDetails?.fullName || staff.name)
+                ? ["Loading..."]
+                : staffList.map((staff) => staff.personalDetails?.fullName || staff.name).filter(Boolean),
+              staffLoading
             )}
           </Box>
         </Grid>
       </Grid>
 
       {/* Note */}
-      <Box mb={2} mt={6}>
+      <Box mb={2}>
         <TextField
           label="Initial Note"
           name="note"
           multiline
           rows={3}
           fullWidth
-          value={formik.values.note}
+          value={formik.values.note || ''}
           onChange={formik.handleChange}
         />
       </Box>
@@ -907,133 +846,122 @@ const Step1Content = ({ formik, dropdownOptions, onFieldChange, onAddNewClick, c
 };
 
 // Step 2 Content Component
-const Step2Content = ({ formik, dropdownOptions, customItems, onFieldChange, onAddNewClick, countries }) => {
-  const dispatch = useDispatch();
-  const { states, cities, loading: locationLoading } = useSelector((state) => state.location);
-
-  // Improved getOptions function that includes current value
-  const getOptions = (field) => {
+const Step2Content = ({ 
+  formik, 
+  dropdownOptions, 
+  customItems, 
+  onFieldChange, 
+  onAddNewClick, 
+  countries, 
+  states,
+  locationLoading 
+}) => {
+  const getOptions = useCallback((field) => {
     const baseOptions = [
       ...(dropdownOptions[field] || []),
       ...(customItems[field] || []),
     ];
-
-    // Include current value if it's not already in options
     const currentValue = formik.values[field];
-    const allOptions = [...new Set([...baseOptions, currentValue].filter(Boolean))];
+    return [...new Set([...baseOptions, currentValue].filter(Boolean))];
+  }, [dropdownOptions, customItems, formik.values]);
 
-    return allOptions;
-  };
+  const destinationOptions = useMemo(() => {
+    if (formik.values.tourType === "Domestic") {
+      return ["Select destination"];
+    } else {
+      if (!formik.values.country || formik.values.country === "Loading countries...") {
+        return ["Select a country first"];
+      }
+      if (locationLoading) return ["Loading destinations..."];
+      if (!states || states.length === 0) return ["No destinations available"];
+      return states.map(s => s.name);
+    }
+  }, [formik.values.tourType, formik.values.country, states, locationLoading]);
 
-  // Handle tour type change
+  const countryOptions = useMemo(() => {
+    if (!countries || countries.length === 0) return ["Loading countries..."];
+    return countries.map(c => c.name);
+  }, [countries]);
+
   const handleTourTypeChange = (e) => {
     const tourType = e.target.value;
-    formik.handleChange(e);
-
+    formik.setFieldValue("tourType", tourType);
+    
     if (tourType === "Domestic") {
       formik.setFieldValue("country", "India");
       formik.setFieldValue("destination", "");
     } else {
       formik.setFieldValue("country", "");
       formik.setFieldValue("destination", "");
-      dispatch(clearStates());
+      formik.setFieldValue("state", "");
     }
   };
 
-  // Handle country change for international tours
   const handleCountryChange = (e) => {
-    const country = e.target.value;
-    if (country === "__add_new__") {
+    const { value } = e.target;
+    if (value === "__add_new__") {
       onAddNewClick("country");
     } else {
-      formik.setFieldValue("country", country);
+      formik.setFieldValue("country", value);
       formik.setFieldValue("destination", "");
     }
   };
 
-  // Improved destination options with loading state
-  const getDestinationOptions = () => {
-    if (formik.values.tourType === "Domestic") {
-      // For domestic tours, show Indian states
-      if (locationLoading) {
-        return ["Loading states..."];
-      }
-      return states && states.length > 0
-        ? states.map(s => s.name)
-        : ["No states available"];
-    } else {
-      // For international tours, show states of selected country
-      if (!formik.values.country) {
-        return ["Select a country first"];
-      }
-      if (locationLoading) {
-        return ["Loading states..."];
-      }
-      return states && states.length > 0
-        ? states.map(s => s.name)
-        : ["No states available for selected country"];
-    }
-  };
-
-  // Improved SelectField component
-  const SelectField = ({
-    name,
-    label,
-    options,
-    disabled = false,
-    onChange = onFieldChange,
-    required = false
-  }) => (
+  const renderSelectField = (name, label, options, required = false, disabled = false) => (
     <TextField
       select
       fullWidth
       name={name}
       label={label + (required ? " *" : "")}
       value={formik.values[name] || ''}
-      onChange={onChange}
+      onChange={onFieldChange}
       onBlur={formik.handleBlur}
       error={formik.touched[name] && Boolean(formik.errors[name])}
       helperText={formik.touched[name] && formik.errors[name]}
       disabled={disabled}
       sx={{ mb: 2 }}
     >
-      {/* Always show current value as an option */}
       {formik.values[name] && !options.includes(formik.values[name]) && (
-        <MenuItem key={formik.values[name]} value={formik.values[name]}>
+        <MenuItem value={formik.values[name]}>
           {formik.values[name]} (current)
         </MenuItem>
       )}
 
-      {/* Show available options */}
       {options.map((opt) => (
         <MenuItem key={opt} value={opt}>
           {opt}
         </MenuItem>
       ))}
 
-      <MenuItem value="__add_new__">➕ Add New</MenuItem>
+      {!disabled && name !== "country" && (
+        <MenuItem value="__add_new__">➕ Add New</MenuItem>
+      )}
     </TextField>
   );
 
-  const renderTextInputs = [
-    { name: "adults", label: "No of Adults", required: true },
-    { name: "children", label: "No of Children (6-12)" },
-    { name: "kidsWithoutMattress", label: "No of Kids (2-5)" },
-    { name: "infants", label: "No of Infants" },
-    { name: "noOfRooms", label: "No of Rooms", required: true },
-    { name: "noOfMattress", label: "No of Mattress" },
-    { name: "noOfNights", label: "No of Nights" },
-  ];
+  const renderNumberField = (name, label, required = false) => (
+    <TextField
+      fullWidth
+      name={name}
+      label={label + (required ? " *" : "")}
+      type="number"
+      value={formik.values[name] || ''}
+      onChange={formik.handleChange}
+      onBlur={formik.handleBlur}
+      error={formik.touched[name] && Boolean(formik.errors[name])}
+      helperText={formik.touched[name] && formik.errors[name]}
+      inputProps={{ min: 0 }}
+    />
+  );
 
   return (
     <Box>
-      {/* Basic Tour Details */}
       <Box p={2} border={1} borderRadius={2} borderColor="grey.300">
         <Typography variant="subtitle1" mb={2}>Basic Tour Details</Typography>
 
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{xs:12, md:6}}>
               <FormControl>
                 <FormLabel>Tour Type</FormLabel>
                 <RadioGroup
@@ -1048,22 +976,15 @@ const Step2Content = ({ formik, dropdownOptions, customItems, onFieldChange, onA
               </FormControl>
             </Grid>
 
-            {/* Country Field */}
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{xs:12, md:6}}>
               {formik.values.tourType === "International" ? (
-                <SelectField
-                  name="country"
-                  label="Country"
-                  required={formik.values.tourType === "International"}
-                  options={locationLoading
-                    ? ["Loading countries..."]
-                    : (countries && countries.length > 0
-                      ? countries.map(c => c.name)
-                      : ["No countries available"])
-                  }
-                  onChange={handleCountryChange}
-                  disabled={locationLoading}
-                />
+                renderSelectField(
+                  "country",
+                  "Country",
+                  countryOptions,
+                  true,
+                  locationLoading
+                )
               ) : (
                 <TextField
                   fullWidth
@@ -1071,184 +992,133 @@ const Step2Content = ({ formik, dropdownOptions, customItems, onFieldChange, onA
                   value="India"
                   disabled
                   sx={{ mb: 2 }}
-                  helperText="Domestic tours are within India"
                 />
               )}
             </Grid>
 
-            {/* Tour Destination */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <SelectField
-                name="destination"
-                label="Tour Destination"
-                required
-                options={getDestinationOptions()}
-                disabled={
-                  formik.values.tourType === "International" && !formik.values.country ||
-                  locationLoading
-                }
+            <Grid size={{xs:12, md:6}}>
+              {renderSelectField(
+                "destination",
+                "Tour Destination",
+                destinationOptions,
+                true,
+                (formik.values.tourType === "International" && !formik.values.country) || locationLoading
+              )}
+            </Grid>
+
+            <Grid size={{xs:12, md:6}}>
+              {renderSelectField(
+                "services",
+                "Services Required",
+                getOptions("services"),
+                true
+              )}
+            </Grid>
+
+            <Grid size={{xs:12, md:3}}>
+              {renderNumberField("adults", "No of Adults", true)}
+            </Grid>
+            <Grid size={{xs:12, md:3}}>
+              {renderNumberField("children", "No of Children (6-12)")}
+            </Grid>
+            <Grid size={{xs:12, md:3}}>
+              {renderNumberField("kidsWithoutMattress", "No of Kids (2-5)")}
+            </Grid>
+            <Grid size={{xs:12, md:3}}>
+              {renderNumberField("infants", "No of Infants")}
+            </Grid>
+
+            <Grid size={{xs:12, md:6}}>
+              <DatePicker
+                label="Arrival Date *"
+                value={formik.values.arrivalDate}
+                onChange={(value) => formik.setFieldValue("arrivalDate", value)}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    error: formik.touched.arrivalDate && Boolean(formik.errors.arrivalDate),
+                    helperText: formik.touched.arrivalDate && formik.errors.arrivalDate
+                  }
+                }}
               />
             </Grid>
 
-            <Grid size={{ xs: 12, md: 6 }}>
-              <SelectField
-                name="services"
-                label="Services Required"
-                required
-                options={getOptions("services")}
+            <Grid size={{xs:12, md:6}}>
+              <DatePicker
+                label="Departure Date *"
+                value={formik.values.departureDate}
+                onChange={(value) => formik.setFieldValue("departureDate", value)}
+                minDate={formik.values.arrivalDate}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    error: formik.touched.departureDate && Boolean(formik.errors.departureDate),
+                    helperText: formik.touched.departureDate && formik.errors.departureDate
+                  }
+                }}
               />
             </Grid>
 
-            {renderTextInputs.slice(0, 4).map(({ name, label, required }) => (
-              <Grid size={{ xs: 12, md: 3 }} key={name}>
-                <TextField
-                  fullWidth
-                  name={name}
-                  label={label + (required ? " *" : "")}
-                  type="number"
-                  value={formik.values[name] || ''}
+            <Grid size={{xs:12, md:4}}>
+              {renderSelectField(
+                "sharingType",
+                "Sharing Type",
+                getOptions("sharingType"),
+                true
+              )}
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              {renderNumberField("noOfRooms", "No of Rooms", true)}
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              {renderNumberField("noOfNights", "No of Nights")}
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              {renderSelectField("hotelType", "Hotel Type", getOptions("hotelType"))}
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              {renderSelectField("mealPlan", "Meal Plan", getOptions("mealPlan"))}
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              <FormControl>
+                <FormLabel>Transport</FormLabel>
+                <RadioGroup
+                  row
+                  name="transport"
+                  value={formik.values.transport}
                   onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  error={formik.touched[name] && Boolean(formik.errors[name])}
-                  helperText={formik.touched[name] && formik.errors[name]}
-                  inputProps={{ min: 0 }}
-                />
-              </Grid>
-            ))}
+                >
+                  <FormControlLabel value="Yes" control={<Radio />} label="Yes" />
+                  <FormControlLabel value="No" control={<Radio />} label="No" />
+                </RadioGroup>
+              </FormControl>
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              {renderSelectField("arrivalCity", "Arrival City", getOptions("arrivalCity"))}
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              {renderSelectField("arrivalLocation", "Arrival Location", getOptions("arrivalLocation"))}
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              {renderSelectField("departureCity", "Departure City", getOptions("departureCity"))}
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              {renderSelectField("departureLocation", "Departure Location", getOptions("departureLocation"))}
+            </Grid>
+
+            <Grid size={{xs:12, md:4}}>
+              {renderNumberField("noOfMattress", "No of Mattress")}
+            </Grid>
           </Grid>
-
-          {/* Pickup / Drop Section */}
-          <Box mt={3} p={2} border={1} borderRadius={2} borderColor="grey.300">
-            <Typography variant="subtitle1" mb={2}>Pickup/Drop</Typography>
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <DatePicker
-                  label="Arrival Date *"
-                  value={formik.values.arrivalDate}
-                  onChange={(val) => formik.setFieldValue("arrivalDate", val)}
-                  renderInput={(params) => (
-                    <TextField
-                      fullWidth
-                      {...params}
-                      error={formik.touched.arrivalDate && Boolean(formik.errors.arrivalDate)}
-                      helperText={formik.touched.arrivalDate && formik.errors.arrivalDate}
-                    />
-                  )}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 4 }}>
-                <SelectField
-                  name="arrivalCity"
-                  label="Arrival City"
-                  options={getOptions("arrivalCity")}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 4 }}>
-                <SelectField
-                  name="arrivalLocation"
-                  label="Arrival Location"
-                  options={getOptions("arrivalLocation")}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 4 }}>
-                <DatePicker
-                  label="Departure Date *"
-                  value={formik.values.departureDate}
-                  onChange={(val) => formik.setFieldValue("departureDate", val)}
-                  renderInput={(params) => (
-                    <TextField
-                      fullWidth
-                      {...params}
-                      error={formik.touched.departureDate && Boolean(formik.errors.departureDate)}
-                      helperText={formik.touched.departureDate && formik.errors.departureDate}
-                    />
-                  )}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 4 }}>
-                <SelectField
-                  name="departureCity"
-                  label="Departure City"
-                  options={getOptions("departureCity")}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 4 }}>
-                <SelectField
-                  name="departureLocation"
-                  label="Departure Location"
-                  options={getOptions("departureLocation")}
-                />
-              </Grid>
-            </Grid>
-          </Box>
-
-          {/* Accommodation */}
-          <Box mt={3} p={2} border={1} borderRadius={2} borderColor="grey.300">
-            <Typography variant="subtitle1" mb={2}>Accommodation & Facility</Typography>
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, md: 3 }}>
-                <SelectField
-                  name="hotelType"
-                  label="Hotel Type"
-                  options={getOptions("hotelType")}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 3 }}>
-                <SelectField
-                  name="mealPlan"
-                  label="Meal Plan"
-                  options={getOptions("mealPlan")}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 3 }}>
-                <FormControl>
-                  <FormLabel>Transport</FormLabel>
-                  <RadioGroup
-                    row
-                    name="transport"
-                    value={formik.values.transport}
-                    onChange={formik.handleChange}
-                  >
-                    <FormControlLabel value="Yes" control={<Radio />} label="Yes" />
-                    <FormControlLabel value="No" control={<Radio />} label="No" />
-                  </RadioGroup>
-                </FormControl>
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 3 }}>
-                <SelectField
-                  name="sharingType"
-                  label="Sharing Type"
-                  required
-                  options={getOptions("sharingType")}
-                />
-              </Grid>
-
-              {renderTextInputs.slice(4).map(({ name, label }) => (
-                <Grid size={{ xs: 12, md: 4 }} key={name}>
-                  <TextField
-                    fullWidth
-                    name={name}
-                    label={label}
-                    type="number"
-                    value={formik.values[name] || ''}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={formik.touched[name] && Boolean(formik.errors[name])}
-                    helperText={formik.touched[name] && formik.errors[name]}
-                    inputProps={{ min: 0 }}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-          </Box>
         </LocalizationProvider>
       </Box>
 
@@ -1266,6 +1136,7 @@ const Step2Content = ({ formik, dropdownOptions, customItems, onFieldChange, onA
     </Box>
   );
 };
+
 // Review Content Component
 const ReviewContent = ({ formik }) => {
   const personalDetails = [
@@ -1275,6 +1146,9 @@ const ReviewContent = ({ formik }) => {
     { label: "Business Type", value: formik.values.businessType },
     { label: "Source", value: formik.values.source },
     { label: "Assigned To", value: formik.values.assignedTo },
+    { label: "Country", value: formik.values.country },
+    { label: "State", value: formik.values.state },
+    { label: "City", value: formik.values.city },
   ];
 
   const tourDetails = [
@@ -1283,10 +1157,15 @@ const ReviewContent = ({ formik }) => {
     { label: "Services", value: formik.values.services },
     { label: "Adults", value: formik.values.adults },
     { label: "Children", value: formik.values.children },
-    { label: "Arrival Date", value: formik.values.arrivalDate?.toString() },
-    { label: "Departure Date", value: formik.values.departureDate?.toString() },
+    { label: "Kids (2-5)", value: formik.values.kidsWithoutMattress },
+    { label: "Infants", value: formik.values.infants },
+    { label: "Arrival Date", value: formik.values.arrivalDate ? dayjs(formik.values.arrivalDate).format('DD/MM/YYYY') : "Not set" },
+    { label: "Departure Date", value: formik.values.departureDate ? dayjs(formik.values.departureDate).format('DD/MM/YYYY') : "Not set" },
     { label: "No of Rooms", value: formik.values.noOfRooms },
     { label: "Sharing Type", value: formik.values.sharingType },
+    { label: "Hotel Type", value: formik.values.hotelType || "Not specified" },
+    { label: "Meal Plan", value: formik.values.mealPlan || "Not specified" },
+    { label: "Transport", value: formik.values.transport },
   ];
 
   return (
@@ -1296,28 +1175,28 @@ const ReviewContent = ({ formik }) => {
       </Typography>
 
       <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Box border={1} borderRadius={1} p={2}>
+        <Grid size={{xs:12, md:6}}>
+          <Box border={1} borderRadius={1} p={2} borderColor="grey.300">
             <Typography variant="subtitle1" fontWeight="bold" mb={2}>
               Customer Details
             </Typography>
             {personalDetails.map((detail, index) => (
               <Box key={index} display="flex" justifyContent="space-between" mb={1}>
-                <Typography fontWeight="bold">{detail.label}:</Typography>
+                <Typography fontWeight="bold" color="text.secondary">{detail.label}:</Typography>
                 <Typography>{detail.value || "Not provided"}</Typography>
               </Box>
             ))}
           </Box>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Box border={1} borderRadius={1} p={2}>
+        <Grid size={{xs:12, md:6}}>
+          <Box border={1} borderRadius={1} p={2} borderColor="grey.300">
             <Typography variant="subtitle1" fontWeight="bold" mb={2}>
               Tour Details
             </Typography>
             {tourDetails.map((detail, index) => (
               <Box key={index} display="flex" justifyContent="space-between" mb={1}>
-                <Typography fontWeight="bold">{detail.label}:</Typography>
+                <Typography fontWeight="bold" color="text.secondary">{detail.label}:</Typography>
                 <Typography>{detail.value || "Not provided"}</Typography>
               </Box>
             ))}
@@ -1326,18 +1205,19 @@ const ReviewContent = ({ formik }) => {
       </Grid>
 
       <Box mt={3}>
-        <Typography variant="subtitle1" fontWeight="bold">
+        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
           Notes
         </Typography>
-        <Typography>
-          {formik.values.note || "No initial note provided"}
-        </Typography>
-        <Typography mt={1} fontWeight="bold">
-          Requirement Note:
-        </Typography>
-        <Typography>
-          {formik.values.requirementNote || "No requirement note provided"}
-        </Typography>
+        <Box border={1} borderRadius={1} p={2} borderColor="grey.300">
+          <Typography fontWeight="bold" color="text.secondary">Initial Note:</Typography>
+          <Typography paragraph>
+            {formik.values.note || "No initial note provided"}
+          </Typography>
+          <Typography fontWeight="bold" color="text.secondary">Requirement Note:</Typography>
+          <Typography>
+            {formik.values.requirementNote || "No requirement note provided"}
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );
