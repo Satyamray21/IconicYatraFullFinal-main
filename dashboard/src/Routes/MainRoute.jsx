@@ -145,6 +145,13 @@ const QuickFinalize = lazy(() =>
 const GlobalSettings = lazy(()=>
 import("../Pages/Admin/Profile/components/GlobalSettings")
 );
+
+const CompanyForm =lazy(()=>
+import("../Pages/Admin/Profile/components/CompanyForm")
+);
+const InsideCompanyList =lazy(()=>
+import("../Pages/Admin/Profile/components/InsideCompanyList")
+);
 /* ========================== */
 /*        MAIN ROUTE          */
 /* ========================== */
@@ -367,7 +374,10 @@ const MainRoute = () => {
           <Route path="/customfinalize/:id" element={<CustomFinalize />} />
           <Route path="/quickfinalize/:id" element={<QuickFinalize />} />
           <Route path="/terms&condition" element={<GlobalSettings />} />
-          );
+          <Route path="/admin/inside-company" element={<InsideCompanyList />} />
+
+<Route path="/admin/inside-company/add" element={<CompanyForm />} />
+          
 <Route
   path="/company-website-enquiry"
   element={<CompanyWebsiteEnquiry />}
