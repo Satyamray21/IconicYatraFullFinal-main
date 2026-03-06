@@ -18,6 +18,7 @@ import invoiceReducer from "../features/invoice/invoiceSlice"
 import bankReducer from "../features/bank/bankSlice.js"
 import companyUIReducer from "../features/companyUI/companyUISlice.js"
 import galleryReducer from "../features/gallery/gallerySlice";
+import companyReducer from "../features/company/InsideCompany";
 export const store = configureStore({
   reducer: {
     leads: LeadReducer,
@@ -39,6 +40,7 @@ export const store = configureStore({
     invoice: invoiceReducer,
     companyUI:companyUIReducer,
     gallery: galleryReducer,
+    company: companyReducer,
   },
 });
 
