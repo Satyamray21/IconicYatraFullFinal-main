@@ -81,8 +81,6 @@ const PackageEditView = () => {
 
   useEffect(() => {
     if (current) {
-      // ✅ FIXED: Remove localhost URL conversion - Use Cloudinary URLs directly
-
       // Hotels ke prices direct pick karo
       let hotelCosts = { Standard: 0, Deluxe: 0, Superior: 0 };
       if (current.destinationNights?.length > 0) {
@@ -96,7 +94,7 @@ const PackageEditView = () => {
         });
       }
 
-      // ✅ FIXED: Policy Data Conversion
+      // Policy Data Conversion
       const getPolicyContent = (policyArray) => {
         if (!policyArray || !Array.isArray(policyArray) || policyArray.length === 0) return "";
         // Agar array mein HTML content hai toh directly use karo
@@ -106,6 +104,20 @@ const PackageEditView = () => {
         // Agar plain text array hai toh HTML mein convert karo
         return policyArray.map(item => `<p>${item}</p>`).join('');
       };
+
+      // ✅ FIXED: Initialize days with proper selectedSightseeing array
+      const initializedDays = (current.days || []).map((d) => ({
+        ...d,
+        dayImage: d.dayImage || "",
+        selectedSightseeing: d.selectedSightseeing || [], // Ensure it's an array
+        sightseeing: d.sightseeing || [], // Available sightseeing options
+      }));
+
+      // ✅ FIXED: Initialize stayLocations properly
+      const initializedStayLocations = (current.stayLocations || []).map((location) => ({
+        city: location.city || "",
+        nights: location.nights || 1
+      }));
 
       setPkg({
         ...pkg,
@@ -117,14 +129,11 @@ const PackageEditView = () => {
         departureCity: current.departureCity || "",
         destinationCountry: current.destinationCountry || "",
         notes: current.notes || "",
-        // ✅ FIXED: Use Cloudinary URL directly - NO localhost conversion
         bannerImage: current.bannerImage || "",
-        stayLocations: current.stayLocations || [],
-        // ✅ FIXED: Use Cloudinary URLs directly for day images - NO localhost conversion
-        days: (current.days || []).map((d) => ({
-          ...d,
-          dayImage: d.dayImage || "",
-        })),
+        // ✅ FIXED: Use initialized stayLocations
+        stayLocations: initializedStayLocations,
+        // ✅ FIXED: Use initialized days with proper arrays
+        days: initializedDays,
         validFrom: current.validFrom?.split("T")[0] || "",
         validTill: current.validTill?.split("T")[0] || "",
         category: current.category || "",
@@ -144,7 +153,7 @@ const PackageEditView = () => {
     }
   }, [current]);
 
-  // ✅ FIXED: Banner Upload Handler
+  // Banner Upload Handler
   const handleBannerUpload = (file) => {
     if (!pkg._id) {
       alert("Package ID not found");
@@ -156,7 +165,7 @@ const PackageEditView = () => {
       .then((response) => {
         console.log("Banner upload response:", response);
 
-        // ✅ FIXED: Update state with new banner image from response
+        // Update state with new banner image from response
         if (response.package?.bannerImage) {
           setPkg(prev => ({
             ...prev,
@@ -181,7 +190,7 @@ const PackageEditView = () => {
       });
   };
 
-  // ✅ FIXED: Day Image Upload Handler
+  // Day Image Upload Handler
   const handleDayImageUpload = (dayIndex, file) => {
     if (!pkg._id) {
       alert("Package ID not found");
@@ -197,7 +206,7 @@ const PackageEditView = () => {
       .then((response) => {
         console.log("Day image upload response:", response);
 
-        // ✅ FIXED: Update specific day image in state
+        // Update specific day image in state
         if (response.package?.days?.[dayIndex]?.dayImage) {
           const updatedDays = [...pkg.days];
           updatedDays[dayIndex] = {
@@ -218,52 +227,88 @@ const PackageEditView = () => {
       });
   };
 
-  // Handlers
+  // ✅ FIXED: Stay change handler to properly update nights
   const handleStayChange = (index, field, value) => {
     const updated = [...pkg.stayLocations];
-    updated[index][field] = value;
+    
+    // Ensure nights is a number
+    if (field === "nights") {
+      updated[index] = {
+        ...updated[index],
+        [field]: parseInt(value) || 0
+      };
+    } else {
+      updated[index] = {
+        ...updated[index],
+        [field]: value
+      };
+    }
+    
     setPkg({ ...pkg, stayLocations: updated });
+    
+    // Log for debugging
+    console.log(`Updated stay location ${index}:`, updated[index]);
   };
 
+  // ✅ FIXED: Day change handler to properly update all fields including selectedSightseeing
   const handleDayChange = (index, field, value) => {
     const updated = [...pkg.days];
-    updated[index][field] = value;
+    
+    // If updating selectedSightseeing, ensure it's an array
+    if (field === "selectedSightseeing") {
+      updated[index] = {
+        ...updated[index],
+        [field]: Array.isArray(value) ? value : []
+      };
+    } else {
+      updated[index] = {
+        ...updated[index],
+        [field]: value
+      };
+    }
+    
     setPkg({ ...pkg, days: updated });
   };
 
   const handleSave = () => {
     if (!pkg) return;
 
-    // ✅ FIXED: Convert HTML back to array format for backend
+    // Convert HTML back to array format for backend
     const convertHtmlToArray = (htmlString) => {
       if (!htmlString || htmlString.trim() === '') return [];
       return [htmlString];
     };
 
-    // ✅ FIXED: Ensure stayLocations has proper structure with required fields
+    // ✅ FIXED: Ensure stayLocations has proper structure with required fields and numbers
     const validatedStayLocations = (pkg.stayLocations || []).map((location, index) => ({
-      city: location?.city || `City ${index + 1}`,
-      nights: location?.nights || 1
+      city: location?.city?.trim() || `City ${index + 1}`,
+      nights: parseInt(location?.nights) || 1  // Ensure nights is a number
     }));
 
-    // ✅ FIXED: Only send fields that actually exist in the package
+    console.log("Validated stay locations before save:", validatedStayLocations);
+
+    // Only send fields that actually exist in the package
     const transformedData = {
-      // Remove tourType if it doesn't exist in current package
       destinationCountry: pkg.destinationCountry || "India",
       sector: pkg.sector || "",
       packageSubType: Array.isArray(pkg.packageSubType) ? pkg.packageSubType : [pkg.packageSubType || ""],
+      
+      // Include days with selectedSightseeing
+      days: pkg.days.map(day => ({
+        ...day,
+        selectedSightseeing: day.selectedSightseeing || [],
+        sightseeing: day.sightseeing || []
+      })),
 
-      // ✅ FIXED: Proper stayLocations structure
-      stayLocations: validatedStayLocations.length > 0 ? validatedStayLocations : [
-        { city: "Default City", nights: 1 }
-      ],
+      // ✅ FIXED: Proper stayLocations structure with validated data
+      stayLocations: validatedStayLocations,
 
       mealPlan: pkg.mealPlan || { planType: "CP", description: "" },
 
-      // ✅ FIXED: Proper destinationNights structure
+      // ✅ FIXED: Proper destinationNights structure using validated stayLocations
       destinationNights: validatedStayLocations.map(location => ({
         destination: location.city,
-        nights: location.nights,
+        nights: location.nights,  // Use the validated nights value
         hotels: [
           {
             category: "standard",
@@ -283,7 +328,7 @@ const PackageEditView = () => {
         ],
       })),
 
-      // ✅ POLICY DATA
+      // POLICY DATA
       policy: {
         inclusionPolicy: convertHtmlToArray(pkg.policy?.inclusionPolicy || ""),
         exclusionPolicy: convertHtmlToArray(pkg.policy?.exclusionPolicy || ""),
@@ -304,10 +349,12 @@ const PackageEditView = () => {
 
     console.log("Sending data to backend:", {
       stayLocations: transformedData.stayLocations,
+      destinationNights: transformedData.destinationNights,
+      days: transformedData.days,
       policy: transformedData.policy
     });
 
-    // 🔹 Dispatch update
+    // Dispatch update
     dispatch(updatePackageStep1({ id: pkg._id, data: transformedData }))
       .unwrap()
       .then(() => {
@@ -540,7 +587,7 @@ const PackageEditView = () => {
               onChange={(e) => setPkg({ ...pkg, notes: e.target.value })}
             />
 
-            {/* Banner - FIXED */}
+            {/* Banner */}
             <Typography
               variant="subtitle1"
               fontWeight="bold"
@@ -623,7 +670,7 @@ const PackageEditView = () => {
                 </Box>
               )}
 
-              {/* ✅ FIXED: Upload Button */}
+              {/* Upload Button */}
               <Button
                 variant="contained"
                 component="label"
@@ -665,7 +712,7 @@ const PackageEditView = () => {
               </Button>
             </Box>
 
-            {/* Days Section - FIXED */}
+            {/* Days Section */}
             <Typography
               variant="h6"
               fontWeight="bold"
@@ -717,7 +764,7 @@ const PackageEditView = () => {
                       )}
                     </Box>
 
-                    {/* ✅ FIXED: Day Image Upload Button */}
+                    {/* Day Image Upload Button */}
                     <Button
                       variant="contained"
                       component="label"
@@ -745,7 +792,7 @@ const PackageEditView = () => {
                       <TextField
                         placeholder="Enter day title"
                         variant="standard"
-                        value={day.title}
+                        value={day.title || ""}
                         onChange={(e) => handleDayChange(index, "title", e.target.value)}
                         fullWidth
                         InputProps={{ style: { fontSize: "1.1rem", fontWeight: 500 } }}
@@ -758,7 +805,7 @@ const PackageEditView = () => {
                       fullWidth
                       multiline
                       minRows={3}
-                      value={day.notes}
+                      value={day.notes || ""}
                       onChange={(e) => handleDayChange(index, "notes", e.target.value)}
                       sx={{ mb: 2 }}
                     />
@@ -767,14 +814,15 @@ const PackageEditView = () => {
                     <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                       Selected Sightseeing
                     </Typography>
+
                     <Autocomplete
                       multiple
                       freeSolo
-                      options={day.sightseeing || []} // Available sightseeing list from API
+                      options={day.sightseeing || []}
                       value={day.selectedSightseeing || []}
-                      onChange={(e, newValue) =>
-                        handleDayChange(index, "selectedSightseeing", newValue)
-                      }
+                      onChange={(e, newValue) => {
+                        handleDayChange(index, "selectedSightseeing", newValue);
+                      }}
                       renderTags={(value, getTagProps) =>
                         value.map((option, i) => (
                           <Chip
@@ -783,6 +831,10 @@ const PackageEditView = () => {
                             {...getTagProps({ index: i })}
                             color="primary"
                             variant="outlined"
+                            onDelete={() => {
+                              const newSelected = value.filter((_, idx) => idx !== i);
+                              handleDayChange(index, "selectedSightseeing", newSelected);
+                            }}
                           />
                         ))
                       }
@@ -794,6 +846,11 @@ const PackageEditView = () => {
                         />
                       )}
                     />
+                    
+                    {/* Debug info - remove in production */}
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                      Selected: {(day.selectedSightseeing || []).length} items
+                    </Typography>
                   </Grid>
                 </Grid>
               </Paper>
@@ -850,7 +907,7 @@ const PackageEditView = () => {
                     <TextField
                       label="City"
                       fullWidth
-                      value={item.city}
+                      value={item.city || ""}
                       onChange={(e) =>
                         handleStayChange(index, "city", e.target.value)
                       }
@@ -861,10 +918,11 @@ const PackageEditView = () => {
                       label="Nights"
                       type="number"
                       fullWidth
-                      value={item.nights}
+                      value={item.nights || 1}
                       onChange={(e) =>
                         handleStayChange(index, "nights", e.target.value)
                       }
+                      inputProps={{ min: 1 }}
                     />
                   </Grid>
                 </Grid>
