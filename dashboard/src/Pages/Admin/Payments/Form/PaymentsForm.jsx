@@ -25,12 +25,15 @@ import { toast } from "react-toastify";
 import { createVoucher } from "../../../../features/payment/paymentSlice";
 import axios from "../../../../utils/axios";
 import PartySelector from "./PartySelector"
+import { getAllBankDetails } from "../../../../features/bank/bankSlice";
 
-const paymentModes = ["Cash", "Yes Bank", "Kotak Bank", "Indusind Bank", "ICICI Bank"];
+
 const paymentLink = "https://iconicyatra.com/payment";
 
 const PaymentsForm = () => {
     const dispatch = useDispatch();
+    const { list: banks } = useSelector((state) => state.bank);
+
     const [voucherType, setVoucherType] = useState("");
     const navigate = useNavigate(); // ✅ Corrected spelling
     const [previewImage, setPreviewImage] = useState(null);
@@ -118,6 +121,9 @@ const PaymentsForm = () => {
         };
         fetchCompanies();
     }, []);
+useEffect(() => {
+    dispatch(getAllBankDetails());
+}, [dispatch]);
 
     return (
         <Paper
@@ -255,19 +261,22 @@ const PaymentsForm = () => {
                                 error={formik.touched.paymentMode && Boolean(formik.errors.paymentMode)}
                             >
                                 <InputLabel>Payment Mode</InputLabel>
-                                <Select
-                                    name="paymentMode"
-                                    value={formik.values.paymentMode}
-                                    onChange={formik.handleChange}
-                                    label="Payment Mode"
-                                    sx={{ bgcolor: "white" }}
-                                >
-                                    {paymentModes.map((mode) => (
-                                        <MenuItem key={mode} value={mode}>
-                                            {mode}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
+                               <Select
+    name="paymentMode"
+    value={formik.values.paymentMode}
+    onChange={formik.handleChange}
+    label="Payment Mode"
+    sx={{ bgcolor: "white" }}
+>
+    <MenuItem value="Cash">Cash</MenuItem>
+
+    {banks?.map((bank) => (
+        <MenuItem key={bank._id} value={bank.bankName}>
+            {bank.bankName}
+        </MenuItem>
+    ))}
+</Select>
+
                             </FormControl>
                         </Grid>
 
