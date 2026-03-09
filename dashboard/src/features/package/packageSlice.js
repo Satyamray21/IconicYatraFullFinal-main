@@ -16,22 +16,28 @@ export const createPackage = createAsyncThunk(
 
 // Fetch all packages
 export const fetchPackages = createAsyncThunk(
-    "packages/fetchPackages",
-    async (params = {}, { rejectWithValue }) => {
-        try {
-            // ✅ DEFAULT LIMIT SET KAREIN
-            const defaultParams = {
-                limit: 100,  // Ya 0 for no limit
-                ...params
-            };
+  "packages/fetchPackages",
+  async (params = {}, { rejectWithValue }) => {
+    try {
 
-            const res = await axios.get("/packages", { params: defaultParams });
-            return res.data;
-        } catch (err) {
-            return rejectWithValue(err.response?.data || err.message);
+      const res = await axios.get("/packages", {
+        params: {
+          page: params.page || 1,
+          limit: params.limit || 10,
+          status: params.status || "",
+          tourType: params.tourType || "",
+          search: params.search || ""
         }
+      });
+
+      return res.data;
+
+    } catch (err) {
+      return rejectWithValue(err.response?.data || err.message);
     }
+  }
 );
+
 // ✅ NEW: Fetch packages by tour type
 export const fetchPackagesByTourType = createAsyncThunk(
     "packages/fetchPackagesByTourType",

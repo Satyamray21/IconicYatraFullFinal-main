@@ -21,6 +21,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchPackages, deletePackage } from "../../../features/package/packageSlice";
 
 const PackageDashboard = () => {
+
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
@@ -34,35 +35,38 @@ const PackageDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [tourTypeFilter, setTourTypeFilter] = useState("");
+
   const [deleteId, setDeleteId] = useState(null);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+
   const [paginationModel, setPaginationModel] = useState({
     pageSize: 10,
-    page: 0,
+    page: 0
   });
 
-  // ✅ PAGINATION KE LIYE PARAMS SET KAREIN
+  // ✅ Fetch packages with pagination
   useEffect(() => {
-    dispatch(fetchPackages({
-      page: paginationModel.page + 1, // MUI DataGrid 0-based, backend 1-based
-      limit: paginationModel.pageSize
-    }));
-  }, [dispatch, paginationModel]);
+  dispatch(
+    fetchPackages({
+      page: paginationModel.page + 1,
+      limit: paginationModel.pageSize,
+      status: statusFilter,
+      tourType: tourTypeFilter,
+      search: searchQuery
+    })
+  );
+}, [dispatch, paginationModel, statusFilter, tourTypeFilter, searchQuery]);
 
-  // Get unique tour types for filter dropdown - ONLY INTERNATIONAL ADDED
-  const tourTypes = useMemo(() => {
-    const types = [...new Set(packageList.map(pkg => pkg.tourType).filter(Boolean))];
 
-    // Sirf International add karein agar nahi hai to
-    if (!types.includes("International")) {
-      types.push("International");
-    }
+  // ✅ Dynamic tour types
+  const tourTypes = ["Domestic", "International"];
 
-    return types.sort();
-  }, [packageList]);
 
   const handleAddClick = () => navigate("/packageform");
-  const handleEditClick = (row) => navigate(`/tourpackage/packageeditform/${row._id}`);
+
+  const handleEditClick = (row) => {
+    navigate(`/tourpackage/packageeditform/${row._id}`);
+  };
 
   const handleDeleteClick = (id) => {
     setDeleteId(id);
@@ -74,14 +78,22 @@ const PackageDashboard = () => {
     setOpenDeleteDialog(false);
   };
 
+  // ✅ Columns
   const columns = [
-    { field: "srNo", headerName: "Sr No.", width: 60 },
+    { field: "srNo", headerName: "Sr No.", width: 70 },
+
     { field: "packageId", headerName: "Package Id", flex: 1, minWidth: 150 },
+
     { field: "sector", headerName: "Sector", width: 120 },
+
     { field: "title", headerName: "Title", flex: 2, minWidth: 180 },
+
     { field: "noOfNight", headerName: "No of Night", width: 120 },
+
     { field: "tourType", headerName: "Tour Type", width: 120 },
+
     { field: "packageType", headerName: "Package Type", width: 140 },
+
     {
       field: "status",
       headerName: "Status",
@@ -91,15 +103,19 @@ const PackageDashboard = () => {
           variant="body2"
           sx={{
             fontWeight: "bold",
-            color: params.value === "active" ? "green" : "red",
+            color:
+              params.value?.toLowerCase() === "active"
+                ? "green"
+                : "red",
             textTransform: "capitalize",
             mt: 1
           }}
         >
           {params.value}
         </Typography>
-      ),
+      )
     },
+
     {
       field: "action",
       headerName: "Action",
@@ -113,6 +129,7 @@ const PackageDashboard = () => {
           >
             <EditIcon fontSize="small" />
           </IconButton>
+
           <IconButton
             color="error"
             size="small"
@@ -121,31 +138,32 @@ const PackageDashboard = () => {
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Box>
-      ),
-    },
+      )
+    }
   ];
 
-  const filteredData = useMemo(
-    () =>
-      packageList.filter((pkg) => {
-        // Status filter
-        const matchesStatus = statusFilter === "" || pkg.status?.toLowerCase() === statusFilter;
+  // ✅ Filters
+  const filteredData = useMemo(() => {
+    return packageList.filter((pkg) => {
 
-        // Tour Type filter
-        const matchesTourType = tourTypeFilter === "" || pkg.tourType === tourTypeFilter;
+      const matchesStatus =
+        !statusFilter ||
+        pkg.status?.toLowerCase() === statusFilter.toLowerCase();
 
-        // Search filter (search in tourType, title, sector)
-        const matchesSearch = searchQuery === "" ||
-          pkg.tourType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          pkg.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          pkg.sector?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesTourType =
+        !tourTypeFilter ||
+        pkg.tourType?.toLowerCase() === tourTypeFilter.toLowerCase();
 
-        return matchesStatus && matchesTourType && matchesSearch;
-      }),
-    [statusFilter, tourTypeFilter, searchQuery, packageList]
-  );
+      const matchesSearch =
+        !searchQuery ||
+        pkg.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        pkg.sector?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        pkg.tourType?.toLowerCase().includes(searchQuery.toLowerCase());
 
-  // Clear all filters
+      return matchesStatus && matchesTourType && matchesSearch;
+    });
+  }, [packageList, searchQuery, statusFilter, tourTypeFilter]);
+
   const clearFilters = () => {
     setStatusFilter("");
     setTourTypeFilter("");
@@ -155,14 +173,34 @@ const PackageDashboard = () => {
   return (
     <Container maxWidth="xl">
       <Box py={3}>
-        {/* Action bar */}
-        <Box mt={3} mb={2} display="flex" flexDirection={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={2}>
-          <Button variant="contained" color="warning" sx={{ minWidth: 100 }} onClick={handleAddClick}>
+
+        {/* Action Bar */}
+
+        <Box
+          mt={3}
+          mb={2}
+          display="flex"
+          flexDirection={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          gap={2}
+        >
+          <Button
+            variant="contained"
+            color="warning"
+            sx={{ minWidth: 100 }}
+            onClick={handleAddClick}
+          >
             Add
           </Button>
 
-          <Box display="flex" justifyContent="flex-end" gap={2} width="100%" flexDirection={{ xs: "column", sm: "row" }}>
+          <Box
+            display="flex"
+            gap={2}
+            flexDirection={{ xs: "column", sm: "row" }}
+          >
+
             {/* Status Filter */}
+
             <TextField
               select
               size="small"
@@ -171,125 +209,142 @@ const PackageDashboard = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               sx={{ minWidth: 120 }}
             >
-              <MenuItem value="">All Status</MenuItem>
+              <MenuItem value="">All</MenuItem>
               <MenuItem value="active">Active</MenuItem>
               <MenuItem value="deactive">Deactive</MenuItem>
             </TextField>
 
-            {/* Tour Type Filter - NOW WITH INTERNATIONAL */}
+            {/* Tour Type */}
+
             <TextField
               select
               size="small"
               label="Tour Type"
               value={tourTypeFilter}
               onChange={(e) => setTourTypeFilter(e.target.value)}
-              sx={{ minWidth: 140 }}
+              sx={{ minWidth: 150 }}
             >
-              <MenuItem value="">All Tour Types</MenuItem>
-              {tourTypes.map((type, index) => (
-                <MenuItem key={index} value={type}>
+              <MenuItem value="">All</MenuItem>
+
+              {tourTypes.map((type, i) => (
+                <MenuItem key={i} value={type}>
                   {type}
                 </MenuItem>
               ))}
             </TextField>
 
-            {/* Search Field */}
+            {/* Search */}
+
             <TextField
-              variant="outlined"
               size="small"
-              placeholder="Search by tour type, title, sector..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{ width: { xs: "100%", sm: 250 } }}
+              sx={{ width: 250 }}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton>
-                      <SearchIcon />
-                    </IconButton>
+                    <SearchIcon />
                   </InputAdornment>
-                ),
+                )
               }}
             />
 
-            {/* Clear Filters Button */}
-            {(statusFilter || tourTypeFilter || searchQuery) && (
+            {(searchQuery || statusFilter || tourTypeFilter) && (
               <Button
                 variant="outlined"
                 size="small"
                 onClick={clearFilters}
-                sx={{ minWidth: 100 }}
               >
-                Clear Filters
+                Clear
               </Button>
             )}
+
           </Box>
         </Box>
 
-        {/* Results Count */}
-        <Box mb={2}>
-          <Typography variant="body2" color="textSecondary">
-            Showing {filteredData.length} of {totalPackages} packages
-          </Typography>
-        </Box>
+        {/* Count */}
+
+        <Typography mb={2} variant="body2">
+          Showing {filteredData.length} of {totalPackages} packages
+        </Typography>
 
         {/* Table */}
-        <Box sx={{ width: "100%", overflowX: "auto" }}>
-          <Box sx={{ minWidth: "600px" }}>
-            {loading ? (
-              <Box display="flex" justifyContent="center" py={3}>
-                <CircularProgress />
-              </Box>
-            ) : error ? (
-              <Alert severity="error">{error}</Alert>
-            ) : (
-              <DataGrid
-                rows={filteredData.map((pkg, index) => ({
-                  ...pkg,
-                  id: pkg._id || `pkg-${index}`,
-                  srNo: index + 1,
-                  noOfNight: pkg.stayLocations?.reduce((sum, loc) => sum + loc.nights, 0) || 0,
-                  packageType: pkg.packageSubType || "-",
-                }))}
-                columns={columns}
-                autoHeight
-                disableRowSelectionOnClick
-                // ✅ PAGINATION SHOW KAREIN
-                paginationModel={paginationModel}
-                onPaginationModelChange={setPaginationModel}
-                pageSizeOptions={[10, 25, 50, 100]}
-                rowCount={totalPackages}
-                paginationMode="server"
-                sx={{
-                  "& .MuiDataGrid-columnHeaders": {
-                    backgroundColor: "#f5f5f5",
-                  },
-                  "& .MuiDataGrid-columnHeaderTitle": {
-                    fontWeight: "bold",
-                  },
-                }}
-              />
-            )}
-          </Box>
-        </Box>
 
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)} PaperProps={{ sx: { padding: 3, borderRadius: 3 } }}>
-          <Box textAlign="center">
+        {loading ? (
+          <Box display="flex" justifyContent="center" py={4}>
+            <CircularProgress />
+          </Box>
+        ) : error ? (
+          <Alert severity="error">{error}</Alert>
+        ) : (
+          <DataGrid
+            autoHeight
+            rows={filteredData.map((pkg, index) => ({
+              ...pkg,
+              id: pkg._id,
+              srNo: index + 1,
+              noOfNight:
+                pkg.stayLocations?.reduce(
+                  (sum, loc) => sum + loc.nights,
+                  0
+                ) || 0,
+              packageType: pkg.packageSubType || "-"
+            }))}
+            columns={columns}
+            disableRowSelectionOnClick
+            paginationModel={paginationModel}
+            onPaginationModelChange={setPaginationModel}
+            pageSizeOptions={[10, 25, 50, 100]}
+            rowCount={totalPackages}
+            paginationMode="server"
+            sx={{
+              "& .MuiDataGrid-columnHeaders": {
+                backgroundColor: "#f5f5f5"
+              },
+              "& .MuiDataGrid-columnHeaderTitle": {
+                fontWeight: "bold"
+              }
+            }}
+          />
+        )}
+
+        {/* Delete Dialog */}
+
+        <Dialog
+          open={openDeleteDialog}
+          onClose={() => setOpenDeleteDialog(false)}
+        >
+          <Box p={4} textAlign="center">
+
             <DeleteIcon sx={{ fontSize: 60, color: "red" }} />
-            <Box mt={2} fontWeight="bold">
+
+            <Typography mt={2} fontWeight="bold">
               Are you sure you want to delete this package?
-            </Box>
-            <Box mt={3} display="flex" justifyContent="center" gap={2}>
-              <Button variant="contained" color="error" onClick={confirmDelete}>
+            </Typography>
+
+            <Box mt={3} display="flex" gap={2} justifyContent="center">
+
+              <Button
+                variant="contained"
+                color="error"
+                onClick={confirmDelete}
+              >
                 Delete
               </Button>
-              <Button variant="outlined" onClick={() => setOpenDeleteDialog(false)}>
+
+              <Button
+                variant="outlined"
+                onClick={() => setOpenDeleteDialog(false)}
+              >
                 Cancel
               </Button>
+
             </Box>
+
           </Box>
         </Dialog>
+
       </Box>
     </Container>
   );
