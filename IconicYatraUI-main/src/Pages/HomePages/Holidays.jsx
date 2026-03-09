@@ -22,10 +22,11 @@ const Holidays = () => {
 
   // Get state from Redux store
   const {
-    holiday: holidayPackages,
-    loading,
-    error
-  } = useSelector((state) => state.packages);
+  holiday: holidayPackages = [],
+  loading,
+  error
+} = useSelector((state) => state.packages);
+
 
   useEffect(() => {
     // Fetch holiday packages when component mounts

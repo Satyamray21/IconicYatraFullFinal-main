@@ -32,8 +32,9 @@ const DomesticPackage = () => {
 
   // Fetch domestic packages on component mount
   useEffect(() => {
-    dispatch(fetchDomesticPackages());
-  }, [dispatch]);
+  dispatch(fetchDomesticPackages({ page: 1, limit: 9 }));
+}, [dispatch]);
+
 
   // Clear error when component unmounts
   useEffect(() => {
