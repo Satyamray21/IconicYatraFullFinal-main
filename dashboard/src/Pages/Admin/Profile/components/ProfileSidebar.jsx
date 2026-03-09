@@ -105,7 +105,7 @@ const ProfileSidebar = ({ user, activeTab, setActiveTab }) => {
             <ListItemIcon>
               <BusinessIcon color={activeTab === "company" ? "primary" : "inherit"} />
             </ListItemIcon>
-            <ListItemText primary="Company" />
+            <ListItemText primary="Website" />
           </ListItem>
 
           {/* INSIDE COMPANIES */}

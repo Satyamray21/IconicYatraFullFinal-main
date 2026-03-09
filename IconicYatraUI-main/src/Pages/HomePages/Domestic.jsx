@@ -17,37 +17,49 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchDomesticPackages } from "../../Features/packageSlice";
 import PackageCard from "../../Components/PackageCard";
 import { BASE_URL } from "../../Utils/axiosInstance";
+import { Pagination } from "@mui/material";
 
 const Domestic = () => {
   const { destination } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const [page, setPage] = useState(1);
+  
 
-  const { domestic: packages, loading, error } = useSelector(
-    (state) => state.packages
-  );
+ const { domestic: packages = [], loading, error, totalPages = 1, totalPackages = 0 } =
+  useSelector((state) => state.packages);
+
+
+
 
   const [selectedDestination, setSelectedDestination] = useState("All");
 
-  useEffect(() => {
-    dispatch(fetchDomesticPackages());
-  }, [dispatch]);
+ useEffect(() => {
+  dispatch(fetchDomesticPackages({ page, limit: 9 }));
+}, [dispatch, page]);
+
 
   // ✅ Handle destination filter (via URL param)
-  useEffect(() => {
-    if (destination && destination !== "All") {
-      const formattedDestination = destination
-        .replace(/-/g, " ")
-        .toLowerCase()
-        .trim();
-      const matched = packages.find(
-        (pkg) => pkg.title.toLowerCase().trim() === formattedDestination
-      );
-      setSelectedDestination(matched ? matched.title : "All");
-    } else {
-      setSelectedDestination("All");
-    }
-  }, [destination, packages]);
+useEffect(() => {
+  if (destination && destination !== "All") {
+    const formattedDestination = destination
+      .replace(/-/g, " ")
+      .toLowerCase()
+      .trim();
+
+    const matched = packages?.find(
+      (pkg) => pkg.title.toLowerCase().trim() === formattedDestination
+    );
+
+    setSelectedDestination(matched ? matched.title : "All");
+  } else {
+    setSelectedDestination("All");
+  }
+
+  setPage(1); // reset only when destination changes
+}, [destination]);
+
+
 
   // ✅ Filter logic
   const filteredPackages =
@@ -58,6 +70,13 @@ const Domestic = () => {
           pkg.title.toLowerCase().trim() ===
           selectedDestination.toLowerCase().trim()
       );
+// Pagination logic
+const currentPackages = filteredPackages;
+
+
+
+
+
 
   // ✅ Handle click
   const handleCardClick = (id) => {
@@ -204,42 +223,59 @@ const Domestic = () => {
 
         {/* Packages Grid */}
         {filteredPackages.length > 0 ? (
-          <Grid container spacing={2} >
-            {filteredPackages.map((pkg) => (
-              <Grid
-                size={{ xs: 12, sm: 6, md: 4 }}
-                key={pkg._id}
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                  "&:hover": {
-                    transform: "translateY(-8px)",
-                    boxShadow: "0 12px 20px rgba(0,0,0,0.2)",
-                  },
-                }}
-              >
-                <PackageCard
-                  image={
-                    pkg.bannerImage
-                      ? pkg.bannerImage.startsWith("http")
-                        ? pkg.bannerImage
-                        : pkg.bannerImage.startsWith("/upload/")
-                          ? `${BASE_URL}${pkg.bannerImage}`
-                          : `${BASE_URL}/upload/${pkg.bannerImage}`
-                      : "https://via.placeholder.com/300x200?text=No+Image"
-                  }
-                  title={pkg.title || "No Title"}
-                  location={`${pkg.sector || "Unknown Sector"}, ${pkg.arrivalCity || "Unknown City"}`}
-                  // UPDATED: Price display with new logic
-                  price={getPriceDisplay(pkg)}
-                  onClick={() => handleCardClick(pkg._id)}
-                  onQueryClick={() => console.log("Query:", pkg._id)}
-                />
-              </Grid>
-            ))}
-          </Grid>
-        ) : (
+  <>
+    <Grid container spacing={2}>
+      {currentPackages.map((pkg) => (
+        <Grid
+          size={{ xs: 12, sm: 6, md: 4 }}
+          key={pkg._id}
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            transition: "transform 0.3s ease, box-shadow 0.3s ease",
+            "&:hover": {
+              transform: "translateY(-8px)",
+              boxShadow: "0 12px 20px rgba(0,0,0,0.2)",
+            },
+          }}
+        >
+          <PackageCard
+            image={
+              pkg.bannerImage
+                ? pkg.bannerImage.startsWith("http")
+                  ? pkg.bannerImage
+                  : pkg.bannerImage.startsWith("/upload/")
+                  ? `${BASE_URL}${pkg.bannerImage}`
+                  : `${BASE_URL}/upload/${pkg.bannerImage}`
+                : "https://via.placeholder.com/300x200?text=No+Image"
+            }
+            title={pkg.title || "No Title"}
+            location={`${pkg.sector || "Unknown Sector"}, ${
+              pkg.arrivalCity || "Unknown City"
+            }`}
+            price={getPriceDisplay(pkg)}
+            onClick={() => handleCardClick(pkg._id)}
+            onQueryClick={() => console.log("Query:", pkg._id)}
+          />
+        </Grid>
+      ))}
+    </Grid>
+
+    {/* Pagination */}
+    {totalPages > 1 && (
+      <Box display="flex" justifyContent="center" mt={5}>
+        <Pagination
+          count={totalPages}
+          page={page}
+          onChange={(e, value) => setPage(value)}
+          color="primary"
+          size="large"
+        />
+      </Box>
+    )}
+  </>
+) : (
+
           <Paper
             elevation={3}
             sx={{
@@ -269,7 +305,11 @@ const Domestic = () => {
             fontStyle: "italic",
           }}
         >
-          Showing {filteredPackages.length} of {packages.length} packages
+         Showing {packages?.length} of {totalPackages} packages
+
+
+
+
         </Typography>
       </Container>
     </Box>

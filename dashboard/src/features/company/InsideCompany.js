@@ -4,15 +4,12 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
 // Log the environment variable to see what's available
-console.log("All import.meta.env:", import.meta.env);
-console.log("VITE_API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
 
 // Use the environment variable from your .env file
-const BASE_URL = import.meta.env.VITE_API_BASE_URL 
-  ? `${import.meta.env.VITE_API_BASE_URL}/company`
-  : "http://localhost:5000/api/v1/company";
+const BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/company`
+  
 
-console.log("Final BASE_URL being used:", BASE_URL);
+
 
 const initialState = {
 

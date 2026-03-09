@@ -28,44 +28,13 @@ router.put("/:id/tour-details", updateTourDetails);
 router.post("/:id/banner", upload.single("banner"), uploadBanner);
 router.post("/:id/days/:dayIndex/image", upload.single("dayImage"), uploadDayImage);
 
-// ✅ NEW: Routes for specific tour types
-router.get("/tour-type/domestic", (req, res) => getPackagesByTourType({ params: { tourType: "Domestic" }, query: req.query }, res));
-router.get("/tour-type/international", (req, res) => getPackagesByTourType({ params: { tourType: "International" }, query: req.query }, res));
-router.get("/tour-type/yatra", (req, res) => getPackagesByTourType({ params: { tourType: "Yatra" }, query: req.query }, res));
-router.get("/tour-type/holiday", (req, res) => getPackagesByTourType({ params: { tourType: "Holiday" }, query: req.query }, res));
-router.get("/tour-type/special", (req, res) => getPackagesByTourType({ params: { tourType: "Special" }, query: req.query }, res));
-router.get("/tour-type/latest", (req, res) => getPackagesByTourType({ params: { tourType: "Latest" }, query: req.query }, res));
+
 
 // ✅ NEW: Dynamic route for any tour type
 router.get("/tour-type/:tourType", getPackagesByTourType);
 
-router.get("/category/yatra", (req, res) =>
-  getPackagesByCategory(
-    { params: { packageCategory: "Yatra" }, query: req.query },
-    res
-  )
-);
+router.get("/category/:packageCategory", getPackagesByCategory);
 
-router.get("/category/holiday", (req, res) =>
-  getPackagesByCategory(
-    { params: { packageCategory: "Holiday" }, query: req.query },
-    res
-  )
-);
-
-router.get("/category/special", (req, res) =>
-  getPackagesByCategory(
-    { params: { packageCategory: "Special" }, query: req.query },
-    res
-  )
-);
-
-router.get("/category/latest", (req, res) =>
-  getPackagesByCategory(
-    { params: { packageCategory: "Latest" }, query: req.query },
-    res
-  )
-);
 
 router.get("/popular", getPopularTours);
 router.get("/make-all-popular", makeAllPopular);

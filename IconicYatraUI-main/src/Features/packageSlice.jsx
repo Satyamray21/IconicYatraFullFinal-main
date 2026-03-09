@@ -17,16 +17,19 @@ export const fetchPackages = createAsyncThunk(
 
 // ✅ Fetch domestic packages
 export const fetchDomesticPackages = createAsyncThunk(
-    "packages/fetchDomesticPackages",
-    async (_, { rejectWithValue }) => {
-        try {
-            const res = await packagesAxios.get("/tour-type/domestic");
-            return res.data;
-        } catch (err) {
-            return rejectWithValue(err.response?.data?.message || err.message);
-        }
+  "packages/fetchDomesticPackages",
+  async ({ page = 1, limit = 9 }, { rejectWithValue }) => {
+    try {
+      const res = await packagesAxios.get(
+        `/tour-type/domestic?page=${page}&limit=${limit}`
+      );
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
+  }
 );
+
 
 // ✅ Fetch international packages
 export const fetchInternationalPackages = createAsyncThunk(
@@ -137,21 +140,21 @@ export const fetchPopularTours = createAsyncThunk(
 
 const packageSlice = createSlice({
     name: "packages",
-    initialState: {
-        items: [],
-        domestic: [],
-        international: [],
-        yatra: [],
-        holiday: [],
-        special: [],
-        popular: [], 
-        latest: [],
-        total: 0,
-        page: 1,
-        limit: 10,
-        selected: null,
-        loading: false,
-        error: null,
+   
+        initialState: {
+    items: [],
+    domestic: [],
+    international: [],
+    yatra: [],
+    holiday: [],
+    special: [],
+    popular: [],
+    latest: [],
+    totalPackages: 0,
+    totalPages: 1,
+    page: 1,
+    limit: 9,
+
     },
     reducers: {
         clearSelected: (state) => {
@@ -200,10 +203,15 @@ const packageSlice = createSlice({
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(fetchDomesticPackages.fulfilled, (state, action) => {
-                state.loading = false;
-                state.domestic = action.payload.items;
-            })
+           .addCase(fetchDomesticPackages.fulfilled, (state, action) => {
+  state.loading = false;
+  state.domestic = action.payload.packages || [];
+  state.page = action.payload.currentPage || 1;
+  state.totalPages = action.payload.totalPages || 1;
+  state.totalPackages = action.payload.totalPackages || 0;
+})
+
+
             .addCase(fetchDomesticPackages.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
@@ -214,10 +222,11 @@ const packageSlice = createSlice({
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(fetchInternationalPackages.fulfilled, (state, action) => {
-                state.loading = false;
-                state.international = action.payload.items;
-            })
+           .addCase(fetchInternationalPackages.fulfilled, (state, action) => {
+    state.loading = false;
+    state.international = action.payload.packages || [];
+})
+
             .addCase(fetchInternationalPackages.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;

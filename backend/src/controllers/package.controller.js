@@ -591,71 +591,72 @@ export const listPackages = asyncHandler(async (req, res) => {
 // ----------------------
 // GET PACKAGES BY TOUR TYPE (NEW FUNCTION)
 // ----------------------
-export const getPackagesByTourType = asyncHandler(async (req, res) => {
+export const getPackagesByTourType = async (req, res) => {
+  try {
     const { tourType } = req.params;
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 9 } = req.query;
 
-    // ✅ VALIDATE TOUR TYPE
-    const validatedTourType = validateTourType(tourType);
+    const formattedTourType =
+      tourType.toLowerCase() === "domestic"
+        ? "Domestic"
+        : "International";
 
-    const skip = (Math.max(1, Number(page)) - 1) * Math.max(1, Number(limit));
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const skip = (page - 1) * limit;
 
-    const [items, total] = await Promise.all([
-        Package.find({ tourType: validatedTourType, status: "active" })
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limitNum),
-        Package.countDocuments({ tourType: validatedTourType, status: "active" })
-    ]);
+    const packages = await Package.find({ tourType: formattedTourType })
+      .sort({ createdAt: -1 }) // ✅ Latest first
+      .skip(skip)
+      .limit(Number(limit));
 
-    const responseItems = items.map(doc => {
-        const packageData = doc.toObject();
-        packageData.status = calculateStatus(packageData.validFrom, packageData.validTill);
-        return normalizePackageUrls(packageData);
+    const totalPackages = await Package.countDocuments({
+      tourType: formattedTourType,
     });
 
     res.json({
-        tourType: validatedTourType,
-        items: responseItems,
-        total,
-        page: Number(page),
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum)
+      packages,
+      totalPackages,
+      totalPages: Math.ceil(totalPackages / limit),
+      currentPage: Number(page),
     });
-});
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
 
 
 export const getPackagesByCategory = asyncHandler(async (req, res) => {
-    const { packageCategory } = req.params;
-    const { page = 1, limit = 10 } = req.query;
+  const { packageCategory } = req.params;
+  const { page = 1, limit = 10 } = req.query;
 
-    const skip = (Math.max(1, Number(page)) - 1) * Math.max(1, Number(limit));
-    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+  const skip = (Math.max(1, Number(page)) - 1) * Math.max(1, Number(limit));
+  const limitNum = Math.min(100, Math.max(1, Number(limit)));
 
-    const [items, total] = await Promise.all([
-        Package.find({ packageCategory, status: "active" })
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limitNum),
-        Package.countDocuments({ packageCategory, status: "active" })
-    ]);
+  const filter = {
+    packageCategory: { $regex: `^${packageCategory}$`, $options: "i" },
+    status: "active",
+  };
 
-    const responseItems = items.map(doc => {
-        const packageData = doc.toObject();
-        packageData.status = calculateStatus(packageData.validFrom, packageData.validTill);
-        return normalizePackageUrls(packageData);
-    });
+  const [items, total] = await Promise.all([
+    Package.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum),
+    Package.countDocuments(filter),
+  ]);
 
-    res.json({
-        packageCategory,
-        items: responseItems,
-        total,
-        page: Number(page),
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum)
-    });
+  res.json({
+    packageCategory,
+    items,
+    total,
+    page: Number(page),
+    limit: limitNum,
+    totalPages: Math.ceil(total / limitNum),
+  });
 });
+
+
 
 // ----------------------
 // DELETE
