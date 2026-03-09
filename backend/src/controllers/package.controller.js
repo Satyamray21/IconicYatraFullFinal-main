@@ -631,15 +631,42 @@ export const getPackagesByCategory = async (req, res) => {
   try {
     const { packageCategory } = req.params;
 
-    const packages = await Package.find({
-      packageCategory: { $regex: `^${packageCategory}$`, $options: "i" }
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const skip = (page - 1) * limit;
+
+    const now = new Date();
+
+    const filter = {
+      packageCategory: { $regex: `^${packageCategory}$`, $options: "i" },
+      validFrom: { $lte: now },
+      validTill: { $gte: now }
+    };
+
+    const totalPackages = await Package.countDocuments(filter);
+
+    const packages = await Package.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.status(200).json({
+      success: true,
+      totalPackages,
+      currentPage: page,
+      totalPages: Math.ceil(totalPackages / limit),
+      packages
     });
 
-    res.status(200).json(packages);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };
+
 
 
 
