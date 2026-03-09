@@ -76,6 +76,7 @@ const DashboardHeader = () => {
         {/* Left Section */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <IconButton
+            onClick={() => navigate(-1)}
             sx={{
               bgcolor: "primary.main",
               color: "#fff",
@@ -86,6 +87,7 @@ const DashboardHeader = () => {
           >
             <ChevronLeft />
           </IconButton>
+
           <Typography variant="h5" color="primary" fontWeight="bold">
             {title}
           </Typography>
@@ -111,23 +113,25 @@ const DashboardHeader = () => {
           justifyContent="flex-end"
         >
           <Button
-    variant="contained"
-    size="small"
-    sx={{
-      textTransform: "none",
-      borderRadius: "20px",
-      background: "linear-gradient(90deg, #1976d2, #1565c0)",
-      "&:hover": {
-        background: "linear-gradient(90deg, #1565c0, #0d47a1)",
-      },
-    }}
-    onClick={() => navigate("/company-website-enquiry")}
-  >
-    Website Enquiry
-  </Button>
+            variant="contained"
+            size="small"
+            sx={{
+              textTransform: "none",
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #1976d2, #1565c0)",
+              "&:hover": {
+                background: "linear-gradient(90deg, #1565c0, #0d47a1)",
+              },
+            }}
+            onClick={() => navigate("/company-website-enquiry")}
+          >
+            Website Enquiry
+          </Button>
+
           <IconButton>
             <Notifications />
           </IconButton>
+
           <IconButton>
             <CalendarToday />
           </IconButton>
@@ -143,6 +147,7 @@ const DashboardHeader = () => {
             <Typography fontWeight={600} color="primary">
               {user?.fullName || "Admin"}
             </Typography>
+
             <Avatar
               src={user?.profileImg || ""}
               alt={user?.fullName || "Admin"}
@@ -212,6 +217,7 @@ const DashboardHeader = () => {
               <Typography variant="body2" sx={{ mb: 0.5 }}>
                 <strong>User ID:</strong> {user?.userId}
               </Typography>
+
               <Typography variant="body2" sx={{ mb: 1 }}>
                 <strong>Email:</strong> {user?.email}
               </Typography>
@@ -253,9 +259,7 @@ const DashboardHeader = () => {
                 onClick={() => {
                   localStorage.clear();
                   const mainUrl = import.meta.env.VITE_MAIN_URL;
-
-window.location.href = `${mainUrl}/admin/login`;
-
+                  window.location.href = `${mainUrl}/admin/login`;
                 }}
                 sx={{
                   "&:hover": {
