@@ -626,35 +626,20 @@ export const getPackagesByTourType = async (req, res) => {
 
 
 
-export const getPackagesByCategory = asyncHandler(async (req, res) => {
-  const { packageCategory } = req.params;
-  const { page = 1, limit = 10 } = req.query;
 
-  const skip = (Math.max(1, Number(page)) - 1) * Math.max(1, Number(limit));
-  const limitNum = Math.min(100, Math.max(1, Number(limit)));
+export const getPackagesByCategory = async (req, res) => {
+  try {
+    const { packageCategory } = req.params;
 
-  const filter = {
-    packageCategory: { $regex: `^${packageCategory}$`, $options: "i" },
-    status: "active",
-  };
+    const packages = await Package.find({
+      packageCategory: { $regex: `^${packageCategory}$`, $options: "i" }
+    });
 
-  const [items, total] = await Promise.all([
-    Package.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum),
-    Package.countDocuments(filter),
-  ]);
-
-  res.json({
-    packageCategory,
-    items,
-    total,
-    page: Number(page),
-    limit: limitNum,
-    totalPages: Math.ceil(total / limitNum),
-  });
-});
+    res.status(200).json(packages);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 
 
 

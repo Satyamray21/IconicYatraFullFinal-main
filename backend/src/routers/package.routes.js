@@ -29,11 +29,11 @@ router.post("/:id/banner", upload.single("banner"), uploadBanner);
 router.post("/:id/days/:dayIndex/image", upload.single("dayImage"), uploadDayImage);
 
 
-
+router.get("/category/:packageCategory", getPackagesByCategory);
 // ✅ NEW: Dynamic route for any tour type
 router.get("/tour-type/:tourType", getPackagesByTourType);
 
-router.get("/category/:packageCategory", getPackagesByCategory);
+
 
 
 router.get("/popular", getPopularTours);
