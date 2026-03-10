@@ -92,7 +92,7 @@ const PackageDashboard = () => {
 
     { field: "tourType", headerName: "Tour Type", width: 120 },
 
-    { field: "packageType", headerName: "Package Type", width: 140 },
+    { field: "packageCategory", headerName: "Package Category", width: 140 },
 
     {
       field: "status",
