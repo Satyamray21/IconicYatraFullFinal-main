@@ -99,6 +99,7 @@ const AboutUs = () => {
   const { data, status } = useSelector(
     (state) => state.companyUI
   );
+  const companyName = data?.company?.companyName;
  const team = data?.company?.ourTeam || [];
 
  const vision = data?.company?.ourVision;
@@ -166,8 +167,8 @@ const AboutUs = () => {
               lineHeight: { xs: 1.2, sm: 1.3, md: 1.4 },
             }}
           >
-            About Iconic Yatra
-          </Typography>
+            About {companyName}
+          </Typography> 
           <Typography
             variant="h6"
             sx={{

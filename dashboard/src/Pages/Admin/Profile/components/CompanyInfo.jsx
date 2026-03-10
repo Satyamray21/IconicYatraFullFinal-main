@@ -100,13 +100,20 @@ const CompanyProfile = () => {
     { key: "invoiceTerms", icon: <DescriptionIcon />, label: "Invoice Terms" },
     { key: "pdfFooter", icon: <DescriptionIcon />, label: "PDF Footer" },
     { key: "currency", icon: <AttachMoneyIcon />, label: "Currency" },
-  ];
-
+    { key: "about", icon: <DescriptionIcon />, label: "About" },
+    { key: "aboutUs.title", icon: <DescriptionIcon />, label: "About Us Title" },
+{ key: "aboutUs.bannerTitle", icon: <ImageIcon />, label: "Banner Title" }, // Changed from bannerImageTitle
+{ key: "aboutUs.bannerDescription", icon: <DescriptionIcon />, label: "Banner Description" }, // Changed from bannerImageDescription
+{ key: "aboutUs.visionTitle", icon: <DescriptionIcon />, label: "Vision Title" }, // Changed from ourVisionImageTitle
+    ]
   const imageFields = [
-    { key: "headerLogo", label: "Header Logo" },
-    { key: "footerLogo", label: "Footer Logo" },
-    { key: "signature", label: "Signature" },
-  ];
+  { key: "headerLogo", label: "Header Logo" },
+  { key: "footerLogo", label: "Footer Logo" },
+  { key: "signature", label: "Signature" },
+  { key: "aboutUs.aboutUsImage", label: "About Us Image" },
+  { key: "aboutUs.bannerImage", label: "Banner Image" },
+  { key: "aboutUs.ourVisionImage", label: "Vision Image" },
+];
 
   const [qrInputs, setQrInputs] = useState([
     { name: "", color: "#1976d2", file: null, preview: null },
@@ -146,34 +153,51 @@ const CompanyProfile = () => {
   // EDIT TEXT / STATS
   // ============================
   const handleEditSave = async () => {
-    const formData = new FormData();
+  const formData = new FormData();
 
-    if (editDialog.field.startsWith("stats.")) {
-      const statKey = editDialog.field.split(".")[1];
-      formData.append(`stats[${statKey}]`, editDialog.value);
-    } else {
-      formData.append(editDialog.field, editDialog.value);
-    }
+  if (editDialog.field.startsWith("aboutUs.")) {
+    const key = editDialog.field.split(".")[1];
+    // Send as nested object
+    formData.append(`aboutUs[${key}]`, editDialog.value);
+  } 
+  else if (editDialog.field.startsWith("stats.")) {
+    const statKey = editDialog.field.split(".")[1];
+    formData.append(`stats[${statKey}]`, editDialog.value);
+  } 
+  else {
+    formData.append(editDialog.field, editDialog.value);
+  }
 
-    await dispatch(upsertCompany(formData));
-    dispatch(getCompany());
+  await dispatch(upsertCompany(formData));
+  dispatch(getCompany());
 
-    setEditDialog({ open: false, field: "", value: "" });
-  };
+  setEditDialog({ open: false, field: "", value: "" });
+};
+
 
   // ============================
   // IMAGE UPLOAD
   // ============================
-  const handleImageUpload = async (e, field) => {
-    const file = e.target.files[0];
-    if (!file) return;
+const handleImageUpload = async (e, field) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    const formData = new FormData();
+  const formData = new FormData();
+
+  if (field === "aboutUs.aboutUsImage") {
+    formData.append("aboutUsImage", file);
+  } else if (field === "aboutUs.bannerImage") {
+    formData.append("bannerImage", file);
+  } else if (field === "aboutUs.ourVisionImage") {
+    formData.append("ourVisionImage", file);
+  } else {
     formData.append(field, file);
+  }
 
-    await dispatch(upsertCompany(formData));
-    dispatch(getCompany());
-  };
+  await dispatch(upsertCompany(formData));
+  dispatch(getCompany());
+};
+
 
   // ============================
   // QR CODES FUNCTIONS
@@ -601,8 +625,18 @@ const handleQrUpload = async () => {
                               </Box>
 
                               <Typography sx={{ flex: 1, fontWeight: 500 }}>
-                                {companyData?.[field.key] || '-'}
-                              </Typography>
+  {field.key.includes("aboutUs")
+    ? (() => {
+        const nestedKey = field.key.split(".")[1];
+        const value = companyData?.aboutUs?.[nestedKey];
+        // Handle different value types
+        if (typeof value === 'object' && value !== null) {
+          return value.text || value.title || JSON.stringify(value) || '-';
+        }
+        return value || '-';
+      })()
+    : companyData?.[field.key] || '-'}
+</Typography>
 
                               <IconButton
                                 size="small"
@@ -610,7 +644,17 @@ const handleQrUpload = async () => {
                                   setEditDialog({
                                     open: true,
                                     field: field.key,
-                                    value: companyData?.[field.key] || "",
+                                     value: field.key.includes("aboutUs")
+  ? (() => {
+      const nestedKey = field.key.split(".")[1];
+      const value = companyData?.aboutUs?.[nestedKey];
+      // Handle different value types
+      if (typeof value === 'object' && value !== null) {
+        return value.text || value.title || '';
+      }
+      return value || '';
+    })()
+  : companyData?.[field.key] || ""|| "-"
                                   })
                                 }
                                 sx={{
@@ -1312,36 +1356,55 @@ const handleQrUpload = async () => {
                                 {field.label}
                               </Typography>
 
-                              {companyData?.[field.key]?.url ? (
-                                <Avatar
-                                  src={companyData[field.key].url}
-                                  variant="rounded"
-                                  sx={{
-                                    width: 120,
-                                    height: 120,
-                                    mx: "auto",
-                                    mb: 2,
-                                    border: `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-                                  }}
-                                />
-                              ) : (
-                                <Box
-                                  sx={{
-                                    width: 120,
-                                    height: 120,
-                                    mx: "auto",
-                                    mb: 2,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    backgroundColor: alpha(theme.palette.primary.main, 0.05),
-                                    borderRadius: 2,
-                                    border: `2px dashed ${alpha(theme.palette.primary.main, 0.2)}`,
-                                  }}
-                                >
-                                  <ImageIcon sx={{ fontSize: 40, color: alpha(theme.palette.primary.main, 0.3) }} />
-                                </Box>
-                              )}
+                                {(() => {
+  // Helper function to get nested value
+  const getNestedValue = (obj, path) => {
+    if (!obj) return null;
+    const keys = path.split('.');
+    let value = obj;
+    for (const key of keys) {
+      if (value === null || value === undefined) return null;
+      value = value[key];
+    }
+    return value;
+  };
+
+  const imageObj = getNestedValue(companyData, field.key);
+  
+  return imageObj?.url ? (
+    <Avatar
+      src={imageObj.url}
+      variant="rounded"
+      sx={{
+        width: 120,
+        height: 120,
+        mx: "auto",
+        mb: 2,
+        border: `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+      }}
+    />
+  ) : (
+    <Box
+      sx={{
+        width: 120,
+        height: 120,
+        mx: "auto",
+        mb: 2,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: alpha(theme.palette.primary.main, 0.05),
+        borderRadius: 2,
+        border: `2px dashed ${alpha(theme.palette.primary.main, 0.2)}`,
+      }}
+    >
+      <ImageIcon
+        sx={{ fontSize: 40, color: alpha(theme.palette.primary.main, 0.3) }}
+      />
+    </Box>
+  );
+})()}
+
 
                               <Button
                                 variant="outlined"

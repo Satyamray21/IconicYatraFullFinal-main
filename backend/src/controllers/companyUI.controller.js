@@ -170,6 +170,37 @@ export const upsertCompany = async (req, res) => {
         });
       }
     }
+    // =====================================
+// ABOUT US IMAGE UPLOADS
+// =====================================
+
+if (req.files?.aboutUsImage) {
+  const result = await uploadOnCloudinary(req.files.aboutUsImage[0].path);
+
+  updateData["aboutUs.aboutUsImage"] = {
+    public_id: result.public_id,
+    url: result.secure_url,
+  };
+}
+
+if (req.files?.bannerImage) {
+  const result = await uploadOnCloudinary(req.files.bannerImage[0].path);
+
+  updateData["aboutUs.bannerImage"] = {
+    public_id: result.public_id,
+    url: result.secure_url,
+  };
+}
+
+if (req.files?.ourVisionImage) {
+  const result = await uploadOnCloudinary(req.files.ourVisionImage[0].path);
+
+  updateData["aboutUs.ourVisionImage"] = {
+    public_id: result.public_id,
+    url: result.secure_url,
+  };
+}
+
 
     // =====================================
     // VISION & MISSION
@@ -182,6 +213,27 @@ export const upsertCompany = async (req, res) => {
     if (req.body.ourMission) {
       updateData.ourMission = req.body.ourMission;
     }
+// =====================================
+// ABOUT US TEXT FIELDS
+// =====================================
+
+if (req.body.aboutUsTitle) {
+  updateData["aboutUs.title"] = req.body.aboutUsTitle;
+}
+
+if (req.body.bannerImageTitle) {
+  updateData["aboutUs.bannerImageTitle"] = req.body.bannerImageTitle;
+}
+
+if (req.body.bannerImageDescription) {
+  updateData["aboutUs.bannerImageDescription"] =
+    req.body.bannerImageDescription;
+}
+
+if (req.body.ourVisionImageTitle) {
+  updateData["aboutUs.ourVisionImageTitle"] =
+    req.body.ourVisionImageTitle;
+}
 
     // =====================================
     // UPSERT COMPANY

@@ -13,6 +13,9 @@ router.put(
     { name: "footerLogo", maxCount: 1 },
     { name: "signature", maxCount: 1 },
     { name: "qrCodes", maxCount: 10 },
+     { name: "aboutUsImage", maxCount: 1 },
+  { name: "bannerImage", maxCount: 1 },
+  { name: "ourVisionImage", maxCount: 1 },
     { name: "testimonialPhotos", maxCount: 10 },
      { name: "teamPhotos", maxCount: 10 } // ✅ multiple QR
   ]),

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node -r dotenv/config index.js",
+    "fix-package-status": "node fix-package-status.js",
     "dev": "nodemon -r dotenv/config --experimental-json-modules index.js",
     "swagger-gen": "node swagger.js"
   },

@@ -49,7 +49,33 @@ const companyUISchema = new mongoose.Schema(
         },
       },
     ],
+    aboutUs:{
+      title:{
+        type:String
+      },
+      aboutUsImage:{
+        public_id: String,
+          url: String,
+      },
+      bannerImageTitle:{
+        type:String
+      },
+      bannerImage:{
+         public_id: String,
+          url: String,
+      },
+      bannerImageDescription:{
+        type:String,
+      },
+      ourVisionImage:{
+        public_id: String,
+        url: String,
+      },
+       ourVisionImageTitle:{
+        type:String,
+       }
 
+    },
     // ✅ VISION & MISSION
     ourVision: {
       type: String,
