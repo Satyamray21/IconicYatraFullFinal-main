@@ -46,7 +46,7 @@ const validationSchema = Yup.object({
   pincode: Yup.string().matches(/^[0-9]{6}$/, "Pincode must be 6 digits"),
 });
 
-const LeadForm = ({ onSaveAndContinue }) => {
+const LeadForm = ({ onSaveAndContinue, initialData = {} }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [optionToDelete, setOptionToDelete] = useState(null);
@@ -113,61 +113,56 @@ const LeadForm = ({ onSaveAndContinue }) => {
     country: ["India", "USA", "Canada"],
   });
 
-  const formik = useFormik({
-    initialValues: {
-      fullName: "",
-      mobile: "",
-      alternateNumber: "",
-      email: "",
-      title: "Mr",
-      dob: null,
-      country: "India",
-      state: "",
-      city: "",
-      address1: "",
-      address2: "",
-      address3: "",
-      pincode: "",
-      businessType: "B2B",
-      priority: "",
-      source: "Direct",
-      referralBy: "",
-      agentName: "",
-      assignedTo: "",
-      note: "",
-    },
-    validationSchema,
-    onSubmit: (values) => {
-      try {
-        // Format date before submission
-        const formattedValues = {
-          ...values,
-          dob: values.dob ? dayjs(values.dob).format("YYYY-MM-DD") : null,
-          officialDetail: {
-            businessType: values.businessType,
-            priority: values.priority,
-            source: values.source,
-            agentName: values.agentName,
-            referredBy: values.referralBy,
-            assignedTo: values.assignedTo,
-          },
-        };
-        console.log("✅ LeadForm submitted values:", formattedValues);
-        if (typeof onSaveAndContinue === "function") {
-          onSaveAndContinue(formattedValues);
-        } else {
-          navigate("/lead/leadtourform", { state: { leadData: formattedValues } });
-        }
-      } catch (error) {
-        setSnackbar({
-          open: true,
-          message: "Error saving lead data",
-          severity: "error",
-        });
-      }
-    },
-  });
+const formik = useFormik({
+  enableReinitialize: true,
+  initialValues: {
+    fullName: initialData?.fullName || "",
+    mobile: initialData?.mobile || "",
+    alternateNumber: initialData?.alternateNumber || "",
+    email: initialData?.email || "",
+    title: initialData?.title || "Mr",
+    dob: initialData?.dob ? dayjs(initialData.dob) : null,
+    country: initialData?.country || "India",
+    state: initialData?.state || "",
+    city: initialData?.city || "",
+    address1: initialData?.address1 || "",
+    address2: initialData?.address2 || "",
+    address3: initialData?.address3 || "",
+    pincode: initialData?.pincode || "",
+    businessType: initialData?.businessType || "B2B",
+    priority: initialData?.priority || "",
+    source: initialData?.source || "Direct",
+    referralBy: initialData?.referralBy || "",
+    agentName: initialData?.agentName || "",
+    assignedTo: initialData?.assignedTo || "",
+    note: initialData?.note || "",
+  },
+  validationSchema,
+  onSubmit: (values) => {
+    try {
+      const formattedValues = {
+        ...values,
+        dob: values.dob ? dayjs(values.dob).format("YYYY-MM-DD") : null,
+        officialDetail: {
+          businessType: values.businessType,
+          priority: values.priority,
+          source: values.source,
+          agentName: values.agentName,
+          referredBy: values.referralBy,
+          assignedTo: values.assignedTo,
+        },
+      };
 
+      onSaveAndContinue(formattedValues);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Error saving lead data",
+        severity: "error",
+      });
+    }
+  },
+});
   // ✅ Fetch lead options on component mount
   useEffect(() => {
     dispatch(getLeadOptions());

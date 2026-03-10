@@ -29,7 +29,7 @@ import { getLeadOptions, addLeadOption } from "../../../../features/leads/leadSl
 import { fetchCountries, fetchStatesByCountry, clearStates } from '../../../../features/location/locationSlice';
 import axios from "../../../../utils/axios"
 
-const LeadTourForm = ({ leadData, onComplete, isSubmitting }) => {
+const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
   console.log("✅ LeadTourForm props:", { onComplete, leadData, isSubmitting });
 
   const location = useLocation();
@@ -890,17 +890,22 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting }) => {
           />
         </Box>
 
-        <Box mt={2} display="flex" justifyContent="center">
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            disabled={isSubmitting}
-            startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
-          >
-            {isSubmitting ? "Submitting..." : "Submit"}
-          </Button>
-        </Box>
+       <Box mt={2} display="flex" justifyContent="center" gap={2}>
+  <Button
+    variant="outlined"
+    onClick={onBack}
+  >
+    Back
+  </Button>
+
+  <Button
+    type="submit"
+    variant="contained"
+    disabled={isSubmitting}
+  >
+    Submit
+  </Button>
+</Box>
       </form>
     </Box>
   );

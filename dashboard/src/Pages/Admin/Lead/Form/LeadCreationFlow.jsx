@@ -1,20 +1,23 @@
 import React, { useState } from "react";
 import LeadForm from "./LeadForm";
-import LeadTourForm from "./LeadTourForm"
+import LeadTourForm from "./LeadTourForm";
 import { useNavigate } from "react-router-dom";
 import { createLead } from "../../../../features/leads/leadSlice";
-import { Snackbar, Alert } from "@mui/material";
-import { useDispatch, useSelector } from 'react-redux';
+import { Snackbar, Alert, Button } from "@mui/material";
+import { useDispatch } from "react-redux";
+
 const LeadCreationFlow = () => {
   const [step, setStep] = useState(1);
   const [leadData, setLeadData] = useState(null);
   const dispatch = useDispatch();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [notification, setNotification] = useState({
     open: false,
     message: "",
     severity: "success",
   });
+
   const navigate = useNavigate();
 
   const handleSaveAndContinue = (basicLeadData) => {
@@ -22,18 +25,20 @@ const LeadCreationFlow = () => {
     setStep(2);
   };
 
+  const handleBackToStepOne = () => {
+    setStep(1);
+  };
+
   const handleComplete = async (tourData) => {
     try {
       setIsSubmitting(true);
 
-      // Combine data from both forms
       const completeLeadData = {
         ...leadData,
         ...tourData,
       };
 
-      // Call the API
-      const response = await dispatch(createLead(completeLeadData)).unwrap();
+      await dispatch(createLead(completeLeadData)).unwrap();
 
       setNotification({
         open: true,
@@ -41,7 +46,6 @@ const LeadCreationFlow = () => {
         severity: "success",
       });
 
-      // Redirect to leads list after 2 seconds
       setTimeout(() => navigate("/lead"), 2000);
     } catch (error) {
       setNotification({
@@ -60,15 +64,21 @@ const LeadCreationFlow = () => {
 
   return (
     <div>
-      {step === 1 && <LeadForm onSaveAndContinue={handleSaveAndContinue} />}
-      {step === 2 && leadData && (
-        <LeadTourForm
-          leadData={leadData}
-          onComplete={handleComplete}
-          isSubmitting={isSubmitting}
-        />
-      )}
+    {step === 1 && (
+  <LeadForm
+    onSaveAndContinue={handleSaveAndContinue}
+    initialData={leadData}
+  />
+)}
 
+{step === 2 && leadData && (
+  <LeadTourForm
+    leadData={leadData}
+    onComplete={handleComplete}
+    isSubmitting={isSubmitting}
+    onBack={() => setStep(1)}
+  />
+)}
 
       <Snackbar
         open={notification.open}
