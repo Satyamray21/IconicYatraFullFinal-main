@@ -203,13 +203,25 @@ const packageSlice = createSlice({
       })
 
       // Domestic
-      .addCase(fetchDomesticPackages.fulfilled, (state, action) => {
-        state.loading = false;
-        state.domestic = normalizeArray(action.payload);
-        state.page = action.payload?.currentPage || 1;
-        state.totalPages = action.payload?.totalPages || 1;
-        state.totalPackages = action.payload?.totalPackages || 0;
-      })
+      // Domestic
+.addCase(fetchDomesticPackages.pending, (state) => {
+  state.loading = true;
+  state.error = null;
+})
+
+.addCase(fetchDomesticPackages.fulfilled, (state, action) => {
+  state.loading = false;
+  state.domestic = normalizeArray(action.payload);
+  state.page = action.payload?.currentPage || 1;
+  state.totalPages = action.payload?.totalPages || 1;
+  state.totalPackages = action.payload?.totalPackages || 0;
+})
+
+.addCase(fetchDomesticPackages.rejected, (state, action) => {
+  state.loading = false;
+  state.error = action.payload;
+})
+
 
       // International
       .addCase(fetchInternationalPackages.fulfilled, (state, action) => {
