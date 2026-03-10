@@ -865,7 +865,7 @@ const VehicleQuotationPage = () => {
       icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
       content: defaultPolicies.exclusions,
       field: "exclusions",
-      isArray: false,
+      isArray: true, // Changed from false to true to properly display as array
     },
     {
       title: "Payment Policy",
@@ -879,7 +879,7 @@ const VehicleQuotationPage = () => {
       icon: <Warning sx={{ mr: 0.5, color: "warning.main" }} />,
       content: defaultPolicies.cancellationPolicy,
       field: "cancellationPolicy",
-      isArray: false,
+      isArray: true, // Changed from false to true to properly display as array
     },
   ];
 
@@ -994,24 +994,20 @@ const VehicleQuotationPage = () => {
     pdf.text(`Destination: ${lead.tourDetails.tourDestination || "N/A"}`, 20, y + 28);
 
     // Right side - Quotation details
-    const today = new Date();
-    pdf.setFontSize(9);
-    pdf.setTextColor(100, 100, 100);
+    // Right side - Quotation details
+const today = new Date();
+pdf.setFontSize(9);
+pdf.setTextColor(100, 100, 100);
 
-    pdf.text(`Date: ${today.toLocaleDateString()}`, 120, y + 8);
-    pdf.text(`Ref: ${vehicle.vehicleQuotationId || "N/A"}`, 120, y + 13);
-    pdf.text(`Valid Until: ${pickupDropDetails.validTo || "N/A"}`, 120, y + 18);
+// All fields in one column at x=120 with proper Y spacing
+pdf.text(`Date: ${today.toLocaleDateString()}`, 120, y + 8);
+pdf.text(`Ref: ${vehicle.vehicleQuotationId || "N/A"}`, 120, y + 13);
+pdf.text(`Valid Until: ${pickupDropDetails.validTo || "N/A"}`, 120, y + 18);
+pdf.text(`Mobile: ${lead.personalDetails.mobile || "N/A"}`, 120, y + 23);
+pdf.text(`Alt: ${lead.personalDetails.alternateNumber || "N/A"}`, 120, y + 28);
+pdf.text(`Email: ${lead.personalDetails.emailId || "N/A"}`, 120, y + 33);
 
-    pdf.text(`Mobile: ${lead.personalDetails.mobile || "N/A"}`, 160, y + 8);
-    if (lead.personalDetails.alternateNumber) {
-      pdf.text(`Alt: ${lead.personalDetails.alternateNumber}`, 160, y + 13);
-    }
-    pdf.text(`Email:`, 160, y + 18);
-
-    pdf.setFontSize(8);
-    pdf.text(lead.personalDetails.emailId || "N/A", 160, y + 22, { maxWidth: 40 });
-
-    y += 55;
+y += 55;
 
     // ---------- About Us ----------
     pdf.setFontSize(12);
@@ -1217,14 +1213,14 @@ const VehicleQuotationPage = () => {
     pdf.setTextColor(80, 80, 80);
     pdf.setFont(undefined, 'normal');
     defaultPolicies.inclusions.forEach(item => {
-      pdf.text(`• ${item}`, 18, y);
+      pdf.text(`• ${item}`, 18, y, { maxWidth: 175 });
       y += 5;
     });
 
-    pdf.text("* Due to low temperature, AC will be off during hill station tours.", 18, y);
+    pdf.text("* Due to low temperature, AC will be off during hill station tours.", 18, y, { maxWidth: 175 });
     y += 8;
 
-    // Exclusions
+    // Exclusions - FIXED: Properly formatted as array with bullet points and line breaks
     pdf.setFontSize(11);
     pdf.setTextColor(...primaryColor);
     pdf.setFont(undefined, 'bold');
@@ -1235,8 +1231,10 @@ const VehicleQuotationPage = () => {
     pdf.setTextColor(80, 80, 80);
     pdf.setFont(undefined, 'normal');
     defaultPolicies.exclusions.forEach(item => {
-      pdf.text(`• ${item}`, 18, y);
-      y += 5;
+      // Split long text into multiple lines
+      const lines = pdf.splitTextToSize(`• ${item}`, 175);
+      pdf.text(lines, 18, y, { maxWidth: 175 });
+      y += (lines.length * 5);
     });
 
     // Payment Terms
@@ -1248,9 +1246,9 @@ const VehicleQuotationPage = () => {
 
     pdf.setFontSize(10);
     pdf.setTextColor(80, 80, 80);
-    pdf.text("• 50% advance at confirmation", 18, y);
+    pdf.text("• 50% advance at confirmation", 18, y, { maxWidth: 175 });
     y += 5;
-    pdf.text("• 50% balance 10 days before tour start", 18, y);
+    pdf.text("• 50% balance 10 days before tour start", 18, y, { maxWidth: 175 });
     y += 8;
 
     // Cancellation Policy
@@ -1262,9 +1260,9 @@ const VehicleQuotationPage = () => {
 
     pdf.setFontSize(10);
     pdf.setTextColor(80, 80, 80);
-    pdf.text("• Before 15 days: 50% retention", 18, y);
+    pdf.text("• Before 15 days: 50% retention", 18, y, { maxWidth: 175 });
     y += 5;
-    pdf.text("• Within 7 days: 100% charges applicable", 18, y);
+    pdf.text("• Within 7 days: 100% charges applicable", 18, y, { maxWidth: 175 });
     y += 15;
 
     // ---------- Terms & Conditions ----------
@@ -1403,7 +1401,7 @@ const VehicleQuotationPage = () => {
       </Box>
 
       <Grid container spacing={2}>
-        <Grid item xs={12} md={3}>
+        <Grid size={{xs:12, md:3}}>
           <Box sx={{ position: "sticky", top: 0 }}>
             <Card>
               <CardContent>
@@ -1500,7 +1498,7 @@ const VehicleQuotationPage = () => {
           </Box>
         </Grid>
 
-        <Grid item xs={12} md={9}>
+        <Grid size={{xs:12, md:9}}>
           <Card>
             <CardContent>
               <Box
@@ -1737,7 +1735,7 @@ const VehicleQuotationPage = () => {
 
               <Grid container spacing={2} mt={1}>
                 {Policies.map((p, i) => (
-                  <Grid item xs={12} key={i}>
+                  <Grid size={{xs:12}} key={i}>
                     <Card variant="outlined">
                       <CardContent>
                         <Box
