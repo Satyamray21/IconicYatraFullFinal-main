@@ -44,35 +44,37 @@ const PackageDashboard = () => {
     page: 0
   });
 
+  // ✅ Normalize status from API
+  const normalizeStatus = (status) => {
+    if (!status) return "";
+    const s = status.trim().toLowerCase();
+    if (s === "active") return "active";
+    if (s === "inactive" || s === "deactive") return "deactive";
+    return s;
+  };
+
   // ✅ Fetch packages with pagination
   useEffect(() => {
-  dispatch(
-    fetchPackages({
-      page: paginationModel.page + 1,
-      limit: paginationModel.pageSize,
-      status: statusFilter,
-      tourType: tourTypeFilter,
-      search: searchQuery
-    })
-  );
-}, [dispatch, paginationModel, statusFilter, tourTypeFilter, searchQuery]);
-
+    dispatch(
+      fetchPackages({
+        page: paginationModel.page + 1,
+        limit: paginationModel.pageSize,
+        status: statusFilter, // server-side filtering if supported
+        tourType: tourTypeFilter,
+        search: searchQuery
+      })
+    );
+  }, [dispatch, paginationModel, statusFilter, tourTypeFilter, searchQuery]);
 
   // ✅ Dynamic tour types
   const tourTypes = ["Domestic", "International"];
 
-
   const handleAddClick = () => navigate("/packageform");
-
-  const handleEditClick = (row) => {
-    navigate(`/tourpackage/packageeditform/${row._id}`);
-  };
-
+  const handleEditClick = (row) => navigate(`/tourpackage/packageeditform/${row._id}`);
   const handleDeleteClick = (id) => {
     setDeleteId(id);
     setOpenDeleteDialog(true);
   };
-
   const confirmDelete = () => {
     dispatch(deletePackage(deleteId));
     setOpenDeleteDialog(false);
@@ -81,19 +83,12 @@ const PackageDashboard = () => {
   // ✅ Columns
   const columns = [
     { field: "srNo", headerName: "Sr No.", width: 70 },
-
     { field: "packageId", headerName: "Package Id", flex: 1, minWidth: 150 },
-
     { field: "sector", headerName: "Sector", width: 120 },
-
     { field: "title", headerName: "Title", flex: 2, minWidth: 180 },
-
     { field: "noOfNight", headerName: "No of Night", width: 120 },
-
     { field: "tourType", headerName: "Tour Type", width: 120 },
-
     { field: "packageCategory", headerName: "Package Category", width: 140 },
-
     {
       field: "status",
       headerName: "Status",
@@ -104,7 +99,7 @@ const PackageDashboard = () => {
           sx={{
             fontWeight: "bold",
             color:
-              params.value?.toLowerCase() === "active"
+              normalizeStatus(params.value) === "active"
                 ? "green"
                 : "red",
             textTransform: "capitalize",
@@ -115,26 +110,16 @@ const PackageDashboard = () => {
         </Typography>
       )
     },
-
     {
       field: "action",
       headerName: "Action",
       width: 120,
       renderCell: (params) => (
         <Box display="flex" gap={1}>
-          <IconButton
-            color="primary"
-            size="small"
-            onClick={() => handleEditClick(params.row)}
-          >
+          <IconButton color="primary" size="small" onClick={() => handleEditClick(params.row)}>
             <EditIcon fontSize="small" />
           </IconButton>
-
-          <IconButton
-            color="error"
-            size="small"
-            onClick={() => handleDeleteClick(params.row._id)}
-          >
+          <IconButton color="error" size="small" onClick={() => handleDeleteClick(params.row._id)}>
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -147,8 +132,7 @@ const PackageDashboard = () => {
     return packageList.filter((pkg) => {
 
       const matchesStatus =
-        !statusFilter ||
-        pkg.status?.toLowerCase() === statusFilter.toLowerCase();
+        !statusFilter || normalizeStatus(pkg.status) === statusFilter.toLowerCase();
 
       const matchesTourType =
         !tourTypeFilter ||
@@ -173,34 +157,13 @@ const PackageDashboard = () => {
   return (
     <Container maxWidth="xl">
       <Box py={3}>
-
         {/* Action Bar */}
-
-        <Box
-          mt={3}
-          mb={2}
-          display="flex"
-          flexDirection={{ xs: "column", sm: "row" }}
-          justifyContent="space-between"
-          gap={2}
-        >
-          <Button
-            variant="contained"
-            color="warning"
-            sx={{ minWidth: 100 }}
-            onClick={handleAddClick}
-          >
+        <Box mt={3} mb={2} display="flex" flexDirection={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={2}>
+          <Button variant="contained" color="warning" sx={{ minWidth: 100 }} onClick={handleAddClick}>
             Add
           </Button>
-
-          <Box
-            display="flex"
-            gap={2}
-            flexDirection={{ xs: "column", sm: "row" }}
-          >
-
+          <Box display="flex" gap={2} flexDirection={{ xs: "column", sm: "row" }}>
             {/* Status Filter */}
-
             <TextField
               select
               size="small"
@@ -215,7 +178,6 @@ const PackageDashboard = () => {
             </TextField>
 
             {/* Tour Type */}
-
             <TextField
               select
               size="small"
@@ -225,7 +187,6 @@ const PackageDashboard = () => {
               sx={{ minWidth: 150 }}
             >
               <MenuItem value="">All</MenuItem>
-
               {tourTypes.map((type, i) => (
                 <MenuItem key={i} value={type}>
                   {type}
@@ -234,43 +195,28 @@ const PackageDashboard = () => {
             </TextField>
 
             {/* Search */}
-
             <TextField
               size="small"
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               sx={{ width: 250 }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <SearchIcon />
-                  </InputAdornment>
-                )
-              }}
+              InputProps={{ endAdornment: (<InputAdornment position="end"><SearchIcon /></InputAdornment>) }}
             />
 
             {(searchQuery || statusFilter || tourTypeFilter) && (
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={clearFilters}
-              >
-                Clear
-              </Button>
+              <Button variant="outlined" size="small" onClick={clearFilters}>Clear</Button>
             )}
 
           </Box>
         </Box>
 
         {/* Count */}
-
         <Typography mb={2} variant="body2">
           Showing {filteredData.length} of {totalPackages} packages
         </Typography>
 
         {/* Table */}
-
         {loading ? (
           <Box display="flex" justifyContent="center" py={4}>
             <CircularProgress />
@@ -284,11 +230,7 @@ const PackageDashboard = () => {
               ...pkg,
               id: pkg._id,
               srNo: index + 1,
-              noOfNight:
-                pkg.stayLocations?.reduce(
-                  (sum, loc) => sum + loc.nights,
-                  0
-                ) || 0,
+              noOfNight: pkg.stayLocations?.reduce((sum, loc) => sum + loc.nights, 0) || 0,
               packageType: pkg.packageSubType || "-"
             }))}
             columns={columns}
@@ -299,49 +241,23 @@ const PackageDashboard = () => {
             rowCount={totalPackages}
             paginationMode="server"
             sx={{
-              "& .MuiDataGrid-columnHeaders": {
-                backgroundColor: "#f5f5f5"
-              },
-              "& .MuiDataGrid-columnHeaderTitle": {
-                fontWeight: "bold"
-              }
+              "& .MuiDataGrid-columnHeaders": { backgroundColor: "#f5f5f5" },
+              "& .MuiDataGrid-columnHeaderTitle": { fontWeight: "bold" }
             }}
           />
         )}
 
         {/* Delete Dialog */}
-
-        <Dialog
-          open={openDeleteDialog}
-          onClose={() => setOpenDeleteDialog(false)}
-        >
+        <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)}>
           <Box p={4} textAlign="center">
-
             <DeleteIcon sx={{ fontSize: 60, color: "red" }} />
-
             <Typography mt={2} fontWeight="bold">
               Are you sure you want to delete this package?
             </Typography>
-
             <Box mt={3} display="flex" gap={2} justifyContent="center">
-
-              <Button
-                variant="contained"
-                color="error"
-                onClick={confirmDelete}
-              >
-                Delete
-              </Button>
-
-              <Button
-                variant="outlined"
-                onClick={() => setOpenDeleteDialog(false)}
-              >
-                Cancel
-              </Button>
-
+              <Button variant="contained" color="error" onClick={confirmDelete}>Delete</Button>
+              <Button variant="outlined" onClick={() => setOpenDeleteDialog(false)}>Cancel</Button>
             </Box>
-
           </Box>
         </Dialog>
 
