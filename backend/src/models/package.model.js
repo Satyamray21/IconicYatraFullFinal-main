@@ -115,16 +115,35 @@ const PackageSchema = new mongoose.Schema(
 
 // -----------------------
 // Status Calculation
+// -----------------------
+// Status Calculation - FIXED
 function calculateStatus(validFrom, validTill) {
-  const now = new Date();
-  if (validFrom && validTill) {
-    return now >= validFrom && now <= validTill
-      ? "active"
-      : "deactive";
-  }
-  if (validFrom && now >= validFrom) return "active";
-  if (validTill && now <= validTill) return "active";
-  return "deactive";
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
+    if (validFrom && validTill) {
+        const fromDate = new Date(validFrom);
+        const tillDate = new Date(validTill);
+        
+        fromDate.setHours(0, 0, 0, 0);
+        tillDate.setHours(0, 0, 0, 0);
+        
+        return now >= fromDate && now <= tillDate ? "active" : "deactive";
+    }
+    
+    if (validFrom) {
+        const fromDate = new Date(validFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        return now >= fromDate ? "active" : "deactive";
+    }
+    
+    if (validTill) {
+        const tillDate = new Date(validTill);
+        tillDate.setHours(0, 0, 0, 0);
+        return now <= tillDate ? "active" : "deactive";
+    }
+    
+    return "deactive";
 }
 
 // -----------------------

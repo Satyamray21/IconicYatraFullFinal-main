@@ -5,8 +5,14 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 // ----------------------
 // Improved Helpers
 // ----------------------
+// ----------------------
+// Improved Helpers
+// ----------------------
 function calculateStatus(validFrom, validTill, isNewPackage = false) {
     const now = new Date();
+    
+    // Reset time part for accurate date comparison
+    now.setHours(0, 0, 0, 0);
 
     // For new packages being created, if no validFrom is provided, set it to active
     if (isNewPackage && !validFrom && !validTill) {
@@ -15,17 +21,28 @@ function calculateStatus(validFrom, validTill, isNewPackage = false) {
 
     // If both dates are provided
     if (validFrom && validTill) {
-        return now >= validFrom && now <= validTill ? "active" : "deactive";
+        const fromDate = new Date(validFrom);
+        const tillDate = new Date(validTill);
+        
+        // Reset time for both dates
+        fromDate.setHours(0, 0, 0, 0);
+        tillDate.setHours(0, 0, 0, 0);
+        
+        return now >= fromDate && now <= tillDate ? "active" : "deactive";
     }
 
     // If only validFrom is provided
     if (validFrom) {
-        return now >= validFrom ? "active" : "deactive";
+        const fromDate = new Date(validFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        return now >= fromDate ? "active" : "deactive";
     }
 
     // If only validTill is provided
     if (validTill) {
-        return now <= validTill ? "active" : "deactive";
+        const tillDate = new Date(validTill);
+        tillDate.setHours(0, 0, 0, 0);
+        return now <= tillDate ? "active" : "deactive";
     }
 
     // If no dates provided, default to active for new packages
@@ -126,26 +143,35 @@ function normalizePolicy(policy) {
 }
 
 // ✅ NEW: Date normalization helper
+// ✅ FIXED: Date normalization helper
+// ✅ FIXED: Date normalization helper
 function normalizeDates(data) {
     if (data.validFrom) {
-        data.validFrom = new Date(data.validFrom);
-        // Allow future dates but don't auto-correct to current date
-        // Remove this auto-correction:
-        // if (data.validFrom < new Date().setHours(0, 0, 0, 0)) {
-        //     data.validFrom = new Date(); // Set to current date
-        // }
+        // Ensure we're working with a Date object and set to start of day
+        const fromDate = new Date(data.validFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        data.validFrom = fromDate;
     }
 
     if (data.validTill) {
-        data.validTill = new Date(data.validTill);
+        // Ensure we're working with a Date object and set to end of day
+        const tillDate = new Date(data.validTill);
+        tillDate.setHours(23, 59, 59, 999);
+        data.validTill = tillDate;
+        
         // Ensure validTill is after validFrom
-        if (data.validFrom && data.validTill <= data.validFrom) {
-            data.validTill = new Date(data.validFrom.getTime() + 24 * 60 * 60 * 1000); // Add 1 day
+        if (data.validFrom && tillDate <= data.validFrom) {
+            // Add one day to validFrom
+            const nextDay = new Date(data.validFrom);
+            nextDay.setDate(nextDay.getDate() + 1);
+            nextDay.setHours(23, 59, 59, 999);
+            data.validTill = nextDay;
         }
     }
 
     return data;
 }
+
 
 // ✅ UPDATED: URL normalization helper for Cloudinary
 function normalizePackageUrls(packageData) {
@@ -594,7 +620,7 @@ export const listPackages = asyncHandler(async (req, res) => {
 export const getPackagesByTourType = async (req, res) => {
   try {
     const { tourType } = req.params;
-    const { page = 1, limit = 9 } = req.query;
+    const { page = 1, limit = 9, status = "active" } = req.query; // Default to active only
 
     const formattedTourType =
       tourType.toLowerCase() === "domestic"
@@ -602,21 +628,33 @@ export const getPackagesByTourType = async (req, res) => {
         : "International";
 
     const skip = (page - 1) * limit;
+    
+    // Build filter object
+    const filter = {
+      tourType: formattedTourType
+    };
+    
+    // Add status filter if provided (defaults to "active")
+    if (status) {
+      filter.status = status;
+    }
 
-    const packages = await Package.find({ tourType: formattedTourType })
-      .sort({ createdAt: -1 }) // ✅ Latest first
+    const packages = await Package.find(filter)
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit));
 
-    const totalPackages = await Package.countDocuments({
-      tourType: formattedTourType,
-    });
+    const totalPackages = await Package.countDocuments(filter);
 
     res.json({
       packages,
       totalPackages,
       totalPages: Math.ceil(totalPackages / limit),
       currentPage: Number(page),
+      filters: {
+        tourType: formattedTourType,
+        status: status || "all"
+      }
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -630,19 +668,30 @@ export const getPackagesByTourType = async (req, res) => {
 export const getPackagesByCategory = async (req, res) => {
   try {
     const { packageCategory } = req.params;
-
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
+    const { status = "active" } = req.query; // Default to active only
 
     const skip = (page - 1) * limit;
 
     const now = new Date();
+    now.setHours(0, 0, 0, 0);
 
+    // Build filter object
     const filter = {
-      packageCategory: { $regex: `^${packageCategory}$`, $options: "i" },
-      validFrom: { $lte: now },
-      validTill: { $gte: now }
+      packageCategory: { $regex: `^${packageCategory}$`, $options: "i" }
     };
+    
+    // Add status filter if provided
+    if (status) {
+      filter.status = status;
+    }
+
+    // For active packages, also check dates (optional - depending on your business logic)
+    if (status === "active") {
+      filter.validFrom = { $lte: now };
+      filter.validTill = { $gte: now };
+    }
 
     const totalPackages = await Package.countDocuments(filter);
 
@@ -656,6 +705,10 @@ export const getPackagesByCategory = async (req, res) => {
       totalPackages,
       currentPage: page,
       totalPages: Math.ceil(totalPackages / limit),
+      filters: {
+        packageCategory,
+        status: status || "all"
+      },
       packages
     });
 
