@@ -103,7 +103,7 @@ const AboutUs = () => {
  const team = data?.company?.ourTeam || [];
 
  const vision = data?.company?.ourVision;
-
+ const aboutUs = data?.company?.aboutUs;
   const mission = data?.company?.ourMission;
 
   useEffect(() => {
@@ -117,7 +117,7 @@ const AboutUs = () => {
       {/* Hero Section with Parallax Effect */}
       <Box
         sx={{
-          backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.3)), url(${aboutBanner})`,
+          backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.3)), url(${aboutUs?.aboutUsImage?.url})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundAttachment: isMobile ? "scroll" : "fixed",
@@ -181,8 +181,7 @@ const AboutUs = () => {
               px: { xs: 1, sm: 0 },
             }}
           >
-            Welcome to Iconic Yatra – where every journey becomes an
-            unforgettable memory!
+            {aboutUs?.title}
           </Typography>
         </Container>
       </Box>
@@ -200,7 +199,7 @@ const AboutUs = () => {
               mb: 3,
             }}
           >
-            Where Travel Becomes Legendary
+           {aboutUs?.bannerImageTitle}
           </Typography>
         </Box>
         <Grid container spacing={{ xs: 4, md: 6 }} alignItems="center">
@@ -211,7 +210,7 @@ const AboutUs = () => {
                 borderRadius: { xs: 2, md: 4 },
                 overflow: "hidden",
                 height: { xs: 300, sm: 350, md: 400, lg: 450 },
-                backgroundImage: `url(${legendaryTravel})`,
+                backgroundImage: `url(${aboutUs?.bannerImage?.url})`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 minHeight: 300,
@@ -375,7 +374,7 @@ const AboutUs = () => {
                   color="primary"
                   sx={{ fontSize: { xs: "2rem", sm: "2.5rem", md: "3rem" } }}
                 >
-                  Shaping the Future of Travel
+                 {aboutUs?.ourVisionImageTitle}
                 </Typography>
                 <Typography
                   variant="body1"
@@ -437,7 +436,7 @@ const AboutUs = () => {
                   borderRadius: { xs: 2, md: 4 },
                   overflow: "hidden",
                   height: { xs: 300, sm: 350, md: 400, lg: 450 },
-                  backgroundImage: `url(${about})`,
+                  backgroundImage: `url(${aboutUs?.ourVisionImage?.url})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                   minHeight: 300,
