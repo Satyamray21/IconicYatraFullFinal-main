@@ -104,7 +104,11 @@ const PackageSchema = new mongoose.Schema(
       enum: ["active", "deactive"],
       default: "deactive",
     },
-
+    perPerson: { 
+      type: Number, 
+      default: 1,
+      min: 1
+    },
     isPopular: {
       type: Boolean,
       default: false,

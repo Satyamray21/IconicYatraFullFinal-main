@@ -624,7 +624,10 @@ const handlePriceChange = (destIndex, category, price) => {
           pricePerPerson: hotel.pricePerPerson || 0
         }))
       }));
-
+const perPersonValue = parseInt(pkg.perPerson) || 1;
+    
+    console.log("Saving perPerson value:", perPersonValue);
+    console.log("Original pkg.perPerson:", pkg.perPerson);
       const transformedData = {
         // Step 1 Fields
         tourType: pkg.tourType || "Domestic",
@@ -650,7 +653,8 @@ const handlePriceChange = (destIndex, category, price) => {
           selectedSightseeing: Array.isArray(day?.selectedSightseeing) ? day.selectedSightseeing : [],
           dayImage: typeof day?.dayImage === "string" ? day.dayImage : "",
         })),
-        perPerson: pkg.perPerson || 1,
+        
+    perPerson: perPersonValue, 
         mealPlan: pkg.mealPlan || { planType: "", description: "" },
         destinationNights: validatedDestinationNights,
         
@@ -1129,16 +1133,19 @@ const handlePriceChange = (destIndex, category, price) => {
 
               {/* Meal Plan & Per Person */}
               <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid size={{xs:12, md:6}}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Number of Persons"
-                    value={pkg.perPerson || 1}
-                    onChange={(e) => setPkg({ ...pkg, perPerson: Number(e.target.value) || 1 })}
-                    inputProps={{ min: 1 }}
-                  />
-                </Grid>
+               <Grid size={{xs:12, md:6}}>
+  <TextField
+    fullWidth
+    type="number"
+    label="Number of Persons"
+    value={pkg.perPerson || 1}
+    onChange={(e) => {
+      const value = e.target.value === "" ? 1 : Number(e.target.value);
+      setPkg({ ...pkg, perPerson: value });
+    }}
+    inputProps={{ min: 1 }}
+  />
+</Grid>
                 <Grid size={{xs:12, md:6}}>
                   <TextField
                     select

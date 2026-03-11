@@ -409,7 +409,9 @@ export const updateStep1 = asyncHandler(async (req, res) => {
             message: "destinationCountry is required for International tours"
         });
     }
-
+     if (data.perPerson !== undefined) {
+        data.perPerson = parseInt(data.perPerson) || 1;
+    }
     // Normalize data
     data.mealPlan = normalizeMealPlan(data.mealPlan);
     data.destinationNights = normalizeDestinationNights(data.destinationNights);
