@@ -17,7 +17,7 @@ import Domestic from '../Pages/HomePages/Domestic';
 import International from '../Pages/HomePages/International';
 import SpecialPackages from '../Components/SpecialPackages';
 import PackageDetail from '../Components/PackageDetails';
-
+import IconicLandingPage from '../Pages/LandingPage/IconicLandingPage';
 import Support from '../Pages/HomePages/Support';
 import WhyChooseUs from '../Components/WhyChooseUs';
 import DomesticPackage from '../Components/DomesticPackage';
@@ -99,6 +99,7 @@ const MainRoutes = () => {
       {/* 404 route - should be last */}
       <Route path="*" element={<Layout><div>Page Not Found</div></Layout>} />
        <Route path="/thank-you" element={<Layout><ThankYouPage /></Layout>} />
+        <Route path="/iconiclanding" element={<IconicLandingPage />} />
     </Routes>
   );
 };
