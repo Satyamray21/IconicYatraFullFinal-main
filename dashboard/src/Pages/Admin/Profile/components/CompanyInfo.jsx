@@ -87,25 +87,24 @@ const CompanyProfile = () => {
   ];
 
   const displayFields = [
-    { key: "companyName", icon: <BusinessIcon />, label: "Company Name" },
-    { key: "contactPerson", icon: <PersonIcon />, label: "Contact Person" },
-    { key: "call", icon: <PhoneIcon />, label: "Phone" },
-    { key: "support", icon: <PhoneIcon />, label: "Support" },
-    { key: "email", icon: <EmailIcon />, label: "Email" },
-    { key: "address", icon: <LocationOnIcon />, label: "Address" },
-    { key: "website", icon: <LanguageIcon />, label: "Website" },
-    { key: "gst", icon: <InfoIcon />, label: "GST" },
-    { key: "about", icon: <DescriptionIcon />, label: "About" },
-    { key: "note", icon: <DescriptionIcon />, label: "Note" },
-    { key: "invoiceTerms", icon: <DescriptionIcon />, label: "Invoice Terms" },
-    { key: "pdfFooter", icon: <DescriptionIcon />, label: "PDF Footer" },
-    { key: "currency", icon: <AttachMoneyIcon />, label: "Currency" },
-    { key: "about", icon: <DescriptionIcon />, label: "About" },
-    { key: "aboutUs.title", icon: <DescriptionIcon />, label: "About Us Title" },
-{ key: "aboutUs.bannerTitle", icon: <ImageIcon />, label: "Banner Title" }, // Changed from bannerImageTitle
-{ key: "aboutUs.bannerDescription", icon: <DescriptionIcon />, label: "Banner Description" }, // Changed from bannerImageDescription
-{ key: "aboutUs.visionTitle", icon: <DescriptionIcon />, label: "Vision Title" }, // Changed from ourVisionImageTitle
-    ]
+  { key: "companyName", icon: <BusinessIcon />, label: "Company Name" },
+  { key: "contactPerson", icon: <PersonIcon />, label: "Contact Person" },
+  { key: "call", icon: <PhoneIcon />, label: "Phone" },
+  { key: "support", icon: <PhoneIcon />, label: "Support" },
+  { key: "email", icon: <EmailIcon />, label: "Email" },
+  { key: "address", icon: <LocationOnIcon />, label: "Address" },
+  { key: "website", icon: <LanguageIcon />, label: "Website" },
+  { key: "gst", icon: <InfoIcon />, label: "GST" },
+  { key: "about", icon: <DescriptionIcon />, label: "About" },
+  { key: "note", icon: <DescriptionIcon />, label: "Note" },
+  { key: "invoiceTerms", icon: <DescriptionIcon />, label: "Invoice Terms" },
+  { key: "pdfFooter", icon: <DescriptionIcon />, label: "PDF Footer" },
+  { key: "currency", icon: <AttachMoneyIcon />, label: "Currency" },
+  { key: "aboutUs.title", icon: <DescriptionIcon />, label: "About Us Title" },
+  { key: "aboutUs.bannerTitle", icon: <ImageIcon />, label: "Banner Title" },
+  { key: "aboutUs.bannerDescription", icon: <DescriptionIcon />, label: "Banner Description" },
+  { key: "aboutUs.visionTitle", icon: <DescriptionIcon />, label: "Vision Title" },
+];
   const imageFields = [
   { key: "headerLogo", label: "Header Logo" },
   { key: "footerLogo", label: "Footer Logo" },
@@ -152,13 +151,33 @@ const CompanyProfile = () => {
   // ============================
   // EDIT TEXT / STATS
   // ============================
-  const handleEditSave = async () => {
+ // ============================
+// EDIT TEXT / STATS
+// ============================
+const handleEditSave = async () => {
   const formData = new FormData();
 
   if (editDialog.field.startsWith("aboutUs.")) {
     const key = editDialog.field.split(".")[1];
-    // Send as nested object
-    formData.append(`aboutUs[${key}]`, editDialog.value);
+    
+    // Map frontend display field names to backend field names
+    if (key === 'bannerTitle') {
+      // Send as direct field that your backend handles in lines 231-239
+      formData.append('bannerTitle', editDialog.value);
+    } 
+    else if (key === 'bannerDescription') {
+      formData.append('bannerDescription', editDialog.value);
+    }
+    else if (key === 'visionTitle') {
+      formData.append('visionTitle', editDialog.value);
+    }
+    else if (key === 'title') {
+      formData.append('aboutUsTitle', editDialog.value);
+    }
+    else {
+      // For any other aboutUs fields, use the bracket notation
+      formData.append(`aboutUs[${key}]`, editDialog.value);
+    }
   } 
   else if (editDialog.field.startsWith("stats.")) {
     const statKey = editDialog.field.split(".")[1];
@@ -628,8 +647,13 @@ const handleQrUpload = async () => {
   {field.key.includes("aboutUs")
     ? (() => {
         const nestedKey = field.key.split(".")[1];
-        const value = companyData?.aboutUs?.[nestedKey];
-        // Handle different value types
+        // Map the nestedKey to the actual database field
+        let dbField = nestedKey;
+        if (nestedKey === 'bannerTitle') dbField = 'bannerImageTitle';
+        else if (nestedKey === 'bannerDescription') dbField = 'bannerImageDescription';
+        else if (nestedKey === 'visionTitle') dbField = 'ourVisionImageTitle';
+        
+        const value = companyData?.aboutUs?.[dbField];
         if (typeof value === 'object' && value !== null) {
           return value.text || value.title || JSON.stringify(value) || '-';
         }
@@ -644,17 +668,22 @@ const handleQrUpload = async () => {
                                   setEditDialog({
                                     open: true,
                                     field: field.key,
-                                     value: field.key.includes("aboutUs")
+                                    value: field.key.includes("aboutUs")
   ? (() => {
       const nestedKey = field.key.split(".")[1];
-      const value = companyData?.aboutUs?.[nestedKey];
-      // Handle different value types
+      // Map the nestedKey to the actual database field
+      let dbField = nestedKey;
+      if (nestedKey === 'bannerTitle') dbField = 'bannerImageTitle';
+      else if (nestedKey === 'bannerDescription') dbField = 'bannerImageDescription';
+      else if (nestedKey === 'visionTitle') dbField = 'ourVisionImageTitle';
+      
+      const value = companyData?.aboutUs?.[dbField];
       if (typeof value === 'object' && value !== null) {
         return value.text || value.title || '';
       }
       return value || '';
     })()
-  : companyData?.[field.key] || ""|| "-"
+  : companyData?.[field.key] || ""
                                   })
                                 }
                                 sx={{

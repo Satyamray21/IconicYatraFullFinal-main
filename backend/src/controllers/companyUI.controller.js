@@ -39,6 +39,11 @@ export const upsertCompany = async (req, res) => {
     let updateData = { ...req.body };
 
     // =====================================
+    // FIRST, GET THE EXISTING COMPANY DATA
+    // =====================================
+    const existingCompany = await CompanyUI.findById(COMPANY_ID);
+
+    // =====================================
     // SINGLE IMAGE UPLOADS
     // =====================================
 
@@ -71,8 +76,7 @@ export const upsertCompany = async (req, res) => {
     // =====================================
 
     if (req.files?.qrCodes) {
-      const company = await CompanyUI.findById(COMPANY_ID);
-      const existingQrs = company?.qrCodes || [];
+      const existingQrs = existingCompany?.qrCodes || [];
       const newQrs = [];
 
       for (let i = 0; i < req.files.qrCodes.length; i++) {
@@ -95,8 +99,7 @@ export const upsertCompany = async (req, res) => {
     // =====================================
 
     if (req.files?.testimonialPhotos) {
-      const company = await CompanyUI.findById(COMPANY_ID);
-      const existingTestimonials = company?.testimonials || [];
+      const existingTestimonials = existingCompany?.testimonials || [];
       const newTestimonials = [];
 
       for (let i = 0; i < req.files.testimonialPhotos.length; i++) {
@@ -125,8 +128,7 @@ export const upsertCompany = async (req, res) => {
     // =====================================
 
     if (req.files?.teamPhotos) {
-      const company = await CompanyUI.findById(COMPANY_ID);
-      const existingTeam = company?.ourTeam || [];
+      const existingTeam = existingCompany?.ourTeam || [];
       const newTeamMembers = [];
 
       for (let i = 0; i < req.files.teamPhotos.length; i++) {
@@ -170,37 +172,87 @@ export const upsertCompany = async (req, res) => {
         });
       }
     }
+
     // =====================================
-// ABOUT US IMAGE UPLOADS
-// =====================================
+    // CRITICAL: PRESERVE EXISTING ABOUT US DATA
+    // =====================================
+    
+    // Start with existing aboutUs data
+    if (existingCompany?.aboutUs) {
+      updateData.aboutUs = { ...existingCompany.aboutUs };
+    } else {
+      updateData.aboutUs = {};
+    }
 
-if (req.files?.aboutUsImage) {
-  const result = await uploadOnCloudinary(req.files.aboutUsImage[0].path);
+    // Handle aboutUs fields from frontend (aboutUs[title] format)
+    Object.keys(req.body).forEach(key => {
+      if (key.startsWith('aboutUs[')) {
+        const matches = key.match(/aboutUs\[(.*?)\]/);
+        if (matches && matches[1]) {
+          const fieldName = matches[1];
+          
+          // Map frontend field names to backend schema field names
+          let backendFieldName = fieldName;
+          
+          // Map the field names if needed
+          if (fieldName === 'bannerTitle') {
+            backendFieldName = 'bannerImageTitle';
+          } else if (fieldName === 'bannerDescription') {
+            backendFieldName = 'bannerImageDescription';
+          } else if (fieldName === 'visionTitle') {
+            backendFieldName = 'ourVisionImageTitle';
+          }
+          
+          updateData.aboutUs[backendFieldName] = req.body[key];
+        }
+      }
+    });
 
-  updateData["aboutUs.aboutUsImage"] = {
-    public_id: result.public_id,
-    url: result.secure_url,
-  };
-}
+    // Handle legacy aboutUs text fields
+    if (req.body.aboutUsTitle) {
+      updateData.aboutUs.title = req.body.aboutUsTitle;
+    }
 
-if (req.files?.bannerImage) {
-  const result = await uploadOnCloudinary(req.files.bannerImage[0].path);
+    // Handle direct field names from frontend
+    if (req.body.bannerTitle) {
+      updateData.aboutUs.bannerImageTitle = req.body.bannerTitle;
+    }
 
-  updateData["aboutUs.bannerImage"] = {
-    public_id: result.public_id,
-    url: result.secure_url,
-  };
-}
+    if (req.body.bannerDescription) {
+      updateData.aboutUs.bannerImageDescription = req.body.bannerDescription;
+    }
 
-if (req.files?.ourVisionImage) {
-  const result = await uploadOnCloudinary(req.files.ourVisionImage[0].path);
+    if (req.body.visionTitle) {
+      updateData.aboutUs.ourVisionImageTitle = req.body.visionTitle;
+    }
 
-  updateData["aboutUs.ourVisionImage"] = {
-    public_id: result.public_id,
-    url: result.secure_url,
-  };
-}
+    // =====================================
+    // ABOUT US IMAGE UPLOADS
+    // =====================================
+    
+    if (req.files?.aboutUsImage) {
+      const result = await uploadOnCloudinary(req.files.aboutUsImage[0].path);
+      updateData.aboutUs.aboutUsImage = {
+        public_id: result.public_id,
+        url: result.secure_url,
+      };
+    }
 
+    if (req.files?.bannerImage) {
+      const result = await uploadOnCloudinary(req.files.bannerImage[0].path);
+      updateData.aboutUs.bannerImage = {
+        public_id: result.public_id,
+        url: result.secure_url,
+      };
+    }
+
+    if (req.files?.ourVisionImage) {
+      const result = await uploadOnCloudinary(req.files.ourVisionImage[0].path);
+      updateData.aboutUs.ourVisionImage = {
+        public_id: result.public_id,
+        url: result.secure_url,
+      };
+    }
 
     // =====================================
     // VISION & MISSION
@@ -213,27 +265,17 @@ if (req.files?.ourVisionImage) {
     if (req.body.ourMission) {
       updateData.ourMission = req.body.ourMission;
     }
-// =====================================
-// ABOUT US TEXT FIELDS
-// =====================================
 
-if (req.body.aboutUsTitle) {
-  updateData["aboutUs.title"] = req.body.aboutUsTitle;
-}
-
-if (req.body.bannerImageTitle) {
-  updateData["aboutUs.bannerImageTitle"] = req.body.bannerImageTitle;
-}
-
-if (req.body.bannerImageDescription) {
-  updateData["aboutUs.bannerImageDescription"] =
-    req.body.bannerImageDescription;
-}
-
-if (req.body.ourVisionImageTitle) {
-  updateData["aboutUs.ourVisionImageTitle"] =
-    req.body.ourVisionImageTitle;
-}
+    // =====================================
+    // REMOVE ANY UNDEFINED FIELDS
+    // =====================================
+    
+    // Clean up undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
 
     // =====================================
     // UPSERT COMPANY
@@ -252,6 +294,7 @@ if (req.body.ourVisionImageTitle) {
 
     res.json(company);
   } catch (error) {
+    console.error("Error in upsertCompany:", error);
     res.status(500).json({ message: error.message });
   }
 };
