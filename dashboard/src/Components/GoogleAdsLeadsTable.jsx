@@ -111,15 +111,26 @@ const GoogleAdsLeadsTable = () => {
       headerName: "Source",
       flex: 1
     },
-    {
+   {
   field: "createdAt",
   headerName: "Date",
   flex: 1,
-  valueFormatter: (params) => {
-    if (!params.value) return "";
-    return new Date(params.value).toLocaleDateString();
+  renderCell: (params) => {
+    if (!params.row?.createdAt) return "";
+
+    const date = new Date(params.row.createdAt);
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+
+    return `${day}-${month}-${year}`;
   }
 }
+
+
+
+
 
   ];
 
