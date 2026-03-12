@@ -18,7 +18,7 @@ const GoogleAdsLeadsTable = () => {
 
   const fetchLeads = async () => {
     const res = await fetch(
-      `${import.meta.env.VITE_BASE_URL}/api/v1/googleAdsEnquiry`
+      `${import.meta.env.VITE_API_BASE_URL}/googleAdsEnquiry`
     );
 
     const data = await res.json();
@@ -35,7 +35,7 @@ const GoogleAdsLeadsTable = () => {
   const handleStatusChange = async (id, status) => {
 
     await fetch(
-      `${import.meta.env.VITE_BASE_URL}/api/v1/googleAdsEnquiry/${id}/status`,
+      `${import.meta.env.VITE_API_BASE_URL}/googleAdsEnquiry/${id}/status`,
       {
         method: "PATCH",
         headers: {
@@ -112,12 +112,15 @@ const GoogleAdsLeadsTable = () => {
       flex: 1
     },
     {
-      field: "createdAt",
-      headerName: "Date",
-      flex: 1,
-      valueGetter: (params) =>
-        new Date(params.row.createdAt).toLocaleDateString()
-    }
+  field: "createdAt",
+  headerName: "Date",
+  flex: 1,
+  valueFormatter: (params) => {
+    if (!params.value) return "";
+    return new Date(params.value).toLocaleDateString();
+  }
+}
+
   ];
 
   return (
