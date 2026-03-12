@@ -9,14 +9,14 @@ import {
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
-import gujaratImage from "../../../assets/LandingImages/mid2.webp"; 
+import darjeelingImage from "../../../assets/LandingImages/darjeeking.jpg";
 
 function OwnPackage() {
   const features = [
-    "Choose destinations you want to cover",
-    "Decide your travel dates and duration",
-    "Select budget, hotels, and transport options",
-    "Get a personalized itinerary crafted just for you",
+    "Choose the destinations you want to explore like Darjeeling, Gangtok, or Pelling",
+    "Select your travel dates and trip duration",
+    "Pick your preferred hotels, transport, and budget options",
+    "Get a personalized Darjeeling & Sikkim itinerary designed for you",
   ];
 
   return (
@@ -25,12 +25,12 @@ function OwnPackage() {
         <Grid container spacing={6} alignItems="center">
           
           {/* LEFT CONTENT */}
-          <Grid size={{xs:12, md:6}}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Typography
               variant="h4"
               sx={{ fontWeight: 600, mb: 2, color: "#1e2b3a" }}
             >
-              Create Your Own Gujarat Tour Package
+              Create Your Own Darjeeling & Sikkim Tour Package
             </Typography>
 
             <Typography
@@ -40,9 +40,10 @@ function OwnPackage() {
                 mb: 3,
               }}
             >
-              Not finding the right package? Don’t worry! We offer fully
-              customizable Gujarat tour packages designed as per your travel
-              dates, budget, and interests.
+              Not finding the perfect package? No problem. We offer fully
+              customizable Darjeeling and Sikkim tour packages designed around
+              your travel preferences, budget, and schedule so you can enjoy a
+              memorable Himalayan holiday.
             </Typography>
 
             <Stack spacing={1.5} sx={{ mb: 4 }}>
@@ -78,11 +79,11 @@ function OwnPackage() {
           </Grid>
 
           {/* RIGHT IMAGE */}
-          <Grid size={{xs:12, md:6}}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Box
               component="img"
-              src={gujaratImage}
-              alt="Gujarat Tour"
+              src={darjeelingImage}
+              alt="Darjeeling and Sikkim Tour"
               sx={{
                 width: "100%",
                 borderRadius: 3,

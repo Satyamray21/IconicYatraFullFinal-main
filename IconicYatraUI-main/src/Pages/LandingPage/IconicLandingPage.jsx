@@ -14,7 +14,7 @@ import CallIcon from "@mui/icons-material/Call";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 
 import logo from "../../assets/Logo/logoiconic1.png";
-import landing from "../../assets/LandingImages/new landing page.jpg";
+import landing from "../../assets/LandingImages/darjrrling.jpg";
 
 import OverView from "./InsideComponents/OverView";
 import DomesticPackage from "../../Components/DomesticPackage";
@@ -31,7 +31,6 @@ export default function LandingPage() {
   return (
     <>
       <Box>
-
         {/* ================= HEADER ================= */}
         <Box
           sx={{
@@ -42,34 +41,30 @@ export default function LandingPage() {
         >
           <Container maxWidth="lg">
             <Grid container alignItems="center" spacing={2}>
-
               {/* Logo + Text */}
-              <Grid size={{xs:12, md:8}}>
+              <Grid size={{ xs: 12, md: 8 }}>
                 <Stack
                   direction={{ xs: "column", sm: "row" }}
                   spacing={2}
                   alignItems={{ xs: "flex-start", sm: "center" }}
                 >
-                  <img
-                    src={logo}
-                    alt="India Tour24"
-                    style={{ height: 45 }}
-                  />
+                  <img src={logo} alt="India Tour24" style={{ height: 45 }} />
 
                   <Typography
                     variant="body2"
                     color="text.secondary"
                     sx={{ fontSize: { xs: 13, md: 14 } }}
                   >
-                    Explore Gujarat’s iconic destinations like Dwarka, Somnath,
-                    Gir, Diu, and Kutch with fully customizable, hassle-free,
-                    unforgettable tour packages.
+                    Explore the beauty of Darjeeling with scenic tea gardens,
+                    Kanchenjunga mountain views, toy train rides, peaceful
+                    monasteries, and unforgettable Himalayan experiences with
+                    customizable tour packages.
                   </Typography>
                 </Stack>
               </Grid>
 
               {/* Phone */}
-              <Grid size={{xs:12, md:4}}>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <Stack
                   direction="row"
                   spacing={1}
@@ -77,12 +72,9 @@ export default function LandingPage() {
                   alignItems="center"
                 >
                   <CallIcon color="error" />
-                  <Typography fontWeight={600}>
-                    +91 7053900957
-                  </Typography>
+                  <Typography fontWeight={600}>+91 7053900957</Typography>
                 </Stack>
               </Grid>
-
             </Grid>
           </Container>
         </Box>
@@ -100,7 +92,7 @@ export default function LandingPage() {
             backgroundPosition: "center",
           }}
         >
-          {/* Dark Overlay */}
+          {/* Overlay */}
           <Box
             sx={{
               position: "absolute",
@@ -112,9 +104,8 @@ export default function LandingPage() {
 
           <Container maxWidth="lg" sx={{ position: "relative", zIndex: 2 }}>
             <Grid container spacing={4} alignItems="center">
-
               {/* LEFT CONTENT */}
-              <Grid size={{xs:12, md:7}}>
+              <Grid size={{ xs: 12, md: 7 }}>
                 <Typography
                   variant="h3"
                   fontWeight={800}
@@ -128,7 +119,8 @@ export default function LandingPage() {
                     },
                   }}
                 >
-                  GUJARAT TOUR PACKAGES – EXPLORE DWARKA, SOMNATH, GIR, DIU & MORE
+                  DARJEELING TOUR PACKAGES – TEA GARDENS, TOY TRAIN & HIMALAYAN
+                  VIEWS
                 </Typography>
 
                 <Typography
@@ -140,37 +132,31 @@ export default function LandingPage() {
                     fontSize: { xs: 14, md: 16 },
                   }}
                 >
-                  Discover Gujarat with our customized tour packages covering
-                  Dwarka, Somnath, Gir, and Diu. Enjoy spiritual journeys,
-                  wildlife adventures, cultural experiences, and scenic beauty
-                  with expert guides and hassle-free travel services.
+                  Discover the charm of Darjeeling with our customized tour
+                  packages. Experience breathtaking Himalayan views, lush tea
+                  gardens, the famous Darjeeling Himalayan Railway, peaceful
+                  monasteries, and the unforgettable sunrise at Tiger Hill with
+                  comfortable and hassle-free travel services.
                 </Typography>
 
                 <Button
-  variant="contained"
-  startIcon={<WhatsAppIcon />}
-  onClick={() =>
-    window.open(
-      "https://wa.me/918130883907?text=Hello%21%20I%20need%20Gujarat%20tour%20package",
-      "_blank"
-    )
-  }
-  sx={{
-    bgcolor: "#25D366",
-    px: 3,
-    py: 1.2,
-    borderRadius: "30px",
-    fontWeight: 600,
-    "&:hover": { bgcolor: "#1ebe5d" },
-  }}
->
-  Chat with Us
-</Button>
-
+                  variant="contained"
+                  startIcon={<WhatsAppIcon />}
+                  sx={{
+                    bgcolor: "#25D366",
+                    px: 3,
+                    py: 1.2,
+                    borderRadius: "30px",
+                    fontWeight: 600,
+                    "&:hover": { bgcolor: "#1ebe5d" },
+                  }}
+                >
+                  Chat for Darjeeling Package
+                </Button>
               </Grid>
 
-              {/* RIGHT FORM CARD */}
-              <Grid size={{xs:12, md:5}}>
+              {/* RIGHT FORM */}
+              <Grid size={{ xs: 12, md: 5 }}>
                 <Paper
                   elevation={6}
                   sx={{
@@ -186,7 +172,7 @@ export default function LandingPage() {
                     color="error"
                     mb={3}
                   >
-                    Find Next Place To Visit
+                    Plan Your Darjeeling Trip
                   </Typography>
 
                   <Stack spacing={2}>
@@ -225,12 +211,11 @@ export default function LandingPage() {
                           "linear-gradient(90deg,#ff7a18,#ff4e50)",
                       }}
                     >
-                      REQUEST A CALLBACK
+                      PLAN MY DARJEELING TRIP
                     </Button>
                   </Stack>
                 </Paper>
               </Grid>
-
             </Grid>
           </Container>
         </Box>
@@ -259,12 +244,6 @@ export default function LandingPage() {
           </IconButton>
 
           <IconButton
-          onClick={() =>
-    window.open(
-      "https://wa.me/918130883907?text=Hello%21%20I%20need%20Gujarat%20tour%20package",
-      "_blank"
-    )
-  }
             sx={{
               bgcolor: "#25D366",
               color: "#fff",
@@ -275,9 +254,9 @@ export default function LandingPage() {
             <WhatsAppIcon />
           </IconButton>
         </Box>
-
       </Box>
 
+      {/* OTHER SECTIONS */}
       <OverView />
       <DomesticPackage />
       <OwnPackage />
@@ -286,8 +265,8 @@ export default function LandingPage() {
       <WhyChooseSection />
       <WorkProcess />
       <HelpSupportSection />
-      <FAQSection/>
-      <FooterSection/>
+      <FAQSection />
+      <FooterSection />
     </>
   );
 }

@@ -23,16 +23,16 @@ import StarIcon from "@mui/icons-material/Star";
 
 const placesData = [
   {
-    title: "Spiritual & Pilgrimage",
+    title: "Spiritual & Monasteries",
     icon: <TempleHinduIcon sx={{ color: "#fff", fontSize: 30 }} />,
     color: "#2e7d32",
     places: [
-      "Somnath Temple",
-      "Dwarkadhish Temple (Dwarka)",
-      "Akshardham Temple (Gandhinagar)",
-      "Sun Temple (Modhera)",
-      "Ambaji Temple",
-      "Palitana Temples",
+      "Rumtek Monastery (Gangtok)",
+      "Pemayangtse Monastery (Pelling)",
+      "Enchey Monastery",
+      "Ghoom Monastery (Darjeeling)",
+      "Do Drul Chorten Stupa",
+      "Samdruptse Statue (Namchi)",
     ],
   },
   {
@@ -40,12 +40,12 @@ const placesData = [
     icon: <AccountBalanceIcon sx={{ color: "#fff", fontSize: 30 }} />,
     color: "#6a1b9a",
     places: [
-      "Rani ki Vav (Patan)",
-      "Champaner-Pavagadh Park",
-      "Sabarmati Ashram",
-      "Laxmi Vilas Palace",
-      "Junagadh Uparkot Fort",
-      "Vijay Vilas Palace (Mandvi)",
+      "Darjeeling Himalayan Railway (Toy Train)",
+      "Batasia Loop",
+      "Namgyal Institute of Tibetology",
+      "Rabdentse Ruins (Pelling)",
+      "Yiga Choeling Monastery",
+      "British-era Darjeeling Town",
     ],
   },
   {
@@ -53,25 +53,25 @@ const placesData = [
     icon: <PetsIcon sx={{ color: "#fff", fontSize: 30 }} />,
     color: "#ef6c00",
     places: [
-      "Gir National Park",
-      "Velavadar (Blackbuck NP)",
-      "Marine National Park (Jamnagar)",
-      "Nalsarovar Bird Sanctuary",
-      "Jessore Sloth Bear Sanctuary",
-      "Little Rann of Kutch",
+      "Padmaja Naidu Himalayan Zoo",
+      "Khangchendzonga National Park",
+      "Fambong Lho Wildlife Sanctuary",
+      "Barsey Rhododendron Sanctuary",
+      "Himalayan Bird Watching Trails",
+      "Singalila National Park",
     ],
   },
   {
-    title: "Desert & Scenic Landscapes",
+    title: "Mountains & Scenic Landscapes",
     icon: <LandscapeIcon sx={{ color: "#fff", fontSize: 30 }} />,
     color: "#f9a825",
     places: [
-      "Rann of Kutch",
-      "Mandvi Beach",
-      "Diu Island",
-      "Saputara Hill Station",
-      "Polo Forest",
-      "White Rann (seasonal events)",
+      "Tiger Hill Sunrise Point",
+      "Tsomgo Lake",
+      "Yumthang Valley",
+      "Gurudongmar Lake",
+      "Kanchenjunga Viewpoints",
+      "Darjeeling Tea Gardens",
     ],
   },
   {
@@ -79,12 +79,12 @@ const placesData = [
     icon: <TheaterComedyIcon sx={{ color: "#fff", fontSize: 30 }} />,
     color: "#0288d1",
     places: [
-      "Rann Utsav (Kutch)",
-      "Navratri Garba (Ahmedabad)",
-      "Kutch Handicrafts & Bhuj",
-      "Patola Weaving (Patan)",
-      "Tribal Culture (Dang)",
-      "Local Food Trails",
+      "Gangtok MG Marg Walk",
+      "Local Sikkimese Food Trails",
+      "Darjeeling Tea Estate Tours",
+      "Traditional Lepcha Culture",
+      "Himalayan Festivals",
+      "Local Handicraft Markets",
     ],
   },
   {
@@ -92,41 +92,42 @@ const placesData = [
     icon: <MapIcon sx={{ color: "#fff", fontSize: 30 }} />,
     color: "#3949ab",
     places: [
-      "Ahmedabad Old City",
-      "Vadodara City & Museums",
-      "Bhuj & Kutch Villages",
-      "Junagadh & Girnar",
-      "Bhavnagar Coastal Areas",
-      "Porbandar (Birthplace of Gandhi)",
+      "Gangtok City",
+      "Pelling Hill Station",
+      "Lachung Village",
+      "Lachen Village",
+      "Namchi Char Dham",
+      "Kalimpong Town",
     ],
   },
 ];
 
 const sliderItems = [
-  "Discover Peaceful Escapes & Cultural Experiences in Gujarat",
-  "Hassle-Free Stays and Smooth Transportation Across Gujarat",
-  "Personalized Gujarat Trip Planning with Local Experts",
-  "Best Heritage, Wildlife & Spiritual Destinations in One Tour",
+  "Explore the Beauty of Darjeeling & Sikkim",
+  "Comfortable Stays and Smooth Transportation in the Himalayas",
+  "Personalized Darjeeling and Sikkim Trip Planning",
+  "Best Tea Gardens, Monasteries & Mountain Landscapes in One Tour",
 ];
 
 function Solution() {
   return (
-   <Box sx={{ pt: 8, pb: 0, background: "#ffffff" }}>
+    <Box sx={{ pt: 8, pb: 0, background: "#ffffff" }}>
       <Container maxWidth="lg">
+
         {/* Heading */}
         <Typography variant="h4" align="center" sx={{ fontWeight: 600, mb: 1 }}>
-          Top Places to Visit in Gujarat
+          Top Places to Visit in Darjeeling & Sikkim
         </Typography>
 
         <Typography align="center" sx={{ color: "#6c7a89", mb: 6 }}>
-          Category-wise quick list — use these in menus, package pages, or quick
-          links for better user experience and SEO.
+          Discover the best Himalayan destinations including scenic viewpoints,
+          monasteries, lakes, tea gardens, and charming hill towns.
         </Typography>
 
         {/* Cards */}
         <Grid container spacing={4}>
           {placesData.map((item, index) => (
-            <Grid size={{xs:12, md:4}} key={index}>
+            <Grid size={{ xs: 12, md: 4 }} key={index}>
               <Card
                 sx={{
                   borderRadius: 3,
@@ -137,6 +138,7 @@ function Solution() {
                 }}
               >
                 <CardContent sx={{ p: 3 }}>
+                  
                   {/* Header */}
                   <Box sx={{ display: "flex", alignItems: "center", mb: 1.5 }}>
                     <Box
@@ -172,6 +174,7 @@ function Solution() {
                       </ListItem>
                     ))}
                   </List>
+
                 </CardContent>
               </Card>
             </Grid>
@@ -193,12 +196,12 @@ function Solution() {
               fontSize: "1rem",
             }}
           >
-            Plan a Custom Gujarat Trip
+            Plan a Custom Darjeeling & Sikkim Trip
           </Button>
 
           <Typography sx={{ mt: 2, color: "#6c7a89" }}>
-            Want these grouped into packages? Click the button to request a
-            tailored itinerary.
+            Want a personalized itinerary? Click the button and our travel
+            experts will design a perfect Himalayan tour for you.
           </Typography>
         </Box>
       </Container>
@@ -222,10 +225,7 @@ function Solution() {
           }}
         >
           {[...sliderItems, ...sliderItems].map((text, index) => (
-            <Box
-              key={index}
-              sx={{ display: "flex", alignItems: "center", mx: 3 }}
-            >
+            <Box key={index} sx={{ display: "flex", alignItems: "center", mx: 3 }}>
               <Typography
                 sx={{
                   color: "#fff",

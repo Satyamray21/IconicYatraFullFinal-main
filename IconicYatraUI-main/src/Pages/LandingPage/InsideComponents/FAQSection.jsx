@@ -11,39 +11,39 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 const faqs = [
   {
-    question: "What are the highlights of your Gujarat tour packages?",
+    question: "What are the highlights of your Darjeeling & Sikkim tour packages?",
     answer:
-      "Our Gujarat tours include destinations like Dwarka, Somnath, Gir National Park, Rann of Kutch, Diu beaches, and Saputara hill station.",
+      "Our packages include popular destinations like Darjeeling, Gangtok, Pelling, Tsomgo Lake, Nathula Pass, Yumthang Valley, and beautiful Himalayan viewpoints such as Tiger Hill.",
   },
   {
-    question: "Are Gujarat tours suitable for families and kids?",
+    question: "Are Darjeeling & Sikkim tours suitable for families?",
     answer:
-      "Yes, our Gujarat packages are family-friendly and include attractions suitable for kids and families.",
+      "Yes, these destinations are perfect for families. Our packages include comfortable hotels, sightseeing tours, and activities suitable for both kids and adults.",
   },
   {
-    question: "What's included in Gujarat tour packages?",
+    question: "What is usually included in Darjeeling & Sikkim tour packages?",
     answer:
-      "Packages usually include accommodation, sightseeing, transfers, meals, and guided tours.",
+      "Packages generally include hotel accommodation, local transportation, sightseeing tours, airport or railway station transfers, and selected meals depending on the plan.",
   },
   {
-    question: "Can I customize my Gujarat itinerary?",
+    question: "Can I customize my Darjeeling & Sikkim itinerary?",
     answer:
-      "Yes, we offer customizable itineraries based on your travel preferences and budget.",
+      "Yes, we provide fully customizable tour packages. You can choose destinations, hotel categories, travel duration, and activities according to your preferences and budget.",
   },
   {
-    question: "Are Gujarat tours suitable for senior citizens?",
+    question: "Is Nathula Pass included in the Sikkim tour package?",
     answer:
-      "Yes, we provide comfortable travel plans with relaxed schedules for senior travelers.",
+      "Nathula Pass can be included depending on permit availability and weather conditions. Our team helps arrange the required permits for visiting the pass.",
   },
   {
-    question: "What is the best time to visit Gujarat?",
+    question: "What is the best time to visit Darjeeling and Sikkim?",
     answer:
-      "October to March is the best time because the weather is pleasant.",
+      "The best time to visit is from March to June and September to December when the weather is pleasant and the mountain views are clear.",
   },
   {
-    question: "How do I book a Gujarat tour package?",
+    question: "How do I book a Darjeeling & Sikkim tour package?",
     answer:
-      "You can book online, request a callback, or contact our travel experts.",
+      "You can easily book through our website, request a call back from our travel experts, or contact us directly for personalized assistance.",
   },
 ];
 

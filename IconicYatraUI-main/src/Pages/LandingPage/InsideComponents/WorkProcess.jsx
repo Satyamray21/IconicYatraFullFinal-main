@@ -4,27 +4,27 @@ import { Box, Container, Grid, Typography, Paper } from "@mui/material";
 const steps = [
   {
     number: "1",
-    title: "Choose Your Gujarat Package",
+    title: "Choose Your Darjeeling & Sikkim Package",
     description:
-      "Explore our curated Gujarat tour packages covering Dwarka, Somnath, Gir, Diu, Kutch, Saputara, and more.",
+      "Explore our curated tour packages covering Darjeeling, Gangtok, Pelling, Tsomgo Lake, Yumthang Valley, and other breathtaking Himalayan destinations.",
   },
   {
     number: "2",
     title: "Customize Your Itinerary",
     description:
-      "Add hotels, sightseeing spots, and activities based on your preferences, interests, and budget for a personalized Gujarat experience.",
+      "Add hotels, sightseeing spots, monasteries, tea garden tours, and adventure activities based on your interests and travel preferences.",
   },
   {
     number: "3",
     title: "Confirm Your Booking",
     description:
-      "Receive a detailed Gujarat travel plan and confirm your booking with safe, hassle-free payment options.",
+      "Receive a detailed travel plan for your Darjeeling and Sikkim trip and confirm your booking with secure and hassle-free payment options.",
   },
   {
     number: "4",
-    title: "Enjoy Your Gujarat Trip",
+    title: "Enjoy Your Himalayan Trip",
     description:
-      "Relax and immerse yourself in the culture, temples, wildlife, deserts, and beaches of Gujarat while we take care of all travel arrangements.",
+      "Relax and experience the beauty of tea gardens, mountain landscapes, monasteries, lakes, and local culture while we manage all travel arrangements.",
   },
 ];
 
@@ -53,13 +53,13 @@ const WorkProcess = () => {
             mb: 6,
           }}
         >
-          Seamless Gujarat Travel Planning With Iconic Yatra
+          Simple & Hassle-Free Darjeeling & Sikkim Travel Planning
         </Typography>
 
         {/* Cards */}
         <Grid container spacing={4}>
           {steps.map((step, index) => (
-            <Grid size={{xs:12, sm:6, md:3}} key={index}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
               <Paper
                 elevation={0}
                 sx={{
