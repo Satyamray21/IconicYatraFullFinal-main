@@ -15,6 +15,7 @@ import LuggageIcon from "@mui/icons-material/Luggage";
 import { toast } from "react-toastify";
 import { Formik, Form } from "formik";
 import * as Yup from "yup";
+import { useNavigate } from "react-router-dom";
 
 const validationSchema = Yup.object({
   name: Yup.string().required("Name required"),
@@ -23,6 +24,8 @@ const validationSchema = Yup.object({
 });
 
 const ContactForm = () => {
+  const navigate = useNavigate();
+
   return (
     <Formik
       initialValues={{
@@ -39,7 +42,7 @@ const ContactForm = () => {
       validationSchema={validationSchema}
       
 
-onSubmit={async (values, { resetForm }) => {
+        onSubmit={async (values, { resetForm }) => {
   try {
 
     const res = await fetch(`${import.meta.env.VITE_BASE_URL}/api/v1/googleAdsEnquiry`, {
@@ -54,7 +57,13 @@ onSubmit={async (values, { resetForm }) => {
 
     if (data.success) {
       toast.success("Enquiry submitted successfully ✅");
+
       resetForm();
+
+      setTimeout(() => {
+        navigate("/thank-you");
+      }, 1000);
+
     } else {
       toast.error(data.message || "Something went wrong");
     }
@@ -63,6 +72,7 @@ onSubmit={async (values, { resetForm }) => {
     toast.error("Server error. Please try again later.");
   }
 }}
+
 
     >
       {({ values, handleChange, errors, touched }) => (
