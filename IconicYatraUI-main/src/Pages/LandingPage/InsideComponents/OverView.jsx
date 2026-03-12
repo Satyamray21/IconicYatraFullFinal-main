@@ -30,7 +30,6 @@ const FeatureCard = ({ image, title, description }) => (
     }}
   >
     <CardContent sx={{ p: 4 }}>
-      
       {/* Image */}
       <Box
         sx={{
@@ -102,27 +101,27 @@ function OverView() {
       <Container maxWidth="lg">
         <Grid container spacing={4}>
           
-          <Grid size={{xs:12, md:4}}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <FeatureCard
               image={packageImg}
-              title="Customizable Gujarat Packages"
-              description="From pilgrimage to wildlife and heritage tours, every Gujarat trip is tailored to match your travel style and budget."
+              title="Customizable Darjeeling & Sikkim Packages"
+              description="Plan your perfect Himalayan getaway with fully customizable Darjeeling and Sikkim tour packages designed to match your travel style, duration, and budget."
             />
           </Grid>
 
-          <Grid size={{xs:12, md:4}}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <FeatureCard
               image={destinationImg}
               title="Top Destinations Covered"
-              description="Explore Dwarka, Somnath, Gir, Diu, Kutch, and Ahmedabad – Gujarat’s most loved destinations with curated itineraries."
+              description="Explore beautiful destinations like Darjeeling, Gangtok, Pelling, Lachung, Yumthang Valley, and Tsomgo Lake with carefully curated travel itineraries."
             />
           </Grid>
 
-          <Grid size={{xs:12, md:4}}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <FeatureCard
               image={travelerImg}
               title="Tours for Every Traveler"
-              description="Be it pilgrimage, family holidays, cultural trips, wildlife adventures, or group tours – we have the perfect Gujarat package for you."
+              description="Whether you're planning a honeymoon, family holiday, adventure trip, or group tour, our Darjeeling and Sikkim packages are designed for every type of traveler."
             />
           </Grid>
 

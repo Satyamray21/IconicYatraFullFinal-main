@@ -136,32 +136,38 @@ const HelpSupportSection = () => {
         </Paper>
 
         {/* Feature Cards */}
-        <Grid container spacing={3}>
-          {features.map((item, index) => (
-            <Grid size={{xs:6, sm:4, md:2}} key={index}>
-              <Paper
-                elevation={0}
-                sx={{
-                  textAlign: "center",
-                  p: 3,
-                  borderRadius: 3,
-                  border: "1px solid #e0e0e0",
-                  transition: "0.3s",
-                  "&:hover": {
-                    boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
-                    transform: "translateY(-4px)",
-                  },
-                }}
-              >
-                <Box mb={1}>{item.icon}</Box>
+<Grid container spacing={3} alignItems="stretch">
+  {features.map((item, index) => (
+    <Grid size={{ xs: 6, sm: 4, md: 2 }} key={index} sx={{ display: "flex" }}>
+      <Paper
+        elevation={0}
+        sx={{
+          textAlign: "center",
+          p: 3,
+          borderRadius: 3,
+          border: "1px solid #e0e0e0",
+          transition: "0.3s",
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          "&:hover": {
+            boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+            transform: "translateY(-4px)",
+          },
+        }}
+      >
+        <Box mb={1}>{item.icon}</Box>
 
-                <Typography fontSize={14} fontWeight={500}>
-                  {item.title}
-                </Typography>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
+        <Typography fontSize={14} fontWeight={500}>
+          {item.title}
+        </Typography>
+      </Paper>
+    </Grid>
+  ))}
+</Grid>
 
       </Container>
     </Box>

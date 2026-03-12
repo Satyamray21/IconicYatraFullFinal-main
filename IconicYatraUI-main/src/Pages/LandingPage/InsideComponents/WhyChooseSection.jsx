@@ -7,35 +7,35 @@ import {
   Card,
   CardContent,
 } from "@mui/material";
-import img from "../../../assets/LandingImages/gujrat.png";
+import img from "../../../assets/LandingImages/sikkim.jpg";
 
 const leftFeatures = [
   {
-    title: "Tailor-Made Gujarat Itineraries",
-    desc: "Plan your ideal Gujarat trip with customized itineraries covering Dwarka, Somnath, Gir, Diu, Kutch, and more according to your interests.",
+    title: "Tailor-Made Darjeeling & Sikkim Itineraries",
+    desc: "Plan your perfect Himalayan getaway with customized itineraries covering Darjeeling, Gangtok, Pelling, Lachung, Yumthang Valley, and more.",
   },
   {
-    title: "Handpicked Scenic Spots",
-    desc: "From the Rann of Kutch to Saputara and Gir National Park, explore the most beautiful and peaceful destinations in Gujarat.",
+    title: "Handpicked Scenic Destinations",
+    desc: "From the famous Darjeeling tea gardens to Tsomgo Lake, Tiger Hill, and the breathtaking Yumthang Valley, explore the most scenic places in the Eastern Himalayas.",
   },
   {
     title: "Value-for-Money Packages",
-    desc: "Affordable Gujarat tours without compromising on comfort, experiences, or premium services for a memorable journey.",
+    desc: "Affordable Darjeeling and Sikkim tour packages designed to give you the best travel experiences without compromising on comfort and quality.",
   },
 ];
 
 const rightFeatures = [
   {
     title: "End-to-End Travel Support",
-    desc: "We take care of transportation, hotel bookings, sightseeing, and local experiences so you can enjoy a hassle-free Gujarat tour.",
+    desc: "We handle hotel bookings, transport, sightseeing tours, and local experiences so you can enjoy a smooth and stress-free Himalayan holiday.",
   },
   {
     title: "Trusted Local Expertise",
-    desc: "Our experienced guides and travel experts ensure authentic experiences and insider knowledge of Gujarat’s culture and attractions.",
+    desc: "Our travel experts and local guides provide authentic insights into the culture, monasteries, tea estates, and traditions of Darjeeling and Sikkim.",
   },
   {
     title: "Flexible Trip Customization",
-    desc: "Modify your travel plan anytime—dates, destinations, or activities—so your Gujarat trip perfectly fits your schedule.",
+    desc: "Easily modify your travel plans including destinations, hotels, or travel dates so your Darjeeling and Sikkim trip perfectly suits your schedule.",
   },
 ];
 
@@ -45,10 +45,11 @@ function WhyChooseSection() {
       <Container maxWidth="lg">
         {/* Heading */}
         <Typography variant="h4" align="center" sx={{ fontWeight: 600, mb: 6 }}>
-          Why Choose Our Gujarat Tour Packages
+          Why Choose Our Darjeeling & Sikkim Tour Packages
         </Typography>
 
         <Grid container spacing={4} alignItems="center">
+          
           {/* LEFT SIDE */}
           <Grid size={{ xs: 12, md: 4 }}>
             {leftFeatures.map((item, index) => (
@@ -83,7 +84,7 @@ function WhyChooseSection() {
             <Box
               component="img"
               src={img}
-              alt="Gujarat Map"
+              alt="Darjeeling and Sikkim Map"
               sx={{
                 width: "100%",
                 maxWidth: 450,
@@ -119,6 +120,7 @@ function WhyChooseSection() {
               </Card>
             ))}
           </Grid>
+
         </Grid>
       </Container>
     </Box>

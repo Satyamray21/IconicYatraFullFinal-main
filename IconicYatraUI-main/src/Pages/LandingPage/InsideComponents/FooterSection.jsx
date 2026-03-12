@@ -3,10 +3,10 @@ import {
   Box,
   Container,
   Grid,
-  Typography,
-  TextField,
-  Button,
+  Typography
 } from "@mui/material";
+
+import ContactForm from "../InsideComponents/ContectForm";
 
 const FooterSection = () => {
   return (
@@ -46,7 +46,10 @@ const FooterSection = () => {
             </Typography>
 
             <Typography variant="body2">
-              Welcome to Iconic Yatra – where every journey becomes an unforgettable memory! We are a premier travel company specializing in domestic and international tour packages, dedicated to providing experiences that combine comfort, adventure, and cultural discovery.Welcome to Iconic Yatra – where every journey becomes an unforgettable memory! We are a premier travel company specializing in domestic and international tour packages, dedicated to providing experiences that combine comfort, adventure, and cultural discovery.
+              Welcome to Iconic Yatra – where every journey becomes an unforgettable memory!
+              We are a premier travel company specializing in domestic and international
+              tour packages, dedicated to providing experiences that combine comfort,
+              adventure, and cultural discovery.
             </Typography>
           </Grid>
 
@@ -58,50 +61,10 @@ const FooterSection = () => {
 
             <Box sx={{ borderBottom: "1px solid #6c6c6c", mb: 2 }} />
 
-            <TextField
-              fullWidth
-              placeholder="Enter Your Name*"
-              size="small"
-              sx={{ mb: 2, background: "#fff", borderRadius: 5 }}
-            />
-
-            <TextField
-              fullWidth
-              placeholder="Enter Your Email"
-              size="small"
-              sx={{ mb: 2, background: "#fff", borderRadius: 5 }}
-            />
-
-            <TextField
-              fullWidth
-              placeholder="Enter phone number*"
-              size="small"
-              sx={{ mb: 2, background: "#fff", borderRadius: 5 }}
-            />
-
-            <TextField
-              fullWidth
-              placeholder="Enter Your City"
-              size="small"
-              sx={{ mb: 2, background: "#fff", borderRadius: 5 }}
-            />
-
-            <Button
-              fullWidth
-              sx={{
-                background: "linear-gradient(90deg,#ff8a00,#e52e71)",
-                color: "#fff",
-                borderRadius: 5,
-                py: 1.2,
-                fontWeight: 600,
-                "&:hover": {
-                  background: "linear-gradient(90deg,#ff8a00,#e52e71)",
-                },
-              }}
-            >
-              REQUEST A CALLBACK
-            </Button>
+            {/* Using Formik Contact Form */}
+            <ContactForm />
           </Grid>
+
         </Grid>
       </Container>
 
@@ -134,6 +97,7 @@ const FooterSection = () => {
       >
         <Container maxWidth="lg">
           <Grid container spacing={2} alignItems="center">
+
             <Grid size={{xs:12, md:6}}>
               <Typography fontSize={14}>
                 © 2025 IconicYatra All Right Reserved.
@@ -148,6 +112,7 @@ const FooterSection = () => {
                 Designed & Marketing By www.iconicyatra.com
               </Typography>
             </Grid>
+
           </Grid>
         </Container>
       </Box>
