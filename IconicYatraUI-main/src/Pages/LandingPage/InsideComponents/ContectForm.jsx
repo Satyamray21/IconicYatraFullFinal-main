@@ -12,7 +12,7 @@ import EmailIcon from "@mui/icons-material/Email";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import LuggageIcon from "@mui/icons-material/Luggage";
-
+import { toast } from "react-toastify";
 import { Formik, Form } from "formik";
 import * as Yup from "yup";
 
@@ -37,9 +37,33 @@ const ContactForm = () => {
         notes: ""
       }}
       validationSchema={validationSchema}
-      onSubmit={(values) => {
-        console.log(values);
-      }}
+      
+
+onSubmit={async (values, { resetForm }) => {
+  try {
+
+    const res = await fetch(`${import.meta.env.VITE_BASE_URL}/api/v1/googleAdsEnquiry`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(values)
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      toast.success("Enquiry submitted successfully ✅");
+      resetForm();
+    } else {
+      toast.error(data.message || "Something went wrong");
+    }
+
+  } catch (error) {
+    toast.error("Server error. Please try again later.");
+  }
+}}
+
     >
       {({ values, handleChange, errors, touched }) => (
         <Form>
