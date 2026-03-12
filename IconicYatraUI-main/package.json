@@ -23,6 +23,7 @@
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.13",
     "dotenv": "^17.2.2",
+    "formik": "^2.4.9",
     "react": "^19.1.0",
     "react-countup": "^6.5.3",
     "react-dom": "^19.1.0",
@@ -30,8 +31,10 @@
     "react-redux": "^9.2.0",
     "react-router-dom": "^7.6.3",
     "react-slick": "^0.30.3",
+    "react-toastify": "^11.0.5",
     "slick-carousel": "^1.8.1",
-    "styled-components": "^6.1.19"
+    "styled-components": "^6.1.19",
+    "yup": "^1.7.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",
