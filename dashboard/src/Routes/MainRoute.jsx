@@ -142,6 +142,10 @@ const QuickFinalize = lazy(() =>
   import("../Pages/Admin/Quotation/QuickQuotation/QuickFinalize")
 );
 
+const GoogleAdsLeadsTable = lazy(() =>
+  import("../Components/GoogleAdsLeadsTable")
+);
+
 const GlobalSettings = lazy(()=>
 import("../Pages/Admin/Profile/components/GlobalSettings")
 );
@@ -382,6 +386,12 @@ const MainRoute = () => {
   path="/company-website-enquiry"
   element={<CompanyWebsiteEnquiry />}
 />
+<Route
+  path="/google-ads-enquiry"
+  element={<GoogleAdsLeadsTable />}
+/>
+
+
           <Route
             path="*"
             element={
