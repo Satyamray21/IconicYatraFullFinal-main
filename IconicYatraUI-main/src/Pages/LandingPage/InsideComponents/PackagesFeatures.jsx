@@ -11,32 +11,32 @@ import FlightIcon from "@mui/icons-material/Flight";
 const features = [
   {
     title: "Handpicked Stays",
-    desc: "Stay at carefully selected hotels, resorts, and heritage properties across Dwarka, Somnath, Gir, Kutch, and Diu.",
+    desc: "Stay at carefully selected hotels, mountain resorts, and cozy homestays across Darjeeling, Gangtok, Pelling, and other scenic Himalayan destinations.",
     icon: <ApartmentIcon sx={{ fontSize: 40, color: "#0f6b4b" }} />,
   },
   {
     title: "Daily Meals",
-    desc: "Enjoy authentic Gujarati cuisine and local delicacies with breakfast, lunch, and dinner included in your package.",
+    desc: "Enjoy delicious local cuisine including Tibetan, Nepali, and Himalayan specialties with breakfast and meal options included in your package.",
     icon: <RestaurantIcon sx={{ fontSize: 40, color: "#ff9800" }} />,
   },
   {
     title: "Private Transfers",
-    desc: "Comfortable private cabs and transport options for seamless travel across all Gujarat destinations in your itinerary.",
+    desc: "Comfortable private cabs and local transport for smooth travel between Darjeeling, Gangtok, Lachung, Tsomgo Lake, and other destinations.",
     icon: <DirectionsCarIcon sx={{ fontSize: 40, color: "#2196f3" }} />,
   },
   {
     title: "Dedicated Support",
-    desc: "24/7 travel assistance with expert guidance to ensure your Gujarat tour is smooth and memorable.",
+    desc: "24/7 travel assistance from our experts to ensure your Darjeeling and Sikkim tour remains safe, comfortable, and memorable.",
     icon: <HeadsetMicIcon sx={{ fontSize: 40, color: "#9c27b0" }} />,
   },
   {
     title: "Custom Itineraries",
-    desc: "Tailor your tour according to your preferences—pilgrimage, cultural, wildlife, or family trips in Gujarat.",
+    desc: "Flexible travel plans designed around your interests whether it’s honeymoon trips, family holidays, adventure tours, or cultural experiences.",
     icon: <MapIcon sx={{ fontSize: 40, color: "#ff5722" }} />,
   },
   {
     title: "Optional Airfare",
-    desc: "Flexible packages with or without flights to match your location and travel convenience.",
+    desc: "Choose packages with or without flights depending on your departure city and travel preferences.",
     icon: <FlightIcon sx={{ fontSize: 40, color: "#4caf50" }} />,
   },
 ];
@@ -52,13 +52,13 @@ function PackagesFeatures() {
           align="center"
           sx={{ fontWeight: 600, mb: 6 }}
         >
-          All-Inclusive Gujarat Tour Packages by Iconic Yatra
+          All-Inclusive Darjeeling & Sikkim Tour Packages
         </Typography>
 
         {/* Grid */}
         <Grid container spacing={4}>
           {features.map((item, index) => (
-            <Grid size={{xs:12, md:6, lg:4}} key={index}>
+            <Grid size={{ xs: 12, md: 6, lg: 4 }} key={index}>
               <Card
                 sx={{
                   borderRadius: 3,
