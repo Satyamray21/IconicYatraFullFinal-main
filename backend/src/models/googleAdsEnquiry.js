@@ -46,22 +46,37 @@ const googleAdsenquirySchema = new mongoose.Schema(
       default: null
     },
 
-    notes: {
-      type: String
-    },
+    notes: String,
 
-    // Google Ads Tracking
+    /* =====================
+       MARKETING TRACKING
+    ====================== */
+
     source: {
       type: String,
       default: "Google Ads"
     },
 
     gclid: String,
+    fbclid: String,
+
+    utm_source: String,
+    utm_medium: String,
+    utm_campaign: String,
+    utm_term: String,
+    utm_content: String,
+
     campaign: String,
     keyword: String,
     adGroup: String,
 
-    // CRM Status
+    landingPage: String,
+    device: String,
+
+    /* =====================
+       CRM SYSTEM
+    ====================== */
+
     status: {
       type: String,
       enum: [
@@ -76,11 +91,22 @@ const googleAdsenquirySchema = new mongoose.Schema(
       default: "New"
     },
 
+    leadScore: {
+      type: Number,
+      default: 0
+    },
+
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User"
-    }
+    },
 
+    /* =====================
+       ANALYTICS
+    ====================== */
+
+    ipAddress: String,
+    city: String
   },
   {
     timestamps: true

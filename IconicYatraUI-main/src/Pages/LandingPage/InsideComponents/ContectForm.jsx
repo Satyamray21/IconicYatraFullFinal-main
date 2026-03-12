@@ -42,16 +42,30 @@ const ContactForm = () => {
       validationSchema={validationSchema}
       
 
-        onSubmit={async (values, { resetForm }) => {
+      onSubmit={async (values, { resetForm }) => {
   try {
 
-    const res = await fetch(`${import.meta.env.VITE_BASE_URL}/api/v1/googleAdsEnquiry`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(values)
-    });
+    // ✅ Get tracking data from localStorage
+    const trackingData =
+      JSON.parse(localStorage.getItem("trackingData")) || {};
+
+    // ✅ Merge form values + tracking
+    const payload = {
+      ...values,
+      ...trackingData
+    };
+
+    const res = await fetch(
+      `${import.meta.env.VITE_BASE_URL}/api/v1/googleAdsEnquiry`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        // ✅ Send payload instead of values
+        body: JSON.stringify(payload)
+      }
+    );
 
     const data = await res.json();
 
@@ -72,6 +86,7 @@ const ContactForm = () => {
     toast.error("Server error. Please try again later.");
   }
 }}
+
 
 
     >

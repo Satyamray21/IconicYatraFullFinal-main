@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import MainRoutes from './Routes/MainRoutes';
 import ScrollToTop from "../src/ScrollToTop";
 import { getCompany } from "./Features/companyUISlice";
+import { captureTrackingParams } from "./Utils/captureTrackingParams";
 
 function App() {
   const dispatch = useDispatch();
@@ -14,6 +15,9 @@ function App() {
       dispatch(getCompany());
     }
   }, [dispatch, status]);
+  useEffect(() => {
+    captureTrackingParams();
+  }, []);
 
   return (
     <BrowserRouter>
