@@ -244,6 +244,12 @@ export default function LandingPage() {
           </IconButton>
 
           <IconButton
+          onClick={() =>
+    window.open(
+      "https://wa.me/918130883907?text=Hello%21%20I%20need%20Gujarat%20tour%20package",
+      "_blank"
+    )
+  }
             sx={{
               bgcolor: "#25D366",
               color: "#fff",
