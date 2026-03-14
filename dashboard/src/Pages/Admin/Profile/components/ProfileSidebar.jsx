@@ -20,7 +20,7 @@ import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import AddIcon from "@mui/icons-material/Add";
 import GroupsIcon from "@mui/icons-material/Groups";
 import ApartmentIcon from "@mui/icons-material/Apartment";
-
+import GoogleIcon from "@mui/icons-material/Google";
 const ProfileSidebar = ({ user, activeTab, setActiveTab }) => {
 
   const navigate = useNavigate();
@@ -147,6 +147,13 @@ const ProfileSidebar = ({ user, activeTab, setActiveTab }) => {
             </ListItemIcon>
             <ListItemText primary="Candidates" />
           </ListItem>
+            <ListItem
+                        sx={{ ...menuItemStyle, ...(activeTab === "googleAds" && activeStyle) }}
+                        onClick={() => setActiveTab("googleAds")}
+                    >
+                        <ListItemIcon><GoogleIcon color={activeTab === "googleAds" ? "primary" : "inherit"} /></ListItemIcon>
+                        <ListItemText primary="Google Ads" />
+                    </ListItem>
 
           {/* BANK DETAILS */}
           <ListItem
