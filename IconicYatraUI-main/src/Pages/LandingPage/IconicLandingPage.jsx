@@ -233,6 +233,7 @@ export default function LandingPage() {
           }}
         >
           <IconButton
+           onClick={() => window.open("tel:+917053900957")}
             sx={{
               bgcolor: "#fff",
               boxShadow: 3,
@@ -244,6 +245,12 @@ export default function LandingPage() {
           </IconButton>
 
           <IconButton
+          onClick={() =>
+    window.open(
+      "https://wa.me/+917053900957?text=Hello%21%20I%20need%20Sikkim%20tour%20package",
+      "_blank"
+    )
+  }
             sx={{
               bgcolor: "#25D366",
               color: "#fff",

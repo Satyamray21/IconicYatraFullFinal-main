@@ -45,6 +45,7 @@ const DashboardHeader = () => {
     "/tourpackage": "Package Manager",
     "/payment": "Payment Manager",
     "/invoice": "Invoice Manager",
+    "/google-ads-enquiry": "Google Ads Enquiry",
     "/associates": "Business Associates Manager",
     "/staff": "Staff Manager",
     "/setting": "Settings",
@@ -112,6 +113,21 @@ const DashboardHeader = () => {
           alignItems="center"
           justifyContent="flex-end"
         >
+          <Button
+    variant="contained"
+    size="small"
+    sx={{
+      textTransform: "none",
+      borderRadius: "20px",
+      background: "linear-gradient(90deg, #ff9800, #f57c00)",
+      "&:hover": {
+        background: "linear-gradient(90deg, #f57c00, #e65100)",
+      },
+    }}
+    onClick={() => navigate("/google-ads-enquiry")}
+  >
+    Google Ads Enquiry
+  </Button>
           <Button
             variant="contained"
             size="small"
