@@ -86,6 +86,7 @@ const Profile = () => {
                     {activeTab === "company" && <CompanyInfo />}
                     {activeTab === "gallery" && <AddressDetails user={user} />}
                     {activeTab === "candidates" && <CareerDashboard />}
+                    {activeTab === "googleAds" && <GoogleAdsLandingForm />}
                     {activeTab === "admin" && user?.userRole === "Admin" && <CreateAdminForm />}
                     {activeTab === "bankDetails" && <BankDetailsPage />}
                 </Box>
