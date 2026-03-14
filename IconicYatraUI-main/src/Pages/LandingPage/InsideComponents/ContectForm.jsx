@@ -12,9 +12,10 @@ import EmailIcon from "@mui/icons-material/Email";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import LuggageIcon from "@mui/icons-material/Luggage";
-
+import { toast } from "react-toastify";
 import { Formik, Form } from "formik";
 import * as Yup from "yup";
+import { useNavigate } from "react-router-dom";
 
 const validationSchema = Yup.object({
   name: Yup.string().required("Name required"),
@@ -23,6 +24,8 @@ const validationSchema = Yup.object({
 });
 
 const ContactForm = () => {
+  const navigate = useNavigate();
+
   return (
     <Formik
       initialValues={{
@@ -37,9 +40,55 @@ const ContactForm = () => {
         notes: ""
       }}
       validationSchema={validationSchema}
-      onSubmit={(values) => {
-        console.log(values);
-      }}
+      
+
+      onSubmit={async (values, { resetForm }) => {
+  try {
+
+    // ✅ Get tracking data from localStorage
+    const trackingData =
+      JSON.parse(localStorage.getItem("trackingData")) || {};
+
+    // ✅ Merge form values + tracking
+    const payload = {
+      ...values,
+      ...trackingData
+    };
+
+    const res = await fetch(
+      `${import.meta.env.VITE_BASE_URL}/api/v1/googleAdsEnquiry`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        // ✅ Send payload instead of values
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await res.json();
+
+    if (data.success) {
+      toast.success("Enquiry submitted successfully ✅");
+
+      resetForm();
+
+      setTimeout(() => {
+        navigate("/thank-you");
+      }, 1000);
+
+    } else {
+      toast.error(data.message || "Something went wrong");
+    }
+
+  } catch (error) {
+    toast.error("Server error. Please try again later.");
+  }
+}}
+
+
+
     >
       {({ values, handleChange, errors, touched }) => (
         <Form>
