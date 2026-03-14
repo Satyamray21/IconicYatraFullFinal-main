@@ -15,10 +15,14 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-
+import { useDispatch } from "react-redux";
+import { createLandingPage } from "../../../../features/landingPage/landingPageSlice";
 export default function LandingPageForm() {
+    const dispatch = useDispatch();
+
   const [formData, setFormData] = useState({
     // Header Section
+    slug: "",
     headerDescription: "",
     
     // Hero Section
@@ -77,19 +81,17 @@ export default function LandingPageForm() {
     }));
   };
 
-  const handleImageUpload = (e, fieldName) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          [fieldName]: reader.result
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+ const handleImageUpload = (e, fieldName) => {
+  const file = e.target.files[0];
+
+  if (file) {
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: file
+    }));
+  }
+};
+
 
   // Overview Section handlers
   const addOverviewSection = () => {
@@ -126,21 +128,19 @@ export default function LandingPageForm() {
     }));
   };
 
-  const handleOverviewImageUpload = (e, id) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          overviewSections: prev.overviewSections.map(section =>
-            section.id === id ? { ...section, overviewImage: reader.result } : section
-          )
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+const handleOverviewImageUpload = (e, id) => {
+  const file = e.target.files[0];
+
+  if (file) {
+    setFormData(prev => ({
+      ...prev,
+      overviewSections: prev.overviewSections.map(section =>
+        section.id === id ? { ...section, overviewImage: file } : section
+      )
+    }));
+  }
+};
+
 
   // Simple array handlers (for strings)
   const addSimpleArrayItem = (fieldName) => {
@@ -190,27 +190,72 @@ export default function LandingPageForm() {
     }));
   };
 
-  const handleObjectArrayImageUpload = (e, fieldName, id, imageField) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          [fieldName]: prev[fieldName].map(item => 
-            item.id === id ? { ...item, [imageField]: reader.result } : item
-          )
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+ const handleObjectArrayImageUpload = (e, fieldName, id, imageField) => {
+  const file = e.target.files[0];
+
+  if (file) {
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: prev[fieldName].map(item =>
+        item.id === id ? { ...item, [imageField]: file } : item
+      )
+    }));
+  }
+};
+
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log("Form Data:", formData);
-    alert("Form submitted! Check console for data.");
-  };
+  e.preventDefault();
+
+  const form = new FormData();
+
+  const data = { ...formData };
+
+  /* ---------- MAIN IMAGES ---------- */
+
+  if (formData.heroBackgroundImage) {
+    form.append("heroBackgroundImage", formData.heroBackgroundImage);
+  }
+
+  if (formData.ownPackageImage) {
+    form.append("ownPackageImage", formData.ownPackageImage);
+  }
+
+  if (formData.whyChooseBannerImage) {
+    form.append("whyChooseBannerImage", formData.whyChooseBannerImage);
+  }
+
+  /* ---------- OVERVIEW ICONS ---------- */
+
+  formData.overviewSections.forEach((section) => {
+    if (section.overviewImage instanceof File) {
+      form.append("overviewImages", section.overviewImage);
+    }
+  });
+
+  /* ---------- SOLUTION ICONS ---------- */
+
+  formData.solutionItems.forEach((item) => {
+    if (item.icon instanceof File) {
+      form.append("solutionIcons", item.icon);
+    }
+  });
+
+  /* ---------- FEATURE ICONS ---------- */
+
+  formData.packageFeatures.forEach((item) => {
+    if (item.icon instanceof File) {
+      form.append("featureIcons", item.icon);
+    }
+  });
+
+  form.append("data", JSON.stringify(data));
+
+  dispatch(createLandingPage(form));
+
+  console.log("Submitting:", data);
+};
+
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -222,6 +267,23 @@ export default function LandingPageForm() {
 
         <form onSubmit={handleSubmit}>
           <Stack spacing={4}>
+            {/* ========== SLUG SECTION ========== */}
+<Paper elevation={1} sx={{ p: 3, bgcolor: "#f8f9fa" }}>
+  <Typography variant="h6" gutterBottom color="primary" sx={{ fontWeight: 600 }}>
+    🔗 Landing Page Slug
+  </Typography>
+  <Divider sx={{ mb: 3 }} />
+
+  <TextField
+    label="Slug"
+    name="slug"
+    value={formData.slug}
+    onChange={handleInputChange}
+    fullWidth
+    required
+    helperText="Example: darjeeling-tour"
+  />
+</Paper>
             {/* ========== HEADER SECTION ========== */}
             <Paper elevation={1} sx={{ p: 3, bgcolor: "#f8f9fa" }}>
               <Typography variant="h6" gutterBottom color="primary" sx={{ fontWeight: 600 }}>
