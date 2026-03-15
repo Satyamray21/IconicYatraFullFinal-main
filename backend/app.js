@@ -114,7 +114,7 @@ app.use("/api/v1/googleAdsEnquiry", googleAdsEnquiryRouter);
 
 import landingRoutes from "./src/routers/landingPage.router.js";
 
-app.use("/api/landing-pages", landingRoutes);
+app.use("/api/v1/landing-pages", landingRoutes);
 // ✅ Fix: Load JSON without import
 const swaggerDocument = JSON.parse(fs.readFileSync("./swagger-output.json", "utf-8"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
