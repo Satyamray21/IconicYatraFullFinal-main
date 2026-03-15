@@ -6,6 +6,7 @@ import packageReducer from "../Features/packageSlice";
 import paymentReducer from "../Features/paymentSlice";
 import companyUIReducer from "../Features/companyUISlice";
 import galleryReducer from "../Features/gallerySlice";
+import landingPageReducer from "../Features/landingPageSlice";
 export const store = configureStore({
     reducer: {
         auth: authReducer,
@@ -15,5 +16,6 @@ export const store = configureStore({
         payment: paymentReducer,
         companyUI:companyUIReducer,
          gallery: galleryReducer,
+         landingPages: landingPageReducer,
     }
 });
