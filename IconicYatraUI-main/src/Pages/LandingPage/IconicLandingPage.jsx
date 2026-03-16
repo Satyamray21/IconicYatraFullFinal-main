@@ -197,6 +197,7 @@ export default function LandingPage() {
           }}
         >
           <IconButton
+           onClick={() => window.open(`tel:${company?.company?.call}`)}
             sx={{
               bgcolor: "#fff",
               boxShadow: 3,
@@ -208,6 +209,20 @@ export default function LandingPage() {
           </IconButton>
 
           <IconButton
+          onClick={() => {
+  let phone = company?.company?.call || "";
+  const text =
+    landingData?.overviewSections?.[0]?.overviewChatWithUsButton || "";
+
+  // remove + and spaces
+  phone = phone.replace(/\D/g, "");
+
+  const encodedText = encodeURIComponent(text);
+
+  window.open(`https://wa.me/${phone}?text=${encodedText}`, "_blank");
+}}
+
+
             sx={{
               bgcolor: "#25D366",
               color: "#fff",
