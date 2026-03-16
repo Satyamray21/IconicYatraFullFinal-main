@@ -14,7 +14,7 @@ import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 
 import logo from "../../assets/Logo/logoiconic1.png";
 import landing from "../../assets/LandingImages/darjrrling.jpg";
-
+import {useSelector} from "react-redux"
 import { useParams } from "react-router-dom";
 import OverView from "./InsideComponents/OverView";
 import DomesticPackage from "./InsideComponents/DomesticPackage";
@@ -28,6 +28,9 @@ import FAQSection from "./InsideComponents/FAQSection";
 import FooterSection from "./InsideComponents/FooterSection";
 import axios from "axios";
 export default function LandingPage() {
+   const { data: company, status } = useSelector(
+  (state) => state.companyUI
+);
    const { slug } = useParams();
   const [landingData, setLandingData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +79,7 @@ export default function LandingPage() {
                   spacing={2}
                   alignItems={{ xs: "flex-start", sm: "center" }}
                 >
-                  <img src={logo} alt="India Tour24" style={{ height: 45 }} />
+                  <img src={company?.company?.headerLogo?.url} alt="India Tour24" style={{ height: 45 }} />
 
                   <Typography
                     variant="body2"
@@ -97,7 +100,7 @@ export default function LandingPage() {
                   alignItems="center"
                 >
                   <CallIcon color="error" />
-                  <Typography fontWeight={600}>+91 7053900957</Typography>
+                  <Typography fontWeight={600}>{company?.company?.call}</Typography>
                 </Stack>
               </Grid>
 
@@ -113,7 +116,7 @@ export default function LandingPage() {
             display: "flex",
             alignItems: "center",
             py: { xs: 6, md: 0 },
-            backgroundImage: `url(${landing})`,
+            backgroundImage: `url(${landingData?.heroBackgroundImage?.url})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
@@ -173,7 +176,7 @@ export default function LandingPage() {
                     "&:hover": { bgcolor: "#1ebe5d" },
                   }}
                 >
-                  Chat for Darjeeling Package
+                  Chat for {landingData?.heroButtonText}
                 </Button>
               </Grid>
 
