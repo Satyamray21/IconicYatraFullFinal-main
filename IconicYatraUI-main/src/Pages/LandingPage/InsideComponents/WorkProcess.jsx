@@ -20,6 +20,16 @@ const WorkProcess = ({ landingData }) => {
             mb: 1,
           }}
         >
+          Our Work Process
+        </Typography>
+        <Typography
+          align="center"
+          sx={{
+            fontSize: "16px",
+            color: "#666",
+            mb: 1,
+          }}
+        >
           {landingData?.workProcessSubtitle}
         </Typography>
 
@@ -72,7 +82,7 @@ const WorkProcess = ({ landingData }) => {
                     border: "3px dashed #ffb199",
                   }}
                 >
-                  {step.number}
+                  {step.step}
                 </Box>
 
                 {/* Title */}

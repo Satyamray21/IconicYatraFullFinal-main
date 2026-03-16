@@ -15,6 +15,8 @@ import LuggageIcon from "@mui/icons-material/Luggage";
 
 import { Formik, Form } from "formik";
 import * as Yup from "yup";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 const validationSchema = Yup.object({
   name: Yup.string().required("Name required"),
@@ -23,6 +25,8 @@ const validationSchema = Yup.object({
 });
 
 const ContactForm = () => {
+  const navigate = useNavigate();
+
   return (
     <Formik
       initialValues={{
@@ -37,11 +41,53 @@ const ContactForm = () => {
         notes: "",
       }}
       validationSchema={validationSchema}
-      onSubmit={(values) => {
-        console.log(values);
-      }}
+      onSubmit={async (values, { resetForm }) => {
+  try {
+
+    const trackingData =
+      JSON.parse(localStorage.getItem("trackingData")) || {};
+
+    const payload = {
+      ...values,
+      ...trackingData
+    };
+
+    const res = await fetch(
+      `${import.meta.env.VITE_BASE_URL}/api/v1/googleAdsEnquiry`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await res.json();
+
+    if (data.success) {
+
+      toast.success("Enquiry submitted successfully ✅");
+
+      // reset form
+      resetForm();
+
+      // redirect
+      navigate("/thank-you");
+
+    } else {
+      toast.error(data.message || "Something went wrong");
+    }
+
+  } catch (error) {
+    console.error(error);
+    toast.error("Server error. Please try again later.");
+  }
+}}
+
+
     >
-      {({ values, handleChange, errors, touched }) => (
+      {({ values, handleChange, errors, touched ,isSubmitting}) => (
         <Form>
           {/* Name */}
           <TextField
@@ -229,6 +275,7 @@ const ContactForm = () => {
             type="submit"
             fullWidth
             variant="contained"
+            disabled={isSubmitting}
             sx={{
               background: "#1e66dc",
               py: 0.6,
@@ -239,7 +286,7 @@ const ContactForm = () => {
               },
             }}
           >
-            Submit
+             {isSubmitting ? "Submitting..." : "Submit"}
           </Button>
         </Form>
       )}
