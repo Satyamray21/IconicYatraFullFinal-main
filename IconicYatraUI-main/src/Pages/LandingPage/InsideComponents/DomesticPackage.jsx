@@ -18,7 +18,7 @@ const DomesticPackage = () => {
   const scrollRef = useRef(null);
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { slug } = useParams(); // ✅ get slug from URL
+  const { slug } = useParams();
 
   const {
     domestic: domesticPackages,
@@ -31,19 +31,19 @@ const DomesticPackage = () => {
   const cardsToShow = isMobile ? 1 : isTablet ? 2 : 3;
   const cardWidthPercent = 100 / cardsToShow;
 
-  // ✅ Fetch packages
+  // Fetch packages
   useEffect(() => {
     dispatch(fetchDomesticPackages({ page: 1, limit: 9 }));
   }, [dispatch]);
 
-  // ✅ Clear errors
+  // Clear errors
   useEffect(() => {
     return () => {
       dispatch(clearError());
     };
   }, [dispatch]);
 
-  // ✅ Filter packages by sector = slug
+  // Filter packages by sector slug
   const filteredPackages = domesticPackages.filter(
     (pkg) =>
       pkg.sector
@@ -53,18 +53,16 @@ const DomesticPackage = () => {
 
   // Price calculation
   const getStartingPrice = (pkg) => {
-    if (!pkg.destinationNights || !Array.isArray(pkg.destinationNights)) {
-      return null;
-    }
+    if (!pkg.destinationNights) return null;
 
     let totalPrice = 0;
 
     pkg.destinationNights.forEach(destination => {
       const standardHotel = destination.hotels?.find(
-        hotel => hotel.category?.toLowerCase() === "standard"
+        (hotel) => hotel.category?.toLowerCase() === "standard"
       );
 
-      if (standardHotel && standardHotel.pricePerPerson) {
+      if (standardHotel?.pricePerPerson) {
         totalPrice += standardHotel.pricePerPerson * (destination.nights || 0);
       }
     });
@@ -96,7 +94,7 @@ const DomesticPackage = () => {
 
   const handleQueryClick = (pkg, e) => {
     e.stopPropagation();
-    console.log("Query for domestic package:", pkg);
+    console.log("Query for package:", pkg);
   };
 
   return (
@@ -111,7 +109,7 @@ const DomesticPackage = () => {
       }}
     >
 
-      {/* Heading */}
+      {/* Section Title */}
       <Box textAlign="center" mb={3}>
         <Typography
           variant="h4"
@@ -156,7 +154,7 @@ const DomesticPackage = () => {
         </Box>
       )}
 
-      {/* Packages */}
+      {/* Cards */}
       <Grid>
         {filteredPackages.length > 0 ? (
 
@@ -166,10 +164,12 @@ const DomesticPackage = () => {
               display: "flex",
               gap: 3,
               overflowX: "scroll",
+              overflowY: "hidden",
               scrollBehavior: "smooth",
               scrollSnapType: "x mandatory",
               px: 2,
-              "&::-webkit-scrollbar": { display: "none" }
+              scrollbarWidth: "none",
+              "&::-webkit-scrollbar": { display: "none" },
             }}
           >
 
@@ -188,30 +188,46 @@ const DomesticPackage = () => {
                     overflow: "hidden",
                     position: "relative",
                     cursor: "pointer",
+                    scrollSnapAlign: "center",
                     backgroundImage: `url(${pkg.bannerImage})`,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
-                    transition: "0.4s",
+                    transition: "all 0.4s ease",
+                    boxShadow: "0 8px 25px rgba(0,0,0,0.15)",
+
                     "&:hover": {
-                      transform: "scale(1.05)"
+                      transform: "scale(1.05) translateY(-5px)",
+                      boxShadow: "0 15px 35px rgba(0,0,0,0.25)",
+                    },
+
+                    "&::before": {
+                      content: '""',
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background:
+                        "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.8) 100%)",
+                      opacity: 0.7,
                     }
                   }}
                 >
 
-                  {/* Duration */}
+                  {/* Duration Badge */}
                   {pkg.stayLocations?.length > 0 && (
                     <Box
                       sx={{
                         position: "absolute",
                         top: 12,
                         left: 12,
-                        bgcolor: "#2196F3",
+                        backgroundColor: "rgba(33,150,243,0.9)",
                         color: "white",
                         px: 1.5,
                         py: 0.5,
                         borderRadius: "12px",
-                        fontSize: "12px",
-                        fontWeight: "bold"
+                        fontSize: "0.75rem",
+                        fontWeight: "bold",
                       }}
                     >
                       {pkg.stayLocations.reduce((s, l) => s + (l.nights || 0), 0)}N /
@@ -219,60 +235,84 @@ const DomesticPackage = () => {
                     </Box>
                   )}
 
-                  {/* Price */}
+                  {/* Price Badge */}
                   {startingPrice && (
                     <Box
                       sx={{
                         position: "absolute",
                         top: 12,
                         right: 12,
-                        bgcolor: "#FF5722",
+                        backgroundColor: "rgba(255,87,34,0.9)",
                         color: "white",
                         px: 1.5,
                         py: 0.5,
                         borderRadius: "12px",
-                        fontSize: "12px",
-                        fontWeight: "bold"
+                        fontSize: "0.75rem",
+                        fontWeight: "bold",
                       }}
                     >
-                      ₹{startingPrice.toLocaleString()}
+                      Starts from ₹{startingPrice.toLocaleString()}
                     </Box>
                   )}
 
-                  {/* Bottom Content */}
+                  {/* Content */}
                   <Box
                     sx={{
                       position: "absolute",
                       bottom: 0,
-                      width: "100%",
-                      p: 2,
+                      left: 0,
+                      right: 0,
+                      p: 3,
                       color: "white",
-                      background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)"
+                      zIndex: 2,
                     }}
                   >
 
-                    <Typography variant="h6" textAlign="center">
+                    <Typography
+                      variant={isMobile ? "body1" : "h6"}
+                      fontWeight="bold"
+                      textAlign="center"
+                      sx={{ mb: 1 }}
+                    >
                       {pkg.title}
                     </Typography>
 
-                    <Typography variant="body2" textAlign="center">
+                    <Typography
+                      variant="body2"
+                      textAlign="center"
+                      sx={{ mb: 2, opacity: 0.9 }}
+                    >
                       {pkg.sector}
                     </Typography>
 
-                    <Box display="flex" justifyContent="center" gap={1} mt={1}>
+                    <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
                       <Button
-                        size="small"
                         variant="contained"
+                        size="small"
+                        sx={{
+                          textTransform: "none",
+                          fontSize: "0.75rem",
+                          borderRadius: "20px",
+                          px: 2,
+                          backgroundColor: "#FF5722",
+                          fontWeight: "bold",
+                        }}
                         onClick={(e) => handleQueryClick(pkg, e)}
-                        sx={{ bgcolor: "#FF5722" }}
                       >
                         Send Query
                       </Button>
 
                       <Button
-                        size="small"
                         variant="outlined"
-                        sx={{ borderColor: "white", color: "white" }}
+                        size="small"
+                        sx={{
+                          textTransform: "none",
+                          fontSize: "0.75rem",
+                          borderRadius: "20px",
+                          px: 2,
+                          borderColor: "white",
+                          color: "white",
+                        }}
                       >
                         View Details
                       </Button>
@@ -283,14 +323,13 @@ const DomesticPackage = () => {
                 </Box>
               );
             })}
-
           </Box>
 
         ) : (
 
           !loading && (
-            <Box textAlign="center" py={4}>
-              <Typography variant="h6">
+            <Box sx={{ textAlign: "center", py: 4 }}>
+              <Typography variant="h6" color="text.secondary">
                 No packages available for this destination.
               </Typography>
             </Box>
@@ -299,21 +338,26 @@ const DomesticPackage = () => {
         )}
       </Grid>
 
-      {/* Arrows */}
+      {/* Navigation Arrows */}
       {filteredPackages.length > cardsToShow && (
         <>
           <Button
             onClick={() =>
               scrollRef.current.scrollBy({
                 left: -scrollRef.current.offsetWidth / cardsToShow,
-                behavior: "smooth"
+                behavior: "smooth",
               })
             }
             sx={{
               position: "absolute",
-              left: 10,
+              left: 16,
               top: "50%",
-              bgcolor: "white"
+              transform: "translateY(-50%)",
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              backgroundColor: "white",
+              color: "#2196F3",
             }}
           >
             ‹
@@ -323,14 +367,19 @@ const DomesticPackage = () => {
             onClick={() =>
               scrollRef.current.scrollBy({
                 left: scrollRef.current.offsetWidth / cardsToShow,
-                behavior: "smooth"
+                behavior: "smooth",
               })
             }
             sx={{
               position: "absolute",
-              right: 10,
+              right: 16,
               top: "50%",
-              bgcolor: "white"
+              transform: "translateY(-50%)",
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              backgroundColor: "white",
+              color: "#2196F3",
             }}
           >
             ›
