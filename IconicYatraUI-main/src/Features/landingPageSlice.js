@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import {googleAds} from "../../Utils/axiosInstance";
+import {googleAds} from "../Utils/axiosInstance";
 
 /* =========================================================
    GET ALL LANDING PAGES

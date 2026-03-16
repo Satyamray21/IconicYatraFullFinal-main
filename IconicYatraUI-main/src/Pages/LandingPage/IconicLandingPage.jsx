@@ -17,7 +17,7 @@ import landing from "../../assets/LandingImages/darjrrling.jpg";
 
 import { useParams } from "react-router-dom";
 import OverView from "./InsideComponents/OverView";
-import DomesticPackage from "../../Components/DomesticPackage";
+import DomesticPackage from "./InsideComponents/DomesticPackage";
 import OwnPackage from "./InsideComponents/OwnPackage";
 import Solution from "./InsideComponents/Solution";
 import PackagesFeatures from "./InsideComponents/PackagesFeatures";
@@ -218,16 +218,21 @@ export default function LandingPage() {
       </Box>
 
       {/* ================= OTHER SECTIONS ================= */}
-      <OverView />
-      <DomesticPackage />
-      <OwnPackage />
-      <Solution />
-      <PackagesFeatures />
-      <WhyChooseSection />
-      <WorkProcess />
-      <HelpSupportSection />
-      <FAQSection />
-      <FooterSection />
+    <OverView landingData={landingData} />
+
+<DomesticPackage slug={slug} />
+<OwnPackage landingData={landingData} />
+
+<Solution landingData={landingData} />
+
+<PackagesFeatures landingData={landingData} />
+
+<WhyChooseSection landingData={landingData}/>
+<WorkProcess landingData={landingData} />
+
+<HelpSupportSection slug={slug} />
+<FAQSection landingData={landingData} />
+<FooterSection slug={slug} />
     </>
   );
 }

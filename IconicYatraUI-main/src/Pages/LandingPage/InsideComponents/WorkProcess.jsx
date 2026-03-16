@@ -1,38 +1,16 @@
 import React from "react";
 import { Box, Container, Grid, Typography, Paper } from "@mui/material";
 
-const steps = [
-  {
-    number: "1",
-    title: "Choose Your Darjeeling & Sikkim Package",
-    description:
-      "Explore our curated tour packages covering Darjeeling, Gangtok, Pelling, Tsomgo Lake, Yumthang Valley, and other breathtaking Himalayan destinations.",
-  },
-  {
-    number: "2",
-    title: "Customize Your Itinerary",
-    description:
-      "Add hotels, sightseeing spots, monasteries, tea garden tours, and adventure activities based on your interests and travel preferences.",
-  },
-  {
-    number: "3",
-    title: "Confirm Your Booking",
-    description:
-      "Receive a detailed travel plan for your Darjeeling and Sikkim trip and confirm your booking with secure and hassle-free payment options.",
-  },
-  {
-    number: "4",
-    title: "Enjoy Your Himalayan Trip",
-    description:
-      "Relax and experience the beauty of tea gardens, mountain landscapes, monasteries, lakes, and local culture while we manage all travel arrangements.",
-  },
-];
+const WorkProcess = ({ landingData }) => {
 
-const WorkProcess = () => {
+  if (!landingData) return null;
+
+  const steps = landingData?.workProcessSteps || [];
+
   return (
     <Box sx={{ py: 8, backgroundColor: "#f7f7f7" }}>
       <Container maxWidth="lg">
-        
+
         {/* Section Heading */}
         <Typography
           align="center"
@@ -42,7 +20,7 @@ const WorkProcess = () => {
             mb: 1,
           }}
         >
-          Our Work Process
+          {landingData?.workProcessSubtitle}
         </Typography>
 
         <Typography
@@ -53,7 +31,7 @@ const WorkProcess = () => {
             mb: 6,
           }}
         >
-          Simple & Hassle-Free Darjeeling & Sikkim Travel Planning
+          {landingData?.workProcessTitle}
         </Typography>
 
         {/* Cards */}
@@ -75,6 +53,7 @@ const WorkProcess = () => {
                   },
                 }}
               >
+
                 {/* Step Circle */}
                 <Box
                   sx={{
@@ -117,6 +96,7 @@ const WorkProcess = () => {
                 >
                   {step.description}
                 </Typography>
+
               </Paper>
             </Grid>
           ))}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Container,
@@ -10,97 +10,17 @@ import {
   ListItem,
   ListItemText,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  IconButton,
 } from "@mui/material";
 
-import TempleHinduIcon from "@mui/icons-material/TempleHindu";
-import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import PetsIcon from "@mui/icons-material/Pets";
-import LandscapeIcon from "@mui/icons-material/Landscape";
-import TheaterComedyIcon from "@mui/icons-material/TheaterComedy";
-import MapIcon from "@mui/icons-material/Map";
 import SendIcon from "@mui/icons-material/Send";
 import StarIcon from "@mui/icons-material/Star";
+import CloseIcon from "@mui/icons-material/Close";
 
-const placesData = [
-  {
-    title: "Spiritual & Monasteries",
-    icon: <TempleHinduIcon sx={{ color: "#fff", fontSize: 30 }} />,
-    color: "#2e7d32",
-    places: [
-      "Rumtek Monastery (Gangtok)",
-      "Pemayangtse Monastery (Pelling)",
-      "Enchey Monastery",
-      "Ghoom Monastery (Darjeeling)",
-      "Do Drul Chorten Stupa",
-      "Samdruptse Statue (Namchi)",
-    ],
-  },
-  {
-    title: "Heritage & Historical",
-    icon: <AccountBalanceIcon sx={{ color: "#fff", fontSize: 30 }} />,
-    color: "#6a1b9a",
-    places: [
-      "Darjeeling Himalayan Railway (Toy Train)",
-      "Batasia Loop",
-      "Namgyal Institute of Tibetology",
-      "Rabdentse Ruins (Pelling)",
-      "Yiga Choeling Monastery",
-      "British-era Darjeeling Town",
-    ],
-  },
-  {
-    title: "Wildlife & Nature",
-    icon: <PetsIcon sx={{ color: "#fff", fontSize: 30 }} />,
-    color: "#ef6c00",
-    places: [
-      "Padmaja Naidu Himalayan Zoo",
-      "Khangchendzonga National Park",
-      "Fambong Lho Wildlife Sanctuary",
-      "Barsey Rhododendron Sanctuary",
-      "Himalayan Bird Watching Trails",
-      "Singalila National Park",
-    ],
-  },
-  {
-    title: "Mountains & Scenic Landscapes",
-    icon: <LandscapeIcon sx={{ color: "#fff", fontSize: 30 }} />,
-    color: "#f9a825",
-    places: [
-      "Tiger Hill Sunrise Point",
-      "Tsomgo Lake",
-      "Yumthang Valley",
-      "Gurudongmar Lake",
-      "Kanchenjunga Viewpoints",
-      "Darjeeling Tea Gardens",
-    ],
-  },
-  {
-    title: "Cultural & Unique Experiences",
-    icon: <TheaterComedyIcon sx={{ color: "#fff", fontSize: 30 }} />,
-    color: "#0288d1",
-    places: [
-      "Gangtok MG Marg Walk",
-      "Local Sikkimese Food Trails",
-      "Darjeeling Tea Estate Tours",
-      "Traditional Lepcha Culture",
-      "Himalayan Festivals",
-      "Local Handicraft Markets",
-    ],
-  },
-  {
-    title: "Other Notable Places",
-    icon: <MapIcon sx={{ color: "#fff", fontSize: 30 }} />,
-    color: "#3949ab",
-    places: [
-      "Gangtok City",
-      "Pelling Hill Station",
-      "Lachung Village",
-      "Lachen Village",
-      "Namchi Char Dham",
-      "Kalimpong Town",
-    ],
-  },
-];
+import QuoteForm from "./ContectForm";
 
 const sliderItems = [
   "Explore the Beauty of Darjeeling & Sikkim",
@@ -109,148 +29,192 @@ const sliderItems = [
   "Best Tea Gardens, Monasteries & Mountain Landscapes in One Tour",
 ];
 
-function Solution() {
+function Solution({ landingData }) {
+
+  const [openDialog, setOpenDialog] = useState(false);
+
+  const handleOpen = () => setOpenDialog(true);
+  const handleClose = () => setOpenDialog(false);
+
+  if (!landingData) return null;
+
   return (
-    <Box sx={{ pt: 8, pb: 0, background: "#ffffff" }}>
-      <Container maxWidth="lg">
+    <>
+      <Box sx={{ pt: 8, pb: 0, background: "#ffffff" }}>
+        <Container maxWidth="lg">
 
-        {/* Heading */}
-        <Typography variant="h4" align="center" sx={{ fontWeight: 600, mb: 1 }}>
-          Top Places to Visit in Darjeeling & Sikkim
-        </Typography>
+          {/* Heading */}
+          <Typography
+            variant="h4"
+            align="center"
+            sx={{ fontWeight: 600, mb: 1 }}
+          >
+            {landingData?.solutionTitle}
+          </Typography>
 
-        <Typography align="center" sx={{ color: "#6c7a89", mb: 6 }}>
-          Discover the best Himalayan destinations including scenic viewpoints,
-          monasteries, lakes, tea gardens, and charming hill towns.
-        </Typography>
+          <Typography align="center" sx={{ color: "#6c7a89", mb: 6 }}>
+            {landingData?.solutionDescription}
+          </Typography>
 
-        {/* Cards */}
-        <Grid container spacing={4}>
-          {placesData.map((item, index) => (
-            <Grid size={{ xs: 12, md: 4 }} key={index}>
-              <Card
-                sx={{
-                  borderRadius: 3,
-                  background: "#f5f6f8",
-                  border: "1px solid #e5e7eb",
-                  boxShadow: "none",
-                  height: "100%",
-                }}
-              >
-                <CardContent sx={{ p: 3 }}>
-                  
-                  {/* Header */}
-                  <Box sx={{ display: "flex", alignItems: "center", mb: 1.5 }}>
-                    <Box
-                      sx={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 2,
-                        background: item.color,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        mr: 2,
-                      }}
-                    >
-                      {item.icon}
+          {/* Cards */}
+          <Grid container spacing={4}>
+            {landingData?.solutionItems?.map((item) => (
+              <Grid size={{ xs: 12, md: 4 }} key={item._id}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    background: "#f5f6f8",
+                    border: "1px solid #e5e7eb",
+                    boxShadow: "none",
+                    height: "100%",
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+
+                    <Box sx={{ display: "flex", alignItems: "center", mb: 1.5 }}>
+                      
+                      {/* Icon */}
+                      <Box
+                        sx={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 2,
+                         
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          mr: 2,
+                        }}
+                      >
+                        {item.icon?.url && (
+                          <img
+                            src={item.icon.url}
+                            alt={item.title}
+                            style={{ width: 24, height: 24 }}
+                          />
+                        )}
+                      </Box>
+
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        {item.title}
+                      </Typography>
+
                     </Box>
 
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {item.title}
-                    </Typography>
-                  </Box>
+                    {/* Places List */}
+                    <List dense>
+                      {item.description?.split("\n").map((place, i) => (
+                        <ListItem key={i} sx={{ pl: 1, py: 0.3 }}>
+                          <ListItemText
+                            primary={place}
+                            primaryTypographyProps={{
+                              sx: { fontSize: "0.95rem" },
+                            }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
 
-                  {/* List */}
-                  <List dense>
-                    {item.places.map((place, i) => (
-                      <ListItem key={i} sx={{ pl: 1, py: 0.3 }}>
-                        <ListItemText
-                          primary={place}
-                          primaryTypographyProps={{
-                            sx: { fontSize: "0.95rem" },
-                          }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
 
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+          {/* Bottom Button */}
+          <Box sx={{ textAlign: "center", mt: 6 }}>
+            <Button
+              variant="contained"
+              startIcon={<SendIcon />}
+              onClick={handleOpen}
+              sx={{
+                background: "linear-gradient(90deg,#ff8a3d,#f0652f)",
+                px: 4,
+                py: 1.5,
+                borderRadius: "30px",
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "1rem",
+              }}
+            >
+              Plan a Custom Darjeeling & Sikkim Trip
+            </Button>
 
-        {/* Bottom Button */}
-        <Box sx={{ textAlign: "center", mt: 6 }}>
-          <Button
-            variant="contained"
-            startIcon={<SendIcon />}
-            sx={{
-              background: "linear-gradient(90deg,#ff8a3d,#f0652f)",
-              px: 4,
-              py: 1.5,
-              borderRadius: "30px",
-              textTransform: "none",
-              fontWeight: 600,
-              fontSize: "1rem",
-            }}
-          >
-            Plan a Custom Darjeeling & Sikkim Trip
-          </Button>
+            <Typography sx={{ mt: 2, color: "#6c7a89" }}>
+              Want a personalized itinerary? Click the button and our travel
+              experts will design a perfect Himalayan tour for you.
+            </Typography>
+          </Box>
 
-          <Typography sx={{ mt: 2, color: "#6c7a89" }}>
-            Want a personalized itinerary? Click the button and our travel
-            experts will design a perfect Himalayan tour for you.
-          </Typography>
-        </Box>
-      </Container>
+        </Container>
 
-      {/* Slider Bar */}
-      <Box
-        sx={{
-          width: "100%",
-          overflow: "hidden",
-          mt: 4,
-          background: "linear-gradient(90deg,#ff8a3d,#f0652f)",
-          py: 1,
-        }}
-      >
+        {/* Slider Bar */}
         <Box
           sx={{
-            display: "flex",
-            whiteSpace: "nowrap",
-            animation: "scrollText 25s linear infinite",
-            alignItems: "center",
+            width: "100%",
+            overflow: "hidden",
+            mt: 4,
+            background: "linear-gradient(90deg,#ff8a3d,#f0652f)",
+            py: 1,
           }}
         >
-          {[...sliderItems, ...sliderItems].map((text, index) => (
-            <Box key={index} sx={{ display: "flex", alignItems: "center", mx: 3 }}>
-              <Typography
-                sx={{
-                  color: "#fff",
-                  fontWeight: 500,
-                  fontSize: "0.95rem",
-                }}
+          <Box
+            sx={{
+              display: "flex",
+              whiteSpace: "nowrap",
+              animation: "scrollText 25s linear infinite",
+              alignItems: "center",
+            }}
+          >
+            {[...sliderItems, ...sliderItems].map((text, index) => (
+              <Box
+                key={index}
+                sx={{ display: "flex", alignItems: "center", mx: 3 }}
               >
-                {text}
-              </Typography>
+                <Typography
+                  sx={{
+                    color: "#fff",
+                    fontWeight: 500,
+                    fontSize: "0.95rem",
+                  }}
+                >
+                  {text}
+                </Typography>
 
-              <StarIcon sx={{ color: "#fff", fontSize: 18, mx: 2 }} />
-            </Box>
-          ))}
-        </Box>
+                <StarIcon sx={{ color: "#fff", fontSize: 18, mx: 2 }} />
+              </Box>
+            ))}
+          </Box>
 
-        <style>
-          {`
+          <style>
+            {`
             @keyframes scrollText {
               0% { transform: translateX(0); }
               100% { transform: translateX(-50%); }
             }
-          `}
-        </style>
+            `}
+          </style>
+        </Box>
       </Box>
-    </Box>
+
+      {/* Dialog */}
+      <Dialog open={openDialog} onClose={handleClose} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ pr: 5 }}>
+          Plan Your Trip
+
+          <IconButton
+            onClick={handleClose}
+            sx={{ position: "absolute", right: 10, top: 10 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent>
+          <QuoteForm />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
