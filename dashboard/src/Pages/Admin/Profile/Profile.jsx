@@ -10,7 +10,7 @@ import AddressDetails from "./components/AddressDetails";
 import CreateAdminForm from "./components/CreateAdminForm";
 import CareerDashboard from "./components/CareerDashboard";
 import BankDetailsPage from "./Bank/Form/BankCard";
-import GoogleAdsLandingForm from "./components/GoogleAdsLandingForm";
+import GoogleAds from "./components/AdsLandingPage/AdsLandingCard";
 const Profile = () => {
     const dispatch = useDispatch();
     const { user, loading, error } = useSelector((state) => state.profile);
@@ -86,7 +86,7 @@ const Profile = () => {
                     {activeTab === "company" && <CompanyInfo />}
                     {activeTab === "gallery" && <AddressDetails user={user} />}
                     {activeTab === "candidates" && <CareerDashboard />}
-                    {activeTab === "googleAds" && <GoogleAdsLandingForm />}
+                    {activeTab === "googleAds" && <GoogleAds />}
                     {activeTab === "admin" && user?.userRole === "Admin" && <CreateAdminForm />}
                     {activeTab === "bankDetails" && <BankDetailsPage />}
                 </Box>

@@ -156,6 +156,14 @@ import("../Pages/Admin/Profile/components/CompanyForm")
 const InsideCompanyList =lazy(()=>
 import("../Pages/Admin/Profile/components/InsideCompanyList")
 );
+
+const GoogleAdsLandingForm = lazy(() =>
+  import("../Pages/Admin/Profile/components/AdsLandingPage/Form/GoogleAdsLandingForm")
+);
+
+const GoogleAdsEditLandingForm = lazy(() =>
+  import("../Pages/Admin/Profile/components/AdsLandingPage/Form/GoogleAdsEditLandingForm")
+);
 /* ========================== */
 /*        MAIN ROUTE          */
 /* ========================== */
@@ -381,7 +389,9 @@ const MainRoute = () => {
           <Route path="/admin/inside-company" element={<InsideCompanyList />} />
 
 <Route path="/admin/inside-company/add" element={<CompanyForm />} />
-<Route path="/admin/inside-company/edit/:id" element={<CompanyForm />} />    
+<Route path="/admin/inside-company/edit/:id" element={<CompanyForm />} />  
+ <Route path="/googleadsform" element={<GoogleAdsLandingForm />} />
+          <Route path="/googleadseditform/:id" element={<GoogleAdsEditLandingForm />} />  
 <Route
   path="/company-website-enquiry"
   element={<CompanyWebsiteEnquiry />}
