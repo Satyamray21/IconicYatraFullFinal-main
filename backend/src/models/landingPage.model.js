@@ -50,6 +50,14 @@ const landingPageSchema = new mongoose.Schema(
     },
 
     headerDescription: String,
+   slidingText: [
+  {
+    text: {
+      type: String,
+      trim: true
+    }
+  }
+],
 
     heroBackgroundImage: imageSchema,
     heroTitle: String,

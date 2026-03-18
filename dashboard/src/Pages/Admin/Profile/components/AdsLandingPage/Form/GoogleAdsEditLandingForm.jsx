@@ -50,7 +50,7 @@ export default function LandingPageForm() {
   const [formData, setFormData] = useState({
     // Header Section
     headerDescription: "",
-    
+    slidingText: [{ text: "" }],
     // Hero Section
     heroBackgroundImage: null,
     heroTitle: "",
@@ -124,7 +124,12 @@ export default function LandingPageForm() {
       // Transform the data to include unique IDs for array items
       const transformedData = {
         headerDescription: page.headerDescription || "",
-        
+        slidingText: page.slidingText?.length > 0
+    ? page.slidingText.map((item, index) => ({
+        ...item,
+        id: item._id || Date.now() + index
+      }))
+    : [{ text: "", id: 1 }],
         heroBackgroundImage: page.heroBackgroundImage?.url || null,
         heroTitle: page.heroTitle || "",
         heroDescription: page.heroDescription || "",
@@ -409,6 +414,29 @@ export default function LandingPageForm() {
     // Add validation logic here if needed
     return true;
   };
+  const handleSlidingTextChange = (index, value) => {
+  const updated = [...formData.slidingText];
+  updated[index].text = value;
+
+  setFormData({
+    ...formData,
+    slidingText: updated,
+  });
+};
+const addSlidingText = () => {
+  setFormData({
+    ...formData,
+    slidingText: [...formData.slidingText, { text: "" }],
+  });
+};
+const removeSlidingText = (index) => {
+  const updated = formData.slidingText.filter((_, i) => i !== index);
+
+  setFormData({
+    ...formData,
+    slidingText: updated.length ? updated : [{ text: "" }],
+  });
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -428,6 +456,12 @@ export default function LandingPageForm() {
     // Prepare the data object for JSON stringification
     const jsonData = {
       headerDescription: formData.headerDescription,
+      slidingText: formData.slidingText
+    .map(({ id, ...rest }) => ({
+      ...rest,
+      text: rest.text?.trim(),
+    }))
+    .filter((item) => item.text && item.text.length > 0),
       heroTitle: formData.heroTitle,
       heroDescription: formData.heroDescription,
       heroButtonText: formData.heroButtonText,
@@ -837,6 +871,35 @@ export default function LandingPageForm() {
                 Add New Overview Section
               </Button>
             </Box>
+              <Typography variant="h6" sx={{ mt: 3 }}>
+  Sliding Text
+</Typography>
+
+{formData.slidingText.map((item, index) => (
+  <Stack direction="row" spacing={2} key={item._id || index} sx={{ mb: 1 }}>
+    
+    <TextField
+      fullWidth
+      label={`Text ${index + 1}`}
+      value={item.text || ""}
+      onChange={(e) =>
+        handleSlidingTextChange(index, e.target.value)
+      }
+    />
+
+    <IconButton color="error" onClick={() => removeSlidingText(index)}>
+      <DeleteIcon />
+    </IconButton>
+  </Stack>
+))}
+
+<Button
+  startIcon={<AddIcon />}
+  onClick={addSlidingText}
+  variant="outlined"
+>
+  Add Text
+</Button>
 
             {/* ========== OWN PACKAGE SECTION ========== */}
             <Paper elevation={1} sx={{ p: 3, bgcolor: "#f8f9fa" }}>

@@ -84,6 +84,19 @@ export const createLandingPage = async (req, res) => {
         }
       }
     }
+    // =============================
+// SLIDING TEXT (OBJECT BASED)
+// =============================
+if (data.slidingText) {
+  data.slidingText = data.slidingText
+    .map((item) => ({
+      ...item,
+      text: item.text?.trim(),
+    }))
+    .filter((item) => item.text && item.text.length > 0);
+}
+
+
 
     const landingPage = await LandingPage.create(data);
 
@@ -269,6 +282,32 @@ export const updateLandingPage = async (req, res) => {
         req.files.whyChooseBannerImage[0].path
       );
     }
+    // =============================
+// SLIDING TEXT (FIXED)
+// =============================
+if (data.slidingText) {
+  data.slidingText = data.slidingText
+    .map((item) => {
+      // NEW ITEM (no _id)
+      if (!item._id) {
+        return {
+          text: item.text?.trim(),
+        };
+      }
+
+      // EXISTING ITEM
+      const existing = page.slidingText.find(
+        (t) => t._id.toString() === item._id
+      );
+
+      return {
+        _id: item._id,
+        text: item.text?.trim() || existing?.text,
+      };
+    })
+    .filter((item) => item.text && item.text.length > 0);
+}
+
 
     // =============================
     // FINAL UPDATE
