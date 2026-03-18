@@ -172,120 +172,122 @@ export const getLandingPageBySlug = async (req, res) => {
 
 export const updateLandingPage = async (req, res) => {
   try {
-
     const { id } = req.params;
-
-    const data = JSON.parse(req.body.data || "{}");
+    const data = JSON.parse(req.body.data);
 
     const page = await LandingPage.findById(id);
-
     if (!page) {
-      return res.status(404).json({
-        success: false,
-        message: "Landing page not found",
+      return res.status(404).json({ message: "Landing page not found" });
+    }
+
+    // =============================
+    // HERO IMAGE
+    // =============================
+    if (req.files?.heroBackgroundImage?.[0]) {
+      data.heroBackgroundImage = await uploadOnCloudinary(
+        req.files.heroBackgroundImage[0].path
+      );
+    }
+
+    // =============================
+    // OVERVIEW SECTIONS
+    // =============================
+    if (data.overviewSections) {
+      data.overviewSections = data.overviewSections.map((section, index) => {
+        const existing = page.overviewSections.find(
+          (s) => s._id.toString() === section._id
+        );
+
+        let image = existing?.overviewImage || null;
+
+        if (req.files?.overviewImages?.[index]) {
+          image = uploadOnCloudinary(req.files.overviewImages[index].path);
+        }
+
+        return {
+          ...section,
+          overviewImage: image,
+        };
       });
     }
 
-    /* ---------- HERO IMAGE ---------- */
+    // =============================
+    // SOLUTIONS
+    // =============================
+    if (data.solutionItems) {
+      data.solutionItems = data.solutionItems.map((item, index) => {
+        const existing = page.solutionItems.find(
+          (s) => s._id.toString() === item._id
+        );
 
-    if (req.files?.heroBackgroundImage) {
+        let icon = existing?.icon || null;
 
-      const uploaded = await uploadOnCloudinary(
-        req.files.heroBackgroundImage[0].path
-      );
+        if (req.files?.solutionIcons?.[index]) {
+          icon = uploadOnCloudinary(req.files.solutionIcons[index].path);
+        }
 
-      data.heroBackgroundImage = uploaded;
+        return {
+          ...item,
+          icon,
+        };
+      });
     }
 
-    /* ---------- OWN PACKAGE IMAGE ---------- */
+    // =============================
+    // PACKAGE FEATURES
+    // =============================
+    if (data.packageFeatures) {
+      data.packageFeatures = data.packageFeatures.map((feature, index) => {
+        const existing = page.packageFeatures.find(
+          (f) => f._id.toString() === feature._id
+        );
 
-    if (req.files?.ownPackageImage) {
+        let icon = existing?.icon || null;
 
-      const uploaded = await uploadOnCloudinary(
+        if (req.files?.featureIcons?.[index]) {
+          icon = uploadOnCloudinary(req.files.featureIcons[index].path);
+        }
+
+        return {
+          ...feature,
+          icon,
+        };
+      });
+    }
+
+    // =============================
+    // SIMPLE IMAGE FIELDS
+    // =============================
+    if (req.files?.ownPackageImage?.[0]) {
+      data.ownPackageImage = await uploadOnCloudinary(
         req.files.ownPackageImage[0].path
       );
-
-      data.ownPackageImage = uploaded;
     }
 
-    /* ---------- WHY CHOOSE IMAGE ---------- */
-
-    if (req.files?.whyChooseBannerImage) {
-
-      const uploaded = await uploadOnCloudinary(
+    if (req.files?.whyChooseBannerImage?.[0]) {
+      data.whyChooseBannerImage = await uploadOnCloudinary(
         req.files.whyChooseBannerImage[0].path
       );
-
-      data.whyChooseBannerImage = uploaded;
     }
 
-    /* ---------- OVERVIEW IMAGES ---------- */
+    // =============================
+    // FINAL UPDATE
+    // =============================
+    const updatedPage = await LandingPage.findByIdAndUpdate(id, data, {
+      new: true,
+    });
 
-    if (req.files?.overviewImages && data.overviewSections) {
-
-      for (let i = 0; i < req.files.overviewImages.length; i++) {
-
-        const uploaded = await uploadOnCloudinary(
-          req.files.overviewImages[i].path
-        );
-
-        if (data.overviewSections[i]) {
-          data.overviewSections[i].overviewImage = uploaded;
-        }
-      }
-    }
-
-    /* ---------- SOLUTION ICONS ---------- */
-
-    if (req.files?.solutionIcons && data.solutionItems) {
-
-      for (let i = 0; i < req.files.solutionIcons.length; i++) {
-
-        const uploaded = await uploadOnCloudinary(
-          req.files.solutionIcons[i].path
-        );
-
-        if (data.solutionItems[i]) {
-          data.solutionItems[i].icon = uploaded;
-        }
-      }
-    }
-
-    /* ---------- FEATURE ICONS ---------- */
-
-    if (req.files?.featureIcons && data.packageFeatures) {
-
-      for (let i = 0; i < req.files.featureIcons.length; i++) {
-
-        const uploaded = await uploadOnCloudinary(
-          req.files.featureIcons[i].path
-        );
-
-        if (data.packageFeatures[i]) {
-          data.packageFeatures[i].icon = uploaded;
-        }
-      }
-    }
-
-    const updatedPage = await LandingPage.findByIdAndUpdate(
-      id,
-      data,
-      { new: true }
-    );
-
-    res.status(200).json({
-      success: true,
-      data: updatedPage,
+    res.json({
+      message: "Landing page updated successfully",
+      page: updatedPage,
     });
 
   } catch (error) {
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 /* =========================================================
@@ -321,3 +323,34 @@ export const deleteLandingPage = async (req, res) => {
     });
   }
 };
+
+/* =========================================================
+   GET LANDING PAGE BY ID
+========================================================= */
+
+export const getLandingPageById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const page = await LandingPage.findById(id);
+
+    if (!page) {
+      return res.status(404).json({
+        success: false,
+        message: "Landing page not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: page,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+

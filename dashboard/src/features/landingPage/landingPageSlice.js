@@ -46,6 +46,19 @@ export const fetchLandingPageBySlug = createAsyncThunk(
   }
 );
 
+export const fetchLandingPageById = createAsyncThunk(
+  "landingPages/fetchLandingPageById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`/landing-pages/${id}`);
+      return res.data.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to fetch landing page"
+      );
+    }
+  }
+);
 
 /* =========================================================
    CREATE LANDING PAGE
@@ -266,7 +279,20 @@ const landingPageSlice = createSlice({
       .addCase(deleteLandingPage.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
+      builder
+  .addCase(fetchLandingPageById.pending, (state) => {
+    state.loading = true;
+  })
+  .addCase(fetchLandingPageById.fulfilled, (state, action) => {
+    state.loading = false;
+    state.page = action.payload;
+  })
+  .addCase(fetchLandingPageById.rejected, (state, action) => {
+    state.loading = false;
+    state.error = action.payload;
+  });
+
 
   },
 });

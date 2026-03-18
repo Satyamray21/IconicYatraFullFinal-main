@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation,useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import {
   Box,
   Container,
@@ -15,19 +16,36 @@ import {
   Snackbar,
   CircularProgress
 } from "@mui/material";
-
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
 
+import {
+  fetchLandingPageById,
+  updateLandingPage,
+  clearLandingState,
+  clearCurrentPage
+} from "../../../../../../features/landingPage/landingPageSlice";
+
+// Helper function to get image source
+const getImageSource = (image) => {
+  if (!image) return null;
+  if (image instanceof File) {
+    return URL.createObjectURL(image);
+  }
+  return image; // This is a URL string
+};
+
 export default function LandingPageForm() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { id } = useParams();
-  const editData = location.state?.landingPage;
-  const isEditing = location.state?.isEditing || false;
+  const { id } = useParams(); // Get ID from URL params
+  const dispatch = useDispatch();
+
+  const { page, loading, error, updateSuccess } = useSelector(
+    (state) => state.landingPages
+  );
 
   const [formData, setFormData] = useState({
     // Header Section
@@ -81,27 +99,44 @@ export default function LandingPageForm() {
     faqQuestions: [],
   });
 
-  const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success"
   });
 
-  // Load edit data if in edit mode
+  // Fetch landing page data when component mounts
   useEffect(() => {
-    if (isEditing && editData) {
-      setFormData({
-        headerDescription: editData.headerDescription || "",
+    if (id) {
+      dispatch(fetchLandingPageById(id));
+    }
+
+    // Cleanup function
+    return () => {
+      dispatch(clearCurrentPage());
+      dispatch(clearLandingState());
+    };
+  }, [dispatch, id]);
+
+  // Populate form when page data is fetched
+  useEffect(() => {
+    if (page && id) {
+      // Transform the data to include unique IDs for array items
+      const transformedData = {
+        headerDescription: page.headerDescription || "",
         
-        heroBackgroundImage: editData.heroBackgroundImage || null,
-        heroTitle: editData.heroTitle || "",
-        heroDescription: editData.heroDescription || "",
-        heroButtonText: editData.heroButtonText || "",
-        heroOverlayOpacity: editData.heroOverlayOpacity || 0.65,
+        heroBackgroundImage: page.heroBackgroundImage?.url || null,
+        heroTitle: page.heroTitle || "",
+        heroDescription: page.heroDescription || "",
+        heroButtonText: page.heroButtonText || "",
+        heroOverlayOpacity: page.heroOverlayOpacity || 0.65,
         
-        overviewSections: editData.overviewSections?.length > 0 
-          ? editData.overviewSections 
+        overviewSections: page.overviewSections?.length > 0 
+          ? page.overviewSections.map((section, index) => ({
+              ...section,
+              id: section._id || Date.now() + index,
+              overviewImage: section.overviewImage?.url || null
+            }))
           : [{
               id: 1,
               overviewTitle: "",
@@ -111,30 +146,76 @@ export default function LandingPageForm() {
               overviewChatWithUsButton: "",
             }],
         
-        ownPackageTitle: editData.ownPackageTitle || "",
-        ownPackageDescription: editData.ownPackageDescription || "",
-        ownPackageImage: editData.ownPackageImage || null,
-        ownPackageFeatures: editData.ownPackageFeatures || [],
+        ownPackageTitle: page.ownPackageTitle || "",
+        ownPackageDescription: page.ownPackageDescription || "",
+        ownPackageImage: page.ownPackageImage?.url || null,
+        ownPackageFeatures: page.ownPackageFeatures || [],
         
-        solutionTitle: editData.solutionTitle || "",
-        solutionDescription: editData.solutionDescription || "",
-        solutionItems: editData.solutionItems || [],
+        solutionTitle: page.solutionTitle || "",
+        solutionDescription: page.solutionDescription || "",
+        solutionItems: page.solutionItems?.map((item, index) => ({
+          ...item,
+          id: item._id || Date.now() + index,
+          icon: item.icon?.url || null
+        })) || [],
         
-        packageFeaturesTitle: editData.packageFeaturesTitle || "",
-        packageFeatures: editData.packageFeatures || [],
+        packageFeaturesTitle: page.packageFeaturesTitle || "",
+        packageFeatures: page.packageFeatures?.map((feature, index) => ({
+          ...feature,
+          id: feature._id || Date.now() + index,
+          icon: feature.icon?.url || null
+        })) || [],
         
-        whyChooseTitle: editData.whyChooseTitle || "",
-        whyChooseBannerImage: editData.whyChooseBannerImage || null,
-        whyChooseReasons: editData.whyChooseReasons || [],
+        whyChooseTitle: page.whyChooseTitle || "",
+        whyChooseBannerImage: page.whyChooseBannerImage?.url || null,
+        whyChooseReasons: page.whyChooseReasons?.map((reason, index) => ({
+          ...reason,
+          id: reason._id || Date.now() + index
+        })) || [],
         
-        workProcessTitle: editData.workProcessTitle || "",
-        workProcessSteps: editData.workProcessSteps || [],
+        workProcessTitle: page.workProcessTitle || "",
+        workProcessSteps: page.workProcessSteps?.map((step, index) => ({
+          ...step,
+          id: step._id || Date.now() + index
+        })) || [],
         
-        faqTitle: editData.faqTitle || "",
-        faqQuestions: editData.faqQuestions || [],
+        faqTitle: page.faqTitle || "",
+        faqQuestions: page.faqQuestions?.map((faq, index) => ({
+          ...faq,
+          id: faq._id || Date.now() + index
+        })) || [],
+      };
+      
+      setFormData(transformedData);
+    }
+  }, [page, id]);
+
+  // Handle update success
+  useEffect(() => {
+    if (updateSuccess) {
+      setSnackbar({
+        open: true,
+        message: 'Landing page updated successfully!',
+        severity: 'success'
+      });
+
+      // Navigate back to landing pages list after successful update
+      setTimeout(() => {
+        navigate('/landing-pages');
+      }, 2000);
+    }
+  }, [updateSuccess, navigate]);
+
+  // Handle error
+  useEffect(() => {
+    if (error) {
+      setSnackbar({
+        open: true,
+        message: error,
+        severity: 'error'
       });
     }
-  }, [isEditing, editData]);
+  }, [error]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -165,19 +246,16 @@ export default function LandingPageForm() {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          [fieldName]: reader.result
-        }));
-      };
-      reader.readAsDataURL(file);
+      // Store the file object directly for FormData
+      setFormData(prev => ({
+        ...prev,
+        [fieldName]: file
+      }));
     }
   };
 
   // Overview Section handlers
-  const addOverviewSection = () => {
+  const handleAddOverviewSection = () => {
     const newId = Date.now();
     setFormData(prev => ({
       ...prev,
@@ -195,7 +273,7 @@ export default function LandingPageForm() {
     }));
   };
 
-  const updateOverviewSection = (id, field, value) => {
+  const handleUpdateOverviewSection = (id, field, value) => {
     setFormData(prev => ({
       ...prev,
       overviewSections: prev.overviewSections.map(section =>
@@ -204,7 +282,7 @@ export default function LandingPageForm() {
     }));
   };
 
-  const removeOverviewSection = (id) => {
+  const handleRemoveOverviewSection = (id) => {
     if (formData.overviewSections.length <= 1) {
       setSnackbar({
         open: true,
@@ -240,28 +318,24 @@ export default function LandingPageForm() {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          overviewSections: prev.overviewSections.map(section =>
-            section.id === id ? { ...section, overviewImage: reader.result } : section
-          )
-        }));
-      };
-      reader.readAsDataURL(file);
+      setFormData(prev => ({
+        ...prev,
+        overviewSections: prev.overviewSections.map(section =>
+          section.id === id ? { ...section, overviewImage: file } : section
+        )
+      }));
     }
   };
 
   // Simple array handlers (for strings)
-  const addSimpleArrayItem = (fieldName) => {
+  const handleAddSimpleArrayItem = (fieldName) => {
     setFormData(prev => ({
       ...prev,
       [fieldName]: [...prev[fieldName], ""]
     }));
   };
 
-  const updateSimpleArrayItem = (fieldName, index, value) => {
+  const handleUpdateSimpleArrayItem = (fieldName, index, value) => {
     setFormData(prev => {
       const newArray = [...prev[fieldName]];
       newArray[index] = value;
@@ -269,7 +343,7 @@ export default function LandingPageForm() {
     });
   };
 
-  const removeSimpleArrayItem = (fieldName, index) => {
+  const handleRemoveSimpleArrayItem = (fieldName, index) => {
     setFormData(prev => ({
       ...prev,
       [fieldName]: prev[fieldName].filter((_, i) => i !== index)
@@ -277,7 +351,7 @@ export default function LandingPageForm() {
   };
 
   // Object array handlers (for packages, solutions, etc.)
-  const addObjectArrayItem = (fieldName, template) => {
+  const handleAddObjectArrayItem = (fieldName, template) => {
     const newId = Date.now() + Math.random();
     setFormData(prev => ({
       ...prev,
@@ -285,7 +359,7 @@ export default function LandingPageForm() {
     }));
   };
 
-  const updateObjectArrayItem = (fieldName, id, key, value) => {
+  const handleUpdateObjectArrayItem = (fieldName, id, key, value) => {
     setFormData(prev => ({
       ...prev,
       [fieldName]: prev[fieldName].map(item => 
@@ -294,7 +368,7 @@ export default function LandingPageForm() {
     }));
   };
 
-  const removeObjectArrayItem = (fieldName, id) => {
+  const handleRemoveObjectArrayItem = (fieldName, id) => {
     setFormData(prev => ({
       ...prev,
       [fieldName]: prev[fieldName].filter(item => item.id !== id)
@@ -322,16 +396,12 @@ export default function LandingPageForm() {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          [fieldName]: prev[fieldName].map(item => 
-            item.id === id ? { ...item, [imageField]: reader.result } : item
-          )
-        }));
-      };
-      reader.readAsDataURL(file);
+      setFormData(prev => ({
+        ...prev,
+        [fieldName]: prev[fieldName].map(item => 
+          item.id === id ? { ...item, [imageField]: file } : item
+        )
+      }));
     }
   };
 
@@ -352,81 +422,105 @@ export default function LandingPageForm() {
       return;
     }
 
-    setLoading(true);
+    // Create FormData object for multipart/form-data
+    const submitData = new FormData();
 
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+    // Prepare the data object for JSON stringification
+    const jsonData = {
+      headerDescription: formData.headerDescription,
+      heroTitle: formData.heroTitle,
+      heroDescription: formData.heroDescription,
+      heroButtonText: formData.heroButtonText,
+      heroOverlayOpacity: formData.heroOverlayOpacity,
       
-      console.log(isEditing ? "Updated Landing Page:" : "Created Landing Page:", formData);
+      // Overview Sections - remove image files and temporary IDs
+      overviewSections: formData.overviewSections.map(({ id, overviewImage, ...rest }) => {
+        // Only include the image URL if it's not a file
+        const sectionData = { ...rest };
+        if (overviewImage && !(overviewImage instanceof File)) {
+          sectionData.overviewImage = overviewImage;
+        }
+        return sectionData;
+      }),
       
-      setSnackbar({
-        open: true,
-        message: isEditing 
-          ? 'Landing page updated successfully!' 
-          : 'Landing page created successfully!',
-        severity: 'success'
-      });
+      // Own Package
+      ownPackageTitle: formData.ownPackageTitle,
+      ownPackageDescription: formData.ownPackageDescription,
+      ownPackageFeatures: formData.ownPackageFeatures,
+      
+      // Solutions - remove image files and temporary IDs
+      solutionTitle: formData.solutionTitle,
+      solutionDescription: formData.solutionDescription,
+      solutionItems: formData.solutionItems.map(({ id, icon, ...rest }) => {
+        const itemData = { ...rest };
+        if (icon && !(icon instanceof File)) {
+          itemData.icon = icon;
+        }
+        return itemData;
+      }),
+      
+      // Package Features - remove image files and temporary IDs
+      packageFeaturesTitle: formData.packageFeaturesTitle,
+      packageFeatures: formData.packageFeatures.map(({ id, icon, ...rest }) => {
+        const featureData = { ...rest };
+        if (icon && !(icon instanceof File)) {
+          featureData.icon = icon;
+        }
+        return featureData;
+      }),
+      
+      // Why Choose Us
+      whyChooseTitle: formData.whyChooseTitle,
+      whyChooseReasons: formData.whyChooseReasons.map(({ id, ...rest }) => rest),
+      
+      // Work Process
+      workProcessTitle: formData.workProcessTitle,
+      workProcessSteps: formData.workProcessSteps.map(({ id, ...rest }) => rest),
+      
+      // FAQs
+      faqTitle: formData.faqTitle,
+      faqQuestions: formData.faqQuestions.map(({ id, ...rest }) => rest),
+    };
 
-      if (isEditing) {
-        // Navigate back to landing pages list after successful update
-        setTimeout(() => {
-          navigate('/landing-pages');
-        }, 2000);
-      } else {
-        // Reset form for new creation
-        setFormData({
-          headerDescription: "",
-          heroBackgroundImage: null,
-          heroTitle: "",
-          heroDescription: "",
-          heroButtonText: "",
-          heroOverlayOpacity: 0.65,
-          overviewSections: [
-            {
-              id: 1,
-              overviewTitle: "",
-              overviewDescription: "",
-              overviewImage: null,
-              overviewGetFreeQuoteButton: "",
-              overviewChatWithUsButton: "",
-            }
-          ],
-          ownPackageTitle: "",
-          ownPackageDescription: "",
-          ownPackageImage: null,
-          ownPackageFeatures: [],
-          solutionTitle: "",
-          solutionDescription: "",
-          solutionItems: [],
-          packageFeaturesTitle: "",
-          packageFeatures: [],
-          whyChooseTitle: "",
-          whyChooseBannerImage: null,
-          whyChooseReasons: [],
-          workProcessTitle: "",
-          workProcessSteps: [],
-          faqTitle: "",
-          faqQuestions: [],
-        });
-      }
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: error.message || `Failed to ${isEditing ? 'update' : 'create'} landing page`,
-        severity: 'error'
-      });
-    } finally {
-      setLoading(false);
+    // Append the JSON data
+    submitData.append('data', JSON.stringify(jsonData));
+
+    // Append single image files (if they are new files)
+    if (formData.heroBackgroundImage instanceof File) {
+      submitData.append('heroBackgroundImage', formData.heroBackgroundImage);
     }
-  };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar(prev => ({ ...prev, open: false }));
-  };
+    if (formData.ownPackageImage instanceof File) {
+      submitData.append('ownPackageImage', formData.ownPackageImage);
+    }
 
-  const handleCancel = () => {
-    navigate('/landing-pages');
+    if (formData.whyChooseBannerImage instanceof File) {
+      submitData.append('whyChooseBannerImage', formData.whyChooseBannerImage);
+    }
+
+    // Append overview section images (as array)
+    formData.overviewSections.forEach((section) => {
+      if (section.overviewImage instanceof File) {
+        submitData.append('overviewImages', section.overviewImage);
+      }
+    });
+
+    // Append solution icons (as array)
+    formData.solutionItems.forEach((item) => {
+      if (item.icon instanceof File) {
+        submitData.append('solutionIcons', item.icon);
+      }
+    });
+
+    // Append feature icons (as array)
+    formData.packageFeatures.forEach((feature) => {
+      if (feature.icon instanceof File) {
+        submitData.append('featureIcons', feature.icon);
+      }
+    });
+
+    // Dispatch update action
+    dispatch(updateLandingPage({ id, formData: submitData }));
   };
 
   const handleRemoveImage = (fieldName) => {
@@ -435,6 +529,34 @@ export default function LandingPageForm() {
       [fieldName]: null
     }));
   };
+
+  const handleRemoveArrayImage = (fieldName, id, imageField) => {
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: prev[fieldName].map(item =>
+        item.id === id ? { ...item, [imageField]: null } : item
+      )
+    }));
+  };
+
+  const handleCancel = () => {
+    navigate('/landing-pages');
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+    dispatch(clearLandingState());
+  };
+
+  // Show loading state
+  if (loading && !page) {
+    return (
+      <Container maxWidth="md" sx={{ py: 4, textAlign: 'center' }}>
+        <CircularProgress />
+        <Typography sx={{ mt: 2 }}>Loading landing page data...</Typography>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -446,13 +568,10 @@ export default function LandingPageForm() {
           </IconButton>
           <Box>
             <Typography variant="h4" gutterBottom color="primary" sx={{ fontWeight: 600 }}>
-              {isEditing ? 'Edit Landing Page' : 'Create New Landing Page'}
+              Edit Landing Page
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {isEditing 
-                ? 'Update your landing page content and settings' 
-                : 'Design your landing page with sections, images, and content'
-              }
+              Update your landing page content and settings
             </Typography>
           </Box>
         </Box>
@@ -467,7 +586,7 @@ export default function LandingPageForm() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="Header Description"
                     name="headerDescription"
@@ -491,7 +610,7 @@ export default function LandingPageForm() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   {!formData.heroBackgroundImage ? (
                     <Button
                       variant="outlined"
@@ -511,7 +630,7 @@ export default function LandingPageForm() {
                   ) : (
                     <Box sx={{ position: 'relative', display: 'inline-block', width: '100%' }}>
                       <img
-                        src={formData.heroBackgroundImage}
+                        src={getImageSource(formData.heroBackgroundImage)}
                         alt="Hero Background"
                         style={{
                           maxWidth: '100%',
@@ -538,7 +657,7 @@ export default function LandingPageForm() {
                   )}
                 </Grid>
                 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="Hero Title"
                     name="heroTitle"
@@ -552,7 +671,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
                 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="Hero Description"
                     name="heroDescription"
@@ -566,7 +685,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
                 
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <TextField
                     label="Button Text"
                     name="heroButtonText"
@@ -578,7 +697,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
                 
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <TextField
                     label="Overlay Opacity (0-1)"
                     name="heroOverlayOpacity"
@@ -604,7 +723,7 @@ export default function LandingPageForm() {
                   {formData.overviewSections.length > 1 && (
                     <IconButton 
                       color="error" 
-                      onClick={() => removeOverviewSection(section.id)}
+                      onClick={() => handleRemoveOverviewSection(section.id)}
                       size="small"
                     >
                       <DeleteIcon />
@@ -614,21 +733,21 @@ export default function LandingPageForm() {
                 <Divider sx={{ mb: 3 }} />
                 
                 <Grid container spacing={3}>
-                  <Grid size={{xs:12}}>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       label="Overview Title"
                       value={section.overviewTitle}
-                      onChange={(e) => updateOverviewSection(section.id, "overviewTitle", e.target.value)}
+                      onChange={(e) => handleUpdateOverviewSection(section.id, "overviewTitle", e.target.value)}
                       fullWidth
                       required
                     />
                   </Grid>
                   
-                  <Grid size={{xs:12}}>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       label="Overview Description"
                       value={section.overviewDescription}
-                      onChange={(e) => updateOverviewSection(section.id, "overviewDescription", e.target.value)}
+                      onChange={(e) => handleUpdateOverviewSection(section.id, "overviewDescription", e.target.value)}
                       multiline
                       rows={4}
                       fullWidth
@@ -636,7 +755,7 @@ export default function LandingPageForm() {
                     />
                   </Grid>
                   
-                  <Grid size={{xs:12}}>
+                  <Grid size={{ xs: 12 }}>
                     {!section.overviewImage ? (
                       <Button
                         variant="outlined"
@@ -655,7 +774,7 @@ export default function LandingPageForm() {
                     ) : (
                       <Box sx={{ position: 'relative', display: 'inline-block', width: '100%' }}>
                         <img
-                          src={section.overviewImage}
+                          src={getImageSource(section.overviewImage)}
                           alt="Overview Icon"
                           style={{
                             maxWidth: '100%',
@@ -665,7 +784,7 @@ export default function LandingPageForm() {
                           }}
                         />
                         <IconButton
-                          onClick={() => updateOverviewSection(section.id, "overviewImage", null)}
+                          onClick={() => handleUpdateOverviewSection(section.id, "overviewImage", null)}
                           sx={{
                             position: 'absolute',
                             top: 8,
@@ -681,22 +800,22 @@ export default function LandingPageForm() {
                     )}
                   </Grid>
 
-                  <Grid size={{xs:12, md:6}}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       label="Get Free Quote Button Text"
                       value={section.overviewGetFreeQuoteButton}
-                      onChange={(e) => updateOverviewSection(section.id, "overviewGetFreeQuoteButton", e.target.value)}
+                      onChange={(e) => handleUpdateOverviewSection(section.id, "overviewGetFreeQuoteButton", e.target.value)}
                       fullWidth
                       required
                       placeholder="Get Free Quote"
                     />
                   </Grid>
 
-                  <Grid size={{xs:12, md:6}}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       label="Chat With Us Button Text"
                       value={section.overviewChatWithUsButton}
-                      onChange={(e) => updateOverviewSection(section.id, "overviewChatWithUsButton", e.target.value)}
+                      onChange={(e) => handleUpdateOverviewSection(section.id, "overviewChatWithUsButton", e.target.value)}
                       fullWidth
                       required
                       placeholder="Chat with Us"
@@ -712,7 +831,7 @@ export default function LandingPageForm() {
                 variant="contained"
                 color="secondary"
                 startIcon={<AddIcon />}
-                onClick={addOverviewSection}
+                onClick={handleAddOverviewSection}
                 size="large"
               >
                 Add New Overview Section
@@ -727,7 +846,7 @@ export default function LandingPageForm() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <TextField
                     label="Section Title"
                     name="ownPackageTitle"
@@ -738,7 +857,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
                 
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <TextField
                     label="Section Description"
                     name="ownPackageDescription"
@@ -749,7 +868,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   {!formData.ownPackageImage ? (
                     <Button
                       variant="outlined"
@@ -768,7 +887,7 @@ export default function LandingPageForm() {
                   ) : (
                     <Box sx={{ position: 'relative', display: 'inline-block', width: '100%' }}>
                       <img
-                        src={formData.ownPackageImage}
+                        src={getImageSource(formData.ownPackageImage)}
                         alt="Own Package"
                         style={{
                           maxWidth: '100%',
@@ -795,7 +914,7 @@ export default function LandingPageForm() {
                   )}
                 </Grid>
 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Features
                   </Typography>
@@ -804,14 +923,14 @@ export default function LandingPageForm() {
                     <Box key={index} sx={{ display: "flex", gap: 1, mb: 1 }}>
                       <TextField
                         value={feature}
-                        onChange={(e) => updateSimpleArrayItem("ownPackageFeatures", index, e.target.value)}
+                        onChange={(e) => handleUpdateSimpleArrayItem("ownPackageFeatures", index, e.target.value)}
                         fullWidth
                         size="small"
                         placeholder={`Feature ${index + 1}`}
                       />
                       <IconButton 
                         color="error" 
-                        onClick={() => removeSimpleArrayItem("ownPackageFeatures", index)}
+                        onClick={() => handleRemoveSimpleArrayItem("ownPackageFeatures", index)}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -820,7 +939,7 @@ export default function LandingPageForm() {
                   
                   <Button
                     startIcon={<AddIcon />}
-                    onClick={() => addSimpleArrayItem("ownPackageFeatures")}
+                    onClick={() => handleAddSimpleArrayItem("ownPackageFeatures")}
                     variant="outlined"
                     size="small"
                     sx={{ mt: 1 }}
@@ -839,7 +958,7 @@ export default function LandingPageForm() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="Section Title"
                     name="solutionTitle"
@@ -850,7 +969,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="Section Description"
                     name="solutionDescription"
@@ -864,7 +983,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Solution Items
                   </Typography>
@@ -872,7 +991,7 @@ export default function LandingPageForm() {
                   {formData.solutionItems.map((item) => (
                     <Paper key={item.id} variant="outlined" sx={{ p: 2, mb: 2 }}>
                       <Grid container spacing={2}>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           {!item.icon ? (
                             <Button
                               variant="outlined"
@@ -892,7 +1011,7 @@ export default function LandingPageForm() {
                           ) : (
                             <Box sx={{ position: 'relative', display: 'inline-block', width: '100%' }}>
                               <img
-                                src={item.icon}
+                                src={getImageSource(item.icon)}
                                 alt="Solution Icon"
                                 style={{
                                   maxWidth: '100%',
@@ -902,7 +1021,7 @@ export default function LandingPageForm() {
                                 }}
                               />
                               <IconButton
-                                onClick={() => updateObjectArrayItem("solutionItems", item.id, "icon", null)}
+                                onClick={() => handleUpdateObjectArrayItem("solutionItems", item.id, "icon", null)}
                                 sx={{
                                   position: 'absolute',
                                   top: 8,
@@ -917,31 +1036,31 @@ export default function LandingPageForm() {
                             </Box>
                           )}
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             label="Solution Title"
                             value={item.title || ""}
-                            onChange={(e) => updateObjectArrayItem("solutionItems", item.id, "title", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("solutionItems", item.id, "title", e.target.value)}
                             fullWidth
                             size="small"
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             label="Solution Description"
                             value={item.description || ""}
-                            onChange={(e) => updateObjectArrayItem("solutionItems", item.id, "description", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("solutionItems", item.id, "description", e.target.value)}
                             fullWidth
                             size="small"
                             multiline
                             rows={2}
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
                             <IconButton 
                               color="error" 
-                              onClick={() => removeObjectArrayItem("solutionItems", item.id)}
+                              onClick={() => handleRemoveObjectArrayItem("solutionItems", item.id)}
                             >
                               <DeleteIcon />
                             </IconButton>
@@ -953,7 +1072,7 @@ export default function LandingPageForm() {
                   
                   <Button
                     startIcon={<AddIcon />}
-                    onClick={() => addObjectArrayItem("solutionItems", { 
+                    onClick={() => handleAddObjectArrayItem("solutionItems", { 
                       title: "", 
                       description: "",
                       icon: null 
@@ -975,7 +1094,7 @@ export default function LandingPageForm() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="Section Title"
                     name="packageFeaturesTitle"
@@ -986,7 +1105,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Features
                   </Typography>
@@ -994,7 +1113,7 @@ export default function LandingPageForm() {
                   {formData.packageFeatures.map((feature) => (
                     <Paper key={feature.id} variant="outlined" sx={{ p: 2, mb: 2 }}>
                       <Grid container spacing={2}>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           {!feature.icon ? (
                             <Button
                               variant="outlined"
@@ -1014,7 +1133,7 @@ export default function LandingPageForm() {
                           ) : (
                             <Box sx={{ position: 'relative', display: 'inline-block', width: '100%' }}>
                               <img
-                                src={feature.icon}
+                                src={getImageSource(feature.icon)}
                                 alt="Feature Icon"
                                 style={{
                                   maxWidth: '100%',
@@ -1024,7 +1143,7 @@ export default function LandingPageForm() {
                                 }}
                               />
                               <IconButton
-                                onClick={() => updateObjectArrayItem("packageFeatures", feature.id, "icon", null)}
+                                onClick={() => handleUpdateObjectArrayItem("packageFeatures", feature.id, "icon", null)}
                                 sx={{
                                   position: 'absolute',
                                   top: 8,
@@ -1039,31 +1158,31 @@ export default function LandingPageForm() {
                             </Box>
                           )}
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             label="Feature Title"
                             value={feature.title || ""}
-                            onChange={(e) => updateObjectArrayItem("packageFeatures", feature.id, "title", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("packageFeatures", feature.id, "title", e.target.value)}
                             fullWidth
                             size="small"
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             label="Feature Description"
                             value={feature.description || ""}
-                            onChange={(e) => updateObjectArrayItem("packageFeatures", feature.id, "description", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("packageFeatures", feature.id, "description", e.target.value)}
                             fullWidth
                             size="small"
                             multiline
                             rows={2}
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
                             <IconButton 
                               color="error" 
-                              onClick={() => removeObjectArrayItem("packageFeatures", feature.id)}
+                              onClick={() => handleRemoveObjectArrayItem("packageFeatures", feature.id)}
                             >
                               <DeleteIcon />
                             </IconButton>
@@ -1075,7 +1194,7 @@ export default function LandingPageForm() {
                   
                   <Button
                     startIcon={<AddIcon />}
-                    onClick={() => addObjectArrayItem("packageFeatures", { 
+                    onClick={() => handleAddObjectArrayItem("packageFeatures", { 
                       icon: null,
                       title: "", 
                       description: "" 
@@ -1097,7 +1216,7 @@ export default function LandingPageForm() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="Section Title"
                     name="whyChooseTitle"
@@ -1108,7 +1227,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   {!formData.whyChooseBannerImage ? (
                     <Button
                       variant="outlined"
@@ -1127,7 +1246,7 @@ export default function LandingPageForm() {
                   ) : (
                     <Box sx={{ position: 'relative', display: 'inline-block', width: '100%' }}>
                       <img
-                        src={formData.whyChooseBannerImage}
+                        src={getImageSource(formData.whyChooseBannerImage)}
                         alt="Why Choose Banner"
                         style={{
                           maxWidth: '100%',
@@ -1154,7 +1273,7 @@ export default function LandingPageForm() {
                   )}
                 </Grid>
 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Reasons
                   </Typography>
@@ -1162,31 +1281,31 @@ export default function LandingPageForm() {
                   {formData.whyChooseReasons.map((reason) => (
                     <Paper key={reason.id} variant="outlined" sx={{ p: 2, mb: 2 }}>
                       <Grid container spacing={2}>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             label="Reason Title"
                             value={reason.title || ""}
-                            onChange={(e) => updateObjectArrayItem("whyChooseReasons", reason.id, "title", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("whyChooseReasons", reason.id, "title", e.target.value)}
                             fullWidth
                             size="small"
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             label="Reason Description"
                             value={reason.description || ""}
-                            onChange={(e) => updateObjectArrayItem("whyChooseReasons", reason.id, "description", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("whyChooseReasons", reason.id, "description", e.target.value)}
                             fullWidth
                             size="small"
                             multiline
                             rows={2}
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
                             <IconButton 
                               color="error" 
-                              onClick={() => removeObjectArrayItem("whyChooseReasons", reason.id)}
+                              onClick={() => handleRemoveObjectArrayItem("whyChooseReasons", reason.id)}
                             >
                               <DeleteIcon />
                             </IconButton>
@@ -1198,7 +1317,7 @@ export default function LandingPageForm() {
                   
                   <Button
                     startIcon={<AddIcon />}
-                    onClick={() => addObjectArrayItem("whyChooseReasons", { 
+                    onClick={() => handleAddObjectArrayItem("whyChooseReasons", { 
                       title: "", 
                       description: "" 
                     })}
@@ -1219,7 +1338,7 @@ export default function LandingPageForm() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="Section Title"
                     name="workProcessTitle"
@@ -1230,7 +1349,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Steps
                   </Typography>
@@ -1238,41 +1357,41 @@ export default function LandingPageForm() {
                   {formData.workProcessSteps.map((step) => (
                     <Paper key={step.id} variant="outlined" sx={{ p: 2, mb: 2 }}>
                       <Grid container spacing={2}>
-                        <Grid size={{xs:12, md:3}}>
+                        <Grid size={{ xs: 12, md: 3 }}>
                           <TextField
                             label="Step Number"
                             type="number"
                             value={step.step || formData.workProcessSteps.length}
-                            onChange={(e) => updateObjectArrayItem("workProcessSteps", step.id, "step", parseInt(e.target.value))}
+                            onChange={(e) => handleUpdateObjectArrayItem("workProcessSteps", step.id, "step", parseInt(e.target.value))}
                             fullWidth
                             size="small"
                           />
                         </Grid>
-                        <Grid size={{xs:12, md:9}}>
+                        <Grid size={{ xs: 12, md: 9 }}>
                           <TextField
                             label="Step Title"
                             value={step.title || ""}
-                            onChange={(e) => updateObjectArrayItem("workProcessSteps", step.id, "title", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("workProcessSteps", step.id, "title", e.target.value)}
                             fullWidth
                             size="small"
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             label="Step Description"
                             value={step.description || ""}
-                            onChange={(e) => updateObjectArrayItem("workProcessSteps", step.id, "description", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("workProcessSteps", step.id, "description", e.target.value)}
                             fullWidth
                             size="small"
                             multiline
                             rows={2}
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
                             <IconButton 
                               color="error" 
-                              onClick={() => removeObjectArrayItem("workProcessSteps", step.id)}
+                              onClick={() => handleRemoveObjectArrayItem("workProcessSteps", step.id)}
                             >
                               <DeleteIcon />
                             </IconButton>
@@ -1284,7 +1403,7 @@ export default function LandingPageForm() {
                   
                   <Button
                     startIcon={<AddIcon />}
-                    onClick={() => addObjectArrayItem("workProcessSteps", { 
+                    onClick={() => handleAddObjectArrayItem("workProcessSteps", { 
                       step: formData.workProcessSteps.length + 1, 
                       title: "", 
                       description: "" 
@@ -1306,7 +1425,7 @@ export default function LandingPageForm() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="FAQ Title"
                     name="faqTitle"
@@ -1317,7 +1436,7 @@ export default function LandingPageForm() {
                   />
                 </Grid>
 
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Questions and Answers
                   </Typography>
@@ -1325,32 +1444,32 @@ export default function LandingPageForm() {
                   {formData.faqQuestions.map((item) => (
                     <Paper key={item.id} variant="outlined" sx={{ p: 2, mb: 2 }}>
                       <Grid container spacing={2}>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             label="Question"
                             value={item.question || ""}
-                            onChange={(e) => updateObjectArrayItem("faqQuestions", item.id, "question", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("faqQuestions", item.id, "question", e.target.value)}
                             fullWidth
                             size="small"
                             multiline
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             label="Answer"
                             value={item.answer || ""}
-                            onChange={(e) => updateObjectArrayItem("faqQuestions", item.id, "answer", e.target.value)}
+                            onChange={(e) => handleUpdateObjectArrayItem("faqQuestions", item.id, "answer", e.target.value)}
                             fullWidth
                             size="small"
                             multiline
                             rows={3}
                           />
                         </Grid>
-                        <Grid size={{xs:12}}>
+                        <Grid size={{ xs: 12 }}>
                           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
                             <IconButton 
                               color="error" 
-                              onClick={() => removeObjectArrayItem("faqQuestions", item.id)}
+                              onClick={() => handleRemoveObjectArrayItem("faqQuestions", item.id)}
                             >
                               <DeleteIcon />
                             </IconButton>
@@ -1362,7 +1481,7 @@ export default function LandingPageForm() {
                   
                   <Button
                     startIcon={<AddIcon />}
-                    onClick={() => addObjectArrayItem("faqQuestions", { 
+                    onClick={() => handleAddObjectArrayItem("faqQuestions", { 
                       question: "", 
                       answer: "" 
                     })}
@@ -1382,6 +1501,7 @@ export default function LandingPageForm() {
                 onClick={handleCancel}
                 size="large"
                 sx={{ px: 4 }}
+                disabled={loading}
               >
                 Cancel
               </Button>
@@ -1394,10 +1514,7 @@ export default function LandingPageForm() {
                 startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
                 sx={{ px: 4 }}
               >
-                {loading 
-                  ? (isEditing ? 'Updating...' : 'Saving...') 
-                  : (isEditing ? 'Update Landing Page' : 'Create Landing Page')
-                }
+                {loading ? 'Updating...' : 'Update Landing Page'}
               </Button>
             </Box>
           </Stack>

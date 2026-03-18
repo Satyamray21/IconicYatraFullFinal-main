@@ -164,6 +164,9 @@ const GoogleAdsLandingForm = lazy(() =>
 const GoogleAdsEditLandingForm = lazy(() =>
   import("../Pages/Admin/Profile/components/AdsLandingPage/Form/GoogleAdsEditLandingForm")
 );
+const ViewLandingPage=lazy(()=>
+import("../Pages/Admin/Profile/components/AdsLandingPage/Form/GoogleAdsViewLanding")
+);
 /* ========================== */
 /*        MAIN ROUTE          */
 /* ========================== */
@@ -390,8 +393,13 @@ const MainRoute = () => {
 
 <Route path="/admin/inside-company/add" element={<CompanyForm />} />
 <Route path="/admin/inside-company/edit/:id" element={<CompanyForm />} />  
- <Route path="/googleadsform" element={<GoogleAdsLandingForm />} />
-          <Route path="/googleadseditform/:id" element={<GoogleAdsEditLandingForm />} />  
+<Route path="/googleadsform" element={<GoogleAdsLandingForm />} />
+
+<Route path="/googleadseditform/:id" element={<GoogleAdsEditLandingForm />} />
+
+{/* VIEW */}
+<Route path="/google-ads/:id" element={<ViewLandingPage />} />
+
 <Route
   path="/company-website-enquiry"
   element={<CompanyWebsiteEnquiry />}

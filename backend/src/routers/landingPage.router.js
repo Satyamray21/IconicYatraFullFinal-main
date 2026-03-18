@@ -7,6 +7,7 @@ import {
   getLandingPageBySlug,
   updateLandingPage,
   deleteLandingPage,
+  getLandingPageById,
 } from "../controllers/landingPage.controller.js";
 
 const router = express.Router();
@@ -68,6 +69,8 @@ router.put(
 ========================================================= */
 
 router.delete("/:id", deleteLandingPage);
+
+router.get("/:id", getLandingPageById);
 
 
 export default router;
