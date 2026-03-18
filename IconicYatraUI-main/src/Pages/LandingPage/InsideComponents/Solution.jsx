@@ -22,12 +22,7 @@ import CloseIcon from "@mui/icons-material/Close";
 
 import QuoteForm from "./ContectForm";
 
-const sliderItems = [
-  "Explore the Beauty of Darjeeling & Sikkim",
-  "Comfortable Stays and Smooth Transportation in the Himalayas",
-  "Personalized Darjeeling and Sikkim Trip Planning",
-  "Best Tea Gardens, Monasteries & Mountain Landscapes in One Tour",
-];
+
 
 function Solution({ landingData }) {
 
@@ -37,6 +32,10 @@ function Solution({ landingData }) {
   const handleClose = () => setOpenDialog(false);
 
   if (!landingData) return null;
+
+const sliderItems = landingData?.slidingText?.length
+  ? landingData.slidingText.map(item => item.text)
+  : [];
 
   return (
     <>

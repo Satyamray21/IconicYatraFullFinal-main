@@ -26,7 +26,9 @@ export default function LandingPageForm() {
 const initialFormState = {
   slug: "",
   headerDescription: "",
-
+  slidingText: [
+    { id: Date.now(), text: "" }
+  ],
   heroBackgroundImage: null,
   heroTitle: "",
   heroDescription: "",
@@ -69,6 +71,32 @@ const initialFormState = {
 
  const [formData, setFormData] = useState(initialFormState);
 
+// Sliding Text Handlers
+const addSlidingText = () => {
+  setFormData(prev => ({
+    ...prev,
+    slidingText: [
+      ...prev.slidingText,
+      { id: Date.now(), text: "" }
+    ]
+  }));
+};
+
+const updateSlidingText = (id, value) => {
+  setFormData(prev => ({
+    ...prev,
+    slidingText: prev.slidingText.map(item =>
+      item.id === id ? { ...item, text: value } : item
+    )
+  }));
+};
+
+const removeSlidingText = (id) => {
+  setFormData(prev => ({
+    ...prev,
+    slidingText: prev.slidingText.filter(item => item.id !== id)
+  }));
+};
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -205,8 +233,14 @@ const handleOverviewImageUpload = (e, id) => {
   e.preventDefault();
 
   const form = new FormData();
-  const data = { ...formData };
+  const data = {
+    ...formData,
 
+    // ✅ CLEAN slidingText
+    slidingText: formData.slidingText
+      .map(item => item.text?.trim())
+      .filter(text => text && text.length > 0)
+  };
   if (formData.heroBackgroundImage) {
     form.append("heroBackgroundImage", formData.heroBackgroundImage);
   }
@@ -395,6 +429,42 @@ const handleOverviewImageUpload = (e, id) => {
                 </Grid>
               </Grid>
             </Paper>
+            {/* ========== SLIDING TEXT SECTION ========== */}
+<Paper elevation={1} sx={{ p: 3, bgcolor: "#f8f9fa" }}>
+  <Typography variant="h6" gutterBottom color="primary" sx={{ fontWeight: 600 }}>
+    🎞️ Sliding Text
+  </Typography>
+  <Divider sx={{ mb: 3 }} />
+
+  {formData.slidingText.map((item, index) => (
+    <Box key={item.id} sx={{ display: "flex", gap: 1, mb: 2 }}>
+      <TextField
+        label={`Sliding Text ${index + 1}`}
+        value={item.text}
+        onChange={(e) => updateSlidingText(item.id, e.target.value)}
+        fullWidth
+        size="small"
+      />
+
+      <IconButton
+        color="error"
+        onClick={() => removeSlidingText(item.id)}
+      >
+        <DeleteIcon />
+      </IconButton>
+    </Box>
+  ))}
+
+  <Button
+    startIcon={<AddIcon />}
+    onClick={addSlidingText}
+    variant="outlined"
+    size="small"
+  >
+    Add Sliding Text
+  </Button>
+</Paper>
+
 
             {/* ========== OVERVIEW SECTIONS ========== */}
             {formData.overviewSections.map((section, index) => (
