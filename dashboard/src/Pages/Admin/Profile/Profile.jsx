@@ -11,8 +11,12 @@ import CreateAdminForm from "./components/CreateAdminForm";
 import CareerDashboard from "./components/CareerDashboard";
 import BankDetailsPage from "./Bank/Form/BankCard";
 import GoogleAds from "./components/AdsLandingPage/AdsLandingCard";
+import { useLocation } from "react-router-dom";
+
 const Profile = () => {
     const dispatch = useDispatch();
+    const location = useLocation();
+
     const { user, loading, error } = useSelector((state) => state.profile);
 
     const [activeTab, setActiveTab] = useState("profile");
@@ -21,7 +25,14 @@ const Profile = () => {
         const userId = localStorage.getItem("userId");
         if (userId) dispatch(fetchProfile(userId));
     }, [dispatch]);
+    useEffect(() => {
+  const params = new URLSearchParams(location.search);
+  const tab = params.get("activeTab");
 
+  if (tab) {
+    setActiveTab(tab);
+  }
+}, [location.search]);
     if (loading) return <Typography>Loading...</Typography>;
     if (error) return <Typography color="error">{error}</Typography>;
 

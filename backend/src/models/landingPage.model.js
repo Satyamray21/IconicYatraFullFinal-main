@@ -58,7 +58,12 @@ const landingPageSchema = new mongoose.Schema(
     }
   }
 ],
-
+solutionButtonText:{
+  type:String,
+},
+solutionButtonDescription:{
+type:String,
+},
     heroBackgroundImage: imageSchema,
     heroTitle: String,
     heroDescription: String,

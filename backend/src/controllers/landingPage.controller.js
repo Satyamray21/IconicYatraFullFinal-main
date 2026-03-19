@@ -96,6 +96,17 @@ if (data.slidingText) {
     .filter((item) => item.text && item.text.length > 0);
 }
 
+/* ---------- SOLUTION BUTTON TEXT ---------- */
+
+if (data.solutionButtonText) {
+  data.solutionButtonText = data.solutionButtonText.trim();
+}
+
+/* ---------- SOLUTION BUTTON DESCRIPTION ---------- */
+
+if (data.solutionButtonDescription) {
+  data.solutionButtonDescription = data.solutionButtonDescription.trim();
+}
 
 
     const landingPage = await LandingPage.create(data);
@@ -308,6 +319,14 @@ if (data.slidingText) {
     .filter((item) => item.text && item.text.length > 0);
 }
 
+if (data.solutionButtonText !== undefined) {
+  data.solutionButtonText = data.solutionButtonText.trim();
+}
+
+if (data.solutionButtonDescription !== undefined) {
+  data.solutionButtonDescription =
+    data.solutionButtonDescription.trim();
+}
 
     // =============================
     // FINAL UPDATE

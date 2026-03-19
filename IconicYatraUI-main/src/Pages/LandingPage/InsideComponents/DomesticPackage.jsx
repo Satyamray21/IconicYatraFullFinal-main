@@ -33,7 +33,7 @@ const DomesticPackage = () => {
 
   // Fetch packages
   useEffect(() => {
-    dispatch(fetchDomesticPackages({ page: 1, limit: 9 }));
+    dispatch(fetchDomesticPackages({ page: 1, limit: 100}));
   }, [dispatch]);
 
   // Clear errors
@@ -44,12 +44,12 @@ const DomesticPackage = () => {
   }, [dispatch]);
 
   // Filter packages by sector slug
-  const filteredPackages = domesticPackages.filter(
-    (pkg) =>
-      pkg.sector
-        ?.toLowerCase()
-        .replace(/\s+/g, "-") === slug?.toLowerCase()
-  );
+const normalize = (str) =>
+  str?.toString().trim().toLowerCase().replace(/\s+/g, "-");
+
+const filteredPackages = domesticPackages.filter(
+  (pkg) => normalize(pkg.sector) === normalize(slug)
+);
 
   // Price calculation
   const getStartingPrice = (pkg) => {

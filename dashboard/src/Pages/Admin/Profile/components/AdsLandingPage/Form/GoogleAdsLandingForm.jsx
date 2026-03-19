@@ -29,6 +29,8 @@ const initialFormState = {
   slidingText: [
     { id: Date.now(), text: "" }
   ],
+  solutionButtonText: "",
+solutionButtonDescription: "",
   heroBackgroundImage: null,
   heroTitle: "",
   heroDescription: "",
@@ -285,7 +287,8 @@ const handleOverviewImageUpload = (e, id) => {
     setFormData(initialFormState);
 
     // ✅ Navigate to profile with Google Ads tab
-    navigate("/profile?tab=googleAds");
+    navigate("/profile?activeTab=googleAds");
+
 
   } catch (error) {
     console.error(error);
@@ -464,6 +467,7 @@ const handleOverviewImageUpload = (e, id) => {
     Add Sliding Text
   </Button>
 </Paper>
+
 
 
             {/* ========== OVERVIEW SECTIONS ========== */}
@@ -678,7 +682,27 @@ const handleOverviewImageUpload = (e, id) => {
                     placeholder="Enter section description..."
                   />
                 </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+  <TextField
+    label="Solution Button Text"
+    name="solutionButtonText"
+    value={formData.solutionButtonText}
+    onChange={handleInputChange}
+    fullWidth
+    placeholder="e.g. Get Started"
+  />
+</Grid>
 
+<Grid size={{ xs: 12, md: 6 }}>
+  <TextField
+    label="Solution Button Description"
+    name="solutionButtonDescription"
+    value={formData.solutionButtonDescription}
+    onChange={handleInputChange}
+    fullWidth
+    placeholder="Short description under button"
+  />
+</Grid>
                 <Grid size={{xs:12}}>
                   <Typography variant="subtitle2" gutterBottom>
                     Solution Items
