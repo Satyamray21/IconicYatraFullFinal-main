@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Container,
   Grid,
@@ -7,14 +7,27 @@ import {
   Typography,
   Button,
   Box,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
 } from "@mui/material";
+
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
+import CloseIcon from "@mui/icons-material/Close";
 
-import packageImg from "../../../assets/LandingImages/puzzle.png";
-import destinationImg from "../../../assets/LandingImages/map.png";
-import travelerImg from "../../../assets/LandingImages/diversity.png";
+import QuoteForm from "./ContectForm";
 
-const FeatureCard = ({ image, title, description }) => (
+/* ------------------ Feature Card ------------------ */
+
+const FeatureCard = ({
+  image,
+  title,
+  description,
+  quoteText,
+  whatsappText,
+  onQuoteClick,
+}) => (
   <Card
     sx={{
       textAlign: "center",
@@ -30,24 +43,21 @@ const FeatureCard = ({ image, title, description }) => (
     }}
   >
     <CardContent sx={{ p: 4 }}>
+      
       {/* Image */}
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          mb: 2,
-        }}
-      >
-        <Box
-          component="img"
-          src={image}
-          alt={title}
-          sx={{
-            width: 60,
-            height: 60,
-            objectFit: "contain",
-          }}
-        />
+      <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+        {image && (
+          <Box
+            component="img"
+            src={image}
+            alt={title}
+            sx={{
+              width: 60,
+              height: 60,
+              objectFit: "contain",
+            }}
+          />
+        )}
       </Box>
 
       {/* Title */}
@@ -74,60 +84,119 @@ const FeatureCard = ({ image, title, description }) => (
         {description}
       </Typography>
 
-      {/* Button */}
-      <Button
-        variant="contained"
-        startIcon={<WhatsAppIcon />}
-        sx={{
-          backgroundColor: "#25D366",
-          borderRadius: "30px",
-          textTransform: "none",
-          fontWeight: 600,
-          px: 3,
-          "&:hover": {
-            backgroundColor: "#1ebe5d",
-          },
-        }}
-      >
-        Chat with Us
-      </Button>
+      {/* Buttons */}
+      <Box sx={{ display: "flex", justifyContent: "center", gap: 1 }}>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={onQuoteClick}
+          sx={{
+            borderRadius: "20px",
+            textTransform: "none",
+            fontWeight: 600,
+            fontSize: "12px",
+            px: 1.8,
+            py: 0.4,
+            borderColor: "#1976d2",
+            color: "#1976d2",
+          }}
+        >
+          {quoteText || "Get Free Quote"}
+        </Button>
+
+        <Button
+          size="small"
+          variant="contained"
+          startIcon={<WhatsAppIcon sx={{ fontSize: 16 }} />}
+          href={`https://wa.me/917053900957?text=${encodeURIComponent(
+            whatsappText || "Hello"
+          )}`}
+          target="_blank"
+          sx={{
+            backgroundColor: "#25D366",
+            borderRadius: "20px",
+            textTransform: "none",
+            fontWeight: 600,
+            fontSize: "12px",
+            px: 1.8,
+            py: 0.4,
+            "&:hover": {
+              backgroundColor: "#1ebe5d",
+            },
+          }}
+        >
+          Chat with Us
+        </Button>
+      </Box>
     </CardContent>
   </Card>
 );
 
-function OverView() {
+/* ------------------ Main Component ------------------ */
+
+function OverView({ landingData }) {
+  const [openQuote, setOpenQuote] = useState(false);
+
+  const handleOpenQuote = () => {
+    setOpenQuote(true);
+  };
+
+  const handleCloseQuote = () => {
+    setOpenQuote(false);
+  };
+
+  if (!landingData) return null;
+
   return (
-    <Box sx={{ py: 8, background: "#fff" }}>
-      <Container maxWidth="lg">
-        <Grid container spacing={4}>
-          
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FeatureCard
-              image={packageImg}
-              title="Customizable Darjeeling & Sikkim Packages"
-              description="Plan your perfect Himalayan getaway with fully customizable Darjeeling and Sikkim tour packages designed to match your travel style, duration, and budget."
-            />
+    <>
+      <Box sx={{ py: 8, background: "#fff" }}>
+        <Container maxWidth="lg">
+
+          <Grid container spacing={4}>
+            {landingData?.overviewSections?.map((item) => (
+              <Grid size={{ xs: 12, md: 4 }} key={item._id}>
+                <FeatureCard
+                  image={item?.overviewImage?.url}
+                  title={item?.overviewTitle}
+                  description={item?.overviewDescription}
+                  quoteText={item?.overviewGetFreeQuoteButton}
+                  whatsappText={item?.overviewChatWithUsButton}
+                  onQuoteClick={handleOpenQuote}
+                />
+              </Grid>
+            ))}
           </Grid>
 
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FeatureCard
-              image={destinationImg}
-              title="Top Destinations Covered"
-              description="Explore beautiful destinations like Darjeeling, Gangtok, Pelling, Lachung, Yumthang Valley, and Tsomgo Lake with carefully curated travel itineraries."
-            />
-          </Grid>
+        </Container>
+      </Box>
 
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FeatureCard
-              image={travelerImg}
-              title="Tours for Every Traveler"
-              description="Whether you're planning a honeymoon, family holiday, adventure trip, or group tour, our Darjeeling and Sikkim packages are designed for every type of traveler."
-            />
-          </Grid>
+      {/* Dialog */}
+      <Dialog
+        open={openQuote}
+        onClose={handleCloseQuote}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ pr: 5 }}>
+          Get Free Quote
 
-        </Grid>
-      </Container>
-    </Box>
+          <IconButton
+            onClick={handleCloseQuote}
+            sx={{
+              position: "absolute",
+              right: 10,
+              top: 10,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent>
+          <QuoteForm />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

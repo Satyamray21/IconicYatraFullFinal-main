@@ -1,47 +1,12 @@
 import React from "react";
 import { Box, Container, Grid, Typography, Card, CardContent } from "@mui/material";
 
-import ApartmentIcon from "@mui/icons-material/Apartment";
-import RestaurantIcon from "@mui/icons-material/Restaurant";
-import DirectionsCarIcon from "@mui/icons-material/DirectionsCar";
-import HeadsetMicIcon from "@mui/icons-material/HeadsetMic";
-import MapIcon from "@mui/icons-material/Map";
-import FlightIcon from "@mui/icons-material/Flight";
+function PackagesFeatures({ landingData }) {
 
-const features = [
-  {
-    title: "Handpicked Stays",
-    desc: "Stay at carefully selected hotels, mountain resorts, and cozy homestays across Darjeeling, Gangtok, Pelling, and other scenic Himalayan destinations.",
-    icon: <ApartmentIcon sx={{ fontSize: 40, color: "#0f6b4b" }} />,
-  },
-  {
-    title: "Daily Meals",
-    desc: "Enjoy delicious local cuisine including Tibetan, Nepali, and Himalayan specialties with breakfast and meal options included in your package.",
-    icon: <RestaurantIcon sx={{ fontSize: 40, color: "#ff9800" }} />,
-  },
-  {
-    title: "Private Transfers",
-    desc: "Comfortable private cabs and local transport for smooth travel between Darjeeling, Gangtok, Lachung, Tsomgo Lake, and other destinations.",
-    icon: <DirectionsCarIcon sx={{ fontSize: 40, color: "#2196f3" }} />,
-  },
-  {
-    title: "Dedicated Support",
-    desc: "24/7 travel assistance from our experts to ensure your Darjeeling and Sikkim tour remains safe, comfortable, and memorable.",
-    icon: <HeadsetMicIcon sx={{ fontSize: 40, color: "#9c27b0" }} />,
-  },
-  {
-    title: "Custom Itineraries",
-    desc: "Flexible travel plans designed around your interests whether it’s honeymoon trips, family holidays, adventure tours, or cultural experiences.",
-    icon: <MapIcon sx={{ fontSize: 40, color: "#ff5722" }} />,
-  },
-  {
-    title: "Optional Airfare",
-    desc: "Choose packages with or without flights depending on your departure city and travel preferences.",
-    icon: <FlightIcon sx={{ fontSize: 40, color: "#4caf50" }} />,
-  },
-];
+  if (!landingData) return null;
 
-function PackagesFeatures() {
+  const features = landingData?.packageFeatures || [];
+
   return (
     <Box sx={{ background: "#f3f4f6", py: 8 }}>
       <Container maxWidth="lg">
@@ -52,7 +17,7 @@ function PackagesFeatures() {
           align="center"
           sx={{ fontWeight: 600, mb: 6 }}
         >
-          All-Inclusive Darjeeling & Sikkim Tour Packages
+          {landingData?.packageFeaturesTitle}
         </Typography>
 
         {/* Grid */}
@@ -67,9 +32,18 @@ function PackagesFeatures() {
                 }}
               >
                 <CardContent sx={{ display: "flex", gap: 2, p: 3 }}>
-                  
-                  {/* Icon */}
-                  <Box>{item.icon}</Box>
+
+                  {/* Icon from API */}
+                  <Box
+                    component="img"
+                    src={item?.icon?.url}
+                    alt={item.title}
+                    sx={{
+                      width: 50,
+                      height: 50,
+                      objectFit: "contain",
+                    }}
+                  />
 
                   {/* Text */}
                   <Box>
@@ -84,7 +58,7 @@ function PackagesFeatures() {
                       variant="body2"
                       sx={{ color: "#6c7a89", lineHeight: 1.6 }}
                     >
-                      {item.desc}
+                      {item.description}
                     </Typography>
                   </Box>
 

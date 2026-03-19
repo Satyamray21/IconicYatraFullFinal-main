@@ -7,8 +7,11 @@ import {
 } from "@mui/material";
 
 import ContactForm from "../InsideComponents/ContectForm";
-
+import {useSelector} from "react-redux"
 const FooterSection = () => {
+  const { data: company, status } = useSelector(
+  (state) => state.companyUI
+);
   return (
     <Box sx={{ background: "#3e434b", color: "#fff", pt: 6 }}>
 
@@ -25,11 +28,11 @@ const FooterSection = () => {
             <Box sx={{ borderBottom: "1px solid #6c6c6c", mb: 2 }} />
 
             <Typography sx={{ mb: 1 }}>
-              +91 7053900957
+              {company?.company?.call}
             </Typography>
 
             <Typography>
-              info@iconicyatra.com
+             {company?.company?.email}
             </Typography>
           </Grid>
 
@@ -42,14 +45,11 @@ const FooterSection = () => {
             <Box sx={{ borderBottom: "1px solid #6c6c6c", mb: 2 }} />
 
             <Typography sx={{ mb: 2 }}>
-              B-38, Second floor Sector-64, Noida UP 201301
+             {company?.company?.address}
             </Typography>
 
             <Typography variant="body2">
-              Welcome to Iconic Yatra – where every journey becomes an unforgettable memory!
-              We are a premier travel company specializing in domestic and international
-              tour packages, dedicated to providing experiences that combine comfort,
-              adventure, and cultural discovery.
+             {company?.company?.about}
             </Typography>
           </Grid>
 
@@ -100,7 +100,7 @@ const FooterSection = () => {
 
             <Grid size={{xs:12, md:6}}>
               <Typography fontSize={14}>
-                © 2025 IconicYatra All Right Reserved.
+                © 2025 {company?.company?.companyName} All Right Reserved.
                 <span style={{ color: "#4da3ff", marginLeft: 8 }}>
                   Privacy Policy
                 </span>
@@ -109,7 +109,7 @@ const FooterSection = () => {
 
             <Grid size={{xs:12, md:6}} textAlign={{ xs: "left", md: "right" }}>
               <Typography fontSize={14}>
-                Designed & Marketing By www.iconicyatra.com
+                Designed & Marketing By {company?.company?.companyName}
               </Typography>
             </Grid>
 

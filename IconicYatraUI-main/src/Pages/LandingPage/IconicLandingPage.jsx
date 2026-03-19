@@ -1,23 +1,23 @@
-import React from "react";
+import React,{ useEffect, useState} from "react";
 import {
   Box,
   Container,
   Grid,
   Typography,
-  TextField,
   Button,
-  Paper,
   Stack,
   IconButton,
 } from "@mui/material";
+
 import CallIcon from "@mui/icons-material/Call";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 
 import logo from "../../assets/Logo/logoiconic1.png";
 import landing from "../../assets/LandingImages/darjrrling.jpg";
-
+import {useSelector} from "react-redux"
+import { useParams } from "react-router-dom";
 import OverView from "./InsideComponents/OverView";
-import DomesticPackage from "../../Components/DomesticPackage";
+import DomesticPackage from "./InsideComponents/DomesticPackage";
 import OwnPackage from "./InsideComponents/OwnPackage";
 import Solution from "./InsideComponents/Solution";
 import PackagesFeatures from "./InsideComponents/PackagesFeatures";
@@ -26,8 +26,38 @@ import WorkProcess from "./InsideComponents/WorkProcess";
 import HelpSupportSection from "./InsideComponents/HelpSupportSection";
 import FAQSection from "./InsideComponents/FAQSection";
 import FooterSection from "./InsideComponents/FooterSection";
-
+import axios from "axios";
 export default function LandingPage() {
+   const { data: company, status } = useSelector(
+  (state) => state.companyUI
+);
+   const { slug } = useParams();
+  const [landingData, setLandingData] = useState(null);
+  const [loading, setLoading] = useState(true);
+   useEffect(() => {
+
+    const fetchLanding = async () => {
+      try {
+
+        const res = await axios.get(
+  `${import.meta.env.VITE_BASE_URL}/api/v1/landing-pages/slug/${slug}`
+);
+
+
+        setLandingData(res.data.data);
+
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLanding();
+
+  }, [slug]);
+
+  if (loading) return <div>Loading...</div>;
   return (
     <>
       <Box>
@@ -41,30 +71,28 @@ export default function LandingPage() {
         >
           <Container maxWidth="lg">
             <Grid container alignItems="center" spacing={2}>
+              
               {/* Logo + Text */}
-              <Grid size={{ xs: 12, md: 8 }}>
+              <Grid size={{xs:12, md:8}}>
                 <Stack
                   direction={{ xs: "column", sm: "row" }}
                   spacing={2}
                   alignItems={{ xs: "flex-start", sm: "center" }}
                 >
-                  <img src={logo} alt="India Tour24" style={{ height: 45 }} />
+                  <img src={company?.company?.headerLogo?.url} alt="India Tour24" style={{ height: 45 }} />
 
                   <Typography
                     variant="body2"
                     color="text.secondary"
                     sx={{ fontSize: { xs: 13, md: 14 } }}
                   >
-                    Explore the beauty of Darjeeling with scenic tea gardens,
-                    Kanchenjunga mountain views, toy train rides, peaceful
-                    monasteries, and unforgettable Himalayan experiences with
-                    customizable tour packages.
+                    {landingData?.headerDescription}
                   </Typography>
                 </Stack>
               </Grid>
 
               {/* Phone */}
-              <Grid size={{ xs: 12, md: 4 }}>
+              <Grid size={{xs:12, md:4}}>
                 <Stack
                   direction="row"
                   spacing={1}
@@ -72,9 +100,10 @@ export default function LandingPage() {
                   alignItems="center"
                 >
                   <CallIcon color="error" />
-                  <Typography fontWeight={600}>+91 7053900957</Typography>
+                  <Typography fontWeight={600}>{company?.company?.call}</Typography>
                 </Stack>
               </Grid>
+
             </Grid>
           </Container>
         </Box>
@@ -87,7 +116,7 @@ export default function LandingPage() {
             display: "flex",
             alignItems: "center",
             py: { xs: 6, md: 0 },
-            backgroundImage: `url(${landing})`,
+            backgroundImage: `url(${landingData?.heroBackgroundImage?.url})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
@@ -104,8 +133,9 @@ export default function LandingPage() {
 
           <Container maxWidth="lg" sx={{ position: "relative", zIndex: 2 }}>
             <Grid container spacing={4} alignItems="center">
+
               {/* LEFT CONTENT */}
-              <Grid size={{ xs: 12, md: 7 }}>
+              <Grid item xs={12} md={7}>
                 <Typography
                   variant="h3"
                   fontWeight={800}
@@ -119,8 +149,7 @@ export default function LandingPage() {
                     },
                   }}
                 >
-                  DARJEELING TOUR PACKAGES – TEA GARDENS, TOY TRAIN & HIMALAYAN
-                  VIEWS
+                 {landingData?.heroTitle}
                 </Typography>
 
                 <Typography
@@ -132,11 +161,7 @@ export default function LandingPage() {
                     fontSize: { xs: 14, md: 16 },
                   }}
                 >
-                  Discover the charm of Darjeeling with our customized tour
-                  packages. Experience breathtaking Himalayan views, lush tea
-                  gardens, the famous Darjeeling Himalayan Railway, peaceful
-                  monasteries, and the unforgettable sunrise at Tiger Hill with
-                  comfortable and hassle-free travel services.
+                 {landingData?.heroDescription}
                 </Typography>
 
                 <Button
@@ -151,71 +176,10 @@ export default function LandingPage() {
                     "&:hover": { bgcolor: "#1ebe5d" },
                   }}
                 >
-                  Chat for Darjeeling Package
+                  Chat for {landingData?.heroButtonText}
                 </Button>
               </Grid>
 
-              {/* RIGHT FORM */}
-              <Grid size={{ xs: 12, md: 5 }}>
-                <Paper
-                  elevation={6}
-                  sx={{
-                    p: { xs: 3, md: 4 },
-                    borderRadius: 3,
-                    backgroundColor: "rgba(255,255,255,0.95)",
-                  }}
-                >
-                  <Typography
-                    variant="h6"
-                    fontWeight={700}
-                    textAlign="center"
-                    color="error"
-                    mb={3}
-                  >
-                    Plan Your Darjeeling Trip
-                  </Typography>
-
-                  <Stack spacing={2}>
-                    <TextField
-                      placeholder="Enter Your Name*"
-                      fullWidth
-                      size="small"
-                    />
-
-                    <TextField
-                      placeholder="Enter Your Email"
-                      fullWidth
-                      size="small"
-                    />
-
-                    <TextField
-                      placeholder="Enter phone number*"
-                      fullWidth
-                      size="small"
-                    />
-
-                    <TextField
-                      placeholder="Enter Your City"
-                      fullWidth
-                      size="small"
-                    />
-
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      sx={{
-                        py: 1.4,
-                        borderRadius: "30px",
-                        fontWeight: 700,
-                        background:
-                          "linear-gradient(90deg,#ff7a18,#ff4e50)",
-                      }}
-                    >
-                      PLAN MY DARJEELING TRIP
-                    </Button>
-                  </Stack>
-                </Paper>
-              </Grid>
             </Grid>
           </Container>
         </Box>
@@ -233,7 +197,7 @@ export default function LandingPage() {
           }}
         >
           <IconButton
-           onClick={() => window.open("tel:+917053900957")}
+           onClick={() => window.open(`tel:${company?.company?.call}`)}
             sx={{
               bgcolor: "#fff",
               boxShadow: 3,
@@ -245,12 +209,20 @@ export default function LandingPage() {
           </IconButton>
 
           <IconButton
-          onClick={() =>
-    window.open(
-      "https://wa.me/+917053900957?text=Hello%21%20I%20need%20Sikkim%20tour%20package",
-      "_blank"
-    )
-  }
+          onClick={() => {
+  let phone = company?.company?.call || "";
+  const text =
+    landingData?.overviewSections?.[0]?.overviewChatWithUsButton || "";
+
+  // remove + and spaces
+  phone = phone.replace(/\D/g, "");
+
+  const encodedText = encodeURIComponent(text);
+
+  window.open(`https://wa.me/${phone}?text=${encodedText}`, "_blank");
+}}
+
+
             sx={{
               bgcolor: "#25D366",
               color: "#fff",
@@ -263,17 +235,22 @@ export default function LandingPage() {
         </Box>
       </Box>
 
-      {/* OTHER SECTIONS */}
-      <OverView />
-      <DomesticPackage />
-      <OwnPackage />
-      <Solution />
-      <PackagesFeatures />
-      <WhyChooseSection />
-      <WorkProcess />
-      <HelpSupportSection />
-      <FAQSection />
-      <FooterSection />
+      {/* ================= OTHER SECTIONS ================= */}
+    <OverView landingData={landingData} />
+
+<DomesticPackage slug={slug} />
+<OwnPackage landingData={landingData} />
+
+<Solution landingData={landingData} />
+
+<PackagesFeatures landingData={landingData} />
+
+<WhyChooseSection landingData={landingData}/>
+<WorkProcess landingData={landingData} />
+
+<HelpSupportSection slug={slug} />
+<FAQSection landingData={landingData} />
+<FooterSection slug={slug} />
     </>
   );
 }
