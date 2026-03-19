@@ -10,9 +10,8 @@ import {
   Divider,
   IconButton,
   Grid,
-  Avatar,
   CircularProgress,
-} from "@mui/material";
+} from "@mui/material"; // Remove Avatar from here
 
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -22,6 +21,83 @@ import { useDispatch } from "react-redux";
 import { createLandingPage } from "../../../../../../features/landingPage/landingPageSlice";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
+
+// Move ImagePreview outside the component and improve it
+const ImagePreview = ({ src, alt, onRemove, size = 100 }) => {
+  const [imageError, setImageError] = useState(false);
+  
+  if (!src) return null;
+  
+  if (imageError) {
+    return (
+      <Paper
+        elevation={2}
+        sx={{
+          width: size,
+          height: size,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'error.light',
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'error.main'
+        }}
+      >
+        <ImageIcon sx={{ color: 'error.contrastText' }} />
+      </Paper>
+    );
+  }
+  
+  return (
+    <Box sx={{ position: 'relative', display: 'inline-block' }}>
+      <Paper
+        elevation={2}
+        sx={{
+          width: size,
+          height: size,
+          overflow: 'hidden',
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'action.hover'
+        }}
+      >
+        <img
+          src={src}
+          alt={alt}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block'
+          }}
+          onError={() => setImageError(true)}
+        />
+      </Paper>
+      {onRemove && (
+        <IconButton
+          size="small"
+          sx={{
+            position: 'absolute',
+            top: -8,
+            right: -8,
+            bgcolor: 'background.paper',
+            '&:hover': { 
+              bgcolor: 'error.main',
+              color: 'white'
+            },
+            boxShadow: 2,
+            zIndex: 1
+          }}
+          onClick={onRemove}
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      )}
+    </Box>
+  );
+};
 
 export default function LandingPageForm() {
   const dispatch = useDispatch();
@@ -281,36 +357,7 @@ export default function LandingPageForm() {
     }
   };
 
-  const ImagePreview = ({ src, alt, onRemove, size = 80 }) => {
-    if (!src) return null;
-    
-    return (
-      <Box sx={{ position: 'relative', display: 'inline-block', mt: 1 }}>
-        <Avatar
-          src={src}
-          alt={alt}
-          variant="rounded"
-          sx={{ width: size, height: size }}
-        />
-        {onRemove && (
-          <IconButton
-            size="small"
-            sx={{
-              position: 'absolute',
-              top: -8,
-              right: -8,
-              bgcolor: 'background.paper',
-              '&:hover': { bgcolor: 'background.paper' }
-            }}
-            onClick={() => onRemove()}
-          >
-            <DeleteIcon fontSize="small" color="error" />
-          </IconButton>
-        )}
-      </Box>
-    );
-  };
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
