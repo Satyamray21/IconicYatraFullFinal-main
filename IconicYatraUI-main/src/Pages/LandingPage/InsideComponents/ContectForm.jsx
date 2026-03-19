@@ -4,7 +4,7 @@ import {
   Button,
   MenuItem,
   Grid,
-  InputAdornment
+  InputAdornment,
 } from "@mui/material";
 
 import PersonIcon from "@mui/icons-material/Person";
@@ -12,10 +12,11 @@ import EmailIcon from "@mui/icons-material/Email";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import LuggageIcon from "@mui/icons-material/Luggage";
-import { toast } from "react-toastify";
+
 import { Formik, Form } from "formik";
 import * as Yup from "yup";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 const validationSchema = Yup.object({
   name: Yup.string().required("Name required"),
@@ -37,19 +38,15 @@ const ContactForm = () => {
         child: "",
         infant: "",
         inclusion: "",
-        notes: ""
+        notes: "",
       }}
       validationSchema={validationSchema}
-      
-
       onSubmit={async (values, { resetForm }) => {
   try {
 
-    // ✅ Get tracking data from localStorage
     const trackingData =
       JSON.parse(localStorage.getItem("trackingData")) || {};
 
-    // ✅ Merge form values + tracking
     const payload = {
       ...values,
       ...trackingData
@@ -62,7 +59,6 @@ const ContactForm = () => {
         headers: {
           "Content-Type": "application/json"
         },
-        // ✅ Send payload instead of values
         body: JSON.stringify(payload)
       }
     );
@@ -70,29 +66,30 @@ const ContactForm = () => {
     const data = await res.json();
 
     if (data.success) {
+
       toast.success("Enquiry submitted successfully ✅");
 
+      // reset form
       resetForm();
 
-      setTimeout(() => {
-        navigate("/thank-you");
-      }, 1000);
+      // redirect
+      navigate("/thank-you");
 
     } else {
       toast.error(data.message || "Something went wrong");
     }
 
   } catch (error) {
+    console.error(error);
     toast.error("Server error. Please try again later.");
   }
 }}
 
 
-
     >
-      {({ values, handleChange, errors, touched }) => (
+      {({ values, handleChange, errors, touched ,isSubmitting}) => (
         <Form>
-
+          {/* Name */}
           <TextField
             size="small"
             fullWidth
@@ -106,12 +103,13 @@ const ContactForm = () => {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <PersonIcon fontSize="small" />
+                  <PersonIcon fontSize="small" sx={{ color: "#1976d2" }} />
                 </InputAdornment>
-              )
+              ),
             }}
           />
 
+          {/* Email */}
           <TextField
             size="small"
             fullWidth
@@ -125,12 +123,13 @@ const ContactForm = () => {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <EmailIcon fontSize="small" />
+                  <EmailIcon fontSize="small" sx={{ color: "#d32f2f" }} />
                 </InputAdornment>
-              )
+              ),
             }}
           />
 
+          {/* Phone */}
           <TextField
             size="small"
             fullWidth
@@ -142,12 +141,16 @@ const ContactForm = () => {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <PhoneAndroidIcon fontSize="small" />
+                  <PhoneAndroidIcon
+                    fontSize="small"
+                    sx={{ color: "#2e7d32" }}
+                  />
                 </InputAdornment>
-              )
+              ),
             }}
           />
 
+          {/* Timeframe */}
           <TextField
             select
             size="small"
@@ -159,9 +162,12 @@ const ContactForm = () => {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <CalendarMonthIcon fontSize="small" />
+                  <CalendarMonthIcon
+                    fontSize="small"
+                    sx={{ color: "#ed6c02" }}
+                  />
                 </InputAdornment>
-              )
+              ),
             }}
           >
             <MenuItem value="1month">1 Month</MenuItem>
@@ -169,6 +175,7 @@ const ContactForm = () => {
             <MenuItem value="6month">6 Months</MenuItem>
           </TextField>
 
+          {/* Travelers */}
           <Grid container spacing={0.5} mb={0.5}>
             <Grid size={{xs:4}}>
               <TextField
@@ -179,9 +186,12 @@ const ContactForm = () => {
                 label="Adult"
                 value={values.adult}
                 onChange={handleChange}
+                sx={{ bgcolor: "#fff", borderRadius: 1 }}
               >
-                {[1,2,3,4,5].map(n => (
-                  <MenuItem key={n} value={n}>{n}</MenuItem>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <MenuItem key={n} value={n}>
+                    {n}
+                  </MenuItem>
                 ))}
               </TextField>
             </Grid>
@@ -195,9 +205,12 @@ const ContactForm = () => {
                 label="Child"
                 value={values.child}
                 onChange={handleChange}
+                sx={{ bgcolor: "#fff", borderRadius: 1 }}
               >
-                {[0,1,2,3].map(n => (
-                  <MenuItem key={n} value={n}>{n}</MenuItem>
+                {[0, 1, 2, 3].map((n) => (
+                  <MenuItem key={n} value={n}>
+                    {n}
+                  </MenuItem>
                 ))}
               </TextField>
             </Grid>
@@ -211,14 +224,18 @@ const ContactForm = () => {
                 label="Infant"
                 value={values.infant}
                 onChange={handleChange}
+                sx={{ bgcolor: "#fff", borderRadius: 1 }}
               >
-                {[0,1,2].map(n => (
-                  <MenuItem key={n} value={n}>{n}</MenuItem>
+                {[0, 1, 2].map((n) => (
+                  <MenuItem key={n} value={n}>
+                    {n}
+                  </MenuItem>
                 ))}
               </TextField>
             </Grid>
           </Grid>
 
+          {/* Inclusion */}
           <TextField
             size="small"
             select
@@ -230,9 +247,9 @@ const ContactForm = () => {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <LuggageIcon fontSize="small" />
+                  <LuggageIcon fontSize="small" sx={{ color: "#6a1b9a" }} />
                 </InputAdornment>
-              )
+              ),
             }}
           >
             <MenuItem value="hotel">Hotel</MenuItem>
@@ -240,6 +257,7 @@ const ContactForm = () => {
             <MenuItem value="sightseeing">Sightseeing</MenuItem>
           </TextField>
 
+          {/* Notes */}
           <TextField
             size="small"
             fullWidth
@@ -252,20 +270,24 @@ const ContactForm = () => {
             sx={{ mb: 0.5, bgcolor: "#fff", borderRadius: 1 }}
           />
 
+          {/* Submit */}
           <Button
             type="submit"
             fullWidth
             variant="contained"
+            disabled={isSubmitting}
             sx={{
               background: "#1e66dc",
               py: 0.6,
               fontSize: "13px",
-              fontWeight: 600
+              fontWeight: 600,
+              "&:hover": {
+                background: "#174fb0",
+              },
             }}
           >
-            Submit
+             {isSubmitting ? "Submitting..." : "Submit"}
           </Button>
-
         </Form>
       )}
     </Formik>

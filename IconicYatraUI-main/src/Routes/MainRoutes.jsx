@@ -99,7 +99,7 @@ const MainRoutes = () => {
       {/* 404 route - should be last */}
       <Route path="*" element={<Layout><div>Page Not Found</div></Layout>} />
        <Route path="/thank-you" element={<Layout><ThankYouPage /></Layout>} />
-        <Route path="/iconiclanding" element={<IconicLandingPage />} />
+        <Route path="/iconiclanding/:slug" element={<IconicLandingPage />} />
     </Routes>
   );
 };

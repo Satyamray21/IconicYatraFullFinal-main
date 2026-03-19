@@ -7,54 +7,37 @@ import {
   Card,
   CardContent,
 } from "@mui/material";
-import img from "../../../assets/LandingImages/sikkim.jpg";
 
-const leftFeatures = [
-  {
-    title: "Tailor-Made Darjeeling & Sikkim Itineraries",
-    desc: "Plan your perfect Himalayan getaway with customized itineraries covering Darjeeling, Gangtok, Pelling, Lachung, Yumthang Valley, and more.",
-  },
-  {
-    title: "Handpicked Scenic Destinations",
-    desc: "From the famous Darjeeling tea gardens to Tsomgo Lake, Tiger Hill, and the breathtaking Yumthang Valley, explore the most scenic places in the Eastern Himalayas.",
-  },
-  {
-    title: "Value-for-Money Packages",
-    desc: "Affordable Darjeeling and Sikkim tour packages designed to give you the best travel experiences without compromising on comfort and quality.",
-  },
-];
+function WhyChooseSection({ landingData }) {
 
-const rightFeatures = [
-  {
-    title: "End-to-End Travel Support",
-    desc: "We handle hotel bookings, transport, sightseeing tours, and local experiences so you can enjoy a smooth and stress-free Himalayan holiday.",
-  },
-  {
-    title: "Trusted Local Expertise",
-    desc: "Our travel experts and local guides provide authentic insights into the culture, monasteries, tea estates, and traditions of Darjeeling and Sikkim.",
-  },
-  {
-    title: "Flexible Trip Customization",
-    desc: "Easily modify your travel plans including destinations, hotels, or travel dates so your Darjeeling and Sikkim trip perfectly suits your schedule.",
-  },
-];
+  if (!landingData) return null;
 
-function WhyChooseSection() {
+  const reasons = landingData?.whyChooseReasons || [];
+
+  const mid = Math.ceil(reasons.length / 2);
+  const leftFeatures = reasons.slice(0, mid);
+  const rightFeatures = reasons.slice(mid);
+
   return (
     <Box sx={{ background: "#f5f6f8", py: 8 }}>
       <Container maxWidth="lg">
+
         {/* Heading */}
-        <Typography variant="h4" align="center" sx={{ fontWeight: 600, mb: 6 }}>
-          Why Choose Our Darjeeling & Sikkim Tour Packages
+        <Typography
+          variant="h4"
+          align="center"
+          sx={{ fontWeight: 600, mb: 6 }}
+        >
+          {landingData?.whyChooseTitle}
         </Typography>
 
         <Grid container spacing={4} alignItems="center">
-          
+
           {/* LEFT SIDE */}
           <Grid size={{ xs: 12, md: 4 }}>
-            {leftFeatures.map((item, index) => (
+            {leftFeatures.map((item) => (
               <Card
-                key={index}
+                key={item._id}
                 sx={{
                   mb: 3,
                   borderRadius: 3,
@@ -72,7 +55,7 @@ function WhyChooseSection() {
                     variant="body2"
                     sx={{ color: "#6c7a89", lineHeight: 1.6 }}
                   >
-                    {item.desc}
+                    {item.description}
                   </Typography>
                 </CardContent>
               </Card>
@@ -83,8 +66,9 @@ function WhyChooseSection() {
           <Grid size={{ xs: 12, md: 4 }} textAlign="center">
             <Box
               component="img"
-              src={img}
-              alt="Darjeeling and Sikkim Map"
+              src={landingData?.whyChooseBannerImage?.url}
+              alt="Why Choose Us"
+              loading="lazy"
               sx={{
                 width: "100%",
                 maxWidth: 450,
@@ -94,9 +78,9 @@ function WhyChooseSection() {
 
           {/* RIGHT SIDE */}
           <Grid size={{ xs: 12, md: 4 }}>
-            {rightFeatures.map((item, index) => (
+            {rightFeatures.map((item) => (
               <Card
-                key={index}
+                key={item._id}
                 sx={{
                   mb: 3,
                   borderRadius: 3,
@@ -114,7 +98,7 @@ function WhyChooseSection() {
                     variant="body2"
                     sx={{ color: "#6c7a89", lineHeight: 1.6 }}
                   >
-                    {item.desc}
+                    {item.description}
                   </Typography>
                 </CardContent>
               </Card>
@@ -122,6 +106,7 @@ function WhyChooseSection() {
           </Grid>
 
         </Grid>
+
       </Container>
     </Box>
   );
