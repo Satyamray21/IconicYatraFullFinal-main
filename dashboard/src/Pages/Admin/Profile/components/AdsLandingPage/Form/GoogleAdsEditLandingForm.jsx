@@ -491,6 +491,9 @@ const removeSlidingText = (index) => {
       // Solutions - remove image files and temporary IDs
       solutionTitle: formData.solutionTitle,
       solutionDescription: formData.solutionDescription,
+      solutionButtonText: formData.solutionButtonText,
+  solutionButtonDescription: formData.solutionButtonDescription,
+
       solutionItems: formData.solutionItems.map(({ id, icon, ...rest }) => {
         const itemData = { ...rest };
         if (icon && !(icon instanceof File)) {

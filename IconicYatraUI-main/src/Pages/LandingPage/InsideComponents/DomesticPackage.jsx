@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect,useState } from "react";
 import {
   Box,
   Typography,
@@ -12,6 +12,12 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchDomesticPackages, clearError } from "../../../Features/packageSlice";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import IconButton from "@mui/material/IconButton";
+import CloseIcon from "@mui/icons-material/Close";
+import QuoteForm from "./ContectForm";; // adjust path
 
 const DomesticPackage = () => {
 
@@ -19,6 +25,8 @@ const DomesticPackage = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { slug } = useParams();
+const [openDialog, setOpenDialog] = useState(false);
+const [selectedPackage, setSelectedPackage] = useState(null);
 
   const {
     domestic: domesticPackages,
@@ -93,11 +101,14 @@ const filteredPackages = domesticPackages.filter(
   };
 
   const handleQueryClick = (pkg, e) => {
-    e.stopPropagation();
-    console.log("Query for package:", pkg);
-  };
+  e.stopPropagation();
+  setSelectedPackage(pkg); // optional (for passing data)
+  setOpenDialog(true);
+};
+
 
   return (
+    <>
     <Box
       sx={{
         px: 3,
@@ -388,6 +399,28 @@ const filteredPackages = domesticPackages.filter(
       )}
 
     </Box>
+    <Dialog
+  open={openDialog}
+  onClose={() => setOpenDialog(false)}
+  maxWidth="sm"
+  fullWidth
+>
+  <DialogTitle sx={{ pr: 5 }}>
+    Send Query
+
+    <IconButton
+      onClick={() => setOpenDialog(false)}
+      sx={{ position: "absolute", right: 10, top: 10 }}
+    >
+      <CloseIcon />
+    </IconButton>
+  </DialogTitle>
+
+  <DialogContent>
+    <QuoteForm selectedPackage={selectedPackage} />
+  </DialogContent>
+</Dialog>
+</>
   );
 };
 

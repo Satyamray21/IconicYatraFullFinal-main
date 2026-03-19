@@ -136,12 +136,11 @@ const sliderItems = landingData?.slidingText?.length
                 fontSize: "1rem",
               }}
             >
-              Plan a Custom Darjeeling & Sikkim Trip
+              {landingData?.solutionButtonText}
             </Button>
 
             <Typography sx={{ mt: 2, color: "#6c7a89" }}>
-              Want a personalized itinerary? Click the button and our travel
-              experts will design a perfect Himalayan tour for you.
+              {landingData?.solutionButtonDescription}
             </Typography>
           </Box>
 

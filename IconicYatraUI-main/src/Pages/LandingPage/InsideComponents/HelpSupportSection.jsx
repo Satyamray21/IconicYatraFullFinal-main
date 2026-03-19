@@ -23,7 +23,7 @@ import CloseIcon from "@mui/icons-material/Close";
 
 import confusedImg from "../../../assets/LandingImages/confused.png";
 import QuoteForm from "./ContectForm"; 
-
+import {useSelector} from "react-redux";
 const features = [
   {
     icon: <SupportAgentIcon sx={{ fontSize: 40, color: "#8BC34A" }} />,
@@ -53,6 +53,9 @@ const features = [
 
 const HelpSupportSection = () => {
 
+ const { data: company, status } = useSelector(
+  (state) => state.companyUI
+);
   const [openDialog, setOpenDialog] = useState(false);
 
   const handleOpen = () => setOpenDialog(true);
@@ -145,7 +148,7 @@ const HelpSupportSection = () => {
                   px: 3,
                 }}
               >
-                +91-9998768015
+                {company?.company?.call}
               </Button>
             </Stack>
           </Paper>
