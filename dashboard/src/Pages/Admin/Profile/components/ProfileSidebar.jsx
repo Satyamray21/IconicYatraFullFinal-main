@@ -19,6 +19,7 @@ import CollectionsBookmarkIcon from "@mui/icons-material/CollectionsBookmark";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import AddIcon from "@mui/icons-material/Add";
 import GroupsIcon from "@mui/icons-material/Groups";
+import ArticleIcon from '@mui/icons-material/Article';
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import GoogleIcon from "@mui/icons-material/Google";
 const ProfileSidebar = ({ user, activeTab, setActiveTab }) => {
@@ -131,7 +132,13 @@ const ProfileSidebar = ({ user, activeTab, setActiveTab }) => {
             </ListItemIcon>
             <ListItemText primary="Gallery" />
           </ListItem>
-
+           <ListItem
+                        sx={{ ...menuItemStyle, ...(activeTab === "blog" && activeStyle) }}
+                        onClick={() => setActiveTab("blog")}
+                    >
+                        <ListItemIcon><ArticleIcon color={activeTab === "blog" ? "primary" : "inherit"} /></ListItemIcon>
+                        <ListItemText primary="Blog" />
+                    </ListItem>
           {/* CANDIDATES */}
           <ListItem
             sx={{
