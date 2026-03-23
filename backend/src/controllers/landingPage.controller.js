@@ -89,12 +89,12 @@ export const createLandingPage = async (req, res) => {
 // =============================
 if (data.slidingText) {
   data.slidingText = data.slidingText
-    .map((item) => ({
-      ...item,
-      text: item.text?.trim(),
+    .map((text) => ({
+      text: text?.trim()
     }))
     .filter((item) => item.text && item.text.length > 0);
 }
+
 
 /* ---------- SOLUTION BUTTON TEXT ---------- */
 
