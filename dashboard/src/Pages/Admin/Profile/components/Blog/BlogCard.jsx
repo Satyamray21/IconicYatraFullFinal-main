@@ -264,9 +264,10 @@ const BlogPostsTable = () => {
   };
 
   // Handle edit
-  const handleEdit = (blog) => {
-    navigate('/postblogform', { state: { blog, isEditing: true } });
-  };
+ const handleEdit = (blog) => {
+    // Navigate to edit form using slug (not ID)
+    navigate(`/blog/edit/${blog.slug}`, { state: { blog, isEditing: true } });
+};
 
   // Handle view
   const handleView = (blog) => {
