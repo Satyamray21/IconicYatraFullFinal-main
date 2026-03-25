@@ -94,16 +94,20 @@ const PostBlogForm = () => {
         severity: 'success'
     });
 
-    const categories = [
-        'India Travel',
-        'International Travel',
-        'Beach Destinations',
-        'Hill Stations',
-        'Cultural Tours',
-        'Adventure Travel',
-        'Honeymoon Packages',
-        'Family Tours'
-    ];
+    const categories = ['Domestic', 'International'];
+
+const subCategories = [
+    'Hill Stations',
+    'Beach Destinations',
+    'Cultural Tours',
+    'Adventure Travel',
+    'Honeymoon Packages',
+    'Family Tours',
+    'Luxury Travel',
+    'Wildlife Safari',
+    'Religious Tours'
+];
+
 
     // Generate ID and slug from title
     const generateId = (title) => {
@@ -114,17 +118,24 @@ const PostBlogForm = () => {
     };
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        
-        if (name === 'title') {
-            const generatedId = generateId(value);
-            dispatch(setFormField({ field: 'title', value }));
-            dispatch(setFormField({ field: 'id', value: generatedId }));
-            dispatch(setFormField({ field: 'slug', value: generatedId }));
-        } else {
-            dispatch(setFormField({ field: name, value }));
-        }
-    };
+    const { name, value } = e.target;
+
+    if (name === 'title') {
+        const generatedId = generateId(value);
+        dispatch(setFormField({ field: 'title', value }));
+        dispatch(setFormField({ field: 'id', value: generatedId }));
+        dispatch(setFormField({ field: 'slug', value: generatedId }));
+    } 
+    // 🔥 RESET SUBCATEGORY WHEN CATEGORY CHANGES
+    else if (name === 'category') {
+        dispatch(setFormField({ field: 'category', value }));
+        dispatch(setFormField({ field: 'subCategory', value: '' })); 
+    } 
+    else {
+        dispatch(setFormField({ field: name, value }));
+    }
+};
+
 
     const handleDateChange = (newDate) => {
         dispatch(setFormField({ field: 'date', value: newDate }));
@@ -266,6 +277,10 @@ const PostBlogForm = () => {
         
         if (!formData.title.trim()) errors.title = 'Blog title is required';
         if (!formData.category) errors.category = 'Category is required';
+        if (!formData.subCategory) errors.subCategory = 'Sub Category is required';
+
+       
+
         if (!formData.date) errors.date = 'Date is required';
         if (!formData.readTime.trim()) errors.readTime = 'Read time is required';
         if (!formData.excerpt.trim()) errors.excerpt = 'Excerpt is required';
@@ -341,6 +356,7 @@ const PostBlogForm = () => {
             id: formData.id,
             slug: formData.slug,
             category: formData.category,
+             subCategory: formData.subCategory,
             title: formData.title,
             date: formData.date,
             readTime: formData.readTime,
@@ -465,7 +481,26 @@ const PostBlogForm = () => {
                                                 ))}
                                             </Select>
                                         </FormControl>
+               
+
                                     </Grid>
+                                    <Grid size={{xs:12, md:6}}>
+    <FormControl fullWidth required>
+        <InputLabel>Sub Category</InputLabel>
+        <Select
+            name="subCategory"
+            value={formData.subCategory || ''}
+            label="Sub Category"
+            onChange={handleInputChange}
+        >
+            {subCategories.map((sub) => (
+                <MenuItem key={sub} value={sub}>
+                    {sub}
+                </MenuItem>
+            ))}
+        </Select>
+    </FormControl>
+</Grid>
 
                                     <Grid size={{xs:12, md:6}}>
                                         <DatePicker

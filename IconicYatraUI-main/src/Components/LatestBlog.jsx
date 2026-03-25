@@ -54,20 +54,25 @@ export default function BlogList() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [category, setCategory] = useState("");
+  const [subCategory, setSubCategory] = useState("");
+
   const [sortBy, setSortBy] = useState("-publishedAt");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const categories = [
-    "All",
-    "India Travel",
-    "International Travel",
-    "Beach Destinations",
-    "Hill Stations",
-    "Cultural Tours",
-    "Adventure Travel",
-    "Honeymoon Packages",
-    "Family Tours",
-  ];
+  const categories = ["All", "Domestic", "International"];
+
+const subCategories = [
+  "Hill Stations",
+  "Beach Destinations",
+  "Cultural Tours",
+  "Adventure Travel",
+  "Honeymoon Packages",
+  "Family Tours",
+  "Luxury Travel",
+  "Wildlife Safari",
+  "Religious Tours",
+];
+
 
   const sortOptions = [
     { value: "-publishedAt", label: "Latest First" },
@@ -77,24 +82,37 @@ export default function BlogList() {
   ];
 
   useEffect(() => {
-    // Debounce search
-    const timer = setTimeout(() => {
-      dispatch(setFilters({ search: searchTerm }));
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, dispatch]);
-
-  useEffect(() => {
+  const delayDebounce = setTimeout(() => {
+    setCurrentPage(1);
     dispatch(
       getAllBlogs({
-        page: currentPage,
+        page: 1,
         limit: 9,
         category: category === "All" ? "" : category,
-        search: filters.search,
+        subCategory,
+        search: searchTerm,
         sort: sortBy,
       })
     );
-  }, [dispatch, currentPage, category, sortBy, filters.search]);
+  }, 500);
+
+  return () => clearTimeout(delayDebounce);
+}, [searchTerm]);
+
+
+ useEffect(() => {
+  dispatch(
+    getAllBlogs({
+      page: currentPage,
+      limit: 9,
+      category: category === "All" ? "" : category,
+      subCategory,
+      search: searchTerm,
+      sort: sortBy,
+    })
+  );
+}, [dispatch, currentPage, category, subCategory, sortBy]);
+
 
   const handlePageChange = (event, value) => {
     setCurrentPage(value);
@@ -223,6 +241,28 @@ export default function BlogList() {
             </FormControl>
           </Grid>
           <Grid size={{ xs: 12, md: 3 }}>
+  <FormControl fullWidth>
+    <InputLabel>Sub Category</InputLabel>
+    <Select
+      value={subCategory}
+      label="Sub Category"
+      onChange={(e) => {
+        setSubCategory(e.target.value);
+        setCurrentPage(1);
+      }}
+      sx={{ bgcolor: "white", borderRadius: 2 }}
+    >
+      <MenuItem value="">All</MenuItem>
+      {subCategories.map((sub) => (
+        <MenuItem key={sub} value={sub}>
+          {sub}
+        </MenuItem>
+      ))}
+    </Select>
+  </FormControl>
+</Grid>
+
+          <Grid size={{ xs: 12, md: 3 }}>
             <FormControl fullWidth>
               <InputLabel>Sort By</InputLabel>
               <Select
@@ -245,7 +285,8 @@ export default function BlogList() {
         </Grid>
 
         {/* Clear Filters Button */}
-        {(searchTerm || category !== "All" || sortBy !== "-publishedAt") && (
+        {(searchTerm || category || subCategory || sortBy !== "-publishedAt")
+ && (
           <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
             <button
               onClick={handleClearFilters}
@@ -302,7 +343,8 @@ export default function BlogList() {
                     <Box sx={{ display: "flex", gap: 1, mb: 1, flexWrap: "wrap" }}>
                       <Chip
                         icon={<CategoryIcon fontSize="small" />}
-                        label={blog.category}
+                        label={`${blog.category} • ${blog.subCategory || ""}`}
+
                         size="small"
                         sx={{
                           bgcolor: alpha(theme.palette.primary.main, 0.1),

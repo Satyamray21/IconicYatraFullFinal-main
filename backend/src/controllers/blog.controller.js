@@ -1,4 +1,4 @@
-import Blog from '../models/blog.model.js';
+import Blog from '../models/Blog.model.js';
 import { uploadOnCloudinary, deleteFromCloudinary } from '../utils/cloudinarys.js';
 
 // Helper function to generate slug
@@ -112,6 +112,7 @@ const getAllBlogs = async (req, res) => {
             page = 1, 
             limit = 10, 
             category, 
+            subCategory,
             search, 
             sort = '-publishedAt',
             status = 'published'
@@ -119,29 +120,34 @@ const getAllBlogs = async (req, res) => {
         
         const query = { status };
         
-        // Filter by category
         if (category) {
             query.category = category;
         }
-        
-        // Search functionality
-        if (search) {
-            query.$text = { $search: search };
+
+        if (subCategory) {
+            query.subCategory = subCategory;
         }
 
-        // Pagination
+        // ✅ FIXED SEARCH
+        if (search) {
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { excerpt: { $regex: search, $options: 'i' } },
+                { category: { $regex: search, $options: 'i' } },
+                { subCategory: { $regex: search, $options: 'i' } }
+            ];
+        }
+
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
 
-        // Get blogs
         const blogs = await Blog.find(query)
             .select('-__v')
             .sort(sort)
             .limit(limitNum)
             .skip(skip);
 
-        // Get total count
         const total = await Blog.countDocuments(query);
 
         res.status(200).json({
@@ -165,6 +171,7 @@ const getAllBlogs = async (req, res) => {
     }
 };
 
+
 // @desc    Get single blog post by ID or slug
 // @route   GET /api/blogs/:identifier
 // @access  Public
@@ -185,7 +192,7 @@ const getBlogByIdentifier = async (req, res) => {
                 message: 'Blog post not found'
             });
         }
-
+       
         // Increment view count
         blog.views += 1;
         await blog.save();

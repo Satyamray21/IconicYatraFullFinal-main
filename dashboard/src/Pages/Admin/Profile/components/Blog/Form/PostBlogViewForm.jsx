@@ -90,7 +90,7 @@ const ViewBlog = () => {
             {/* Back Button */}
             <Button
                 startIcon={<ArrowBackIcon />}
-                onClick={() => navigate('/latestblogs')}
+                onClick={() => navigate('/profile?activeTab=blog')}
                 sx={{ mb: 2 }}
             >
                 Back to Blogs
@@ -107,6 +107,13 @@ const ViewBlog = () => {
                         <Chip
                             icon={<CategoryIcon />}
                             label={blog.category}
+                            color="primary"
+                            variant="outlined"
+                            size="small"
+                        />
+                        <Chip
+                            icon={<CategoryIcon />}
+                            label={blog.subCategory}
                             color="primary"
                             variant="outlined"
                             size="small"

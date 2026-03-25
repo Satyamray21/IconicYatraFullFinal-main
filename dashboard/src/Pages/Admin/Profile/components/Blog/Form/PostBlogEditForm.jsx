@@ -91,6 +91,7 @@ const PostBlogFormEdit = () => {
         id: '',
         slug: '',
         category: '',
+        subCategory:'',
         title: '',
         date: null,
         readTime: '',
@@ -132,15 +133,18 @@ const PostBlogFormEdit = () => {
         severity: 'success'
     });
 
-    const categories = [
-        'India Travel',
-        'International Travel',
-        'Beach Destinations',
+    const categories = ['Domestic', 'International'];
+    
+    const subCategories = [
         'Hill Stations',
+        'Beach Destinations',
         'Cultural Tours',
         'Adventure Travel',
         'Honeymoon Packages',
-        'Family Tours'
+        'Family Tours',
+        'Luxury Travel',
+        'Wildlife Safari',
+        'Religious Tours'
     ];
 
     // Fetch blog data if editing
@@ -169,6 +173,8 @@ const PostBlogFormEdit = () => {
                 id: currentBlog.id || '',
                 slug: currentBlog.slug || '',
                 category: currentBlog.category || '',
+                subCategory: currentBlog.subCategory || '',
+
                 title: currentBlog.title || '',
                 date: parsedDate,
                 readTime: currentBlog.readTime || '',
@@ -505,6 +511,8 @@ const PostBlogFormEdit = () => {
 
         if (!formData.title.trim()) newErrors.title = 'Blog title is required';
         if (!formData.category) newErrors.category = 'Category is required';
+        if (!formData.subCategory) newErrors.subCategory = 'Sub Category is required';
+
         if (!formData.date) newErrors.date = 'Date is required';
         if (!formData.readTime.trim()) newErrors.readTime = 'Read time is required';
         if (!formData.excerpt.trim()) newErrors.excerpt = 'Excerpt is required';
@@ -590,6 +598,7 @@ const PostBlogFormEdit = () => {
             id: formData.id,
             slug: formData.slug,
             category: formData.category,
+            subCategory:formData.category,
             title: formData.title,
             date: formattedDate,
             readTime: formData.readTime,
@@ -627,6 +636,7 @@ const PostBlogFormEdit = () => {
                     id: '',
                     slug: '',
                     category: '',
+                    subCategory:'',
                     title: '',
                     date: null,
                     readTime: '',
@@ -771,6 +781,25 @@ const PostBlogFormEdit = () => {
                                                 <FormHelperText>{errors.category}</FormHelperText>
                                             )}
                                         </FormControl>
+                                        <FormControl fullWidth required error={!!errors.subCategory}>
+    <InputLabel>Sub Category</InputLabel>
+    <Select
+        name="subCategory"
+        value={formData.subCategory}
+        label="Sub Category"
+        onChange={handleInputChange}
+    >
+        {subCategories.map((sub) => (
+            <MenuItem key={sub} value={sub}>
+                {sub}
+            </MenuItem>
+        ))}
+    </Select>
+    {errors.subCategory && (
+        <FormHelperText>{errors.subCategory}</FormHelperText>
+    )}
+</FormControl>
+
                                     </Grid>
 
                                     <Grid size={{xs:12, md:6}}>

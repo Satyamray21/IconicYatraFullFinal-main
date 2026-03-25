@@ -23,11 +23,12 @@ export const getAllBlogs = createAsyncThunk(
     "blog/getAllBlogs",
     async (params = {}, thunkApi) => {
         try {
-            const { page = 1, limit = 10, category, search, sort = '-publishedAt' } = params;
+            const { page = 1, limit = 10, category,subCategory, search, sort = '-publishedAt' } = params;
             const queryParams = new URLSearchParams({
                 page,
                 limit,
                 ...(category && { category }),
+                ...(subCategory && { subCategory }),
                 ...(search && { search }),
                 sort
             });
@@ -131,6 +132,7 @@ const initialState = {
         id: '',
         slug: '',
         category: '',
+        subCategory: '',
         title: '',
         date: null,
         readTime: '',
@@ -166,6 +168,7 @@ const initialState = {
     loading: false,
     filters: {
         category: '',
+        subCategory: '',
         search: '',
         sort: '-publishedAt'
     }

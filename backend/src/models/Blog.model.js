@@ -81,15 +81,23 @@ const blogSchema = new mongoose.Schema({
     category: {
         type: String,
         required: true,
+        enum: ['Domestic', 'International']
+    },
+
+    // ✅ SUB CATEGORY (NEW)
+    subCategory: {
+        type: String,
+        
         enum: [
-            'India Travel',
-            'International Travel',
-            'Beach Destinations',
             'Hill Stations',
+            'Beach Destinations',
             'Cultural Tours',
             'Adventure Travel',
             'Honeymoon Packages',
-            'Family Tours'
+            'Family Tours',
+            'Luxury Travel',
+            'Wildlife Safari',
+            'Religious Tours'
         ]
     },
     title: {
