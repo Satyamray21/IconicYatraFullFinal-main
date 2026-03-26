@@ -43,6 +43,7 @@ import about from "../assets/Banner/about.jpeg";
 import legendaryTravel from "../assets/Banner/about.jpg";
 import { useDispatch, useSelector } from "react-redux";
 
+import axios from "axios";
 
 const values = [
   {
@@ -96,6 +97,10 @@ const AboutUs = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.1 });
+  const API = import.meta.env.VITE_BASE_URL;
+
+const [socialLinks, setSocialLinks] = useState({});
+
   const { data, status } = useSelector(
     (state) => state.companyUI
   );
@@ -110,6 +115,10 @@ const AboutUs = () => {
     if (inView) {
       setIsVisible(true);
     }
+    axios
+    .get(`${API}/api/v1/social-links`)
+    .then((res) => setSocialLinks(res.data))
+    .catch((err) => console.error(err));
   }, [inView]);
 
   return (
@@ -723,30 +732,47 @@ const AboutUs = () => {
                     {member.description}
                   </Typography>
                   <Box sx={{ mt: 2 }}>
-                    <IconButton
-                      size={isSmallMobile ? "small" : "medium"}
-                      sx={{ color: "#3b5998" }}
-                    >
-                      <Facebook fontSize={isSmallMobile ? "small" : "medium"} />
-                    </IconButton>
-                    <IconButton
-                      size={isSmallMobile ? "small" : "medium"}
-                      sx={{ color: "#1DA1F2" }}
-                    >
-                      <Twitter fontSize={isSmallMobile ? "small" : "medium"} />
-                    </IconButton>
-                    <IconButton
-                      size={isSmallMobile ? "small" : "medium"}
-                      sx={{ color: "#E1306C" }}
-                    >
-                      <Instagram fontSize={isSmallMobile ? "small" : "medium"} />
-                    </IconButton>
-                    <IconButton
-                      size={isSmallMobile ? "small" : "medium"}
-                      sx={{ color: "#0077B5" }}
-                    >
-                      <LinkedIn fontSize={isSmallMobile ? "small" : "medium"} />
-                    </IconButton>
+                   
+                      {socialLinks?.facebook && (
+    <IconButton
+      href={socialLinks.facebook}
+      target="_blank"
+      size={isSmallMobile ? "small" : "medium"}
+      sx={{ color: "#3b5998" }}
+    >
+      <Facebook fontSize={isSmallMobile ? "small" : "medium"} />
+    </IconButton>
+  )}
+                      {socialLinks?.twitter && (
+    <IconButton
+      href={socialLinks.twitter}
+      target="_blank"
+      size={isSmallMobile ? "small" : "medium"}
+      sx={{ color: "#1DA1F2" }}
+    >
+      <Twitter fontSize={isSmallMobile ? "small" : "medium"} />
+    </IconButton>
+  )}
+                  {socialLinks?.instagram && (
+    <IconButton
+      href={socialLinks.instagram}
+      target="_blank"
+      size={isSmallMobile ? "small" : "medium"}
+      sx={{ color: "#E1306C" }}
+    >
+      <Instagram fontSize={isSmallMobile ? "small" : "medium"} />
+    </IconButton>
+  )}
+                    {socialLinks?.linkedin && (
+    <IconButton
+      href={socialLinks.linkedin}
+      target="_blank"
+      size={isSmallMobile ? "small" : "medium"}
+      sx={{ color: "#0077B5" }}
+    >
+      <LinkedIn fontSize={isSmallMobile ? "small" : "medium"} />
+    </IconButton>
+  )}
                   </Box>
                 </CardContent>
               </Card>

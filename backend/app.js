@@ -120,6 +120,11 @@ app.use("/api/v1/landing-pages", landingRoutes);
 // ========== ADD BLOG ROUTES HERE ==========
 import blogRoutes from "./src/routers/blog.routes.js";
 app.use("/api/v1/blogs", blogRoutes);
+
+import socialLinksRoutes from "./src/routers/socialLinksRoutes.js";
+
+app.use("/api/v1/social-links", socialLinksRoutes);
+
 // ==========================================
 // ✅ Fix: Load JSON without import
 const swaggerDocument = JSON.parse(fs.readFileSync("./swagger-output.json", "utf-8"));
