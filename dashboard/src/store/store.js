@@ -20,6 +20,7 @@ import companyUIReducer from "../features/companyUI/companyUISlice.js"
 import galleryReducer from "../features/gallery/gallerySlice";
 import companyReducer from "../features/company/InsideCompany";
 import landingPageReducer from "../features/landingPage/landingPageSlice";
+import blogReducer from "../features/blog/blogSlice";
 export const store = configureStore({
   reducer: {
     leads: LeadReducer,
@@ -43,6 +44,7 @@ export const store = configureStore({
     gallery: galleryReducer,
     company: companyReducer,
     landingPages: landingPageReducer,
+    blog: blogReducer,
   },
 });
 

@@ -25,9 +25,11 @@ import * as Yup from "yup";
 import { useLocation } from "react-router-dom";
 import dayjs from "dayjs";
 import { useDispatch, useSelector } from "react-redux";
-import { getLeadOptions, addLeadOption } from "../../../../features/leads/leadSlice"
+import { getLeadOptions, addLeadOption, deleteLeadOption } from "../../../../features/leads/leadSlice";
 import { fetchCountries, fetchStatesByCountry, clearStates } from '../../../../features/location/locationSlice';
-import axios from "../../../../utils/axios"
+import axios from "../../../../utils/axios";
+import DeleteIcon from "@mui/icons-material/Delete";
+import IconButton from "@mui/material/IconButton";
 
 const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
   console.log("✅ LeadTourForm props:", { onComplete, leadData, isSubmitting });
@@ -183,6 +185,28 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
     }
   };
 
+  const handleDeleteOption = async (id) => {
+    if (!id) return;
+
+    if (!window.confirm("Delete this option?")) return;
+
+    try {
+      await dispatch(deleteLeadOption(id)).unwrap();
+
+      setSnackbar({
+        open: true,
+        message: "Deleted successfully",
+        severity: "success",
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Delete failed",
+        severity: "error",
+      });
+    }
+  };
+
   // Fetch states when country changes (for international tours)
   useEffect(() => {
     if (values.tourType === "International" && values.country) {
@@ -277,62 +301,94 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
     setNewItem("");
   };
 
-  const handleAddNewItem = async () => {
-    if (!addMore.trim()) return;
-
-    try {
-      const newValue = addMore.trim();
-      const backendField = currentField;
-
-      // Dispatch Redux thunk to save in DB + refresh options
-      await dispatch(addLeadOption({ fieldName: backendField, value: newValue })).unwrap();
-
-      // Set the selected value instantly
-      setFieldValue(currentField, newValue);
-
-      // Show success message
-      setSnackbar({
-        open: true,
-        message: `New ${currentField} added successfully`,
-        severity: "success",
-      });
-
-      handleCloseDialog();
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: "Failed to add new option",
-        severity: "error",
-      });
-    }
-  };
-
-  const fieldMapping = {
-    destination: "tourDestination",
-    services: "servicesRequired",
-    hotelType: "hotelType",
-    mealPlan: "mealPlan",
-    sharingType: "sharingType",
-    arrivalCity: "arrivalCity",
-    arrivalLocation: "arrivalLocation",
-    departureCity: "departureCity",
-    departureLocation: "departureLocation",
-    country: "country",
-  };
-
   const getOptionsForField = (fieldName) => {
     const filteredOptions = options
       ?.filter((opt) => opt.fieldName === fieldName)
-      .map((opt) => ({ value: opt.value, label: opt.value }));
+      .map((opt) => ({
+        id: opt._id,
+        value: opt.value,
+        label: opt.value,
+      })) || [];
+
+    const customItemsForField = (customItems[fieldName] || []).map((opt, index) => ({
+      id: null,
+      value: opt,
+      label: opt,
+      isCustom: true,
+    }));
+
+    // Combine and remove duplicates
+    const combined = [...filteredOptions, ...customItemsForField];
+    const uniqueOptions = combined.reduce((acc, current) => {
+      const exists = acc.find(item => item.value === current.value);
+      if (!exists) {
+        acc.push(current);
+      }
+      return acc;
+    }, []);
 
     return [
-      ...(filteredOptions || []),
-      ...(customItems[fieldName] || []).map((opt) => ({
-        value: opt,
-        label: opt,
-      })),
-      { value: "__add_new", label: "+ Add New" },
+      ...uniqueOptions,
+      { value: "__add_new", label: "+ Add New", id: null }
     ];
+  };
+
+  /* ================= DROPDOWN ================= */
+  const renderDropdownOptions = (fieldName) => {
+    const optionsForField = getOptionsForField(fieldName);
+    
+    return optionsForField.map((option) => {
+      if (option.value === "__add_new") {
+        return (
+          <MenuItem
+            key={`add-${fieldName}`}
+            value=""
+            onClick={() => {
+              setCurrentField(fieldName);
+              setOpenDialog(true);
+            }}
+          >
+            + Add New
+          </MenuItem>
+        );
+      }
+      
+      return (
+        <MenuItem key={option.value} value={option.value}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+            <span>{option.label}</span>
+            {option.id && (
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteOption(option.id);
+                }}
+                sx={{ ml: 1 }}
+              >
+                <DeleteIcon fontSize="small" color="error" />
+              </IconButton>
+            )}
+          </Box>
+        </MenuItem>
+      );
+    });
+  };
+
+  /* ================= ADD ================= */
+  const handleAddNewItem = async () => {
+    if (!addMore.trim()) return;
+
+    await dispatch(
+      addLeadOption({ fieldName: currentField, value: addMore })
+    );
+
+    setFieldValue(currentField, addMore);
+
+    setSnackbar({ open: true, message: "Added successfully", severity: "success" });
+
+    setOpenDialog(false);
+    setNewItem("");
   };
 
   const handleCloseSnackbar = () => {
@@ -405,7 +461,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                   row
                   name="tourType"
                   value={values.tourType}
-                  onChange={handleTourTypeChange} // Use the new handler
+                  onChange={handleTourTypeChange}
                 >
                   <FormControlLabel
                     value="Domestic"
@@ -430,7 +486,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                   name="country"
                   label="Country *"
                   value={values.country}
-                  onChange={handleCountryChange} // Use the new handler
+                  onChange={handleCountryChange}
                   error={touched.country && Boolean(errors.country)}
                   helperText={touched.country && errors.country}
                   disabled={locationLoading}
@@ -473,18 +529,21 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 error={touched.destination && Boolean(errors.destination)}
                 helperText={touched.destination && errors.destination}
                 disabled={
-                  values.tourType === "International" && !values.country ||
+                  (values.tourType === "International" && !values.country) ||
                   locationLoading
                 }
               >
-                {getDestinationOptions().map((option, index) => (
-                  <MenuItem key={index} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-                <MenuItem value="__add_new" onClick={() => handleOpenDialog("destination")}>
-                  + Add New
-                </MenuItem>
+                {getDestinationOptions().map((option, index) => {
+                  if (option !== "No states available" && option !== "Loading states..." && option !== "Select a country first") {
+                    return (
+                      <MenuItem key={`state-${index}`} value={option}>
+                        {option}
+                      </MenuItem>
+                    );
+                  }
+                  return null;
+                })}
+                {renderDropdownOptions("destination")}
               </TextField>
             </Grid>
 
@@ -499,21 +558,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 error={touched.services && Boolean(errors.services)}
                 helperText={touched.services && errors.services}
               >
-                {getOptionsForField("services").map((option) =>
-                  option.value === "__add_new" ? (
-                    <MenuItem
-                      key="add-new-service"
-                      value=""
-                      onClick={() => handleOpenDialog("services")}
-                    >
-                      + Add New
-                    </MenuItem>
-                  ) : (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {renderDropdownOptions("services")}
               </TextField>
             </Grid>
 
@@ -572,7 +617,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
           </Grid>
         </Box>
 
-        {/* Rest of the form remains the same */}
+        {/* Pickup/Drop Section */}
         <Box mt={3} p={2} border={1} borderRadius={2} borderColor="grey.300">
           <Typography variant="subtitle1" gutterBottom>
             Pickup/Drop
@@ -583,7 +628,6 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 label="Arrival Date *"
                 value={values.arrivalDate}
                 onChange={(val) => setFieldValue("arrivalDate", val)}
-
                 renderInput={(params) => (
                   <TextField
                     fullWidth
@@ -605,21 +649,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 error={touched.arrivalCity && Boolean(errors.arrivalCity)}
                 helperText={touched.arrivalCity && errors.arrivalCity}
               >
-                {getOptionsForField("arrivalCity").map((option) =>
-                  option.value === "__add_new" ? (
-                    <MenuItem
-                      key="add-new-arrival-city"
-                      value=""
-                      onClick={() => handleOpenDialog("arrivalCity")}
-                    >
-                      + Add New
-                    </MenuItem>
-                  ) : (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {renderDropdownOptions("arrivalCity")}
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
@@ -635,21 +665,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 }
                 helperText={touched.arrivalLocation && errors.arrivalLocation}
               >
-                {getOptionsForField("arrivalLocation").map((option) =>
-                  option.value === "__add_new" ? (
-                    <MenuItem
-                      key="add-new-arrival-location"
-                      value=""
-                      onClick={() => handleOpenDialog("arrivalLocation")}
-                    >
-                      + Add New
-                    </MenuItem>
-                  ) : (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {renderDropdownOptions("arrivalLocation")}
               </TextField>
             </Grid>
 
@@ -682,21 +698,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 error={touched.departureCity && Boolean(errors.departureCity)}
                 helperText={touched.departureCity && errors.departureCity}
               >
-                {getOptionsForField("departureCity").map((option) =>
-                  option.value === "__add_new" ? (
-                    <MenuItem
-                      key="add-new-departure-city"
-                      value=""
-                      onClick={() => handleOpenDialog("departureCity")}
-                    >
-                      + Add New
-                    </MenuItem>
-                  ) : (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {renderDropdownOptions("departureCity")}
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
@@ -714,26 +716,13 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                   touched.departureLocation && errors.departureLocation
                 }
               >
-                {getOptionsForField("departureLocation").map((option) =>
-                  option.value === "__add_new" ? (
-                    <MenuItem
-                      key="add-new-departure-location"
-                      value=""
-                      onClick={() => handleOpenDialog("departureLocation")}
-                    >
-                      + Add New
-                    </MenuItem>
-                  ) : (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {renderDropdownOptions("departureLocation")}
               </TextField>
             </Grid>
           </Grid>
         </Box>
 
+        {/* Accommodation & Facility Section */}
         <Box mt={3} p={2} border={1} borderRadius={2} borderColor="grey.300">
           <Typography variant="subtitle1" gutterBottom>
             Accommodation & Facility
@@ -750,21 +739,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 error={touched.hotelType && Boolean(errors.hotelType)}
                 helperText={touched.hotelType && errors.hotelType}
               >
-                {getOptionsForField("hotelType").map((option) =>
-                  option.value === "__add_new" ? (
-                    <MenuItem
-                      key="add-new-hotel-type"
-                      value=""
-                      onClick={() => handleOpenDialog("hotelType")}
-                    >
-                      + Add New
-                    </MenuItem>
-                  ) : (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {renderDropdownOptions("hotelType")}
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
@@ -778,21 +753,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 error={touched.mealPlan && Boolean(errors.mealPlan)}
                 helperText={touched.mealPlan && errors.mealPlan}
               >
-                {getOptionsForField("mealPlan").map((option) =>
-                  option.value === "__add_new" ? (
-                    <MenuItem
-                      key="add-new-meal-plan"
-                      value=""
-                      onClick={() => handleOpenDialog("mealPlan")}
-                    >
-                      + Add New
-                    </MenuItem>
-                  ) : (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {renderDropdownOptions("mealPlan")}
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
@@ -824,21 +785,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 error={touched.sharingType && Boolean(errors.sharingType)}
                 helperText={touched.sharingType && errors.sharingType}
               >
-                {getOptionsForField("sharingType").map((option) =>
-                  option.value === "__add_new" ? (
-                    <MenuItem
-                      key="add-new-sharing-type"
-                      value=""
-                      onClick={() => handleOpenDialog("sharingType")}
-                    >
-                      + Add New
-                    </MenuItem>
-                  ) : (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {renderDropdownOptions("sharingType")}
               </TextField>
             </Grid>
             <Grid size={{ xs: 4 }}>
@@ -890,22 +837,22 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
           />
         </Box>
 
-       <Box mt={2} display="flex" justifyContent="center" gap={2}>
-  <Button
-    variant="outlined"
-    onClick={onBack}
-  >
-    Back
-  </Button>
+        <Box mt={2} display="flex" justifyContent="center" gap={2}>
+          <Button
+            variant="outlined"
+            onClick={onBack}
+          >
+            Back
+          </Button>
 
-  <Button
-    type="submit"
-    variant="contained"
-    disabled={isSubmitting}
-  >
-    Submit
-  </Button>
-</Box>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isSubmitting}
+          >
+            Submit
+          </Button>
+        </Box>
       </form>
     </Box>
   );

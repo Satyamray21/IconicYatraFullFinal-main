@@ -2,50 +2,84 @@ import ReceivedVoucher from "../models/payment.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import Company from "../models/company.model.js";
 // @desc    Create a new voucher
+
 export const createVoucher = asyncHandler(async (req, res) => {
-    const {
-        paymentType,
-        date,
-        accountType,
-        partyName,
-        paymentMode,
-        referenceNumber,
-        particulars,
-        amount,
-        invoice,
-        companyId
-    } = req.body; // req.body is now JSON
+  const {
+    paymentType,
+    date,
+    accountType,
+    partyName,
+    paymentMode,
+    referenceNumber,
+    particulars,
+    amount,
+    invoice,
+    companyId,
+  } = req.body;
 
-    if (!date || !accountType || !partyName || !paymentMode || !particulars || !amount) {
-        res.status(400);
-        throw new Error("Please provide all required fields.");
+  if (!date || !accountType || !partyName || !paymentMode || !particulars || !amount) {
+    res.status(400);
+    throw new Error("Please provide all required fields.");
+  }
+
+  const voucherDate = new Date(date);
+
+  // ✅ Month + Year
+  const month = voucherDate
+    .toLocaleString("en-US", { month: "short" })
+    .toUpperCase();
+  const year = voucherDate.getFullYear();
+
+  // ✅ Find last voucher for SAME company + month + year
+  const lastVoucher = await ReceivedVoucher.findOne({
+    companyId,
+    month,
+    year,
+  }).sort({ receiptNumber: -1 });
+
+  const nextReceiptNumber = lastVoucher
+    ? lastVoucher.receiptNumber + 1
+    : 1;
+
+  // ✅ Format: 001/MAR
+  const formattedNumber = String(nextReceiptNumber).padStart(3, "0");
+  const invoiceId = `${month}/${formattedNumber}`;
+
+  let voucher;
+
+  try {
+    voucher = await ReceivedVoucher.create({
+      paymentType,
+      date,
+      accountType,
+      partyName,
+      paymentMode,
+      referenceNumber,
+      particulars,
+      amount,
+      invoice,
+      receiptNumber: nextReceiptNumber,
+      invoiceId,
+      companyId,
+      month,
+      year,
+    });
+  } catch (err) {
+    // ✅ HANDLE DUPLICATE SAFELY
+    if (err.code === 11000) {
+      throw new Error("Duplicate voucher detected. Please try again.");
     }
+    throw err;
+  }
 
-    const lastVoucher = await ReceivedVoucher.findOne().sort({ receiptNumber: -1 });
-    const nextReceiptNumber = lastVoucher?.receiptNumber ? lastVoucher.receiptNumber + 1 : 1;
-    const invoiceId = `R-${nextReceiptNumber}`;
-
-    const voucher = await ReceivedVoucher.create({
-        paymentType,
-        date,
-        accountType,
-        partyName,
-        paymentMode,
-        referenceNumber,
-        particulars,
-        amount,
-        invoice,
-        receiptNumber: nextReceiptNumber,
-        invoiceId,
-        companyId,
-    });
-
-    res.status(201).json({
-        success: true,
-        message: "Voucher created successfully",
-        data: voucher,
-    });
+  res.status(201).json({
+    success: true,
+    message: "Voucher created successfully",
+    data: voucher,
+  });
 });
+
+
 
 
 // @desc    Get all vouchers
@@ -95,4 +129,38 @@ export const deleteVoucher = asyncHandler(async (req, res) => {
         throw new Error("Voucher not found");
     }
     res.status(200).json({ success: true, message: "Voucher deleted" });
+});
+
+// @desc Get total payment received per company
+export const getCompanyTotalPayments = asyncHandler(async (req, res) => {
+    const result = await ReceivedVoucher.aggregate([
+        {
+            $group: {
+                _id: "$companyId",
+                totalAmount: { $sum: "$amount" }
+            }
+        },
+        {
+            $lookup: {
+                from: "companies",
+                localField: "_id",
+                foreignField: "_id",
+                as: "company"
+            }
+        },
+        { $unwind: "$company" },
+        {
+            $project: {
+                _id: 0,
+                companyId: "$company._id",
+                companyName: "$company.companyName",
+                totalAmount: 1
+            }
+        }
+    ]);
+
+    res.status(200).json({
+        success: true,
+        data: result
+    });
 });

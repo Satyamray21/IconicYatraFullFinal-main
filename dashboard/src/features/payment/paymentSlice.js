@@ -30,6 +30,14 @@ export const deleteVoucher = createAsyncThunk("voucher/delete", async (id) => {
     await axios.delete(`/payment/${id}`);
     return id;
 });
+// Fetch total payments per company
+export const fetchCompanyTotals = createAsyncThunk(
+    "voucher/fetchCompanyTotals",
+    async () => {
+        const res = await axios.get("/payment/totalPayment");
+        return res.data.data;
+    }
+);
 
 const voucherSlice = createSlice({
     name: "voucher",
@@ -37,6 +45,7 @@ const voucherSlice = createSlice({
         list: [],
         selected: null,
         loading: false,
+        companyTotals: [],
         error: null,
     },
     reducers: {
@@ -80,7 +89,20 @@ const voucherSlice = createSlice({
             // Delete
             .addCase(deleteVoucher.fulfilled, (state, action) => {
                 state.list = state.list.filter(item => item._id !== action.payload);
-            });
+            })
+            // Company Total Payments
+.addCase(fetchCompanyTotals.pending, (state) => {
+    state.loading = true;
+})
+.addCase(fetchCompanyTotals.fulfilled, (state, action) => {
+    state.loading = false;
+    state.companyTotals = action.payload; // 🔥 store totals
+})
+.addCase(fetchCompanyTotals.rejected, (state, action) => {
+    state.loading = false;
+    state.error = action.error.message;
+})
+;
     },
 });
 

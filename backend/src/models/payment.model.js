@@ -1,84 +1,112 @@
 import mongoose from "mongoose";
 
-const receivedVoucherSchema = new mongoose.Schema({
-
+const receivedVoucherSchema = new mongoose.Schema(
+  {
     companyId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Company",
-        required: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
     },
+
     paymentType: {
-        type: String,
-        enum: ["Receive Voucher", "Payment Voucher"],
-        default: "Receive Voucher",
+      type: String,
+      enum: ["Receive Voucher", "Payment Voucher"],
+      default: "Receive Voucher",
     },
+
     date: {
-        type: Date,
-        required: true,
+      type: Date,
+      required: true,
     },
+
+    // ✅ NEW (for correct indexing)
+    month: {
+      type: String, // JAN, FEB
+    },
+    year: {
+      type: Number,
+    },
+
     paymentScreenshot: {
-        type: String, // URL or path to uploaded file
+      type: String,
     },
+
     accountType: {
-        type: String,
-        required: true,
+      type: String,
+      required: true,
     },
+
     partyName: {
-        type: String,
-        required: true,
+      type: String,
+      required: true,
     },
+
     paymentMode: {
-        type: String,
-        required: true,
-
+      type: String,
+      required: true,
     },
+
     referenceNumber: {
-        type: String,
-    },
-    particulars: {
-        type: String,
-        required: true,
-    },
-    amount: {
-        type: Number,
-        required: true,
-    },
-    invoice: {
-        type: String,
-        unique: true
+      type: String,
     },
 
-    // 👇 New field added for Dr/Cr based on paymentType
-    drCr: {
-        type: String,
-        enum: ["Dr", "Cr"],
+    particulars: {
+      type: String,
+      required: true,
     },
+
+    amount: {
+      type: Number,
+      required: true,
+    },
+
+    invoice: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+
+    drCr: {
+      type: String,
+      enum: ["Dr", "Cr"],
+    },
+
+    // ❌ removed unique
     receiptNumber: {
-        type: Number,
-        required: true,
-        unique: true,
+      type: Number,
+      required: true,
     },
 
     invoiceId: {
-        type: String,
-        required: true,
-        unique: true,
+      type: String,
+      required: true,
+      unique: true,
     },
-
-
-}, {
+  },
+  {
     timestamps: true,
-});
+  }
+);
 
-// 👇 Automatically set drCr based on paymentType
+// ✅ AUTO DR/CR
 receivedVoucherSchema.pre("save", function (next) {
-    if (this.paymentType === "Receive Voucher") {
-        this.drCr = "Cr";
-    } else if (this.paymentType === "Payment Voucher") {
-        this.drCr = "Dr";
-    }
-    next();
+  if (this.paymentType === "Receive Voucher") {
+    this.drCr = "Cr";
+  } else {
+    this.drCr = "Dr";
+  }
+  next();
 });
 
-const ReceivedVoucher = mongoose.model("ReceivedVoucher", receivedVoucherSchema);
+// ✅ PERFECT UNIQUE INDEX
+receivedVoucherSchema.index(
+  { companyId: 1, month: 1, year: 1, receiptNumber: 1 },
+  { unique: true }
+);
+
+const ReceivedVoucher = mongoose.model(
+  "ReceivedVoucher",
+  receivedVoucherSchema
+);
+
 export default ReceivedVoucher;

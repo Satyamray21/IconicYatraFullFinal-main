@@ -38,6 +38,7 @@ import CancellationPolicy from '../Components/CancelationPolicy';
 import PrivacyPolicy from '../Components/PrivacyPolicy';
 import LoginPage from '../Pages/HeaderPages/Login';
 import LatestBlog from '../Components/LatestBlog';
+import BlogDetail from '../Components/LatestBlogDetail'; 
 import SpecialPackageDetail from '../Components/SpecialPackageDetail';
 import ThankYouPage from '../Pages/HomePages/ThankYou';
 import PaymentFailed from '../Pages/HomePages/PaymentFailed';
@@ -91,7 +92,7 @@ const MainRoutes = () => {
       <Route path="/privacypolicy" element={<Layout><PrivacyPolicy /></Layout>} />
 
       <Route path="/latestblogs" element={<Layout><LatestBlog /></Layout>} />
-
+      <Route path="/latestblogs/:slug" element={<Layout><BlogDetail /></Layout>} />
       <Route path="/special-package-details/:packageId" element={<Layout><SpecialPackageDetail /></Layout>} />
       <Route path="/payment-success" element={<PaymentSuccess />} />
       <Route path="/payment-failed" element={<PaymentFailed />} />

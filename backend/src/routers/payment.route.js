@@ -4,7 +4,8 @@ import {
     getAllVouchers,
     getVoucherById,
     updateVoucher,
-    deleteVoucher
+    deleteVoucher,
+    getCompanyTotalPayments
 } from "../controllers/payment.controller.js";
 
 const router = express.Router();
@@ -12,7 +13,7 @@ const router = express.Router();
 router.route("/")
     .post(createVoucher)
     .get(getAllVouchers);
-
+router.route("/totalPayment").get(getCompanyTotalPayments);
 router.route("/:id")
     .get(getVoucherById)
     .put(updateVoucher)

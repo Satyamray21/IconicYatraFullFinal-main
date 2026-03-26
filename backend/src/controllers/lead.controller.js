@@ -234,7 +234,7 @@ export const createLead = asyncHandler(async (req, res) => {
 // view Lead
 export const viewAllLeads = asyncHandler(async (req, res) => {
   try {
-    const lead = await Lead.find();
+     const lead = await Lead.find().sort({ createdAt: -1 });
     res.status(200)
       .json(new ApiResponse(200, lead, "All leads fetched successfully"))
   }
