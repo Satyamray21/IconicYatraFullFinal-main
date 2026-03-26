@@ -76,28 +76,52 @@ export const createLandingPage = async (req, res) => {
 
     /* ---------- FEATURE ICONS ---------- */
     /* ---------- FEATURE ICONS ---------- */
+/* ---------- FEATURE ICONS ---------- */
 if (req.files?.featureIcons && data.packageFeatures) {
-  // Get indices from request body
-  let indices = req.body.featureIconIndices 
-    ? (Array.isArray(req.body.featureIconIndices) 
-        ? req.body.featureIconIndices.map(i => parseInt(i, 10))
-        : [parseInt(req.body.featureIconIndices, 10)])
-    : Array.from({ length: req.files.featureIcons.length }, (_, i) => i);
+  // Parse indices - ensure we have one index per uploaded file
+  let indices = [];
   
-  // Upload all icons first
-  const uploadedIcons = [];
-  for (let i = 0; i < req.files.featureIcons.length; i++) {
-    const uploaded = await uploadOnCloudinary(req.files.featureIcons[i].path);
-    uploadedIcons.push(uploaded);
+  if (req.body.featureIconIndices) {
+    indices = Array.isArray(req.body.featureIconIndices) 
+      ? req.body.featureIconIndices.map(i => parseInt(i, 10))
+      : [parseInt(req.body.featureIconIndices, 10)];
   }
   
-  // Map icons to their respective features using indices
-  for (let i = 0; i < uploadedIcons.length && i < indices.length; i++) {
-    const targetIndex = indices[i];
-    if (targetIndex >= 0 && targetIndex < data.packageFeatures.length) {
-      data.packageFeatures[targetIndex].icon = uploadedIcons[i];
+  // If we don't have enough indices, generate sequential ones
+  if (indices.length !== req.files.featureIcons.length) {
+    console.log(`Indices count mismatch. Expected ${req.files.featureIcons.length}, got ${indices.length}`);
+    // Fill missing indices with sequential numbers
+    while (indices.length < req.files.featureIcons.length) {
+      indices.push(indices.length);
     }
   }
+  
+  console.log(`Processing ${req.files.featureIcons.length} feature icons with indices:`, indices);
+  
+  // Upload all icons and map them
+  for (let i = 0; i < req.files.featureIcons.length; i++) {
+    const targetIndex = indices[i];
+    
+    // Skip if target index is invalid
+    if (targetIndex === undefined || targetIndex < 0 || targetIndex >= data.packageFeatures.length) {
+      console.warn(`Skipping icon ${i} - invalid target index ${targetIndex}`);
+      continue;
+    }
+    
+    try {
+      const uploaded = await uploadOnCloudinary(req.files.featureIcons[i].path);
+      data.packageFeatures[targetIndex].icon = uploaded;
+      console.log(`✅ Mapped icon ${i} (${req.files.featureIcons[i].originalname}) to package feature index ${targetIndex}`);
+    } catch (error) {
+      console.error(`❌ Failed to upload icon ${i}:`, error);
+    }
+  }
+  
+  // Log final mapping
+  console.log("Final package features mapping:");
+  data.packageFeatures.forEach((feature, idx) => {
+    console.log(`  Index ${idx}: ${feature.title} - ${feature.icon ? '✅ Has icon' : '❌ No icon'}`);
+  });
 }
 
     // =============================
