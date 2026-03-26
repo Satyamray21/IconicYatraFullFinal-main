@@ -13,7 +13,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { Edit, Delete } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAllVouchers, deleteVoucher } from '../../../features/payment/paymentSlice';
+import { fetchAllVouchers, deleteVoucher,fetchCompanyTotals } from '../../../features/payment/paymentSlice';
 import { toast } from 'react-toastify';
 
 const cellStyle = {
@@ -28,7 +28,7 @@ const PaymentsCard = () => {
     const [search, setSearch] = React.useState('');
     const ITEMS_PER_PAGE = 10;
     const [page, setPage] = React.useState(1);
-    const { list: payments = [] } = useSelector((state) => state.payment);
+    const { list: payments = [],companyTotals = [] } = useSelector((state) => state.payment);
 
 
     const filteredPayments = payments.filter((p) =>
@@ -44,6 +44,7 @@ const PaymentsCard = () => {
 
     useEffect(() => {
         dispatch(fetchAllVouchers());
+        dispatch(fetchCompanyTotals());
     }, [dispatch]);
 
     useEffect(() => {
@@ -65,6 +66,45 @@ const PaymentsCard = () => {
 
     return (
         <Box>
+            {/* Company Totals */}
+<Box
+    mb={3}
+    p={2}
+    borderRadius={2}
+    bgcolor="#ffffff"
+    boxShadow="0 2px 8px rgba(0,0,0,0.08)"
+>
+    <Typography variant="h6" fontWeight={600} mb={1}>
+        Company Payment Summary
+    </Typography>
+
+    {companyTotals.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">
+            No data available
+        </Typography>
+    ) : (
+        <Box display="flex" flexWrap="wrap" gap={2}>
+            {companyTotals.map((item) => (
+                <Box
+                    key={item.companyId}
+                    px={2}
+                    py={1}
+                    borderRadius="8px"
+                    bgcolor="#f5f6fa"
+                    boxShadow="0 1px 4px rgba(0,0,0,0.05)"
+                >
+                    <Typography variant="body2" fontWeight={600}>
+                        {item.companyName}
+                    </Typography>
+                    <Typography variant="body2" color="primary">
+                        ₹{item.totalAmount}
+                    </Typography>
+                </Box>
+            ))}
+        </Box>
+    )}
+</Box>
+
             {/* Header */}
             <Box
                 mb={3}
@@ -169,7 +209,7 @@ const PaymentsCard = () => {
                             </Tooltip>
 
                             <Tooltip title={p.invoice || ''}>
-                                <Box sx={cellStyle}>{p.invoice || '-'}</Box>
+                                <Box sx={cellStyle}>{p.invoiceId || '-'}</Box>
                             </Tooltip>
 
                             <Tooltip title={p.partyName}>

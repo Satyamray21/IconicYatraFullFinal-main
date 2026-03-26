@@ -10,6 +10,7 @@ import AddressDetails from "./components/AddressDetails";
 import CreateAdminForm from "./components/CreateAdminForm";
 import CareerDashboard from "./components/CareerDashboard";
 import BankDetailsPage from "./Bank/Form/BankCard";
+import PostBlog from "./components/Blog/BlogCard";
 import GoogleAds from "./components/AdsLandingPage/AdsLandingCard";
 import { useLocation } from "react-router-dom";
 
@@ -77,6 +78,7 @@ const Profile = () => {
                         {activeTab === "company" && "Company Information"}
                         {activeTab === "gallery" && "Gallery Upload"}
                          {activeTab === "candidates" && "Candidate Applications"}
+                          {activeTab === "blog" && "Blog Posts"}
                         {/* {activeTab === "address" && "Address Details"} */}
                          {activeTab === "googleAds" && "Google Ads Landing Page"}
                         {activeTab === "bankDetails" && "Bank Details"}
@@ -96,6 +98,7 @@ const Profile = () => {
                     {activeTab === "profile" && <ProfileDetails user={user} />}
                     {activeTab === "company" && <CompanyInfo />}
                     {activeTab === "gallery" && <AddressDetails user={user} />}
+                     {activeTab === "blog" && <PostBlog />}
                     {activeTab === "candidates" && <CareerDashboard />}
                     {activeTab === "googleAds" && <GoogleAds />}
                     {activeTab === "admin" && user?.userRole === "Admin" && <CreateAdminForm />}

@@ -343,7 +343,7 @@ const InvoiceView = () => {
                         color="#1976d2"
                         fontSize="0.9rem"
                     >
-                        Payment Mode
+                        Payment Bank
                     </Typography>
                     <Typography fontSize={14}>{paymentMode}</Typography>
                     {referenceNumber && (

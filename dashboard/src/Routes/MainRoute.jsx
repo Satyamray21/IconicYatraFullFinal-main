@@ -167,6 +167,9 @@ const GoogleAdsEditLandingForm = lazy(() =>
 const ViewLandingPage=lazy(()=>
 import("../Pages/Admin/Profile/components/AdsLandingPage/Form/GoogleAdsViewLanding")
 );
+const PostBlogForm = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogForm'));
+const PostBlogViewForm = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogViewForm'));
+const PostBlogFormEdit = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogEditForm'));
 /* ========================== */
 /*        MAIN ROUTE          */
 /* ========================== */
@@ -396,7 +399,9 @@ const MainRoute = () => {
 <Route path="/googleadsform" element={<GoogleAdsLandingForm />} />
 
 <Route path="/googleadseditform/:id" element={<GoogleAdsEditLandingForm />} />
-
+ <Route path="/postblogform" element={<PostBlogForm />} />
+<Route path="/blog/:slug" element={<PostBlogViewForm />} />
+<Route path="/blog/edit/:slug" element={<PostBlogFormEdit />} />
 {/* VIEW */}
 <Route path="/google-ads/:id" element={<ViewLandingPage />} />
 
