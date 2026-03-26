@@ -598,7 +598,7 @@ const PostBlogFormEdit = () => {
             id: formData.id,
             slug: formData.slug,
             category: formData.category,
-            subCategory:formData.category,
+            subCategory:formData.subCategory,
             title: formData.title,
             date: formattedDate,
             readTime: formData.readTime,

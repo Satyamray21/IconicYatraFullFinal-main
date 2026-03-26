@@ -7,11 +7,9 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
 export const createLandingPage = async (req, res) => {
   try {
-
     const data = JSON.parse(req.body.data || "{}");
 
     /* ---------- HERO IMAGE ---------- */
-
     if (req.files?.heroBackgroundImage) {
       const uploaded = await uploadOnCloudinary(
         req.files.heroBackgroundImage[0].path
@@ -20,7 +18,6 @@ export const createLandingPage = async (req, res) => {
     }
 
     /* ---------- OWN PACKAGE IMAGE ---------- */
-
     if (req.files?.ownPackageImage) {
       const uploaded = await uploadOnCloudinary(
         req.files.ownPackageImage[0].path
@@ -29,7 +26,6 @@ export const createLandingPage = async (req, res) => {
     }
 
     /* ---------- WHY CHOOSE IMAGE ---------- */
-
     if (req.files?.whyChooseBannerImage) {
       const uploaded = await uploadOnCloudinary(
         req.files.whyChooseBannerImage[0].path
@@ -38,76 +34,92 @@ export const createLandingPage = async (req, res) => {
     }
 
     /* ---------- OVERVIEW IMAGES ---------- */
-
     if (req.files?.overviewImages && data.overviewSections) {
+      // If indices are provided, use them to map correctly
+      const indices = req.body.overviewImageIndices 
+        ? (Array.isArray(req.body.overviewImageIndices) 
+            ? req.body.overviewImageIndices 
+            : [req.body.overviewImageIndices])
+        : [];
 
       for (let i = 0; i < req.files.overviewImages.length; i++) {
-
         const uploaded = await uploadOnCloudinary(
           req.files.overviewImages[i].path
         );
-
-        if (data.overviewSections[i]) {
-          data.overviewSections[i].overviewImage = uploaded;
+        
+        const targetIndex = indices[i] ? parseInt(indices[i]) : i;
+        if (data.overviewSections[targetIndex]) {
+          data.overviewSections[targetIndex].overviewImage = uploaded;
         }
       }
     }
 
     /* ---------- SOLUTION ICONS ---------- */
-
     if (req.files?.solutionIcons && data.solutionItems) {
+      const indices = req.body.solutionIconIndices 
+        ? (Array.isArray(req.body.solutionIconIndices) 
+            ? req.body.solutionIconIndices 
+            : [req.body.solutionIconIndices])
+        : [];
 
       for (let i = 0; i < req.files.solutionIcons.length; i++) {
-
         const uploaded = await uploadOnCloudinary(
           req.files.solutionIcons[i].path
         );
-
-        if (data.solutionItems[i]) {
-          data.solutionItems[i].icon = uploaded;
+        
+        const targetIndex = indices[i] ? parseInt(indices[i]) : i;
+        if (data.solutionItems[targetIndex]) {
+          data.solutionItems[targetIndex].icon = uploaded;
         }
       }
     }
 
     /* ---------- FEATURE ICONS ---------- */
-
-    if (req.files?.featureIcons && data.packageFeatures) {
-
-      for (let i = 0; i < req.files.featureIcons.length; i++) {
-
-        const uploaded = await uploadOnCloudinary(
-          req.files.featureIcons[i].path
-        );
-
-        if (data.packageFeatures[i]) {
-          data.packageFeatures[i].icon = uploaded;
-        }
-      }
+    /* ---------- FEATURE ICONS ---------- */
+if (req.files?.featureIcons && data.packageFeatures) {
+  // Get indices from request body
+  let indices = req.body.featureIconIndices 
+    ? (Array.isArray(req.body.featureIconIndices) 
+        ? req.body.featureIconIndices.map(i => parseInt(i, 10))
+        : [parseInt(req.body.featureIconIndices, 10)])
+    : Array.from({ length: req.files.featureIcons.length }, (_, i) => i);
+  
+  // Upload all icons first
+  const uploadedIcons = [];
+  for (let i = 0; i < req.files.featureIcons.length; i++) {
+    const uploaded = await uploadOnCloudinary(req.files.featureIcons[i].path);
+    uploadedIcons.push(uploaded);
+  }
+  
+  // Map icons to their respective features using indices
+  for (let i = 0; i < uploadedIcons.length && i < indices.length; i++) {
+    const targetIndex = indices[i];
+    if (targetIndex >= 0 && targetIndex < data.packageFeatures.length) {
+      data.packageFeatures[targetIndex].icon = uploadedIcons[i];
     }
+  }
+}
+
     // =============================
-// SLIDING TEXT (OBJECT BASED)
-// =============================
-if (data.slidingText) {
-  data.slidingText = data.slidingText
-    .map((text) => ({
-      text: text?.trim()
-    }))
-    .filter((item) => item.text && item.text.length > 0);
-}
+    // SLIDING TEXT (OBJECT BASED)
+    // =============================
+    if (data.slidingText) {
+      data.slidingText = data.slidingText
+        .map((text) => ({
+          text: text?.trim()
+        }))
+        .filter((item) => item.text && item.text.length > 0);
+    }
 
+    /* ---------- SOLUTION BUTTON TEXT ---------- */
+    if (data.solutionButtonText) {
+      data.solutionButtonText = data.solutionButtonText.trim();
+    }
 
-/* ---------- SOLUTION BUTTON TEXT ---------- */
-
-if (data.solutionButtonText) {
-  data.solutionButtonText = data.solutionButtonText.trim();
-}
-
-/* ---------- SOLUTION BUTTON DESCRIPTION ---------- */
-
-if (data.solutionButtonDescription) {
-  data.solutionButtonDescription = data.solutionButtonDescription.trim();
-}
-
+    /* ---------- SOLUTION BUTTON DESCRIPTION ---------- */
+    if (data.solutionButtonDescription) {
+      data.solutionButtonDescription = data.solutionButtonDescription.trim();
+    }
 
     const landingPage = await LandingPage.create(data);
 
@@ -117,9 +129,7 @@ if (data.solutionButtonDescription) {
     });
 
   } catch (error) {
-
     console.error(error);
-
     res.status(500).json({
       success: false,
       message: error.message,

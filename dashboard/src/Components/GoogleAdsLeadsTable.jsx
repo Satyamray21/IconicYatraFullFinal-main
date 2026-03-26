@@ -55,6 +55,16 @@ const GoogleAdsLeadsTable = () => {
   };
 
   const columns = [
+    {
+      field: "createdAt",
+      headerName: "Date",
+      minWidth: 140,
+      valueGetter: (value, row) => {
+        if (!row?.createdAt) return "";
+
+        return new Date(row.createdAt).toLocaleDateString("en-IN");
+      }
+    },
     { field: "name", headerName: "Name", minWidth: 150, flex: 1 },
 
     { field: "phone", headerName: "Phone", minWidth: 140 },
@@ -137,18 +147,9 @@ const GoogleAdsLeadsTable = () => {
           </Select>
         );
       }
-    },
-
-    {
-      field: "createdAt",
-      headerName: "Date",
-      minWidth: 140,
-      valueGetter: (value, row) => {
-        if (!row?.createdAt) return "";
-
-        return new Date(row.createdAt).toLocaleDateString("en-IN");
-      }
     }
+
+    
   ];
 
   return (

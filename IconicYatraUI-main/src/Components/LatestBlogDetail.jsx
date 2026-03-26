@@ -276,7 +276,7 @@ export default function BlogDetail() {
                 <Box sx={{ display: "flex", gap: 2, mb: 2, flexWrap: "wrap" }}>
                   <Chip
                     icon={<Category sx={{ fontSize: 18 }} />}
-                    label={blog.category}
+                     label={`${blog.category} • ${blog.subCategory || ""}`}
                     sx={{
                       bgcolor: alpha(theme.palette.primary.main, 0.8),
                       color: "white",

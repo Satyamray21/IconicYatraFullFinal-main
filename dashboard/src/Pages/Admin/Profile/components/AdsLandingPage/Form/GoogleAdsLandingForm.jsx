@@ -358,84 +358,140 @@ export default function LandingPageForm() {
   };
 
   
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsSubmitting(true);
 
-    const form = new FormData();
-    const data = {
-      ...formData,
-      solutionButtonText: formData.solutionButtonText || "",
-  solutionButtonDescription: formData.solutionButtonDescription || "",
-      // Remove preview fields before sending
-      heroBackgroundImagePreview: undefined,
-      ownPackageImagePreview: undefined,
-      whyChooseBannerImagePreview: undefined,
-      
-      slidingText: formData.slidingText
-        .map(item => item.text?.trim())
-        .filter(text => text && text.length > 0),
-      
-      overviewSections: formData.overviewSections.map(section => ({
-        ...section,
-        overviewImagePreview: undefined
-      })),
-      
-      solutionItems: formData.solutionItems.map(item => ({
-        ...item,
-        iconPreview: undefined
-      })),
-      
-      packageFeatures: formData.packageFeatures.map(feature => ({
-        ...feature,
-        iconPreview: undefined
-      }))
-    };
+  const form = new FormData();
+  
+  // Prepare data without preview fields and File objects
+  const data = {
+    ...formData,
+    solutionButtonText: formData.solutionButtonText || "",
+    solutionButtonDescription: formData.solutionButtonDescription || "",
+    // Remove preview fields before sending
+    heroBackgroundImagePreview: undefined,
+    ownPackageImagePreview: undefined,
+    whyChooseBannerImagePreview: undefined,
     
-    if (formData.heroBackgroundImage) {
-      form.append("heroBackgroundImage", formData.heroBackgroundImage);
-    }
-
-    if (formData.ownPackageImage) {
-      form.append("ownPackageImage", formData.ownPackageImage);
-    }
-
-    if (formData.whyChooseBannerImage) {
-      form.append("whyChooseBannerImage", formData.whyChooseBannerImage);
-    }
-
-    formData.overviewSections.forEach((section) => {
-      if (section.overviewImage instanceof File) {
-        form.append("overviewImages", section.overviewImage);
-      }
-    });
-
-    formData.solutionItems.forEach((item) => {
-      if (item.icon instanceof File) {
-        form.append("solutionIcons", item.icon);
-      }
-    });
-
-    formData.packageFeatures.forEach((item) => {
-      if (item.icon instanceof File) {
-        form.append("featureIcons", item.icon);
-      }
-    });
-
-    form.append("data", JSON.stringify(data));
-
-    try {
-      await dispatch(createLandingPage(form)).unwrap();
-      toast.success("Landing page created successfully 🚀");
-      setFormData(initialFormState);
-      navigate("/profile?activeTab=googleAds");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to create landing page");
-    } finally {
-      setIsSubmitting(false);
-    }
+    slidingText: formData.slidingText
+      .map(item => item.text?.trim())
+      .filter(text => text && text.length > 0),
+    
+    overviewSections: formData.overviewSections.map(section => ({
+      ...section,
+      overviewImagePreview: undefined,
+      overviewImage: undefined
+    })),
+    
+    solutionItems: formData.solutionItems.map(item => ({
+      ...item,
+      iconPreview: undefined,
+      icon: undefined
+    })),
+    
+    packageFeatures: formData.packageFeatures.map(feature => ({
+      ...feature,
+      iconPreview: undefined,
+      icon: undefined
+    })),
+    
+    whyChooseReasons: formData.whyChooseReasons.map(reason => ({
+      ...reason,
+    })),
+    
+    workProcessSteps: formData.workProcessSteps.map(step => ({
+      ...step,
+    })),
+    
+    faqQuestions: formData.faqQuestions.map(faq => ({
+      ...faq,
+    }))
   };
+  
+  // Append main images
+  if (formData.heroBackgroundImage) {
+    form.append("heroBackgroundImage", formData.heroBackgroundImage);
+  }
+
+  if (formData.ownPackageImage) {
+    form.append("ownPackageImage", formData.ownPackageImage);
+  }
+
+  if (formData.whyChooseBannerImage) {
+    form.append("whyChooseBannerImage", formData.whyChooseBannerImage);
+  }
+
+  // IMPORTANT: Append overview images in the same order as overviewSections
+  // Filter out sections without images to maintain order
+  const overviewImagesToUpload = formData.overviewSections
+    .map((section, index) => ({
+      image: section.overviewImage,
+      index: index
+    }))
+    .filter(item => item.image instanceof File);
+  
+  overviewImagesToUpload.forEach(({ image, index }) => {
+    form.append("overviewImages", image);
+    // Also send the index to help backend map correctly
+    form.append("overviewImageIndices", index.toString());
+  });
+
+  // Append solution icons in the same order as solutionItems
+  const solutionIconsToUpload = formData.solutionItems
+    .map((item, index) => ({
+      icon: item.icon,
+      index: index
+    }))
+    .filter(item => item.icon instanceof File);
+  
+  solutionIconsToUpload.forEach(({ icon, index }) => {
+    form.append("solutionIcons", icon);
+    form.append("solutionIconIndices", index.toString());
+  });
+
+  // Append feature icons with their indices
+const featureIconsToUpload = [];
+formData.packageFeatures.forEach((feature, index) => {
+  if (feature.icon instanceof File) {
+    featureIconsToUpload.push({ icon: feature.icon, index });
+  }
+});
+
+featureIconsToUpload.forEach(({ icon }) => {
+  form.append("featureIcons", icon);
+});
+
+featureIconsToUpload.forEach(({ index }) => {
+  form.append("featureIconIndices", index.toString());
+});
+
+  // Append the JSON data
+  form.append("data", JSON.stringify(data));
+
+  // Debug: Log all form data
+  console.log("=== Form Data Debug ===");
+  for (let pair of form.entries()) {
+    if (pair[1] instanceof File) {
+      console.log(`${pair[0]}: ${pair[1].name} (${pair[1].size} bytes)`);
+    } else {
+      console.log(`${pair[0]}: ${pair[1]}`);
+    }
+  }
+  console.log("======================");
+
+  try {
+    await dispatch(createLandingPage(form)).unwrap();
+    toast.success("Landing page created successfully 🚀");
+    setFormData(initialFormState);
+    navigate("/profile?activeTab=googleAds");
+  } catch (error) {
+    console.error("Error details:", error);
+    toast.error(error?.response?.data?.message || "Failed to create landing page");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
