@@ -384,7 +384,7 @@ export default function BlogDetail() {
                 mb: 3,
               }}
             >
-              <LocationOn /> Top Places to Visit
+              <LocationOn /> Tourist Sports
             </Typography>
             <Grid container spacing={3}>
               {blog.content.topPlaces.map((place, index) => (
@@ -430,7 +430,7 @@ export default function BlogDetail() {
         )}
 
         {/* Best Time to Visit */}
-        {blog.content?.bestTimeToVisit && (
+        {/* {blog.content?.bestTimeToVisit && (
           <Zoom in={true}>
             <Paper
               sx={{
@@ -467,10 +467,10 @@ export default function BlogDetail() {
               </Box>
             </Paper>
           </Zoom>
-        )}
+        )} */}
 
         {/* Travel Tips */}
-        {blog.content?.travelTips?.length > 0 && (
+        {/* {blog.content?.travelTips?.length > 0 && (
           <Fade in={true}>
             <Paper
               sx={{
@@ -528,7 +528,7 @@ export default function BlogDetail() {
               </Grid>
             </Paper>
           </Fade>
-        )}
+        )} */}
 
         {/* Cuisine */}
         {blog.content?.cuisine && (
