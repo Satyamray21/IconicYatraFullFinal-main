@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect,useState } from "react";
 import {
   Box,
   Grid,
@@ -23,13 +23,15 @@ import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchPopularTours } from "../features/packageSlice";
 
+import axios from "axios";
 
 const Footer = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
+  const API = import.meta.env.VITE_BASE_URL;
+  const [socialLinks, setSocialLinks] = useState({});
  const { popular, loading } = useSelector((state) => state.packages);
 
   const { data: company, status } = useSelector(
@@ -38,6 +40,13 @@ const Footer = () => {
   // ✅ Fetch domestic packages on mount
  useEffect(() => {
   dispatch(fetchPopularTours());
+  axios.get(`${API}/api/v1/social-links`)
+    .then((res) => {
+      setSocialLinks(res.data);
+    })
+    .catch((err) => {
+      console.error("Error fetching social links", err);
+    });
 }, [dispatch]);
 
 
@@ -331,58 +340,72 @@ const Footer = () => {
         {/* Social Icons */}
         <Grid size={{ xs: 12, md: 2 }}>
           <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
-            <Typography variant="body2" sx={{ whiteSpace: "nowrap", fontWeight: 600, color: '#ffd700' }}>
-              Follow Us:
-            </Typography>
-            <IconButton
-              size="small"
-              sx={{
-                background: 'rgba(255,255,255,0.1)',
-                color: '#fff',
-                '&:hover': {
-                  background: '#1877f2',
-                  transform: 'scale(1.1)'
-                },
-                transition: 'all 0.3s ease'
-              }}
-              href="https://facebook.com"
-              target="_blank"
-            >
-              <Facebook fontSize="small" />
-            </IconButton>
-            <IconButton
-              size="small"
-              sx={{
-                background: 'rgba(255,255,255,0.1)',
-                color: '#fff',
-                '&:hover': {
-                  background: '#e1306c',
-                  transform: 'scale(1.1)'
-                },
-                transition: 'all 0.3s ease'
-              }}
-              href="https://instagram.com"
-              target="_blank"
-            >
-              <Instagram fontSize="small" />
-            </IconButton>
-            <IconButton
-              size="small"
-              sx={{
-                background: 'rgba(255,255,255,0.1)',
-                color: '#fff',
-                '&:hover': {
-                  background: '#25d366',
-                  transform: 'scale(1.1)'
-                },
-                transition: 'all 0.3s ease'
-              }}
-              href="https://wa.me/917053900957"
-              target="_blank"
-            >
-              <WhatsApp fontSize="small" />
-            </IconButton>
-          </Stack>
+  <Typography
+    variant="body2"
+    sx={{ whiteSpace: "nowrap", fontWeight: 600, color: "#ffd700" }}
+  >
+    Follow Us:
+  </Typography>
+
+  {/* FACEBOOK */}
+  {socialLinks?.facebook && (
+    <IconButton
+      size="small"
+      sx={{
+        background: 'rgba(255,255,255,0.1)',
+        color: '#fff',
+        '&:hover': {
+          background: '#1877f2',
+          transform: 'scale(1.1)'
+        },
+        transition: 'all 0.3s ease'
+      }}
+      href={socialLinks.facebook}
+      target="_blank"
+    >
+      <Facebook fontSize="small" />
+    </IconButton>
+  )}
+
+  {/* INSTAGRAM */}
+  {socialLinks?.instagram && (
+    <IconButton
+      size="small"
+      sx={{
+        background: 'rgba(255,255,255,0.1)',
+        color: '#fff',
+        '&:hover': {
+          background: '#e1306c',
+          transform: 'scale(1.1)'
+        },
+        transition: 'all 0.3s ease'
+      }}
+      href={socialLinks.instagram}
+      target="_blank"
+    >
+      <Instagram fontSize="small" />
+    </IconButton>
+  )}
+
+  {/* WHATSAPP (optional dynamic later) */}
+  <IconButton
+    size="small"
+    sx={{
+      background: 'rgba(255,255,255,0.1)',
+      color: '#fff',
+      '&:hover': {
+        background: '#25d366',
+        transform: 'scale(1.1)'
+      },
+      transition: 'all 0.3s ease'
+    }}
+    href="https://wa.me/917053900957"
+    target="_blank"
+  >
+    <WhatsApp fontSize="small" />
+  </IconButton>
+</Stack>
+
         </Grid>
 
         {/* Support */}

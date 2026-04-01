@@ -14,11 +14,15 @@ import {
   useTheme,
   Toolbar,
   AppBar,
+  Collapse,
 } from '@mui/material';
+
 import MenuIcon from '@mui/icons-material/Menu';
+import { ExpandLess, ExpandMore } from '@mui/icons-material';
+
 import { Link, useLocation } from 'react-router-dom';
 import { sidebarItems } from './SidebarData';
-import logo from '../assets/Logo/logoiconic.jpg'
+import logo from '../assets/Logo/logoiconic.jpg';
 
 const drawerWidth = 200;
 
@@ -26,24 +30,100 @@ const Sidebar = ({ children }) => {
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState({}); // 👈 NEW
 
   const toggleDrawer = () => setMobileOpen(!mobileOpen);
+
+  const handleToggle = (label) => {
+    setOpenMenu((prev) => ({
+      ...prev,
+      [label]: !prev[label],
+    }));
+  };
+
+  const isActiveRoute = (route) => location.pathname === route;
 
   const drawerContent = (
     <Box>
       <Box sx={{ p: 2, textAlign: 'center' }}>
         <img src={logo} style={{ height: '50px', width: '150px' }} />
       </Box>
+
       <Divider />
+
       <List>
         {sidebarItems.map((item, index) => {
-          // Render Divider if the item has the divider flag
           if (item.divider) {
-            return <Divider key={`divider-${index}`} sx={{ my: 1 }} />;
+            return <Divider key={index} sx={{ my: 1 }} />;
           }
 
-          const isActive = location.pathname === item.route;
+          // 🔽 HANDLE DROPDOWN (Settings)
+          if (item.children) {
+            const isOpen = openMenu[item.label];
+
+            return (
+              <React.Fragment key={index}>
+                <ListItem disablePadding>
+                  <ListItemButton onClick={() => handleToggle(item.label)}>
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                      {item.icon}
+                    </ListItemIcon>
+
+                    <ListItemText primary={item.label} />
+
+                    {isOpen ? <ExpandLess /> : <ExpandMore />}
+                  </ListItemButton>
+                </ListItem>
+
+                {/* CHILDREN */}
+                <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    {item.children.map((child, i) => {
+                      const isActive = isActiveRoute(child.route);
+
+                      return (
+                        <ListItem key={i} disablePadding>
+                          <ListItemButton
+                            component={Link}
+                            to={child.route}
+                            sx={{
+                              pl: 4,
+                              backgroundColor: isActive
+                                ? 'primary.main'
+                                : 'transparent',
+                              color: isActive ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isActive
+                                  ? 'primary.dark'
+                                  : '#e0e0e0',
+                              },
+                            }}
+                            onClick={() => isMobile && toggleDrawer()}
+                          >
+                            <ListItemIcon
+                              sx={{
+                                color: isActive ? 'white' : 'black',
+                                minWidth: 40,
+                              }}
+                            >
+                              {child.icon}
+                            </ListItemIcon>
+
+                            <ListItemText primary={child.label} />
+                          </ListItemButton>
+                        </ListItem>
+                      );
+                    })}
+                  </List>
+                </Collapse>
+              </React.Fragment>
+            );
+          }
+
+          // 🔹 NORMAL ITEM
+          const isActive = isActiveRoute(item.route);
 
           return (
             <ListItem key={index} disablePadding>
@@ -64,28 +144,27 @@ const Sidebar = ({ children }) => {
                 >
                   {item.icon}
                 </ListItemIcon>
+
                 <ListItemText primary={item.label} />
               </ListItemButton>
             </ListItem>
           );
         })}
       </List>
-
     </Box>
   );
 
   return (
     <Box sx={{ display: 'flex' }}>
-      {/* AppBar for mobile */}
+      {/* Mobile AppBar */}
       {isMobile && (
         <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
           <Toolbar>
             <IconButton edge="start" color="inherit" onClick={toggleDrawer}>
               <MenuIcon />
             </IconButton>
-            <Typography variant="h6" noWrap>
-              Admin Dashboard
-            </Typography>
+
+            <Typography variant="h6">Admin Dashboard</Typography>
           </Toolbar>
         </AppBar>
       )}
@@ -98,19 +177,16 @@ const Sidebar = ({ children }) => {
         ModalProps={{ keepMounted: true }}
         sx={{
           width: drawerWidth,
-          flexShrink: 0,
           '& .MuiDrawer-paper': {
             width: drawerWidth,
-            boxSizing: 'border-box',
             backgroundColor: '#f5f5f5',
-            borderRight: '1px solid #ccc',
           },
         }}
       >
         {drawerContent}
       </Drawer>
 
-      {/* Page Content */}
+      {/* Content */}
       <Box
         component="main"
         sx={{
