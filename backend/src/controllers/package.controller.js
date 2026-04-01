@@ -741,32 +741,91 @@ export const remove = asyncHandler(async (req, res) => {
 export const getPopularTours = asyncHandler(async (req, res) => {
     const { page = 1, limit = 8 } = req.query;
 
-    const skip = (Math.max(1, Number(page)) - 1) * Math.max(1, Number(limit));
+    const pageNum = Math.max(1, Number(page));
     const limitNum = Math.min(50, Math.max(1, Number(limit)));
+    const skip = (pageNum - 1) * limitNum;
 
-    const [items, total] = await Promise.all([
-        Package.find({ 
-            isPopular: true, 
-            status: "active" 
-        })
-        .select("_id sector")   // ✅ Only sector
-        .skip(skip)
-        .limit(limitNum),
+    const matchStage = {
+        status: "active"
+    };
 
-        Package.countDocuments({ 
-            isPopular: true, 
-            status: "active" 
-        })
+    const aggregation = [
+        { $match: matchStage },
+
+        // ✅ 1st sort (important for picking latest in group)
+        { $sort: { createdAt: -1 } },
+
+        {
+            $addFields: {
+                groupKey: {
+                    $cond: [
+                        { $eq: ["$tourType", "Domestic"] },
+                        "$sector",
+                        "$destinationCountry"
+                    ]
+                }
+            }
+        },
+
+        {
+            $group: {
+                _id: "$groupKey",
+                doc: { $first: "$$ROOT" }
+            }
+        },
+
+        { $replaceRoot: { newRoot: "$doc" } },
+
+        // ✅ 2nd sort (VERY IMPORTANT 🔥)
+        { $sort: { createdAt: -1 } },
+
+        { $skip: skip },
+        { $limit: limitNum },
+
+        {
+            $project: {
+                _id: 1,
+                sector: 1,
+                destinationCountry: 1,
+                tourType: 1,
+                createdAt: 1 // optional (good for debugging)
+            }
+        }
+    ];
+
+    const items = await Package.aggregate(aggregation);
+
+    const totalAgg = await Package.aggregate([
+        { $match: matchStage },
+        {
+            $addFields: {
+                groupKey: {
+                    $cond: [
+                        { $eq: ["$tourType", "Domestic"] },
+                        "$sector",
+                        "$destinationCountry"
+                    ]
+                }
+            }
+        },
+        {
+            $group: { _id: "$groupKey" }
+        },
+        { $count: "total" }
     ]);
+
+    const total = totalAgg[0]?.total || 0;
 
     res.json({
         items,
         total,
-        page: Number(page),
+        page: pageNum,
         limit: limitNum,
         totalPages: Math.ceil(total / limitNum)
     });
 });
+
+
 
 
 
