@@ -202,10 +202,34 @@ const BlogPostsTable = () => {
     return () => clearTimeout(debounceTimer);
   }, [searchTerm]);
 
-  // Handle delete
+  // Handle delete - FIXED VERSION
   const handleDelete = async () => {
-    if (selectedBlog) {
-      const result = await dispatch(deleteBlog(selectedBlog._id));
+    if (!selectedBlog) {
+      console.error('No blog selected for deletion');
+      return;
+    }
+
+    // Get the correct ID - try different possible ID fields
+    const blogId = selectedBlog._id || selectedBlog.id || selectedBlog.slug;
+    
+    if (!blogId) {
+      setSnackbar({
+        open: true,
+        message: 'Invalid blog ID. Cannot delete.',
+        severity: 'error'
+      });
+      setDeleteDialogOpen(false);
+      setSelectedBlog(null);
+      return;
+    }
+
+    console.log('Attempting to delete blog with ID:', blogId);
+    console.log('Full blog object:', selectedBlog);
+
+    try {
+      const result = await dispatch(deleteBlog(blogId));
+      
+      console.log('Delete result:', result);
       
       if (deleteBlog.fulfilled.match(result)) {
         setSnackbar({
@@ -213,61 +237,81 @@ const BlogPostsTable = () => {
           message: 'Blog post deleted successfully!',
           severity: 'success'
         });
+        // Refresh the blog list
         fetchBlogs();
       } else {
+        console.error('Delete failed:', result.payload);
         setSnackbar({
           open: true,
           message: result.payload || 'Failed to delete blog post',
           severity: 'error'
         });
       }
-      
-      setDeleteDialogOpen(false);
-      setSelectedBlog(null);
+    } catch (error) {
+      console.error('Delete error:', error);
+      setSnackbar({
+        open: true,
+        message: 'An error occurred while deleting',
+        severity: 'error'
+      });
     }
+
+    setDeleteDialogOpen(false);
+    setSelectedBlog(null);
   };
 
   // Handle status change
   const handleStatusChange = async (newStatus) => {
-    if (selectedBlog) {
-      const formData = new FormData();
-      const blogData = {
-        ...selectedBlog,
-        status: newStatus,
-        updatedAt: new Date()
-      };
-      formData.append('blogData', JSON.stringify(blogData));
-      
-      const result = await dispatch(updateBlog({ 
-        id: selectedBlog._id, 
-        formData 
-      }));
-      
-      if (updateBlog.fulfilled.match(result)) {
-        setSnackbar({
-          open: true,
-          message: `Blog post ${newStatus} successfully!`,
-          severity: 'success'
-        });
-        fetchBlogs();
-      } else {
-        setSnackbar({
-          open: true,
-          message: result.payload || 'Failed to update blog status',
-          severity: 'error'
-        });
-      }
-      
+    if (!selectedBlog) return;
+    
+    const blogId = selectedBlog._id || selectedBlog.id;
+    
+    if (!blogId) {
+      setSnackbar({
+        open: true,
+        message: 'Invalid blog ID',
+        severity: 'error'
+      });
       setStatusDialogOpen(false);
-      setSelectedBlog(null);
+      return;
     }
+    
+    const formData = new FormData();
+    const blogData = {
+      ...selectedBlog,
+      status: newStatus,
+      updatedAt: new Date()
+    };
+    formData.append('blogData', JSON.stringify(blogData));
+    
+    const result = await dispatch(updateBlog({ 
+      id: blogId, 
+      formData 
+    }));
+    
+    if (updateBlog.fulfilled.match(result)) {
+      setSnackbar({
+        open: true,
+        message: `Blog post ${newStatus} successfully!`,
+        severity: 'success'
+      });
+      fetchBlogs();
+    } else {
+      setSnackbar({
+        open: true,
+        message: result.payload || 'Failed to update blog status',
+        severity: 'error'
+      });
+    }
+    
+    setStatusDialogOpen(false);
+    setSelectedBlog(null);
   };
 
   // Handle edit
- const handleEdit = (blog) => {
-    // Navigate to edit form using slug (not ID)
+  const handleEdit = (blog) => {
     navigate(`/blog/edit/${blog.slug}`, { state: { blog, isEditing: true } });
-};
+  };
 
   // Handle view
   const handleView = (blog) => {
@@ -284,14 +328,11 @@ const BlogPostsTable = () => {
     const duplicatedBlog = {
       ...blog,
       title: `${blog.title} (Copy)`,
-      slug: `${blog.slug}-copy`,
+      slug: `${blog.slug}-copy-${Date.now()}`,
       status: 'draft',
       publishedAt: new Date(),
       views: 0
     };
-    
-    const formData = new FormData();
-    formData.append('blogData', JSON.stringify(duplicatedBlog));
     
     // Navigate to form with duplicated data
     navigate('/postblogform', { state: { blog: duplicatedBlog, isEditing: false } });
@@ -317,17 +358,19 @@ const BlogPostsTable = () => {
 
   // Open menu for blog actions
   const handleMenuOpen = (event, blog) => {
+    event.stopPropagation();
     setAnchorEl(event.currentTarget);
     setSelectedBlog(blog);
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setSelectedBlog(null);
-  };
+const handleMenuClose = () => {
+  setAnchorEl(null);
+};
+
 
   // Format date
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', {
       day: '2-digit',
@@ -338,6 +381,7 @@ const BlogPostsTable = () => {
 
   // Truncate text
   const truncateText = (text, maxLength = 100) => {
+    if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
   };
@@ -509,7 +553,7 @@ const BlogPostsTable = () => {
             ) : blogs && blogs.length > 0 ? (
               blogs.map((blog, index) => (
                 <TableRow 
-                  key={blog._id}
+                  key={blog._id || blog.id || index}
                   sx={{ 
                     '&:hover': { 
                       backgroundColor: '#f5f5f5',
@@ -563,8 +607,8 @@ const BlogPostsTable = () => {
                   </TableCell>
                   <TableCell>
                     <StatusChip
-                      label={blog.status}
-                      status={blog.status}
+                      label={blog.status || 'draft'}
+                      status={blog.status || 'draft'}
                       size="small"
                       icon={getStatusIcon(blog.status)}
                     />
@@ -685,7 +729,8 @@ const BlogPostsTable = () => {
           </ListItemIcon>
           <ListItemText>Duplicate Post</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => {
+        <MenuItem onClick={(e) => {
+          e.stopPropagation();
           handleMenuClose();
           setDeleteDialogOpen(true);
         }} sx={{ color: '#f44336' }}>

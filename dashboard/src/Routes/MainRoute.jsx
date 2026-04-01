@@ -167,6 +167,7 @@ const GoogleAdsEditLandingForm = lazy(() =>
 const ViewLandingPage=lazy(()=>
 import("../Pages/Admin/Profile/components/AdsLandingPage/Form/GoogleAdsViewLanding")
 );
+const SocialLinksForm = lazy(() => import("../Components/SocialLinksForm"));
 const PostBlogForm = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogForm'));
 const PostBlogViewForm = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogViewForm'));
 const PostBlogFormEdit = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogEditForm'));
@@ -413,7 +414,7 @@ const MainRoute = () => {
   path="/google-ads-enquiry"
   element={<GoogleAdsLeadsTable />}
 />
-
+ <Route path="/setting/social-links" element={<SocialLinksForm />} />
 
           <Route
             path="*"

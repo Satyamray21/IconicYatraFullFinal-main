@@ -48,11 +48,11 @@ const contentSchema = new mongoose.Schema({
     topPlaces: [placeSchema],
     bestTimeToVisit: {
         type: String,
-        required: true
+        required: false
     },
     travelTips: [{
         type: String,
-        required: true
+        required: false
     }],
     cuisine: {
         type: String,

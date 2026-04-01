@@ -1,5 +1,5 @@
 // src/components/PostBlog.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     Box,
@@ -12,7 +12,6 @@ import {
     InputLabel,
     Select,
     MenuItem,
-    FormHelperText,
     Alert,
     Snackbar,
     CircularProgress,
@@ -48,8 +47,6 @@ import {
     resetForm,
     addPlace,
     removePlace,
-    addTravelTip,
-    removeTravelTip,
     addGuideTravelTip,
     removeGuideTravelTip,
     addService,
@@ -62,7 +59,7 @@ import {
     selectBlogStatus,
     selectBlogError
 } from "../../../../../../features/blog/blogSlice";
-
+import { useNavigate } from "react-router-dom";
 const VisuallyHiddenInput = styled('input')({
     clip: 'rect(0 0 0 0)',
     clipPath: 'inset(50%)',
@@ -80,10 +77,10 @@ const PostBlogForm = () => {
     const formData = useSelector(selectBlogForm);
     const status = useSelector(selectBlogStatus);
     const error = useSelector(selectBlogError);
-    
+    const navigate = useNavigate();
+
     const [activeTab, setActiveTab] = useState(0);
     const [placeInput, setPlaceInput] = useState({ title: '', desc: '' });
-    const [tipInput, setTipInput] = useState('');
     const [guideTipInput, setGuideTipInput] = useState('');
     const [serviceInput, setServiceInput] = useState('');
     const [safetyTipInput, setSafetyTipInput] = useState('');
@@ -96,18 +93,17 @@ const PostBlogForm = () => {
 
     const categories = ['Domestic', 'International'];
 
-const subCategories = [
-    'Hill Stations',
-    'Beach Destinations',
-    'Cultural Tours',
-    'Adventure Travel',
-    'Honeymoon Packages',
-    'Family Tours',
-    'Luxury Travel',
-    'Wildlife Safari',
-    'Religious Tours'
-];
-
+    const subCategories = [
+        'Hill Stations',
+        'Beach Destinations',
+        'Cultural Tours',
+        'Adventure Travel',
+        'Honeymoon Packages',
+        'Family Tours',
+        'Luxury Travel',
+        'Wildlife Safari',
+        'Religious Tours'
+    ];
 
     // Generate ID and slug from title
     const generateId = (title) => {
@@ -118,24 +114,22 @@ const subCategories = [
     };
 
     const handleInputChange = (e) => {
-    const { name, value } = e.target;
+        const { name, value } = e.target;
 
-    if (name === 'title') {
-        const generatedId = generateId(value);
-        dispatch(setFormField({ field: 'title', value }));
-        dispatch(setFormField({ field: 'id', value: generatedId }));
-        dispatch(setFormField({ field: 'slug', value: generatedId }));
-    } 
-    // 🔥 RESET SUBCATEGORY WHEN CATEGORY CHANGES
-    else if (name === 'category') {
-        dispatch(setFormField({ field: 'category', value }));
-        dispatch(setFormField({ field: 'subCategory', value: '' })); 
-    } 
-    else {
-        dispatch(setFormField({ field: name, value }));
-    }
-};
-
+        if (name === 'title') {
+            const generatedId = generateId(value);
+            dispatch(setFormField({ field: 'title', value }));
+            dispatch(setFormField({ field: 'id', value: generatedId }));
+            dispatch(setFormField({ field: 'slug', value: generatedId }));
+        } 
+        else if (name === 'category') {
+            dispatch(setFormField({ field: 'category', value }));
+            dispatch(setFormField({ field: 'subCategory', value: '' })); 
+        } 
+        else {
+            dispatch(setFormField({ field: name, value }));
+        }
+    };
 
     const handleDateChange = (newDate) => {
         dispatch(setFormField({ field: 'date', value: newDate }));
@@ -194,25 +188,6 @@ const subCategories = [
 
     const handleRemovePlace = (index) => {
         dispatch(removePlace(index));
-    };
-
-    // Travel Tips Management
-    const handleAddTip = () => {
-        if (!tipInput.trim()) {
-            setSnackbar({
-                open: true,
-                message: 'Please enter a travel tip',
-                severity: 'warning'
-            });
-            return;
-        }
-
-        dispatch(addTravelTip(tipInput));
-        setTipInput('');
-    };
-
-    const handleRemoveTip = (index) => {
-        dispatch(removeTravelTip(index));
     };
 
     // Guide Travel Tips Management
@@ -278,9 +253,6 @@ const subCategories = [
         if (!formData.title.trim()) errors.title = 'Blog title is required';
         if (!formData.category) errors.category = 'Category is required';
         if (!formData.subCategory) errors.subCategory = 'Sub Category is required';
-
-       
-
         if (!formData.date) errors.date = 'Date is required';
         if (!formData.readTime.trim()) errors.readTime = 'Read time is required';
         if (!formData.excerpt.trim()) errors.excerpt = 'Excerpt is required';
@@ -295,14 +267,6 @@ const subCategories = [
 
         if (formData.content.topPlaces.length === 0) {
             errors.topPlaces = 'At least one top place is required';
-        }
-
-        if (!formData.content.bestTimeToVisit.trim()) {
-            errors.bestTimeToVisit = 'Best time to visit is required';
-        }
-
-        if (formData.content.travelTips.length === 0) {
-            errors.travelTips = 'At least one travel tip is required';
         }
 
         if (!formData.content.cuisine.trim()) {
@@ -337,60 +301,62 @@ const subCategories = [
     };
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
+    e.preventDefault();
 
-        if (!validateForm()) {
-            setSnackbar({
-                open: true,
-                message: 'Please fill all required fields correctly',
-                severity: 'error'
-            });
-            return;
-        }
+    if (!validateForm()) {
+        setSnackbar({
+            open: true,
+            message: 'Please fill all required fields correctly',
+            severity: 'error'
+        });
+        return;
+    }
 
-        // Create FormData for file upload
-        const formDataToSend = new FormData();
-        
-        // Prepare blog data
-        const blogData = {
-            id: formData.id,
-            slug: formData.slug,
-            category: formData.category,
-             subCategory: formData.subCategory,
-            title: formData.title,
-            date: formData.date,
-            readTime: formData.readTime,
-            excerpt: formData.excerpt,
-            content: formData.content
-        };
-        
-        formDataToSend.append('blogData', JSON.stringify(blogData));
-        
-        if (formData.image) {
-            formDataToSend.append('image', formData.image);
-        }
+    const formDataToSend = new FormData();
 
-        const result = await dispatch(createBlog(formDataToSend));
-        
-        if (createBlog.fulfilled.match(result)) {
-            setSnackbar({
-                open: true,
-                message: 'Blog post created successfully!',
-                severity: 'success'
-            });
-            
-            // Reset form
-            dispatch(resetForm());
-            setImagePreviewLocal(null);
-            setActiveTab(0);
-        } else {
-            setSnackbar({
-                open: true,
-                message: result.payload || 'Failed to create blog post',
-                severity: 'error'
-            });
-        }
+    const blogData = {
+        id: formData.id,
+        slug: formData.slug,
+        category: formData.category,
+        subCategory: formData.subCategory,
+        title: formData.title,
+        date: formData.date,
+        readTime: formData.readTime,
+        excerpt: formData.excerpt,
+        content: formData.content
     };
+
+    formDataToSend.append('blogData', JSON.stringify(blogData));
+
+    if (formData.image) {
+        formDataToSend.append('image', formData.image);
+    }
+
+    const result = await dispatch(createBlog(formDataToSend));
+
+    if (createBlog.fulfilled.match(result)) {
+        setSnackbar({
+            open: true,
+            message: 'Blog post created successfully!',
+            severity: 'success'
+        });
+
+        // Reset form
+        dispatch(resetForm());
+        setImagePreviewLocal(null);
+        setActiveTab(0);
+
+        // ✅ ADD THIS LINE (navigation)
+        navigate('/profile?activeTab=blog');
+
+    } else {
+        setSnackbar({
+            open: true,
+            message: result.payload || 'Failed to create blog post',
+            severity: 'error'
+        });
+    }
+};
 
     const handleCloseSnackbar = () => {
         setSnackbar(prev => ({ ...prev, open: false }));
@@ -481,26 +447,25 @@ const subCategories = [
                                                 ))}
                                             </Select>
                                         </FormControl>
-               
-
                                     </Grid>
+
                                     <Grid size={{xs:12, md:6}}>
-    <FormControl fullWidth required>
-        <InputLabel>Sub Category</InputLabel>
-        <Select
-            name="subCategory"
-            value={formData.subCategory || ''}
-            label="Sub Category"
-            onChange={handleInputChange}
-        >
-            {subCategories.map((sub) => (
-                <MenuItem key={sub} value={sub}>
-                    {sub}
-                </MenuItem>
-            ))}
-        </Select>
-    </FormControl>
-</Grid>
+                                        <FormControl fullWidth required>
+                                            <InputLabel>Sub Category</InputLabel>
+                                            <Select
+                                                name="subCategory"
+                                                value={formData.subCategory || ''}
+                                                label="Sub Category"
+                                                onChange={handleInputChange}
+                                            >
+                                                {subCategories.map((sub) => (
+                                                    <MenuItem key={sub} value={sub}>
+                                                        {sub}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Grid>
 
                                     <Grid size={{xs:12, md:6}}>
                                         <DatePicker
@@ -630,7 +595,7 @@ const subCategories = [
                                         <Accordion>
                                             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                                                 <Typography variant="subtitle1" fontWeight={600}>
-                                                    Top Places {formData.content.topPlaces.length > 0 && 
+                                                    Tourist Spots {formData.content.topPlaces.length > 0 && 
                                                         `(${formData.content.topPlaces.length} added)`}
                                                 </Typography>
                                             </AccordionSummary>
@@ -718,26 +683,6 @@ const subCategories = [
                                         <TextField
                                             fullWidth
                                             required
-                                            label="Best Time to Visit"
-                                            name="content.bestTimeToVisit"
-                                            value={formData.content.bestTimeToVisit}
-                                            onChange={handleInputChange}
-                                            variant="outlined"
-                                            placeholder="e.g., October to March is the best time to visit..."
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <WbSunnyIcon color="primary" />
-                                                    </InputAdornment>
-                                                ),
-                                            }}
-                                        />
-                                    </Grid>
-
-                                    <Grid size={{xs:12}}>
-                                        <TextField
-                                            fullWidth
-                                            required
                                             label="Local Cuisine"
                                             name="content.cuisine"
                                             value={formData.content.cuisine}
@@ -752,72 +697,6 @@ const subCategories = [
                                                 ),
                                             }}
                                         />
-                                    </Grid>
-
-                                    {/* Travel Tips Section */}
-                                    <Grid size={{xs:12}}>
-                                        <Accordion>
-                                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                                <Typography variant="subtitle1" fontWeight={600}>
-                                                    Travel Tips {formData.content.travelTips.length > 0 && 
-                                                        `(${formData.content.travelTips.length} added)`}
-                                                </Typography>
-                                            </AccordionSummary>
-                                            <AccordionDetails>
-                                                <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-                                                    <Typography variant="subtitle2" gutterBottom>
-                                                        Add Travel Tip
-                                                    </Typography>
-                                                    <Grid container spacing={2}>
-                                                        <Grid size={{xs:12}}>
-                                                            <TextField
-                                                                fullWidth
-                                                                size="small"
-                                                                label="Travel Tip"
-                                                                value={tipInput}
-                                                                onChange={(e) => setTipInput(e.target.value)}
-                                                                placeholder="e.g., Carry light cotton clothes"
-                                                            />
-                                                        </Grid>
-                                                        <Grid size={{xs:12}}>
-                                                            <Button
-                                                                variant="contained"
-                                                                startIcon={<AddIcon />}
-                                                                onClick={handleAddTip}
-                                                                size="small"
-                                                            >
-                                                                Add Tip
-                                                            </Button>
-                                                        </Grid>
-                                                    </Grid>
-                                                </Paper>
-
-                                                {formData.content.travelTips.length > 0 ? (
-                                                    <Stack spacing={1}>
-                                                        {formData.content.travelTips.map((tip, index) => (
-                                                            <Paper key={index} variant="outlined" sx={{ p: 1.5 }}>
-                                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                    <Typography variant="body2">
-                                                                        {index + 1}. {tip}
-                                                                    </Typography>
-                                                                    <IconButton 
-                                                                        size="small" 
-                                                                        color="error"
-                                                                        onClick={() => handleRemoveTip(index)}
-                                                                    >
-                                                                        <DeleteIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                </Box>
-                                                            </Paper>
-                                                        ))}
-                                                    </Stack>
-                                                ) : (
-                                                    <Typography variant="body2" color="text.secondary" align="center">
-                                                        No travel tips added yet.
-                                                    </Typography>
-                                                )}
-                                            </AccordionDetails>
-                                        </Accordion>
                                     </Grid>
 
                                     <Grid size={{xs:12}}>

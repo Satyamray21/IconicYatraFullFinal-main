@@ -131,7 +131,7 @@ const initialState = {
         id: '',
         slug: '',
         category: '',
-        subCategory:'',
+        subCategory: '',
         title: '',
         date: null,
         readTime: '',
@@ -140,8 +140,6 @@ const initialState = {
         content: {
             introduction: '',
             topPlaces: [],
-            bestTimeToVisit: '',
-            travelTips: [],
             cuisine: '',
             conclusion: '',
             travelGuide: {
@@ -230,18 +228,6 @@ const blogSlice = createSlice({
         // Remove place from topPlaces array
         removePlace: (state, action) => {
             state.form.content.topPlaces = state.form.content.topPlaces.filter(
-                (_, index) => index !== action.payload
-            );
-        },
-        
-        // Add travel tip
-        addTravelTip: (state, action) => {
-            state.form.content.travelTips.push(action.payload);
-        },
-        
-        // Remove travel tip
-        removeTravelTip: (state, action) => {
-            state.form.content.travelTips = state.form.content.travelTips.filter(
                 (_, index) => index !== action.payload
             );
         },
@@ -463,8 +449,6 @@ export const {
     resetFilters,
     addPlace,
     removePlace,
-    addTravelTip,
-    removeTravelTip,
     addGuideTravelTip,
     removeGuideTravelTip,
     addService,
