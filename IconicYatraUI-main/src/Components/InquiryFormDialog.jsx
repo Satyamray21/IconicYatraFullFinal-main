@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from "react";
 import {
     Dialog,
-    DialogTitle,
     DialogContent,
     TextField,
     Button,
@@ -10,16 +9,23 @@ import {
     CircularProgress,
     Alert,
     Typography,
-    Box
+    Box,
+    IconButton
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import { useDispatch, useSelector } from "react-redux";
-import { createInquiry, resetInquiryState } from "../Features/inquirySlice";
+import { useNavigate } from "react-router-dom";
+import {enquiryAxios} from "../Utils/axiosInstance"
 
-const InquiryFormDialog = ({ open, handleClose, title = "Travel Inquiry", defaultDestination = "" }) => {
+const InquiryFormDialog = ({
+    open,
+    handleClose,
+    title = "Get a Free Enquiry",
+    defaultDestination = ""
+}) => {
     const dispatch = useDispatch();
-    const { loading, success, error } = useSelector((state) => state.inquiry);
-
-    const [showThankYou, setShowThankYou] = useState(false);
+    const navigate = useNavigate();
+    
 
     const [form, setForm] = useState({
         name: "",
@@ -27,104 +33,192 @@ const InquiryFormDialog = ({ open, handleClose, title = "Travel Inquiry", defaul
         mobile: "",
         persons: "",
         destination: defaultDestination,
-        date: "",
+        travelDate: "",
     });
-
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
     useEffect(() => {
         setForm((prev) => ({ ...prev, destination: defaultDestination }));
     }, [defaultDestination, open]);
 
-    useEffect(() => {
-        if (success) {
-            // Reset form after successful submission
+     
+
+    const handleChange = (e) => {
+        setForm({ ...form, [e.target.name]: e.target.value });
+    };
+
+      const handleFormSubmit = async (e) => {
+        e.preventDefault();
+
+        setLoading(true);
+        setError("");
+
+        try {
+            await enquiryAxios.post("/enquiry/create", form);
+
+            // reset form
             setForm({
                 name: "",
                 email: "",
                 mobile: "",
                 persons: "",
                 destination: "",
-                date: "",
+                travelDate: "",
             });
-            dispatch(resetInquiryState());
-            setShowThankYou(true);
+
+            handleClose();
+            navigate("/thank-you");
+
+        } catch (error) {
+            setError(error.response?.data?.message || "Something went wrong");
+        } finally {
+            setLoading(false);
         }
-    }, [success, dispatch]);
-
-    const handleChange = (e) => {
-        setForm({ ...form, [e.target.name]: e.target.value });
-    };
-
-    const handleFormSubmit = (e) => {
-        e.preventDefault();
-        dispatch(createInquiry(form));
-    };
-
-    const handleThankYouClose = () => {
-        setShowThankYou(false);
-        handleClose();
     };
 
     return (
         <>
             {/* Inquiry Form Dialog */}
-            <Dialog open={open && !showThankYou} onClose={handleClose} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontWeight: 700, textAlign: "center", color: "#ff9800" }}>
-                    ✈ {title} - Iconic Yatra
-                </DialogTitle>
-                <DialogContent>
+            <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
+                
+                {/* Header */}
+                <Box
+                    sx={{
+                        backgroundColor: "#e67e52",
+                        color: "#000",
+                        px: 2,
+                        py: 1.5,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                    }}
+                >
+                    <Typography fontWeight={600}>{title}</Typography>
+                    <IconButton size="small" onClick={handleClose}>
+                        <CloseIcon />
+                    </IconButton>
+                </Box>
+
+                <DialogContent sx={{ background: "#f2f2f2" }}>
                     {error && <Alert severity="error">{error.message || error}</Alert>}
+
                     <form onSubmit={handleFormSubmit}>
-                        <Grid container spacing={2} sx={{ mt: 1 }}>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth label="Name" name="name" value={form.name} onChange={handleChange} required />
+                        <Grid container spacing={2} sx={{ mt: 0.5 }}>
+
+                            {/* Name */}
+                            <Grid size={{xs:12}} >
+                                <Typography fontSize={13}>Name</Typography>
+                                <TextField
+                                    fullWidth
+                                    name="name"
+                                    placeholder="Your Name*"
+                                    value={form.name}
+                                    onChange={handleChange}
+                                    size="small"
+                                    required
+                                />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth label="Email" type="email" name="email" value={form.email} onChange={handleChange} required />
+
+                            {/* Email */}
+                            <Grid size={{xs:6}}>
+                                <Typography fontSize={13}>Email</Typography>
+                                <TextField
+                                    fullWidth
+                                    name="email"
+                                    type="email"
+                                    placeholder="Your Email*"
+                                    value={form.email}
+                                    onChange={handleChange}
+                                    size="small"
+                                    required
+                                />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth label="Mobile" name="mobile" value={form.mobile} onChange={handleChange} required />
+
+                            {/* Mobile */}
+                            <Grid size={{xs:6}}>
+                                <Typography fontSize={13}>Mobile/Whatsapp No.</Typography>
+                                <TextField
+                                    fullWidth
+                                    name="mobile"
+                                    placeholder="Your Mobile No.*"
+                                    value={form.mobile}
+                                    onChange={handleChange}
+                                    size="small"
+                                    required
+                                />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth label="No. of Persons" name="persons" type="number" value={form.persons} onChange={handleChange} required />
+
+                            {/* Persons */}
+                            <Grid size={{xs:6}}>
+                                <Typography fontSize={13}>No. of Persons</Typography>
+                                <TextField
+                                    fullWidth
+                                    name="persons"
+                                    type="number"
+                                    placeholder="Number of Perso"
+                                    value={form.persons}
+                                    onChange={handleChange}
+                                    size="small"
+                                    required
+                                />
                             </Grid>
-                            <Grid size={{ xs: 12 }}>
-                                <TextField fullWidth label="Destination" name="destination" value={form.destination} onChange={handleChange} required />
+
+                            {/* Destination */}
+                            <Grid size={{xs:6}}>
+                                <Typography fontSize={13}>Destination</Typography>
+                                <TextField
+                                    fullWidth
+                                    name="destination"
+                                    placeholder="Your Destination*"
+                                    value={form.destination}
+                                    onChange={handleChange}
+                                    size="small"
+                                    required
+                                />
                             </Grid>
-                            <Grid size={{ xs: 12 }}>
-                                <TextField fullWidth type="date" name="date" value={form.date} onChange={handleChange} InputLabelProps={{ shrink: true }} label="Travel Date" required />
+
+                            {/* Date */}
+                            <Grid size={{xs:12}}>
+                                <Typography fontSize={13}>Travel Date</Typography>
+                                <TextField
+                                    fullWidth
+                                    type="date"
+                                    name="travelDate"
+                                    value={form.travelDate}
+                                    onChange={handleChange}
+                                    size="small"
+                                    InputLabelProps={{ shrink: true }}
+                                    required
+                                />
                             </Grid>
-                            <Grid size={{ xs: 12 }} sx={{ textAlign: "center", mt: 2 }}>
-                                <Button type="submit" variant="contained" color="warning" size="large" sx={{ px: 5, borderRadius: 3 }} disabled={loading}>
-                                    {loading ? <CircularProgress size={24} color="inherit" /> : "Submit Inquiry"}
+
+                            {/* Button */}
+                            <Grid size={{xs:12}} sx={{ mt: 1 }}>
+                                <Button
+                                    type="submit"
+                                    fullWidth
+                                    variant="contained"
+                                    disabled={loading}
+                                    sx={{
+                                        backgroundColor: "#e67e52",
+                                        borderRadius: "25px",
+                                        py: 1.2,
+                                        fontWeight: 600,
+                                        textTransform: "none",
+                                        "&:hover": {
+                                            backgroundColor: "#d96d3f"
+                                        }
+                                    }}
+                                >
+                                    {loading ? (
+                                        <CircularProgress size={22} color="inherit" />
+                                    ) : (
+                                        "Submit Enquiry"
+                                    )}
                                 </Button>
                             </Grid>
                         </Grid>
                     </form>
-                </DialogContent>
-            </Dialog>
-
-            {/* Thank You Dialog */}
-            <Dialog open={showThankYou} onClose={handleThankYouClose} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontWeight: 700, textAlign: "center", color: "green" }}>
-                    🎉 Thank You!
-                </DialogTitle>
-                <DialogContent>
-                    <Box sx={{ textAlign: "center", p: 3 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Your inquiry has been submitted successfully.
-                        </Typography>
-                        <Typography variant="body1" gutterBottom>
-                            Our team from <b>Iconic Yatra</b> will contact you shortly.
-                        </Typography>
-                        <Button
-                            variant="contained"
-                            color="success"
-                            sx={{ mt: 3, borderRadius: 3, px: 5 }}
-                            onClick={handleThankYouClose}
-                        >
-                            Close
-                        </Button>
-                    </Box>
                 </DialogContent>
             </Dialog>
         </>

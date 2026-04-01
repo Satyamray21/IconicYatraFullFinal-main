@@ -12,6 +12,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import PackageCard from "../../Components/PackageCard";
+import InquiryFormDialog from "../../Components/InquiryFormDialog";
 import bannerImg from "../../assets/Banner/banner1.jpg";
 import { fetchHolidayPackages, clearError } from "../../Features/packageSlice";
 
@@ -19,6 +20,8 @@ const Holidays = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [visibleCount, setVisibleCount] = useState(8);
+  const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
+  const [selectedPackageTitle, setSelectedPackageTitle] = useState("");
 
   // Get state from Redux store
   const {
@@ -109,10 +112,8 @@ const Holidays = () => {
   };
 
   const handleQueryClick = (pkg) => {
-    // Implement your query logic here
-    console.log("Query for package:", pkg);
-    // You can open a modal or navigate to query page
-    // navigate(`/query?package=${pkg.id}&type=holiday`);
+    setSelectedPackageTitle(pkg.title);
+    setInquiryDialogOpen(true);
   };
 
   return (
@@ -251,6 +252,14 @@ const Holidays = () => {
           </Box>
         )}
       </Box>
+
+      {/* Inquiry Form Dialog */}
+      <InquiryFormDialog
+        open={inquiryDialogOpen}
+        handleClose={() => setInquiryDialogOpen(false)}
+        title="Holiday Package Inquiry"
+        defaultDestination={selectedPackageTitle}
+      />
     </>
   );
 };
