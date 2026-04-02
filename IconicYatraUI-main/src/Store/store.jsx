@@ -8,6 +8,7 @@ import companyUIReducer from "../Features/companyUISlice";
 import galleryReducer from "../Features/gallerySlice";
 import landingPageReducer from "../Features/landingPageSlice";
 import blogReducer from '../Features/blogSlice';
+import homePageReducer from "../Features/homePageSlice";
 export const store = configureStore({
     reducer: {
         auth: authReducer,
@@ -19,5 +20,6 @@ export const store = configureStore({
          gallery: galleryReducer,
          landingPages: landingPageReducer,
          blog: blogReducer,
+         homePage: homePageReducer,
     }
 });

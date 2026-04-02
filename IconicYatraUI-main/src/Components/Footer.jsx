@@ -304,7 +304,7 @@ const Footer = () => {
         <Grid size={{ xs: 12, md: 4 }}>
           <Stack
             direction="row"
-            spacing={2}
+            spacing={0}
             flexWrap="wrap"
             sx={{
               "& a": {
@@ -341,12 +341,13 @@ const Footer = () => {
 
         {/* Social Icons */}
         <Grid size={{ xs: 12, md: 2 }}>
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="center"
+          sx={{mr: isMobile ? 0 : 4}}>
   <Typography
     variant="body2"
     sx={{ whiteSpace: "nowrap", fontWeight: 600, color: "#ffd700" }}
   >
-    Follow Us:
+    Follow Us :
   </Typography>
 
   {/* FACEBOOK */}

@@ -6,7 +6,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import PublicIcon from '@mui/icons-material/Public';
 import StarIcon from '@mui/icons-material/Star';
 
-const AchievementItem = ({ number, suffix, label, Icon }) => (
+const AchievementItem = ({ number, suffix, label, icon }) => (
   <Box
     textAlign="center"
     sx={{
@@ -22,34 +22,30 @@ const AchievementItem = ({ number, suffix, label, Icon }) => (
       },
     }}
   >
-    <Box
-      sx={{
-        mb: 2,
-        display: 'flex',
-        justifyContent: 'center',
-      }}
-    >
-      <Icon sx={{ fontSize: 40, color: '#555' }} />
+    <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+      <img
+        src={icon}
+        alt={label}
+        style={{ width: 40, height: 40, objectFit: "contain" }}
+      />
     </Box>
+
     <Typography variant="h4" fontWeight="bold" color="#333">
       <CountUp end={number} duration={2.5} suffix={suffix} />
     </Typography>
+
     <Typography variant="subtitle1" mt={1} sx={{ fontWeight: 500, color: '#666' }}>
       {label}
     </Typography>
   </Box>
 );
 
-const Achievements = () => {
+const Achievements = ({data}) => {
+   const achievementsList = data?.achievements || [];
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const achievements = [
-    { number: 9, suffix: '+', label: 'Years of Experience', Icon: EmojiEventsIcon },
-    { number: 100, suffix: '+', label: 'Travel Experts', Icon: PeopleIcon },
-    { number: 1500, suffix: '+', label: 'Happy Travelers', Icon: StarIcon },
-    { number: 25, suffix: '+', label: 'Destinations Covered', Icon: PublicIcon },
-  ];
+ 
 
   return (
     <Box
@@ -70,26 +66,31 @@ const Achievements = () => {
           WebkitTextFillColor: 'transparent'
         }}
       >
-        Our Achievements
+       {data?.title || "Our Achievements"}
       </Typography>
 
-      <Grid
+     <Grid
         container
         spacing={4}
         justifyContent="center"
         alignItems="stretch"
         sx={{ maxWidth: '1200px', mx: 'auto' }}
       >
-        {achievements.map((item, index) => (
-          <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
-            <AchievementItem
-              number={item.number}
-              suffix={item.suffix}
-              label={item.label}
-              Icon={item.Icon}
-            />
-          </Grid>
-        ))}
+        {achievementsList.map((item, index) => {
+          const number = parseInt(item.value);
+          const suffix = item.value.replace(number, "");
+
+          return (
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
+              <AchievementItem
+                number={number}
+                suffix={suffix}
+                label={item.label}
+                icon={item.icon}
+              />
+            </Grid>
+          );
+        })}
       </Grid>
     </Box>
   );

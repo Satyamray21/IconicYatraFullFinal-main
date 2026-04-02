@@ -4,17 +4,26 @@ import { useDispatch, useSelector } from "react-redux";
 import MainRoutes from './Routes/MainRoutes';
 import ScrollToTop from "../src/ScrollToTop";
 import { getCompany } from "./Features/companyUISlice";
+import { getHomePage } from "./Features/homePageSlice";
 import { captureTrackingParams } from "./Utils/captureTrackingParams";
 
 function App() {
   const dispatch = useDispatch();
-  const { status } = useSelector((state) => state.companyUI);
+const { status: companyStatus } = useSelector((state) => state.companyUI);
+const { status: homeStatus } = useSelector((state) => state.homePage);
 
   useEffect(() => {
-    if (status === "idle") {
-      dispatch(getCompany());
-    }
-  }, [dispatch, status]);
+  if (companyStatus === "idle") {
+    dispatch(getCompany());
+  }
+}, [dispatch, companyStatus]);
+
+useEffect(() => {
+  if (homeStatus === "idle") {
+    dispatch(getHomePage());
+  }
+}, [dispatch, homeStatus]);
+
   useEffect(() => {
     captureTrackingParams();
   }, []);

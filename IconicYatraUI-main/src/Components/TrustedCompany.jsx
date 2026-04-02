@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 
-const TrustedCompany = () => {
+const TrustedCompany = ({data}) => {
   return (
     <Box sx={{ py: 8, width: '100%', px: { xs: 2, md: 6 } }}>
       <Box
@@ -81,21 +81,10 @@ const TrustedCompany = () => {
             fontSize: '1rem',
             position: 'relative',
             zIndex: 1,
+             whiteSpace: "pre-line",
           }}
         >
-          Iconic Yatra is the most trusted and reliable travel agency in India.
-          Our years of experience and the best team of experts allow us to offer
-          premium travel services to our clients. With certified and highly
-          experienced professionals, we have successfully served countless happy
-          and satisfied travelers by meeting their requirements and expectations.
-          <br />
-          We provide customized solutions tailored to individual needs, ensuring
-          that each journey is unique and memorable. Our services are designed
-          to deliver the best possible experience, from planning to execution.
-          <br />
-          With continuous adaptation to the latest trends and technologies, our
-          team ensures that Iconic Yatra stays ahead in delivering exceptional
-          travel experiences, making us a leader in the industry.
+          {data?.description}
         </Typography>
       </Box>
     </Box>
