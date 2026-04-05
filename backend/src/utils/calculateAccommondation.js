@@ -1,13 +1,11 @@
 
 export const calculateAccommodation = (members, accommodation) => {
-    const { adults, children, kidsWithoutMattress, infants } = members || {};
+    const { adults, children } = members || {};
     const { sharingType, noOfRooms = 0 } = accommodation || {};
     const totalMembers =
         (adults || 0) +
-        (children || 0) +
-        (kidsWithoutMattress || 0) +
-        (infants || 0);
-
+        (children || 0) 
+        
     let capacityPerRoom = 1; // Default single sharing
 
     switch (sharingType?.toLowerCase()) {
