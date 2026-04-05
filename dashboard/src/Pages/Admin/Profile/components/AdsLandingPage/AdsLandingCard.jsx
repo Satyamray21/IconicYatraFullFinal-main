@@ -70,6 +70,7 @@ const LandingPageChip = styled(Chip)(({ theme }) => ({
 const GoogleAdsList = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const MAIN_URL = import.meta.env.VITE_MAIN_URL;
 
   const { pages, loading } = useSelector((state) => state.landingPages);
 
@@ -251,12 +252,21 @@ const GoogleAdsList = () => {
                   </TableCell>
 
                   <TableCell>
-                    <LandingPageChip
-                      label={campaign.slug}
-                      icon={<FlagIcon />}
-                      size="small"
-                    />
-                  </TableCell>
+  <a
+    href={`${MAIN_URL}/${campaign.slug}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    style={{ textDecoration: "none" }}
+  >
+    <LandingPageChip
+      label={campaign.slug}
+      icon={<FlagIcon />}
+      size="small"
+      clickable
+    />
+  </a>
+</TableCell>
+
 
                   <TableCell>
                     <Chip

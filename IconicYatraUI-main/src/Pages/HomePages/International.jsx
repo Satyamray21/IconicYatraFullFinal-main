@@ -17,6 +17,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchInternationalPackages } from "../../Features/packageSlice";
 import PackageCard from "../../Components/PackageCard";
 import { BASE_URL } from "../../Utils/axiosInstance";
+import InquiryFormDialog from "../../Components/InquiryFormDialog";
 
 const International = () => {
   const { destination } = useParams();
@@ -28,6 +29,8 @@ const International = () => {
   );
 
   const [selectedDestination, setSelectedDestination] = useState("All");
+  const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
+  const [selectedPackageTitle, setSelectedPackageTitle] = useState("");
 
   useEffect(() => {
     dispatch(fetchInternationalPackages());
@@ -62,6 +65,12 @@ const International = () => {
   // ✅ Handle click
   const handleCardClick = (id) => {
     navigate(`/package/${id}`);
+  };
+
+  // ✅ Handle query button click
+  const handleQueryClick = (pkg) => {
+    setSelectedPackageTitle(pkg.title);
+    setInquiryDialogOpen(true);
   };
 
   // ✅ UPDATED: ENHANCED PRICE FUNCTION - SAME AS OTHER PACKAGES
@@ -135,142 +144,152 @@ const International = () => {
 
   // ✅ Main UI
   return (
-    <Box sx={{ backgroundColor: "#f4f6f8", minHeight: "100vh", py: 6 }}>
-      <Container maxWidth="lg">
-        {/* Breadcrumbs */}
-        <Paper
-          elevation={2}
-          sx={{
-            p: 2,
-            mb: 4,
-            borderRadius: 3,
-            background:
-              "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          }}
-        >
-          <Breadcrumbs aria-label="breadcrumb">
-            <MUILink underline="hover" color="inherit" component={Link} to="/">
-              Home
-            </MUILink>
-            <MUILink
-              underline="hover"
-              color="inherit"
-              component={Link}
-              to="/international"
+    <>
+      <Box sx={{ backgroundColor: "#f4f6f8", minHeight: "100vh", py: 6 }}>
+        <Container maxWidth="lg">
+          {/* Breadcrumbs */}
+          <Paper
+            elevation={2}
+            sx={{
+              p: 2,
+              mb: 4,
+              borderRadius: 3,
+              background:
+                "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            }}
+          >
+            <Breadcrumbs aria-label="breadcrumb">
+              <MUILink underline="hover" color="inherit" component={Link} to="/">
+                Home
+              </MUILink>
+              <MUILink
+                underline="hover"
+                color="inherit"
+                component={Link}
+                to="/international"
+              >
+                International Packages
+              </MUILink>
+              <Typography color="text.primary" fontWeight="bold">
+                {selectedDestination === "All"
+                  ? "All Packages"
+                  : selectedDestination}
+              </Typography>
+            </Breadcrumbs>
+          </Paper>
+
+          {/* Heading */}
+          <Box textAlign="center" mb={5}>
+            <Typography
+              variant="h4"
+              fontWeight="bold"
+              sx={{
+                background: "linear-gradient(90deg, #667eea, #764ba2)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
             >
-              International Packages
-            </MUILink>
-            <Typography color="text.primary" fontWeight="bold">
               {selectedDestination === "All"
-                ? "All Packages"
+                ? "All International Packages"
                 : selectedDestination}
             </Typography>
-          </Breadcrumbs>
-        </Paper>
+            <Divider
+              sx={{
+                width: "150px",
+                mx: "auto",
+                my: 2,
+                height: "4px",
+                borderRadius: 2,
+                background:
+                  "linear-gradient(90deg, #667eea, #764ba2)",
+              }}
+            />
+            <Typography variant="subtitle1" color="text.secondary">
+              Discover amazing international travel destinations
+            </Typography>
+          </Box>
 
-        {/* Heading */}
-        <Box textAlign="center" mb={5}>
+          {/* Packages Grid */}
+          {filteredPackages.length > 0 ? (
+            <Grid container spacing={2} >
+              {filteredPackages.map((pkg) => (
+                <Grid
+                  size={{ xs: 12, sm: 6, md: 4 }}
+                  key={pkg._id}
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                    "&:hover": {
+                      transform: "translateY(-8px)",
+                      boxShadow: "0 12px 20px rgba(0,0,0,0.2)",
+                    },
+                  }}
+                >
+                  <PackageCard
+                    image={
+                      pkg.bannerImage
+                        ? pkg.bannerImage.startsWith("http")
+                          ? pkg.bannerImage
+                          : pkg.bannerImage.startsWith("/upload/")
+                            ? `${BASE_URL}${pkg.bannerImage}`
+                            : `${BASE_URL}/upload/${pkg.bannerImage}`
+                        : "https://via.placeholder.com/300x200?text=No+Image"
+                    }
+                    title={pkg.title || "No Title"}
+                    location={`${pkg.sector || "Unknown Sector"}, ${pkg.arrivalCity || "Unknown City"}`}
+                    // UPDATED: Price display with new logic
+                    price={getPriceDisplay(pkg)}
+                    priceNote={pkg.priceNote || ""}
+                    onClick={() => handleCardClick(pkg._id)}
+                    onQueryClick={() => handleQueryClick(pkg)}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Paper
+              elevation={3}
+              sx={{
+                p: 5,
+                mt: 4,
+                textAlign: "center",
+                borderRadius: 2,
+                backgroundColor: "#fff",
+              }}
+            >
+              <Typography variant="h5" color="text.secondary">
+                No packages found for "{selectedDestination}"
+              </Typography>
+              <Typography variant="body1" sx={{ mt: 2 }}>
+                Please try selecting a different destination filter.
+              </Typography>
+            </Paper>
+          )}
+
+          {/* Footer Info */}
           <Typography
-            variant="h4"
-            fontWeight="bold"
+            variant="body2"
+            color="text.secondary"
             sx={{
-              background: "linear-gradient(90deg, #667eea, #764ba2)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            {selectedDestination === "All"
-              ? "All International Packages"
-              : selectedDestination}
-          </Typography>
-          <Divider
-            sx={{
-              width: "150px",
-              mx: "auto",
-              my: 2,
-              height: "4px",
-              borderRadius: 2,
-              background:
-                "linear-gradient(90deg, #667eea, #764ba2)",
-            }}
-          />
-          <Typography variant="subtitle1" color="text.secondary">
-            Discover amazing international travel destinations
-          </Typography>
-        </Box>
-
-        {/* Packages Grid */}
-        {filteredPackages.length > 0 ? (
-          <Grid container spacing={2} >
-            {filteredPackages.map((pkg) => (
-              <Grid
-                size={{ xs: 12, sm: 6, md: 4 }}
-                key={pkg._id}
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                  "&:hover": {
-                    transform: "translateY(-8px)",
-                    boxShadow: "0 12px 20px rgba(0,0,0,0.2)",
-                  },
-                }}
-              >
-                <PackageCard
-                  image={
-                    pkg.bannerImage
-                      ? pkg.bannerImage.startsWith("http")
-                        ? pkg.bannerImage
-                        : pkg.bannerImage.startsWith("/upload/")
-                          ? `${BASE_URL}${pkg.bannerImage}`
-                          : `${BASE_URL}/upload/${pkg.bannerImage}`
-                      : "https://via.placeholder.com/300x200?text=No+Image"
-                  }
-                  title={pkg.title || "No Title"}
-                  location={`${pkg.sector || "Unknown Sector"}, ${pkg.arrivalCity || "Unknown City"}`}
-                  // UPDATED: Price display with new logic
-                  price={getPriceDisplay(pkg)}
-                  priceNote={pkg.priceNote || ""}
-                  onClick={() => handleCardClick(pkg._id)}
-                  onQueryClick={() => console.log("Query:", pkg._id)}
-                />
-              </Grid>
-            ))}
-          </Grid>
-        ) : (
-          <Paper
-            elevation={3}
-            sx={{
-              p: 5,
-              mt: 4,
               textAlign: "center",
-              borderRadius: 2,
-              backgroundColor: "#fff",
+              mt: 6,
+              fontStyle: "italic",
             }}
           >
-            <Typography variant="h5" color="text.secondary">
-              No packages found for "{selectedDestination}"
-            </Typography>
-            <Typography variant="body1" sx={{ mt: 2 }}>
-              Please try selecting a different destination filter.
-            </Typography>
-          </Paper>
-        )}
+            Showing {filteredPackages.length} of {packages.length} packages
+          </Typography>
+        </Container>
+      </Box>
 
-        {/* Footer Info */}
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            textAlign: "center",
-            mt: 6,
-            fontStyle: "italic",
-          }}
-        >
-          Showing {filteredPackages.length} of {packages.length} packages
-        </Typography>
-      </Container>
-    </Box>
+      {/* Inquiry Form Dialog */}
+      <InquiryFormDialog
+        open={inquiryDialogOpen}
+        handleClose={() => setInquiryDialogOpen(false)}
+        title="International Package Inquiry"
+        defaultDestination={selectedPackageTitle}
+      />
+    </>
   );
 };
 

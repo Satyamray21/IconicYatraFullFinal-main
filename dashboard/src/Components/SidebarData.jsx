@@ -10,6 +10,7 @@ import Diversity3Icon from '@mui/icons-material/Diversity3';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import LinkIcon from '@mui/icons-material/Link';
+import HomeIcon from '@mui/icons-material/Home';
 
 export const sidebarItems = [
   { label: 'Dashboard', route: '/', icon: <DashboardIcon /> },
@@ -32,6 +33,11 @@ export const sidebarItems = [
         label: 'Social Links',
         route: '/setting/social-links',
         icon: <LinkIcon />,
+      },
+      {
+        label: 'Hero Section',
+        route: '/setting/hero-section',
+        icon: <HomeIcon />,
       },
     ],
   },

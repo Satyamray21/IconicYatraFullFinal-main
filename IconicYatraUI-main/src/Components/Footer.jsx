@@ -17,7 +17,7 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import Calendar from "./Calendar";
 import logo from "../assets/Logo/logoiconic.jpg";
-import { Facebook, Instagram, WhatsApp } from "@mui/icons-material";
+import { Facebook, Instagram, WhatsApp,YouTube } from "@mui/icons-material";
 import PhoneInTalkIcon from "@mui/icons-material/PhoneInTalk";
 import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import { useDispatch, useSelector } from "react-redux";
@@ -134,7 +134,7 @@ const Footer = () => {
                 Loading tours...
               </Typography>
             ) :  popular && popular.length > 0 ? (
-  popular.slice(0, 7).map((tour) => (
+  popular.slice(0, 8).map((tour) => (
 
                 <Link
                   key={tour._id}
@@ -163,7 +163,9 @@ const Footer = () => {
                   >
                     ›
                   </Box>
-                  {tour.sector}
+                  {tour.tourType === "Domestic"
+      ? tour.sector
+      : tour.destinationCountry}
                 </Link>
               ))
             ) : (
@@ -302,7 +304,7 @@ const Footer = () => {
         <Grid size={{ xs: 12, md: 4 }}>
           <Stack
             direction="row"
-            spacing={2}
+            spacing={0}
             flexWrap="wrap"
             sx={{
               "& a": {
@@ -339,12 +341,13 @@ const Footer = () => {
 
         {/* Social Icons */}
         <Grid size={{ xs: 12, md: 2 }}>
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="center"
+          sx={{mr: isMobile ? 0 : 4}}>
   <Typography
     variant="body2"
     sx={{ whiteSpace: "nowrap", fontWeight: 600, color: "#ffd700" }}
   >
-    Follow Us:
+    Follow Us :
   </Typography>
 
   {/* FACEBOOK */}
@@ -386,6 +389,25 @@ const Footer = () => {
       <Instagram fontSize="small" />
     </IconButton>
   )}
+{/* YOUTUBE */}
+{socialLinks?.youtube && (
+  <IconButton
+    size="small"
+    sx={{
+      background: 'rgba(255,255,255,0.1)',
+      color: '#fff',
+      '&:hover': {
+        background: '#ff0000',
+        transform: 'scale(1.1)'
+      },
+      transition: 'all 0.3s ease'
+    }}
+    href={socialLinks.youtube}
+    target="_blank"
+  >
+    <YouTube fontSize="small" />
+  </IconButton>
+)}
 
   {/* WHATSAPP (optional dynamic later) */}
   <IconButton
