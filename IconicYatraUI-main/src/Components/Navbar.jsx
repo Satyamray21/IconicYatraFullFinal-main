@@ -215,21 +215,26 @@ const Navbar = () => {
             <Divider sx={{ my: 1 }} />
 
             {/* Static Links */}
-            {["holidays", "yatra", "services", "contact"].map((page) => (
+            {[
+              { name: "Holidays", path: "holidays" },
+              { name: "Yatra", path: "spiritual-tour" },
+              { name: "Services", path: "services" },
+              { name: "Contact", path: "contact" }
+            ].map((page) => (
               <ListItemButton
-                key={page}
+                key={page.path}
                 component={Link}
-                to={`/${page}`}
+                to={`/${page.path}`}
                 onClick={toggleDrawer}
                 sx={{
-                  fontWeight: isActive(`/${page}`) ? 700 : 500,
-                  borderLeft: isActive(`/${page}`)
+                  fontWeight: isActive(`/${page.path}`) ? 700 : 500,
+                  borderLeft: isActive(`/${page.path}`)
                     ? "4px solid #1f3c65"
                     : "4px solid transparent",
-                  color: isActive(`/${page}`) ? "#1f3c65" : "black",
+                  color: isActive(`/${page.path}`) ? "#1f3c65" : "black",
                 }}
               >
-                <ListItemText primary={page.charAt(0).toUpperCase() + page.slice(1)} />
+                <ListItemText primary={page.name} />
               </ListItemButton>
             ))}
           </List>

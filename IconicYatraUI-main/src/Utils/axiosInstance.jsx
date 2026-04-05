@@ -47,6 +47,11 @@ export const blogsAxios = axios.create({
     baseURL: `${BASE_URL}/api/v1`,
     headers: { "Content-Type": "application/json" },
 })
+
+export const homePageAxios=axios.create({
+     baseURL: `${BASE_URL}/api/v1/home`,
+    headers: { "Content-Type": "application/json" },
+})
 // Token interceptor
 const attachToken = (config) => {
     const token = localStorage.getItem("token");

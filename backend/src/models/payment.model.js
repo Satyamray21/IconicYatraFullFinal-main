@@ -19,10 +19,10 @@ const receivedVoucherSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ✅ NEW (for correct indexing)
     month: {
-      type: String, // JAN, FEB
+      type: Number,
     },
+
     year: {
       type: Number,
     },
@@ -71,7 +71,6 @@ const receivedVoucherSchema = new mongoose.Schema(
       enum: ["Dr", "Cr"],
     },
 
-    // ❌ removed unique
     receiptNumber: {
       type: Number,
       required: true,
@@ -80,7 +79,6 @@ const receivedVoucherSchema = new mongoose.Schema(
     invoiceId: {
       type: String,
       required: true,
-      unique: true,
     },
   },
   {
@@ -88,7 +86,6 @@ const receivedVoucherSchema = new mongoose.Schema(
   }
 );
 
-// ✅ AUTO DR/CR
 receivedVoucherSchema.pre("save", function (next) {
   if (this.paymentType === "Receive Voucher") {
     this.drCr = "Cr";
@@ -98,7 +95,6 @@ receivedVoucherSchema.pre("save", function (next) {
   next();
 });
 
-// ✅ PERFECT UNIQUE INDEX
 receivedVoucherSchema.index(
   { companyId: 1, month: 1, year: 1, receiptNumber: 1 },
   { unique: true }

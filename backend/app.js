@@ -125,6 +125,9 @@ import socialLinksRoutes from "./src/routers/socialLinksRoutes.js";
 
 app.use("/api/v1/social-links", socialLinksRoutes);
 
+
+import homePageRoutes from "./src/routers/homePage.routes.js";
+app.use("/api/v1/home",homePageRoutes);
 // ==========================================
 // ✅ Fix: Load JSON without import
 const swaggerDocument = JSON.parse(fs.readFileSync("./swagger-output.json", "utf-8"));

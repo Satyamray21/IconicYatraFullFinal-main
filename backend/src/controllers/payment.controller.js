@@ -25,10 +25,8 @@ export const createVoucher = asyncHandler(async (req, res) => {
   const voucherDate = new Date(date);
 
   // ✅ Month + Year
-  const month = voucherDate
-    .toLocaleString("en-US", { month: "short" })
-    .toUpperCase();
-  const year = voucherDate.getFullYear();
+  const month = voucherDate.getMonth() + 1; // 1-12
+const year = voucherDate.getFullYear();
 
   // ✅ Find last voucher for SAME company + month + year
   const lastVoucher = await ReceivedVoucher.findOne({
@@ -42,8 +40,14 @@ export const createVoucher = asyncHandler(async (req, res) => {
     : 1;
 
   // ✅ Format: 001/MAR
-  const formattedNumber = String(nextReceiptNumber).padStart(3, "0");
-  const invoiceId = `${month}/${formattedNumber}`;
+    const formattedNumber = String(nextReceiptNumber).padStart(3, "0");
+    const monthNames = [
+  "JAN","FEB","MAR","APR","MAY","JUN",
+  "JUL","AUG","SEP","OCT","NOV","DEC"
+];
+
+const invoiceId = `${monthNames[month-1]}/${year}/${formattedNumber}`;
+  
 
   let voucher;
 
