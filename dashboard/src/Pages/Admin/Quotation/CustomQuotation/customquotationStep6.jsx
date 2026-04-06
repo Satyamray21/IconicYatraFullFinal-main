@@ -29,6 +29,7 @@ import * as yup from "yup";
 import { useDispatch } from "react-redux";
 import { createCustomQuotation } from "../../../../features/quotation/customQuotationSlice";
 import { toast } from "react-toastify";
+import { computeCustomQuotationPackages } from "../../../../utils/customQuotationPricing";
 
 // =====================================================
 // VALIDATION SCHEMA
@@ -65,13 +66,16 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
     // =====================================================
     // INITIALIZE CITY PRICE OBJECTS
     // =====================================================
-    const initializeCityPrices = (cities) =>
-        cities.reduce((acc, city, index) => {
+    const buildCityPrices = (cityList) =>
+        cityList.reduce((acc, city, index) => {
+            const dest = tourDetails?.quotationDetails?.destinations?.[index];
             acc[index] = {
-                standardHotelName: "",
-                standardPrice: "",
-                deluxeHotelName: "",
-                deluxePrice: "",
+                standardHotelName: dest?.standardHotels?.[0] || "",
+                standardPrice: dest?.prices?.standard ?? "",
+                deluxeHotelName: dest?.deluxeHotels?.[0] || "",
+                deluxePrice: dest?.prices?.deluxe ?? "",
+                superiorHotelName: dest?.superiorHotels?.[0] || "",
+                superiorPrice: dest?.prices?.superior ?? "",
             };
             return acc;
         }, {});
@@ -98,7 +102,7 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
             deluxeMattressCost:
                 tourDetails?.quotationDetails?.mattress?.deluxeMattressCost || 0,
 
-            cityPrices: initializeCityPrices(cities),
+            cityPrices: buildCityPrices(cities),
 
             marginPercent:
                 tourDetails?.quotationDetails?.companyMargin?.marginPercent || 0,
@@ -108,7 +112,8 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
             discount: tourDetails?.quotationDetails?.discount || 0,
 
             gstOn: tourDetails?.quotationDetails?.taxes?.gstOn || "Full",
-            taxPercent: tourDetails?.quotationDetails?.taxes?.taxPercent || 0,
+            taxPercent:
+                tourDetails?.quotationDetails?.taxes?.taxPercent ?? 0,
 
             regardsText:
                 tourDetails?.quotationDetails?.signatureDetails?.regardsText ||
@@ -121,63 +126,31 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
 
         onSubmit: async (values) => {
             try {
-                const totals = calculateTotals(values);
-                const totalNights = totals.totalNights;
-
                 const vehicleCost =
                     Number(
                         formData?.tourDetails?.vehicleDetails?.costDetails?.totalCost || 0
                     ) || 0;
 
-                // =====================================================
-                // MATTRESS TOTAL
-                // =====================================================
-                const mattressCount = Number(values.noOfMattress) || 0;
-
-                const superiorMattressTotal =
-                    mattressCount * values.superiorMattressCost * totalNights;
-
-                const deluxeMattressTotal =
-                    mattressCount * values.deluxeMattressCost * totalNights;
-
-                const totalStandardWithRooms =
-                    totals.totalStandard * values.noOfRooms + superiorMattressTotal;
-
-                const totalDeluxeWithRooms =
-                    totals.totalDeluxe * values.noOfRooms + deluxeMattressTotal;
-
-                const totalStandardPackage = totalStandardWithRooms + vehicleCost;
-                const totalDeluxePackage = totalDeluxeWithRooms + vehicleCost;
-
-                const baseStandard = totalStandardPackage;
-                const baseDeluxe = totalDeluxePackage;
-
-                const standardAfterMargin =
-                    baseStandard +
-                    (values.marginPercent / 100) * baseStandard +
-                    Number(values.marginAmount);
-
-                const deluxeAfterMargin =
-                    baseDeluxe +
-                    (values.marginPercent / 100) * baseDeluxe +
-                    Number(values.marginAmount);
-
-                const standardTaxable =
-                    standardAfterMargin - Number(values.discount);
-
-                const deluxeTaxable =
-                    deluxeAfterMargin - Number(values.discount);
-
-                const gstPercent = Number(values.taxPercent);
-
-                const standardGST =
-                    (gstPercent / 100) * standardTaxable;
-
-                const deluxeGST =
-                    (gstPercent / 100) * deluxeTaxable;
-
-                const finalStandardTotal = standardTaxable + standardGST;
-                const finalDeluxeTotal = deluxeTaxable + deluxeGST;
+                const pricing = computeCustomQuotationPackages({
+                    destinations: cities.map((city, index) => ({
+                        nights: city.nights,
+                        prices: {
+                            standard: Number(values.cityPrices[index]?.standardPrice) || 0,
+                            deluxe: Number(values.cityPrices[index]?.deluxePrice) || 0,
+                            superior: Number(values.cityPrices[index]?.superiorPrice) || 0,
+                        },
+                    })),
+                    numberOfRooms: values.noOfRooms,
+                    mattressCount: values.noOfMattress,
+                    standardPackageMattressCostPerNight: values.superiorMattressCost,
+                    deluxePackageMattressCostPerNight: values.deluxeMattressCost,
+                    vehicleCost,
+                    marginPercent: values.marginPercent,
+                    marginAmount: values.marginAmount,
+                    discount: values.discount,
+                    taxPercent: values.taxPercent,
+                    gstOn: values.gstOn,
+                });
 
                 // =====================================================
                 // FINAL PAYLOAD
@@ -202,11 +175,16 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
                                 deluxeHotels: [
                                     values.cityPrices[index]?.deluxeHotelName || "",
                                 ],
+                                superiorHotels: [
+                                    values.cityPrices[index]?.superiorHotelName || "",
+                                ],
                                 prices: {
                                     standard:
                                         Number(values.cityPrices[index]?.standardPrice) || 0,
                                     deluxe:
                                         Number(values.cityPrices[index]?.deluxePrice) || 0,
+                                    superior:
+                                        Number(values.cityPrices[index]?.superiorPrice) || 0,
                                 },
                             })),
 
@@ -232,25 +210,13 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
                             taxes: {
                                 gstOn: values.gstOn,
                                 taxPercent: values.taxPercent,
+                                applyGST: values.gstOn !== "None",
                             },
 
                             packageCalculations: {
-                                standard: {
-                                    baseCost: baseStandard,
-                                    afterMargin: standardAfterMargin,
-                                    afterDiscount: standardTaxable,
-                                    gstAmount: standardGST,
-                                    gstPercentage: gstPercent,
-                                    finalTotal: finalStandardTotal,
-                                },
-                                deluxe: {
-                                    baseCost: baseDeluxe,
-                                    afterMargin: deluxeAfterMargin,
-                                    afterDiscount: deluxeTaxable,
-                                    gstAmount: deluxeGST,
-                                    gstPercentage: gstPercent,
-                                    finalTotal: finalDeluxeTotal,
-                                },
+                                standard: pricing.standard,
+                                deluxe: pricing.deluxe,
+                                superior: pricing.superior,
                             },
 
                             signatureDetails: {
@@ -265,9 +231,8 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
                     await onSubmit(finalData);
                 } else {
                     await dispatch(createCustomQuotation(finalData)).unwrap();
+                    toast.success("Quotation created successfully!");
                 }
-
-                toast.success("Quotation created successfully!");
             } catch (err) {
                 console.error("❌ Error submitting form:", err);
                 toast.error("Failed to submit quotation");
@@ -276,88 +241,58 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
     });
 
     // =====================================================
-    // BASIC HOTEL PRICE CALCULATION
+    // REALTIME CALCULATIONS (same engine as submit)
     // =====================================================
-    const calculateTotals = (values) => {
-        let totalNights = 0;
-        let totalStandard = 0;
-        let totalDeluxe = 0;
-
-        cities.forEach((city, index) => {
-            const nights = Number(city.nights) || 0;
-            const stdPrice = Number(values.cityPrices[index]?.standardPrice || 0);
-            const dlxPrice = Number(values.cityPrices[index]?.deluxePrice || 0);
-
-            totalNights += nights;
-            totalStandard += nights * stdPrice;
-            totalDeluxe += nights * dlxPrice;
-        });
-
-        return { totalNights, totalStandard, totalDeluxe };
-    };
-
-    // =====================================================
-    // REALTIME CALCULATIONS FOR UI
-    // =====================================================
-    const totals = calculateTotals(formik.values);
-    const totalNights = totals.totalNights;
-
-    const mattressCount = Number(formik.values.noOfMattress || 0);
-
-    const superiorMattressTotal =
-        mattressCount * formik.values.superiorMattressCost * totalNights;
-
-    const deluxeMattressTotal =
-        mattressCount * formik.values.deluxeMattressCost * totalNights;
-
-    const vehicleCost =
+    const vehicleCostLive =
         Number(
             formData?.tourDetails?.vehicleDetails?.costDetails?.totalCost || 0
         ) || 0;
 
-    const totalStandardWithRooms =
-        totals.totalStandard *
-        Number(formik.values.noOfRooms) +
-        superiorMattressTotal;
+    const pricing = computeCustomQuotationPackages({
+        destinations: cities.map((city, index) => ({
+            nights: city.nights,
+            prices: {
+                standard: Number(formik.values.cityPrices[index]?.standardPrice) || 0,
+                deluxe: Number(formik.values.cityPrices[index]?.deluxePrice) || 0,
+                superior: Number(formik.values.cityPrices[index]?.superiorPrice) || 0,
+            },
+        })),
+        numberOfRooms: formik.values.noOfRooms,
+        mattressCount: formik.values.noOfMattress,
+        standardPackageMattressCostPerNight: formik.values.superiorMattressCost,
+        deluxePackageMattressCostPerNight: formik.values.deluxeMattressCost,
+        vehicleCost: vehicleCostLive,
+        marginPercent: formik.values.marginPercent,
+        marginAmount: formik.values.marginAmount,
+        discount: formik.values.discount,
+        taxPercent: formik.values.taxPercent,
+        gstOn: formik.values.gstOn,
+    });
 
-    const totalDeluxeWithRooms =
-        totals.totalDeluxe *
-        Number(formik.values.noOfRooms) +
-        deluxeMattressTotal;
+    const {
+        baseCost: baseStandard,
+        afterMargin: standardAfterMargin,
+        afterDiscount: standardTaxable,
+        gstPercentage: gstPercent,
+        gstAmount: standardGST,
+        finalTotal: finalStandardTotal,
+    } = pricing.standard;
 
-    const totalStandardPackage = totalStandardWithRooms + vehicleCost;
-    const totalDeluxePackage = totalDeluxeWithRooms + vehicleCost;
+    const {
+        baseCost: baseDeluxe,
+        afterMargin: deluxeAfterMargin,
+        afterDiscount: deluxeTaxable,
+        gstAmount: deluxeGST,
+        finalTotal: finalDeluxeTotal,
+    } = pricing.deluxe;
 
-    const marginPercent = Number(formik.values.marginPercent || 0);
-    const gstPercent = Number(formik.values.taxPercent || 0);
-
-    const baseStandard = totalStandardPackage;
-    const baseDeluxe = totalDeluxePackage;
-
-    const standardAfterMargin =
-        baseStandard +
-        (marginPercent / 100) * baseStandard +
-        Number(formik.values.marginAmount);
-
-    const deluxeAfterMargin =
-        baseDeluxe +
-        (marginPercent / 100) * baseDeluxe +
-        Number(formik.values.marginAmount);
-
-    const standardTaxable =
-        standardAfterMargin - Number(formik.values.discount);
-
-    const deluxeTaxable =
-        deluxeAfterMargin - Number(formik.values.discount);
-
-    const standardGST =
-        (gstPercent / 100) * standardTaxable;
-
-    const deluxeGST =
-        (gstPercent / 100) * deluxeTaxable;
-
-    const finalStandardTotal = standardTaxable + standardGST;
-    const finalDeluxeTotal = deluxeTaxable + deluxeGST;
+    const {
+        baseCost: baseSuperior,
+        afterMargin: superiorAfterMargin,
+        afterDiscount: superiorTaxable,
+        gstAmount: superiorGST,
+        finalTotal: finalSuperiorTotal,
+    } = pricing.superior;
 
     // =====================================================
     // UI START
@@ -459,9 +394,11 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
                                     <TableCell>Destination</TableCell>
                                     <TableCell>Nights</TableCell>
                                     <TableCell>Standard Hotel</TableCell>
-                                    <TableCell>Standard Price</TableCell>
+                                    <TableCell>Std / night</TableCell>
                                     <TableCell>Deluxe Hotel</TableCell>
-                                    <TableCell>Deluxe Price</TableCell>
+                                    <TableCell>Dlx / night</TableCell>
+                                    <TableCell>Superior Hotel</TableCell>
+                                    <TableCell>Sup / night</TableCell>
                                 </TableRow>
                             </TableHead>
 
@@ -486,6 +423,14 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
                                         <TableCell>
                                             <TextField size="small" type="number" fullWidth {...formik.getFieldProps(`cityPrices[${index}].deluxePrice`)} />
                                         </TableCell>
+
+                                        <TableCell>
+                                            <TextField size="small" fullWidth {...formik.getFieldProps(`cityPrices[${index}].superiorHotelName`)} />
+                                        </TableCell>
+
+                                        <TableCell>
+                                            <TextField size="small" type="number" fullWidth {...formik.getFieldProps(`cityPrices[${index}].superiorPrice`)} />
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -502,7 +447,7 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
 
                         <Grid container spacing={3}>
                             {/* STANDARD */}
-                            <Grid item xs={12} md={6}>
+                            <Grid item xs={12} md={4}>
                                 <Card sx={{ borderLeft: "6px solid #1976d2" }}>
                                     <CardContent>
                                         <Typography variant="h6" sx={{ color: "#1976d2" }}>
@@ -524,7 +469,7 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
                             </Grid>
 
                             {/* DELUXE */}
-                            <Grid item xs={12} md={6}>
+                            <Grid item xs={12} md={4}>
                                 <Card sx={{ borderLeft: "6px solid #9c27b0" }}>
                                     <CardContent>
                                         <Typography variant="h6" sx={{ color: "#9c27b0" }}>
@@ -540,6 +485,28 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
 
                                         <Typography sx={{ color: "green" }} variant="h6">
                                             Final Total: ₹{finalDeluxeTotal.toFixed(2)}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+
+                            {/* SUPERIOR */}
+                            <Grid item xs={12} md={4}>
+                                <Card sx={{ borderLeft: "6px solid #2e7d32" }}>
+                                    <CardContent>
+                                        <Typography variant="h6" sx={{ color: "#2e7d32" }}>
+                                            SUPERIOR PACKAGE
+                                        </Typography>
+
+                                        <Typography><strong>Base Cost:</strong> ₹{baseSuperior.toFixed(2)}</Typography>
+                                        <Typography><strong>After Margin:</strong> ₹{superiorAfterMargin.toFixed(2)}</Typography>
+                                        <Typography><strong>After Discount:</strong> ₹{superiorTaxable.toFixed(2)}</Typography>
+                                        <Typography><strong>GST ({gstPercent}%):</strong> ₹{superiorGST.toFixed(2)}</Typography>
+
+                                        <Divider sx={{ my: 1 }} />
+
+                                        <Typography sx={{ color: "green" }} variant="h6">
+                                            Final Total: ₹{finalSuperiorTotal.toFixed(2)}
                                         </Typography>
                                     </CardContent>
                                 </Card>
@@ -569,14 +536,21 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
                             <FormControl fullWidth>
                                 <InputLabel>GST On</InputLabel>
                                 <Select value={formik.values.gstOn} name="gstOn" onChange={formik.handleChange}>
-                                    <MenuItem value="Full">Full</MenuItem>
+                                    <MenuItem value="Full">Full (GST on amount after discount)</MenuItem>
+                                    <MenuItem value="Margin">Margin (GST on margin only)</MenuItem>
                                     <MenuItem value="None">None</MenuItem>
                                 </Select>
                             </FormControl>
                         </Grid>
 
                         <Grid item xs={6} sm={3}>
-                            <TextField label="Tax (%)" type="number" fullWidth {...formik.getFieldProps("taxPercent")} />
+                            <TextField
+                                label="GST / Tax (%)"
+                                type="number"
+                                fullWidth
+                                helperText="Totals update automatically when you change this"
+                                {...formik.getFieldProps("taxPercent")}
+                            />
                         </Grid>
                     </Grid>
                 </Paper>

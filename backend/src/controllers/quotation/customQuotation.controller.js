@@ -115,12 +115,31 @@ export const getCustomQuotationById = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, quotation, "Quotation fetched successfully"));
 });
 
-// Update Full Quotation
+// Update Full Quotation (Mongo _id)
 export const updateCustomQuotation = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
     const updatedQuotation = await CustomQuotation.findByIdAndUpdate(
         id,
+        { $set: req.body },
+        { new: true, runValidators: true }
+    );
+
+    if (!updatedQuotation) {
+        throw new ApiError(404, "Quotation not found");
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, updatedQuotation, "Quotation updated successfully"));
+});
+
+/** Partial update by business quotationId (e.g. ICYR_CQ_0001) — used from finalize / admin UI */
+export const updateCustomQuotationByQuotationId = asyncHandler(async (req, res) => {
+    const { quotationId } = req.params;
+
+    const updatedQuotation = await CustomQuotation.findOneAndUpdate(
+        { quotationId },
         { $set: req.body },
         { new: true, runValidators: true }
     );
@@ -220,20 +239,23 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
 
             console.log("📸 Total itineraryImages received:", itineraryFiles.length);
 
+            const isNoopItineraryFile = (f) =>
+                !f ||
+                !f.size ||
+                (f.originalname && String(f.originalname).includes("itinerary-noop"));
+
             for (let i = 0; i < processedItinerary.length; i++) {
                 const file = itineraryFiles[i];
 
-                if (file) {
-                    console.log(`☁️ Uploading image for day ${i + 1}:`, file.originalname);
-                    const uploaded = await uploadOnCloudinary(file.path);
+                if (isNoopItineraryFile(file)) {
+                    continue;
+                }
 
-                    if (uploaded?.url) {
-                        processedItinerary[i].image = uploaded.url;
-                    }
-                } else {
-                    if (!processedItinerary[i].image) {
-                        processedItinerary[i].image = null;
-                    }
+                console.log(`☁️ Uploading image for day ${i + 1}:`, file.originalname);
+                const uploaded = await uploadOnCloudinary(file.path);
+
+                if (uploaded?.url) {
+                    processedItinerary[i].image = uploaded.url;
                 }
             }
 
@@ -255,9 +277,9 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
                 case 5:
                     console.log("🚗 STEP 5 RECEIVED DATA:", stepData);
 
-                    // StepData comes as nested objects exactly matching schema
                     quotation.tourDetails.vehicleDetails = {
                         basicsDetails: {
+                            ...(quotation.tourDetails.vehicleDetails?.basicsDetails || {}),
                             clientName: stepData.basicsDetails?.clientName,
                             vehicleType: stepData.basicsDetails?.vehicleType,
                             tripType: stepData.basicsDetails?.tripType,
@@ -266,10 +288,17 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
                         },
 
                         costDetails: {
+                            ...(quotation.tourDetails.vehicleDetails?.costDetails || {}),
                             totalCost: stepData.costDetails?.totalCost,
+                            perDayCost: stepData.costDetails?.perDayCost,
+                            ratePerKm: stepData.costDetails?.ratePerKm,
+                            kmPerDay: stepData.costDetails?.kmPerDay,
+                            driverAllowance: stepData.costDetails?.driverAllowance,
+                            tollParking: stepData.costDetails?.tollParking,
                         },
 
                         pickupDropDetails: {
+                            ...(quotation.tourDetails.vehicleDetails?.pickupDropDetails || {}),
                             pickupDate: stepData.pickupDropDetails?.pickupDate,
                             pickupTime: stepData.pickupDropDetails?.pickupTime,
                             pickupLocation: stepData.pickupDropDetails?.pickupLocation,
@@ -356,6 +385,31 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
     }
 });
 
+const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
+
+export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
+    const { quotationId } = req.params;
+    const { finalizedPackage } = req.body || {};
+
+    if (!FINAL_PACKAGES.includes(finalizedPackage)) {
+        throw new ApiError(400, "finalizedPackage must be Standard, Deluxe, or Superior");
+    }
+
+    const quotation = await CustomQuotation.findOne({ quotationId });
+    if (!quotation) {
+        throw new ApiError(404, "Quotation not found");
+    }
+
+    quotation.finalizeStatus = "finalized";
+    quotation.finalizedPackage = finalizedPackage;
+    quotation.finalizedAt = new Date();
+    await quotation.save();
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, quotation, "Quotation finalized successfully"));
+});
+
 // Delete Quotation
 export const deleteCustomQuotation = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -383,16 +437,25 @@ export const resetQuotationCounter = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, null, "Quotation counter reset successfully"));
 });
 
-// ✅ NEW: Update Package Calculations specifically
+// Update package calculations + optional company margin / discount (finalize costing edit)
 export const updatePackageCalculations = asyncHandler(async (req, res) => {
     const { quotationId } = req.params;
-    const { packageCalculations } = req.body;
+    const { packageCalculations, companyMargin, discount, taxes } = req.body;
 
-    console.log("🧮 Updating package calculations for:", quotationId);
-    console.log("📊 Package data:", packageCalculations);
+    const hasPkg =
+        packageCalculations &&
+        typeof packageCalculations === "object" &&
+        Object.keys(packageCalculations).length > 0;
+    const hasMargin =
+        companyMargin && typeof companyMargin === "object";
+    const hasDiscount = discount !== undefined && discount !== null;
+    const hasTaxes = taxes && typeof taxes === "object";
 
-    if (!packageCalculations) {
-        throw new ApiError(400, "Package calculations data is required");
+    if (!hasPkg && !hasMargin && !hasDiscount && !hasTaxes) {
+        throw new ApiError(
+            400,
+            "Provide packageCalculations, companyMargin, discount, and/or taxes"
+        );
     }
 
     const quotation = await CustomQuotation.findOne({ quotationId });
@@ -400,36 +463,59 @@ export const updatePackageCalculations = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Quotation not found");
     }
 
-    // Initialize quotationDetails if it doesn't exist
     if (!quotation.tourDetails.quotationDetails) {
         quotation.tourDetails.quotationDetails = {};
     }
 
-    // Update package calculations
-    quotation.tourDetails.quotationDetails.packageCalculations = {
-        // Keep existing calculations
-        ...quotation.tourDetails.quotationDetails.packageCalculations,
-        // Merge new calculations
-        ...packageCalculations,
+    if (hasPkg) {
+        quotation.tourDetails.quotationDetails.packageCalculations = {
+            ...quotation.tourDetails.quotationDetails.packageCalculations,
+            ...packageCalculations,
+            standard: {
+                ...(quotation.tourDetails.quotationDetails.packageCalculations
+                    ?.standard || {}),
+                ...(packageCalculations.standard || {}),
+            },
+            deluxe: {
+                ...(quotation.tourDetails.quotationDetails.packageCalculations
+                    ?.deluxe || {}),
+                ...(packageCalculations.deluxe || {}),
+            },
+            superior: {
+                ...(quotation.tourDetails.quotationDetails.packageCalculations
+                    ?.superior || {}),
+                ...(packageCalculations.superior || {}),
+            },
+        };
+    }
 
-        // Ensure all package types are properly merged
-        standard: {
-            ...(quotation.tourDetails.quotationDetails.packageCalculations?.standard || {}),
-            ...(packageCalculations.standard || {})
-        },
-        deluxe: {
-            ...(quotation.tourDetails.quotationDetails.packageCalculations?.deluxe || {}),
-            ...(packageCalculations.deluxe || {})
-        },
-        superior: {
-            ...(quotation.tourDetails.quotationDetails.packageCalculations?.superior || {}),
-            ...(packageCalculations.superior || {})
-        }
-    };
+    if (hasMargin) {
+        quotation.tourDetails.quotationDetails.companyMargin = {
+            ...(quotation.tourDetails.quotationDetails.companyMargin || {}),
+            ...companyMargin,
+        };
+    }
+
+    if (hasDiscount) {
+        quotation.tourDetails.quotationDetails.discount = Number(discount) || 0;
+    }
+
+    if (hasTaxes) {
+        quotation.tourDetails.quotationDetails.taxes = {
+            ...(quotation.tourDetails.quotationDetails.taxes || {}),
+            ...taxes,
+        };
+    }
 
     await quotation.save();
 
     return res
         .status(200)
-        .json(new ApiResponse(200, quotation, "Package calculations updated successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                quotation,
+                "Package calculations updated successfully"
+            )
+        );
 });

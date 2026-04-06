@@ -27,7 +27,12 @@ export const vehicleDetailsSchema = new mongoose.Schema({
         totalCost: {
             type: String,
             required: true
-        }
+        },
+        perDayCost: { type: String },
+        ratePerKm: { type: String },
+        kmPerDay: { type: String },
+        driverAllowance: { type: String },
+        tollParking: { type: String },
     },
     pickupDropDetails: {
         pickupDate: {
