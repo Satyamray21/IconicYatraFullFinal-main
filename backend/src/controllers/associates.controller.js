@@ -21,11 +21,13 @@ export const createAssociate = async (req, res, next) => {
     const newAssociate = new Associate({
 
       personalDetails: {
+        title:personalDetails.title,
         fullName: personalDetails.fullName,
         mobileNumber: personalDetails.mobileNumber,
         alternateContact: personalDetails.alternateContact,
         associateType: personalDetails.associateType,
-        email: personalDetails.email
+        email: personalDetails.email,
+        dob: personalDetails.dob
       },
       staffLocation: {
         country: staffLocation.country,
@@ -38,15 +40,22 @@ export const createAssociate = async (req, res, next) => {
         addressLine3: address.addressLine3,
         pincode: address.pincode
       },
-      firm: {
-        firmType: firm.firmType,
-        gstIn: firm.gstIn,
-        cin: firm.cin,
-        pan: firm.pan,
-        existingTurnOver: firm.existingTurnOver,
-        firmName: firm.firmName,
-        firmDescription: firm.firmDescription
-      },
+    firm: {
+  firmType: firm.firmType,
+  gstin: firm.gstin,          // ✅ FIXED
+  cin: firm.cin,
+  pan: firm.pan,
+  turnover: firm.turnover,    // ✅ FIXED
+  firmName: firm.firmName,
+  firmDescription: firm.firmDescription,
+  sameAsContact: firm.sameAsContact,
+  address1: firm.address1,
+  address2: firm.address2,
+  address3: firm.address3,
+  supportingDocs: firm.supportingDocs
+},
+
+
       bank: {
         bankName: bank.bankName,
         branchName: bank.branchName,
