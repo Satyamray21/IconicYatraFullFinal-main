@@ -7,6 +7,9 @@ export const itinerarySchema = new mongoose.Schema({
     dayNote: {
         type: String
     },
+    dayDate: {
+        type: String,
+    },
     aboutCity: {
         type: String
     },

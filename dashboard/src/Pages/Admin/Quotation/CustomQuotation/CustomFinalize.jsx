@@ -60,11 +60,12 @@ import {
     Add,
     Download,
     Error,
+    Calculate,
 } from "@mui/icons-material";
 
 import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
-import MakePaymentDialog from "../VehicleQuotation/Dialog/MakePaymentDialog";
 import FinalizeDialog from "./Dialog/FinalizeDialog";
+import CostingEditDialog from "./Dialog/CostingEditDialog";
 import HotelVendorDialog from "./Dialog/HotelVendor";
 import AddBankDialog from "../VehicleQuotation/Dialog/AddBankDialog";
 import EditDialog from "../VehicleQuotation/Dialog/EditDialog";
@@ -73,17 +74,127 @@ import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams } from 'react-router-dom';
-import { getCustomQuotationById } from "../../../../features/quotation/customQuotationSlice";
-// Transaction Summary Dialog Component
-const TransactionSummaryDialog = ({ open, onClose }) => {
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+    getCustomQuotationById,
+    finalizeCustomQuotation,
+    updateCustomQuotation,
+    updateQuotationStep,
+} from "../../../../features/quotation/customQuotationSlice";
+import { saveCustomQuotationItinerary } from "../../../../utils/syncCustomQuotationItinerary";
+import FinalizeVehicleDialog from "./Dialog/FinalizeVehicleDialog";
+import FinalizeHotelsPricingDialog from "./Dialog/FinalizeHotelsPricingDialog";
+import axios from "../../../../utils/axios";
+
+function setQuotationValueByPath(prev, path, value) {
+    const parts = path.split(".");
+    if (parts.length === 1) {
+        return { ...prev, [path]: value };
+    }
+    const next = { ...prev };
+    let cur = next;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const p = parts[i];
+        cur[p] = cur[p] && typeof cur[p] === "object" ? { ...cur[p] } : {};
+        cur = cur[p];
+    }
+    cur[parts[parts.length - 1]] = value;
+    return next;
+}
+
+function linesToPolicyArray(v) {
+    if (Array.isArray(v)) return v.map(String);
+    if (typeof v === "string") {
+        return v.split("\n").map((s) => s.trim()).filter(Boolean);
+    }
+    return [String(v)];
+}
+
+/** Maps UI field paths to Mongo $set keys on CustomQuotation */
+function buildMongoSetFromDisplayField(field, value) {
+    const P = "tourDetails.policies";
+    switch (field) {
+        case "policies.inclusions":
+            return { [`${P}.inclusionPolicy`]: linesToPolicyArray(value) };
+        case "policies.exclusions":
+            return { [`${P}.exclusionPolicy`]: linesToPolicyArray(value) };
+        case "policies.paymentPolicy":
+            return { [`${P}.paymentPolicy`]: linesToPolicyArray(value) };
+        case "policies.cancellationPolicy":
+            return { [`${P}.cancellationPolicy`]: linesToPolicyArray(value) };
+        case "policies.terms":
+            return { [`${P}.termsAndConditions`]: linesToPolicyArray(value) };
+        case "hotel.itinerary":
+            return { "tourDetails.initalNotes": String(value) };
+        case "customer.name":
+            return { "clientDetails.clientName": String(value) };
+        case "customer.location":
+            return { "clientDetails.sector": String(value) };
+        case "footer.contact":
+            return {
+                "tourDetails.quotationDetails.signatureDetails.signedBy":
+                    String(value),
+            };
+        case "quotationHeaderTitle":
+            return { "tourDetails.quotationTitle": String(value) };
+        case "destinationLine":
+            return { "tourDetails.destinationSummary": String(value) };
+        default:
+            return null;
+    }
+}
+
+/** Resolves $set payload including nested pickup (arrival / departure) edits */
+function buildMongoSetFromEditDialog(editDialog, newValue) {
+    if (editDialog.field === "pickup" && editDialog.nestedKey === "arrival") {
+        return { "tourDetails.pickupArrivalNote": String(newValue) };
+    }
+    if (editDialog.field === "pickup" && editDialog.nestedKey === "departure") {
+        return { "tourDetails.pickupDepartureNote": String(newValue) };
+    }
+    return buildMongoSetFromDisplayField(editDialog.field, newValue);
+}
+
+/** Receive Voucher → Cr = money received from client; Payment Voucher → Dr = money paid to vendor */
+function summarizeVoucherAmounts(vouchers) {
+    let receivedFromClient = 0;
+    let paidToVendor = 0;
+    (vouchers || []).forEach((v) => {
+        const n = Number(v.amount) || 0;
+        const isReceive =
+            v.drCr === "Cr" || v.paymentType === "Receive Voucher";
+        const isPayment =
+            v.drCr === "Dr" || v.paymentType === "Payment Voucher";
+        if (isReceive) receivedFromClient += n;
+        else if (isPayment) paidToVendor += n;
+    });
+    return {
+        receivedFromClient,
+        paidToVendor,
+        net: receivedFromClient - paidToVendor,
+        cr: receivedFromClient,
+        dr: paidToVendor,
+    };
+}
+
+// Transaction Summary — vouchers linked to this quotation (Receive = Cr, Payment = Dr)
+const TransactionSummaryDialog = ({
+    open,
+    onClose,
+    loading,
+    rows,
+    quotationRef,
+}) => {
+    const totals = summarizeVoucherAmounts(rows);
+
     const tableHeaders = [
-        "Sr No.",
-        "Receipt",
-        "Invoice",
-        "Party Name",
-        "Transaction Remark",
-        "Transaction...",
+        "Sr.",
+        "Receipt #",
+        "Voucher id",
+        "Type",
+        "Party",
+        "Particulars",
+        "Mode",
         "Dr/Cr",
         "Amount",
     ];
@@ -98,10 +209,78 @@ const TransactionSummaryDialog = ({ open, onClose }) => {
         >
             <DialogTitle>
                 <Typography variant="h6" component="div" fontWeight="bold">
-                    Transaction Summary
+                    Payment history{quotationRef ? ` — ${quotationRef}` : ""}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Receive vouchers count as money from the client; payment vouchers count as money paid to vendors.
                 </Typography>
             </DialogTitle>
             <DialogContent>
+                {!loading && rows?.length > 0 && (
+                    <Box
+                        sx={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 2,
+                            mb: 2,
+                        }}
+                    >
+                        <Paper
+                            variant="outlined"
+                            sx={{
+                                flex: "1 1 200px",
+                                p: 2,
+                                borderLeft: "4px solid",
+                                borderColor: "success.main",
+                            }}
+                        >
+                            <Typography variant="caption" color="text.secondary">
+                                Received from client
+                            </Typography>
+                            <Typography variant="h6" color="success.main" fontWeight="bold">
+                                ₹{totals.receivedFromClient.toLocaleString("en-IN")}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Receive vouchers (Cr)
+                            </Typography>
+                        </Paper>
+                        <Paper
+                            variant="outlined"
+                            sx={{
+                                flex: "1 1 200px",
+                                p: 2,
+                                borderLeft: "4px solid",
+                                borderColor: "warning.main",
+                            }}
+                        >
+                            <Typography variant="caption" color="text.secondary">
+                                Paid to vendors
+                            </Typography>
+                            <Typography variant="h6" color="warning.main" fontWeight="bold">
+                                ₹{totals.paidToVendor.toLocaleString("en-IN")}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Payment vouchers (Dr)
+                            </Typography>
+                        </Paper>
+                        <Paper
+                            variant="outlined"
+                            sx={{
+                                flex: "1 1 200px",
+                                p: 2,
+                                borderLeft: "4px solid",
+                                borderColor: "info.main",
+                            }}
+                        >
+                            <Typography variant="caption" color="text.secondary">
+                                Net (client in − vendor out)
+                            </Typography>
+                            <Typography variant="h6" fontWeight="bold">
+                                ₹{totals.net.toLocaleString("en-IN")}
+                            </Typography>
+                        </Paper>
+                    </Box>
+                )}
                 <TableContainer
                     component={Paper}
                     variant="outlined"
@@ -127,23 +306,56 @@ const TransactionSummaryDialog = ({ open, onClose }) => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            <TableRow>
-                                <TableCell
-                                    colSpan={tableHeaders.length}
-                                    align="center"
-                                    sx={{
-                                        height: 120,
-                                        color: "text.secondary",
-                                        fontStyle: "italic",
-                                    }}
-                                >
-                                    No data
-                                </TableCell>
-                            </TableRow>
+                            {loading ? (
+                                <TableRow>
+                                    <TableCell colSpan={tableHeaders.length} align="center" sx={{ py: 4 }}>
+                                        <CircularProgress size={32} />
+                                    </TableCell>
+                                </TableRow>
+                            ) : rows?.length ? (
+                                rows.map((v, index) => (
+                                    <TableRow key={v._id || index} hover>
+                                        <TableCell>{index + 1}</TableCell>
+                                        <TableCell>{v.receiptNumber}</TableCell>
+                                        <TableCell>{v.invoiceId}</TableCell>
+                                        <TableCell>{v.paymentType}</TableCell>
+                                        <TableCell>{v.partyName}</TableCell>
+                                        <TableCell sx={{ maxWidth: 220 }}>{v.particulars}</TableCell>
+                                        <TableCell>{v.paymentMode}</TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                size="small"
+                                                label={v.drCr || "—"}
+                                                color={v.drCr === "Cr" ? "success" : v.drCr === "Dr" ? "warning" : "default"}
+                                            />
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            ₹{(Number(v.amount) || 0).toLocaleString("en-IN")}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell
+                                        colSpan={tableHeaders.length}
+                                        align="center"
+                                        sx={{
+                                            height: 120,
+                                            color: "text.secondary",
+                                            fontStyle: "italic",
+                                        }}
+                                    >
+                                        No vouchers linked to this quotation yet.
+                                    </TableCell>
+                                </TableRow>
+                            )}
                         </TableBody>
                     </Table>
                 </TableContainer>
             </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Close</Button>
+            </DialogActions>
         </Dialog>
     );
 };
@@ -240,7 +452,6 @@ const CustomFinalize = () => {
     const [activeInfo, setActiveInfo] = useState(null);
     const [openFinalize, setOpenFinalize] = useState(false);
     const [openAddFlight, setOpenAddFlight] = useState(false);
-    const [vendor, setVendor] = useState("");
     const [isFinalized, setIsFinalized] = useState(false);
     const [invoiceGenerated, setInvoiceGenerated] = useState(false);
     const [openInvoiceDialog, setOpenInvoiceDialog] = useState(false);
@@ -256,9 +467,22 @@ const CustomFinalize = () => {
         day: null,
         title: "",
         description: "",
-        id: null
+        dayDate: "",
+        editIndex: null,
     });
-    const { id } = useParams(); // Get quotation ID from URL params
+    const [openVehicleFinalizeDialog, setOpenVehicleFinalizeDialog] = useState(false);
+    const [openHotelsPricingDialog, setOpenHotelsPricingDialog] = useState(false);
+    const [itinerarySaving, setItinerarySaving] = useState(false);
+    const [guestCountsDialog, setGuestCountsDialog] = useState({
+        open: false,
+        adults: 0,
+        children: 0,
+        kids: 0,
+        infants: 0,
+    });
+    const [bannerUploading, setBannerUploading] = useState(false);
+    const { id } = useParams(); // business quotationId e.g. ICYR_CQ_0001
+    const navigate = useNavigate();
     const { selectedQuotation, loading: reduxLoading, error } = useSelector(state => state.customQuotation);
     // Dynamic quotation state from API
     const [quotation, setQuotation] = useState({
@@ -276,6 +500,8 @@ const CustomFinalize = () => {
             arrival: "",
             departure: "",
         },
+        quotationTitle: "",
+        destinationSummary: "",
         hotel: {
             guests: "",
             rooms: "",
@@ -325,11 +551,13 @@ const CustomFinalize = () => {
         taxType: "",
     });
     const [openEmailDialog, setOpenEmailDialog] = useState(false);
-    const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
     const [openBankDialog, setOpenBankDialog] = useState(false);
     const [flights, setFlights] = useState([]);
     const [openAddBankDialog, setOpenAddBankDialog] = useState(false);
     const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
+    const [openCostingEdit, setOpenCostingEdit] = useState(false);
+    const [paymentHistory, setPaymentHistory] = useState([]);
+    const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
     const [days, setDays] = useState([]);
     const [accountType, setAccountType] = useState("company");
     const [accountName, setAccountName] = useState("Iconic Yatra");
@@ -395,20 +623,107 @@ const CustomFinalize = () => {
         fetchQuotationData();
     }, [dispatch, id]);
 
+    const loadPaymentHistory = React.useCallback(async () => {
+        if (!id) return;
+        setPaymentHistoryLoading(true);
+        try {
+            const res = await axios.get(
+                `/payment/by-quotation/${encodeURIComponent(id)}`
+            );
+            setPaymentHistory(res.data?.data || []);
+        } catch (e) {
+            console.error(e);
+            setPaymentHistory([]);
+        } finally {
+            setPaymentHistoryLoading(false);
+        }
+    }, [id]);
+
+    useEffect(() => {
+        loadPaymentHistory();
+    }, [loadPaymentHistory]);
+
+    useEffect(() => {
+        if (selectedQuotation?.finalizeStatus === "finalized") {
+            setIsFinalized(true);
+        }
+    }, [selectedQuotation?.finalizeStatus]);
+
+    const packageTotalForFooter = React.useMemo(() => {
+        const pkg = selectedQuotation?.finalizedPackage;
+        const calc =
+            selectedQuotation?.tourDetails?.quotationDetails
+                ?.packageCalculations;
+        if (!pkg || !calc) return null;
+        const key = pkg.toLowerCase();
+        const t = calc[key]?.finalTotal;
+        return typeof t === "number" ? t : null;
+    }, [selectedQuotation]);
+
+    useEffect(() => {
+        const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
+        setQuotation((prev) => ({
+            ...prev,
+            footer: {
+                ...prev.footer,
+                received: `₹ ${receivedFromClient.toLocaleString("en-IN")}`,
+                balance:
+                    packageTotalForFooter != null
+                        ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}`
+                        : prev.footer.balance,
+            },
+        }));
+    }, [paymentHistory, packageTotalForFooter]);
+
     // Update the transformApiData function to handle the actual API response structure
     const transformApiData = (apiData) => {
         if (!apiData) return null;
 
-        const { clientDetails, tourDetails, quotationId, createdAt, pickupDrop } = apiData;
+        const { clientDetails, tourDetails, quotationId, createdAt, pickupDrop, finalizedPackage } = apiData;
         const { quotationDetails, arrivalCity, departureCity, arrivalDate, departureDate, itinerary, policies, vehicleDetails } = tourDetails;
+
+        const pkgCalc = quotationDetails?.packageCalculations;
+        const readPackageFinalTotal = (key) => {
+            if (!key || !pkgCalc) return null;
+            const v = pkgCalc[key]?.finalTotal;
+            return typeof v === "number" && !Number.isNaN(v) ? v : null;
+        };
+        const finalizedKey = (finalizedPackage || "").toLowerCase();
+        const sumDestinationTotalCost =
+            quotationDetails.destinations?.reduce(
+                (sum, dest) => sum + (Number(dest.totalCost) || 0),
+                0
+            ) || 0;
+        const pkgOrder = ["standard", "deluxe", "superior"];
+        const tryKeys =
+            finalizedKey && pkgOrder.includes(finalizedKey)
+                ? [finalizedKey, ...pkgOrder.filter((k) => k !== finalizedKey)]
+                : pkgOrder;
+        let quotationCostNumber = null;
+        for (const k of tryKeys) {
+            const t = readPackageFinalTotal(k);
+            if (t != null) {
+                quotationCostNumber = t;
+                break;
+            }
+        }
+        if (quotationCostNumber == null) {
+            quotationCostNumber = sumDestinationTotalCost;
+        }
 
         // Calculate total guests
         const totalGuests = quotationDetails.adults + quotationDetails.children + quotationDetails.kids + quotationDetails.infants;
 
-        // Format destinations
-        const destinationString = quotationDetails.destinations?.map(dest =>
-            `${dest.nights}N ${dest.cityName}`
-        ).join(', ') || '';
+        // Format destinations (auto); optional tourDetails.destinationSummary overrides display
+        const destinationString =
+            quotationDetails.destinations
+                ?.map((dest) => `${dest.nights}N ${dest.cityName}`)
+                .join(", ") || "";
+        const destinationDisplay =
+            tourDetails.destinationSummary &&
+            String(tourDetails.destinationSummary).trim()
+                ? String(tourDetails.destinationSummary).trim()
+                : destinationString;
 
         // Transform hotel pricing data
         const hotelPricingData = quotationDetails.destinations?.map(dest => ({
@@ -444,13 +759,14 @@ const CustomFinalize = () => {
             );
         }
 
-        // Transform itinerary days
+        // Transform itinerary days (use array index for edits; optional dayDate from API)
         const transformedDays = itinerary?.map((day, index) => ({
-            id: index + 1,
-            date: formatDate(arrivalDate), // You might want to calculate actual dates based on day number
+            id: index,
+            dayDate: day.dayDate || "",
+            date: day.dayDate || formatDate(arrivalDate),
             title: day.dayTitle || `Day ${index + 1}`,
-            description: day.dayNote || '',
-            image: day.image ? { preview: day.image, name: 'Itinerary Image' } : null
+            description: day.dayNote || "",
+            image: day.image ? { preview: day.image, name: "Itinerary Image" } : null,
         })) || [];
 
         // Format pickup/drop details
@@ -472,9 +788,18 @@ const CustomFinalize = () => {
             vehicleDeparture = `Departure: ${dropDetails.dropLocation} (${dropDateTime})`;
         }
 
+        if (tourDetails.pickupArrivalNote) {
+            vehicleArrival = tourDetails.pickupArrivalNote;
+        }
+        if (tourDetails.pickupDepartureNote) {
+            vehicleDeparture = tourDetails.pickupDepartureNote;
+        }
+
         return {
             date: formatDate(createdAt),
             reference: quotationId,
+            quotationTitle: tourDetails.quotationTitle || "",
+            destinationSummary: tourDetails.destinationSummary || "",
             actions: ["Finalize", "Add Service", "Email Quotation", "Preview PDF", "Make Payment", "Add Flight", "Transaction"],
             bannerImage: tourDetails.bannerImage || "",
             customer: {
@@ -492,7 +817,7 @@ const CustomFinalize = () => {
                 rooms: `${quotationDetails.rooms.numberOfRooms}  (${quotationDetails.rooms.sharingType})`,
                 hotelType: `${quotationDetails.rooms.roomType}`,
                 mealPlan: quotationDetails.mealPlan,
-                destination: destinationString,
+                destination: destinationDisplay,
                 itinerary: tourDetails.initalNotes || "This is only tentative schedule for sightseeing and travel...",
             },
             vehicles: vehicleDetails ? [{
@@ -508,7 +833,7 @@ const CustomFinalize = () => {
             pricing: {
                 discount: `₹ ${quotationDetails.discount || 0}`,
                 gst: `₹ ${quotationDetails.taxes?.applyGST ? 'Calculated' : 0}`,
-                total: `₹ ${quotationDetails.destinations?.reduce((sum, dest) => sum + (dest.totalCost || 0), 0) || 0}`
+                total: `₹ ${quotationCostNumber.toLocaleString("en-IN")}`,
             },
             policies: {
                 inclusions: policies.inclusionPolicy || [],
@@ -568,6 +893,71 @@ const CustomFinalize = () => {
             return timeString;
         }
     };
+
+    const refreshQuotationFromApi = async () => {
+        if (!id) return;
+        const refreshed = await dispatch(getCustomQuotationById(id)).unwrap();
+        const t = transformApiData(refreshed);
+        if (t) {
+            setQuotation(t);
+            setDays(t.days);
+        }
+    };
+
+    const persistItineraryToServer = async (nextDays) => {
+        if (!id) {
+            setSnackbar({
+                open: true,
+                message: "Cannot sync itinerary: no quotation id",
+                severity: "error",
+            });
+            return;
+        }
+        setItinerarySaving(true);
+        try {
+            await saveCustomQuotationItinerary(
+                dispatch,
+                updateQuotationStep,
+                id,
+                nextDays
+            );
+            await refreshQuotationFromApi();
+            setSnackbar({
+                open: true,
+                message: "Itinerary saved to server",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message:
+                    typeof e === "string"
+                        ? e
+                        : e?.message || "Failed to save itinerary",
+                severity: "error",
+            });
+        } finally {
+            setItinerarySaving(false);
+        }
+    };
+
+    const handleStep5Or6Saved = async () => {
+        try {
+            await refreshQuotationFromApi();
+            setSnackbar({
+                open: true,
+                message: "Saved to server",
+                severity: "success",
+            });
+        } catch {
+            setSnackbar({
+                open: true,
+                message: "Saved; reload if the page looks stale",
+                severity: "warning",
+            });
+        }
+    };
+
     // Add loading state handling
     if (reduxLoading) {
         return (
@@ -637,8 +1027,35 @@ const CustomFinalize = () => {
     const handleEmailOpen = () => setOpenEmailDialog(true);
     const handleEmailClose = () => setOpenEmailDialog(false);
 
-    const handlePaymentOpen = () => setOpenPaymentDialog(true);
-    const handlePaymentClose = () => setOpenPaymentDialog(false);
+    const handlePaymentOpen = () => {
+        if (!id) {
+            setSnackbar({
+                open: true,
+                message: "Missing quotation reference",
+                severity: "error",
+            });
+            return;
+        }
+        const clientName =
+            quotation.customer?.name?.trim() ||
+            selectedQuotation?.clientDetails?.clientName?.trim() ||
+            "";
+        try {
+            sessionStorage.setItem(
+                "paymentFormPartyPrefill",
+                JSON.stringify({
+                    quotationRef: id,
+                    partyName: clientName,
+                })
+            );
+        } catch {
+            /* ignore quota / private mode */
+        }
+        const party = encodeURIComponent(clientName);
+        navigate(
+            `/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`
+        );
+    };
 
     const handleFinalizeOpen = () => setOpenFinalize(true);
     const handleFinalizeClose = () => setOpenFinalize(false);
@@ -678,27 +1095,278 @@ const CustomFinalize = () => {
         });
     };
 
-    const handleEditSave = () => {
-        setQuotation((prev) => ({
-            ...prev,
-            [editDialog.field]: editDialog.nested
-                ? {
-                    ...prev[editDialog.field],
-                    [editDialog.nestedKey]: editDialog.value,
+    const handleEditSave = async () => {
+        let newValue = editDialog.value;
+
+        if (editDialog.field === "policies.inclusions") {
+            try {
+                const parsed = JSON.parse(editDialog.value);
+                newValue = Array.isArray(parsed) ? parsed : [String(parsed)];
+            } catch {
+                newValue = linesToPolicyArray(editDialog.value);
+            }
+        } else if (editDialog.field.startsWith("policies.")) {
+            newValue = linesToPolicyArray(editDialog.value);
+        }
+
+        if (editDialog.field === "quotationHeaderTitle") {
+            const t = String(newValue).trim();
+            if (!t) {
+                const name =
+                    selectedQuotation?.clientDetails?.clientName ||
+                    quotation.customer?.name ||
+                    "Guest";
+                newValue = `Custom Quotation For ${name}`;
+            } else {
+                newValue = t;
+            }
+        }
+
+        setQuotation((prev) => {
+            if (editDialog.field === "quotationHeaderTitle") {
+                return { ...prev, quotationTitle: newValue };
+            }
+            if (editDialog.field === "destinationLine") {
+                return {
+                    ...prev,
+                    destinationSummary: newValue,
+                    hotel: { ...prev.hotel, destination: newValue },
+                };
+            }
+            if (editDialog.nested && editDialog.nestedKey) {
+                return {
+                    ...prev,
+                    [editDialog.field]: {
+                        ...prev[editDialog.field],
+                        [editDialog.nestedKey]: newValue,
+                    },
+                };
+            }
+            return setQuotationValueByPath(prev, editDialog.field, newValue);
+        });
+
+        const mongoSet = buildMongoSetFromEditDialog(editDialog, newValue);
+        if (mongoSet && id) {
+            try {
+                await dispatch(
+                    updateCustomQuotation({
+                        quotationId: id,
+                        formData: mongoSet,
+                    })
+                ).unwrap();
+                const refreshed = await dispatch(
+                    getCustomQuotationById(id)
+                ).unwrap();
+                const t = transformApiData(refreshed);
+                if (t) {
+                    setQuotation(t);
+                    setDays(t.days);
                 }
-                : editDialog.value,
-        }));
+                setSnackbar({
+                    open: true,
+                    message: "Saved to server",
+                    severity: "success",
+                });
+            } catch (e) {
+                setSnackbar({
+                    open: true,
+                    message:
+                        typeof e === "string"
+                            ? e
+                            : e?.message || "Saved locally; server update failed",
+                    severity: "warning",
+                });
+            }
+        } else if (mongoSet && !id) {
+            setSnackbar({
+                open: true,
+                message: "Cannot sync: no quotation id in URL",
+                severity: "warning",
+            });
+        }
+
         handleEditClose();
+    };
+
+    const openGuestCountsDialog = () => {
+        const qd = selectedQuotation?.tourDetails?.quotationDetails;
+        setGuestCountsDialog({
+            open: true,
+            adults: Number(qd?.adults) || 0,
+            children: Number(qd?.children) || 0,
+            kids: Number(qd?.kids) || 0,
+            infants: Number(qd?.infants) || 0,
+        });
+    };
+
+    const handleSaveGuestCounts = async () => {
+        const { adults, children, kids, infants } = guestCountsDialog;
+        const a = Math.max(0, Number(adults) || 0);
+        const c = Math.max(0, Number(children) || 0);
+        const k = Math.max(0, Number(kids) || 0);
+        const inf = Math.max(0, Number(infants) || 0);
+        const mongoSet = {
+            "tourDetails.quotationDetails.adults": a,
+            "tourDetails.quotationDetails.children": c,
+            "tourDetails.quotationDetails.kids": k,
+            "tourDetails.quotationDetails.infants": inf,
+        };
+        if (!id) {
+            setSnackbar({
+                open: true,
+                message: "Cannot sync: no quotation id",
+                severity: "warning",
+            });
+            return;
+        }
+        try {
+            await dispatch(
+                updateCustomQuotation({ quotationId: id, formData: mongoSet })
+            ).unwrap();
+            await refreshQuotationFromApi();
+            setGuestCountsDialog({
+                open: false,
+                adults: 0,
+                children: 0,
+                kids: 0,
+                infants: 0,
+            });
+            setSnackbar({
+                open: true,
+                message: "Guest counts saved",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message:
+                    typeof e === "string"
+                        ? e
+                        : e?.message || "Failed to save guest counts",
+                severity: "error",
+            });
+        }
+    };
+
+    const handleBannerFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        if (!id) {
+            setSnackbar({
+                open: true,
+                message: "Cannot upload: no quotation id",
+                severity: "error",
+            });
+            return;
+        }
+        const td = selectedQuotation?.tourDetails;
+        if (!td) {
+            setSnackbar({
+                open: true,
+                message: "Quotation data not loaded yet; try again.",
+                severity: "warning",
+            });
+            return;
+        }
+        setBannerUploading(true);
+        try {
+            const stepDataObj = {
+                arrivalCity: td.arrivalCity,
+                departureCity: td.departureCity,
+                arrivalDate: td.arrivalDate,
+                departureDate: td.departureDate,
+                quotationTitle: td.quotationTitle,
+                notes: td.notes,
+                transport: td.transport || "Yes",
+                validFrom: td.validFrom,
+                validTill: td.validTill,
+            };
+            const fd = new FormData();
+            fd.append("stepData", JSON.stringify(stepDataObj));
+            fd.append("bannerImage", file);
+            await dispatch(
+                updateQuotationStep({
+                    quotationId: id,
+                    stepNumber: 3,
+                    stepData: fd,
+                })
+            ).unwrap();
+            await refreshQuotationFromApi();
+            setSnackbar({
+                open: true,
+                message: "Banner image uploaded",
+                severity: "success",
+            });
+        } catch (err) {
+            setSnackbar({
+                open: true,
+                message:
+                    typeof err === "string"
+                        ? err
+                        : err?.message || "Banner upload failed",
+                severity: "error",
+            });
+        } finally {
+            setBannerUploading(false);
+        }
+    };
+
+    const handleCostingSaved = async () => {
+        if (!id) return;
+        try {
+            await refreshQuotationFromApi();
+            setSnackbar({
+                open: true,
+                message: "Costing updated",
+                severity: "success",
+            });
+        } catch {
+            setSnackbar({
+                open: true,
+                message: "Costing saved; reload the page if totals look stale",
+                severity: "warning",
+            });
+        }
     };
 
     const handleEditValueChange = (e) => {
         setEditDialog({ ...editDialog, value: e.target.value });
     };
 
-    const handleConfirm = () => {
-        setIsFinalized(true);
-        setOpenFinalize(false);
-        setOpenBankDialog(true);
+    const handleConfirm = async (values) => {
+        const pkg = values?.quotation;
+        if (!pkg || !id) {
+            setSnackbar({
+                open: true,
+                message: "Select a package to finalize",
+                severity: "error",
+            });
+            return;
+        }
+        try {
+            await dispatch(
+                finalizeCustomQuotation({
+                    quotationId: id,
+                    finalizedPackage: pkg,
+                })
+            ).unwrap();
+            await dispatch(getCustomQuotationById(id)).unwrap();
+            setIsFinalized(true);
+            setOpenFinalize(false);
+            setOpenBankDialog(true);
+            setSnackbar({
+                open: true,
+                message: `Quotation finalized — ${pkg}`,
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message: e || "Could not finalize quotation",
+                severity: "error",
+            });
+        }
     };
 
     const handleBankDialogClose = () => {
@@ -837,24 +1505,29 @@ const CustomFinalize = () => {
         handleAddFlightClose();
     };
 
-    const handleDayImageUpload = (dayId, file) => {
+    const handleDayImageUpload = async (dayIndex, file) => {
         if (file) {
-            setDays((prev) =>
-                prev.map((day) =>
-                    day.id === dayId
-                        ? {
-                            ...day,
-                            image: {
-                                file,
-                                preview: URL.createObjectURL(file),
-                                name: file.name,
-                            },
-                        }
-                        : day
-                )
+            const next = days.map((day, i) =>
+                i === dayIndex
+                    ? {
+                          ...day,
+                          image: {
+                              file,
+                              preview: URL.createObjectURL(file),
+                              name: file.name,
+                          },
+                      }
+                    : day
             );
-            console.log(`Image uploaded for Day ${dayId}:`, file.name);
+            setDays(next);
+            await persistItineraryToServer(next);
+            return;
         }
+        const next = days.map((day, i) =>
+            i === dayIndex ? { ...day, image: null } : day
+        );
+        setDays(next);
+        await persistItineraryToServer(next);
     };
 
     const handleAddDay = () => {
@@ -870,12 +1543,14 @@ const CustomFinalize = () => {
         ]);
     };
 
-    const handleRemoveDay = (dayId) => {
-        if (days.length > 1) {
-            setDays((prev) => prev.filter((day) => day.id !== dayId));
-        } else {
+    const handleRemoveDay = async (removeIndex) => {
+        if (days.length <= 1) {
             alert("At least one day is required");
+            return;
         }
+        const next = days.filter((_, i) => i !== removeIndex);
+        setDays(next);
+        await persistItineraryToServer(next);
     };
 
     // PDF Dialog Handlers - FIXED VERSION
@@ -939,6 +1614,7 @@ const CustomFinalize = () => {
                 handleAddFlightOpen();
                 break;
             case "Transaction":
+                loadPaymentHistory();
                 setOpenTransactionDialog(true);
                 break;
             default:
@@ -946,79 +1622,96 @@ const CustomFinalize = () => {
         }
     };
 
+    const resetItineraryDialog = () =>
+        setItineraryDialog({
+            open: false,
+            mode: "add",
+            day: null,
+            title: "",
+            description: "",
+            dayDate: "",
+            editIndex: null,
+        });
+
     const handleAddItinerary = () => {
         const currentDays = days.length;
         setItineraryDialog({
             open: true,
-            mode: 'add',
+            mode: "add",
             day: currentDays + 1,
             title: `Day ${currentDays + 1}`,
             description: "",
-            id: null
+            dayDate: "",
+            editIndex: null,
         });
     };
 
     const handleEditItinerary = (day, index) => {
         setItineraryDialog({
             open: true,
-            mode: 'edit',
+            mode: "edit",
             day: index + 1,
             title: day.title || `Day ${index + 1}`,
             description: day.description || "",
-            id: day.id
+            dayDate: day.dayDate || day.date || "",
+            editIndex: index,
         });
     };
 
     const handleSaveItinerary = async () => {
-        const { mode, title, description, id } = itineraryDialog;
+        const { mode, title, description, dayDate, editIndex } = itineraryDialog;
 
-        if (!title.trim() || !description.trim()) {
+        if (!title.trim()) {
             setSnackbar({
                 open: true,
-                message: "Please fill in both title and description",
-                severity: "error"
+                message: "Please enter a day title",
+                severity: "error",
             });
             return;
         }
 
-        try {
-            if (mode === 'add') {
-                const newDay = {
-                    id: Date.now(),
-                    date: new Date().toLocaleDateString('en-IN'),
-                    title,
-                    description,
-                    image: null
-                };
-
-                setDays(prev => [...prev, newDay]);
-            } else if (mode === 'edit') {
-                setDays(prev =>
-                    prev.map(day =>
-                        day.id === id ? { ...day, title, description } : day
-                    )
-                );
-            }
-
-            setItineraryDialog({ open: false, mode: 'add', day: null, title: "", description: "", id: null });
-
-            setSnackbar({
-                open: true,
-                message: `Itinerary ${mode === 'add' ? 'added' : 'updated'} successfully`,
-                severity: "success"
-            });
-
-        } catch (error) {
-            setSnackbar({
-                open: true,
-                message: "Failed to save itinerary",
-                severity: "error"
-            });
+        const trimmedDate = (dayDate || "").trim();
+        let nextDays;
+        if (mode === "add") {
+            nextDays = [
+                ...days,
+                {
+                    id: days.length,
+                    dayDate: trimmedDate,
+                    date:
+                        trimmedDate ||
+                        new Date().toLocaleDateString("en-IN"),
+                    title: title.trim(),
+                    description: (description || "").trim(),
+                    image: null,
+                },
+            ];
+        } else if (mode === "edit" && editIndex != null) {
+            nextDays = days.map((day, i) =>
+                i === editIndex
+                    ? {
+                          ...day,
+                          title: title.trim(),
+                          description: (description || "").trim(),
+                          dayDate: trimmedDate,
+                          date:
+                              trimmedDate ||
+                              day.date ||
+                              new Date().toLocaleDateString("en-IN"),
+                      }
+                    : day
+            );
+        } else {
+            return;
         }
+
+        setDays(nextDays);
+        resetItineraryDialog();
+        await persistItineraryToServer(nextDays);
     };
 
     const handleCloseItineraryDialog = () => {
-        setItineraryDialog({ open: false, mode: 'add', day: null, title: "", description: "", id: null });
+        resetItineraryDialog();
     };
 
     const handleCloseSnackbar = () => {
@@ -1033,7 +1726,7 @@ const CustomFinalize = () => {
     const infoMap = {
         call: `📞 ${quotation.footer.phone}`,
         email: `✉️ ${quotation.footer.email}`,
-        payment: `Received: ${quotation.footer.received}\n Balance: ${quotation.footer.balance}`,
+        payment: `Received from client: ${quotation.footer.received}\n Balance due: ${quotation.footer.balance}`,
         quotation: `Total Quotation Cost: ${quotation.pricing.total}`,
         guest: `No. of Guests: ${quotation.hotel.guests}`,
     };
@@ -1110,7 +1803,7 @@ const CustomFinalize = () => {
             icon: <Group sx={{ fontSize: 16, mr: 0.5 }} />,
             text: `No of Guest: ${quotation.hotel.guests}`,
             editable: true,
-            field: "hotel.guests",
+            editGuestCounts: true,
         },
     ];
 
@@ -1136,6 +1829,33 @@ const CustomFinalize = () => {
                             {a}
                         </Button>
                     ))}
+                <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<Calculate />}
+                    disabled={!selectedQuotation}
+                    onClick={() => setOpenCostingEdit(true)}
+                >
+                    Edit costing
+                </Button>
+                <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<Route />}
+                    disabled={!selectedQuotation || !id}
+                    onClick={() => setOpenVehicleFinalizeDialog(true)}
+                >
+                    Edit vehicle & pickup
+                </Button>
+                <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<Business />}
+                    disabled={!selectedQuotation || !id}
+                    onClick={() => setOpenHotelsPricingDialog(true)}
+                >
+                    Edit hotels & pricing
+                </Button>
                 {isFinalized && !invoiceGenerated && (
                     <Button
                         variant="contained"
@@ -1274,9 +1994,14 @@ const CustomFinalize = () => {
                                                     </Box>
                                                 ) : a.title === "Hotel Details" ? (
                                                     <Box>
-                                                        <Typography variant="body2">
-                                                            <strong>Guests:</strong> {quotation.hotel.guests}
-                                                        </Typography>
+                                                        <Box display="flex" alignItems="center" gap={0.5}>
+                                                            <Typography variant="body2" component="span">
+                                                                <strong>Guests:</strong> {quotation.hotel.guests}
+                                                            </Typography>
+                                                            <IconButton size="small" onClick={openGuestCountsDialog}>
+                                                                <Edit fontSize="small" />
+                                                            </IconButton>
+                                                        </Box>
                                                         <Typography variant="body2">
                                                             <strong>Rooms:</strong> {quotation.hotel.rooms}
                                                         </Typography>
@@ -1286,9 +2011,23 @@ const CustomFinalize = () => {
                                                         <Typography variant="body2">
                                                             <strong>Meal Plan:</strong> {quotation.hotel.mealPlan}
                                                         </Typography>
-                                                        <Typography variant="body2">
-                                                            <strong>Destination:</strong> {quotation.hotel.destination}
-                                                        </Typography>
+                                                        <Box display="flex" alignItems="flex-start" gap={0.5}>
+                                                            <Typography variant="body2" component="span">
+                                                                <strong>Destination:</strong> {quotation.hotel.destination}
+                                                            </Typography>
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() =>
+                                                                    handleEditOpen(
+                                                                        "destinationLine",
+                                                                        quotation.hotel.destination,
+                                                                        "Destination line"
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Edit fontSize="small" />
+                                                            </IconButton>
+                                                        </Box>
                                                     </Box>
                                                 ) : a.title === "Company Margin" ? (
                                                     <Box>
@@ -1467,13 +2206,15 @@ const CustomFinalize = () => {
                                             <IconButton
                                                 size="small"
                                                 onClick={() =>
-                                                    handleEditOpen(
-                                                        i.field,
-                                                        i.text,
-                                                        i.nestedKey || i.field,
-                                                        !!i.nestedKey,
-                                                        i.nestedKey
-                                                    )
+                                                    i.editGuestCounts
+                                                        ? openGuestCountsDialog()
+                                                        : handleEditOpen(
+                                                              i.field,
+                                                              i.text,
+                                                              i.nestedKey || i.field,
+                                                              !!i.nestedKey,
+                                                              i.nestedKey
+                                                          )
                                                 }
                                             >
                                                 <Edit fontSize="small" />
@@ -1485,55 +2226,117 @@ const CustomFinalize = () => {
 
                             {/* Quotation Details */}
                             <Box mt={3}>
-                                <Box display="flex" alignItems="center">
-                                    <FormatQuoteIcon sx={{ mr: 1 }} />
-                                    <Typography
-                                        variant="h6"
-                                        fontWeight="bold"
-                                        color="warning.main"
-                                    >
-                                        Custom Quotation For {quotation.customer.name}
-                                    </Typography>
-                                </Box>
-
-                                <Box display="flex" alignItems="center" mt={1}>
-                                    <Route sx={{ mr: 0.5 }} />
-                                    <Typography variant="subtitle2">
-                                        Destination : {quotation.hotel.destination}
-                                    </Typography>
-                                </Box>
-
-                                <Box display="flex" alignItems="center" mt={1}>
-                                    <ImageIcon sx={{ mr: 0.5 }} />
-                                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
-                                        Add Banner Image
-                                    </Typography>
-                                    <Button component="label" sx={{ textTransform: "none" }}>
-                                        <AddCircleOutline />
-                                        <input
-                                            type="file"
-                                            hidden
-                                            accept="image/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files[0];
-                                                if (file) {
-                                                    setQuotation((prev) => ({
-                                                        ...prev,
-                                                        bannerImage: file.name,
-                                                    }));
-                                                    console.log("Selected file:", file);
-                                                }
-                                            }}
-                                        />
-                                    </Button>
-                                    {quotation.bannerImage && (
+                                <Box
+                                    display="flex"
+                                    alignItems="center"
+                                    justifyContent="space-between"
+                                    gap={1}
+                                >
+                                    <Box display="flex" alignItems="center" flexWrap="wrap" gap={0.5}>
+                                        <FormatQuoteIcon sx={{ mr: 1 }} />
                                         <Typography
-                                            variant="body2"
-                                            sx={{ ml: 2, fontStyle: "italic" }}
+                                            variant="h6"
+                                            fontWeight="bold"
+                                            color="warning.main"
                                         >
-                                            Selected: {quotation.bannerImage}
+                                            {quotation.quotationTitle?.trim()
+                                                ? quotation.quotationTitle
+                                                : `Custom Quotation For ${quotation.customer.name}`}
                                         </Typography>
-                                    )}
+                                    </Box>
+                                    <IconButton
+                                        size="small"
+                                        aria-label="Edit quotation title"
+                                        onClick={() =>
+                                            handleEditOpen(
+                                                "quotationHeaderTitle",
+                                                quotation.quotationTitle?.trim() ||
+                                                    `Custom Quotation For ${quotation.customer.name}`,
+                                                "Quotation title (shown in header)"
+                                            )
+                                        }
+                                    >
+                                        <Edit fontSize="small" />
+                                    </IconButton>
+                                </Box>
+
+                                <Box
+                                    display="flex"
+                                    alignItems="center"
+                                    mt={1}
+                                    justifyContent="space-between"
+                                    gap={1}
+                                >
+                                    <Box display="flex" alignItems="center" flexWrap="wrap">
+                                        <Route sx={{ mr: 0.5 }} />
+                                        <Typography variant="subtitle2">
+                                            Destination : {quotation.hotel.destination}
+                                        </Typography>
+                                    </Box>
+                                    <IconButton
+                                        size="small"
+                                        aria-label="Edit destination line"
+                                        onClick={() =>
+                                            handleEditOpen(
+                                                "destinationLine",
+                                                quotation.hotel.destination,
+                                                "Destination line (e.g. 1N City A, 2N City B)"
+                                            )
+                                        }
+                                    >
+                                        <Edit fontSize="small" />
+                                    </IconButton>
+                                </Box>
+
+                                <Box display="flex" flexDirection="column" gap={1} mt={1}>
+                                    <Box display="flex" alignItems="center" flexWrap="wrap" gap={1}>
+                                        <ImageIcon sx={{ mr: 0.5 }} />
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                            Banner image
+                                        </Typography>
+                                        <Button
+                                            component="label"
+                                            variant="outlined"
+                                            size="small"
+                                            startIcon={
+                                                bannerUploading ? (
+                                                    <CircularProgress size={16} />
+                                                ) : (
+                                                    <AddCircleOutline />
+                                                )
+                                            }
+                                            disabled={bannerUploading || !id}
+                                            sx={{ textTransform: "none" }}
+                                        >
+                                            {bannerUploading ? "Uploading…" : "Upload image"}
+                                            <input
+                                                type="file"
+                                                hidden
+                                                accept="image/*"
+                                                onChange={handleBannerFileChange}
+                                            />
+                                        </Button>
+                                    </Box>
+                                    {typeof quotation.bannerImage === "string" &&
+                                        /^https?:\/\//i.test(quotation.bannerImage) && (
+                                            <Box display="flex" alignItems="flex-start" gap={2}>
+                                                <Box
+                                                    component="img"
+                                                    src={quotation.bannerImage}
+                                                    alt="Quotation banner"
+                                                    sx={{
+                                                        maxHeight: 140,
+                                                        maxWidth: "100%",
+                                                        objectFit: "contain",
+                                                        borderRadius: 1,
+                                                        border: "1px solid #e0e0e0",
+                                                    }}
+                                                />
+                                                <Typography variant="caption" color="text.secondary">
+                                                    Saved on server. Choose a new file to replace it.
+                                                </Typography>
+                                            </Box>
+                                        )}
                                 </Box>
 
                                 {/* Itinerary */}
@@ -1582,6 +2385,7 @@ const CustomFinalize = () => {
                                                     size="small"
                                                     onClick={handleAddItinerary}
                                                     startIcon={<Add />}
+                                                    disabled={itinerarySaving}
                                                 >
                                                     Add Day
                                                 </Button>
@@ -1589,15 +2393,23 @@ const CustomFinalize = () => {
 
                                             {days.length > 0 ? (
                                                 days.map((day, index) => (
-                                                    <Box key={day.id} mb={2} p={1} sx={{ border: '1px dashed #ddd', borderRadius: 1 }}>
+                                                    <Box key={`itinerary-day-${index}`} mb={2} p={1} sx={{ border: '1px dashed #ddd', borderRadius: 1 }}>
                                                         <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                                            <Typography variant="subtitle1" fontWeight="bold">
-                                                                {day.title}
-                                                            </Typography>
+                                                            <Box>
+                                                                <Typography variant="subtitle1" fontWeight="bold">
+                                                                    {day.title}
+                                                                </Typography>
+                                                                {(day.dayDate || day.date) && (
+                                                                    <Typography variant="caption" color="text.secondary" display="block">
+                                                                        Date: {day.dayDate || day.date}
+                                                                    </Typography>
+                                                                )}
+                                                            </Box>
                                                             <Box>
                                                                 <IconButton
                                                                     size="small"
                                                                     onClick={() => handleEditItinerary(day, index)}
+                                                                    disabled={itinerarySaving}
                                                                 >
                                                                     <Edit fontSize="small" />
                                                                 </IconButton>
@@ -1605,7 +2417,8 @@ const CustomFinalize = () => {
                                                                     <IconButton
                                                                         size="small"
                                                                         color="error"
-                                                                        onClick={() => handleRemoveDay(day.id)}
+                                                                        onClick={() => handleRemoveDay(index)}
+                                                                        disabled={itinerarySaving}
                                                                     >
                                                                         <Delete />
                                                                     </IconButton>
@@ -1625,6 +2438,7 @@ const CustomFinalize = () => {
                                                                 variant="outlined"
                                                                 size="small"
                                                                 startIcon={<AddCircleOutline />}
+                                                                disabled={itinerarySaving}
                                                             >
                                                                 Upload Image
                                                                 <input
@@ -1632,7 +2446,7 @@ const CustomFinalize = () => {
                                                                     hidden
                                                                     accept="image/*"
                                                                     onChange={(e) =>
-                                                                        handleDayImageUpload(day.id, e.target.files[0])
+                                                                        handleDayImageUpload(index, e.target.files[0])
                                                                     }
                                                                 />
                                                             </Button>
@@ -1643,7 +2457,7 @@ const CustomFinalize = () => {
                                                                 <Box
                                                                     component="img"
                                                                     src={day.image.preview}
-                                                                    alt={`Day ${day.id}`}
+                                                                    alt={`Day ${index + 1}`}
                                                                     sx={{
                                                                         width: 100,
                                                                         height: 100,
@@ -1654,12 +2468,13 @@ const CustomFinalize = () => {
                                                                 />
                                                                 <Box>
                                                                     <Typography variant="body2" fontWeight="medium">
-                                                                        {day.image.name}
+                                                                        {day.image.name || "Image"}
                                                                     </Typography>
                                                                     <Button
                                                                         size="small"
                                                                         color="error"
-                                                                        onClick={() => handleDayImageUpload(day.id, null)}
+                                                                        disabled={itinerarySaving}
+                                                                        onClick={() => handleDayImageUpload(index, null)}
                                                                     >
                                                                         Remove
                                                                     </Button>
@@ -1830,8 +2645,8 @@ const CustomFinalize = () => {
                                                         onClick={() =>
                                                             handleEditOpen(
                                                                 p.field,
-                                                                p.isArray
-                                                                    ? JSON.stringify(p.content)
+                                                                p.field === "policies.inclusions"
+                                                                    ? JSON.stringify(quotation.policies.inclusions)
                                                                     : p.content,
                                                                 p.title
                                                             )
@@ -1965,11 +2780,30 @@ const CustomFinalize = () => {
             </Snackbar>
 
             {/* Dialogs */}
+            <CostingEditDialog
+                open={openCostingEdit}
+                onClose={() => setOpenCostingEdit(false)}
+                quotation={selectedQuotation}
+                quotationId={id}
+                onSaved={handleCostingSaved}
+            />
+            <FinalizeVehicleDialog
+                open={openVehicleFinalizeDialog}
+                onClose={() => setOpenVehicleFinalizeDialog(false)}
+                quotation={selectedQuotation}
+                quotationId={id}
+                onSaved={handleStep5Or6Saved}
+            />
+            <FinalizeHotelsPricingDialog
+                open={openHotelsPricingDialog}
+                onClose={() => setOpenHotelsPricingDialog(false)}
+                quotation={selectedQuotation}
+                quotationId={id}
+                onSaved={handleStep5Or6Saved}
+            />
             <FinalizeDialog
                 open={openFinalize}
                 onClose={handleFinalizeClose}
-                vendor={vendor}
-                setVendor={setVendor}
                 onConfirm={handleConfirm}
             />
             <HotelVendorDialog
@@ -1998,6 +2832,57 @@ const CustomFinalize = () => {
                 onValueChange={handleEditValueChange}
                 onSave={handleEditSave}
             />
+            <Dialog
+                open={guestCountsDialog.open}
+                onClose={() =>
+                    setGuestCountsDialog((s) => ({ ...s, open: false }))
+                }
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Edit guest counts</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Updates adults, children, kids, and infants on the quotation (same as Step 6).
+                    </Typography>
+                    <Grid container spacing={2}>
+                        {[
+                            { key: "adults", label: "Adults" },
+                            { key: "children", label: "Children" },
+                            { key: "kids", label: "Kids" },
+                            { key: "infants", label: "Infants" },
+                        ].map(({ key, label }) => (
+                            <Grid size={{ xs: 6 }} key={key}>
+                                <TextField
+                                    label={label}
+                                    type="number"
+                                    fullWidth
+                                    inputProps={{ min: 0 }}
+                                    value={guestCountsDialog[key]}
+                                    onChange={(e) =>
+                                        setGuestCountsDialog((s) => ({
+                                            ...s,
+                                            [key]: e.target.value,
+                                        }))
+                                    }
+                                />
+                            </Grid>
+                        ))}
+                    </Grid>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() =>
+                            setGuestCountsDialog((s) => ({ ...s, open: false }))
+                        }
+                    >
+                        Cancel
+                    </Button>
+                    <Button variant="contained" onClick={handleSaveGuestCounts}>
+                        Save
+                    </Button>
+                </DialogActions>
+            </Dialog>
             <AddServiceDialog
                 open={openAddService}
                 onClose={handleAddServiceClose}
@@ -2020,13 +2905,12 @@ const CustomFinalize = () => {
                 onClose={handleEmailClose}
                 customer={quotation.customer}
             />
-            <MakePaymentDialog
-                open={openPaymentDialog}
-                onClose={handlePaymentClose}
-            />
             <TransactionSummaryDialog
                 open={openTransactionDialog}
                 onClose={() => setOpenTransactionDialog(false)}
+                loading={paymentHistoryLoading}
+                rows={paymentHistory}
+                quotationRef={id}
             />
 
             {/* Invoice PDF Dialog */}
@@ -2064,6 +2948,16 @@ const CustomFinalize = () => {
                     />
                     <TextField
                         margin="dense"
+                        label="Date (optional)"
+                        placeholder="e.g. 15 Apr 2026"
+                        fullWidth
+                        variant="outlined"
+                        value={itineraryDialog.dayDate}
+                        onChange={(e) => setItineraryDialog({ ...itineraryDialog, dayDate: e.target.value })}
+                        sx={{ mb: 2 }}
+                    />
+                    <TextField
+                        margin="dense"
                         label="Description"
                         fullWidth
                         variant="outlined"
@@ -2074,9 +2968,15 @@ const CustomFinalize = () => {
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={handleCloseItineraryDialog}>Cancel</Button>
-                    <Button onClick={handleSaveItinerary} variant="contained">
-                        {itineraryDialog.mode === 'add' ? 'Add' : 'Save'}
+                    <Button onClick={handleCloseItineraryDialog} disabled={itinerarySaving}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleSaveItinerary}
+                        variant="contained"
+                        disabled={itinerarySaving}
+                    >
+                        {itinerarySaving ? "Saving…" : itineraryDialog.mode === 'add' ? 'Add' : 'Save'}
                     </Button>
                 </DialogActions>
             </Dialog>
