@@ -28,19 +28,7 @@ import {
 } from "../../../../features/location/locationSlice";
 const titles = ["Mr", "Mrs", "Ms", "Dr"];
 const roles = ["B2B Vendor", "Hotel Vendor", "Referral Partner", "Staff", "Sub Agent", "Vehicle Vendor"];
-const countries = ["India", "USA"];
-const states = {
-  India: ["Maharashtra", "Delhi", "Karnataka"],
-  USA: ["California", "New York", "Texas"],
-};
-const cities = {
-  Maharashtra: ["Mumbai", "Pune"],
-  Delhi: ["New Delhi"],
-  Karnataka: ["Bangalore"],
-  California: ["Los Angeles", "San Francisco"],
-  "New York": ["New York City"],
-  Texas: ["Houston"],
-};
+
 
 const validationSchema = Yup.object().shape({
   fullName: Yup.string().required("Required"),
@@ -93,19 +81,20 @@ const AssociatesForm = () => {
         pincode: values.pincode,
       },
       firm: {
-        firmType: values.firmType,
-        gstIn: values.gstin,  // Changed from gstin to gstIn
-        cin: values.cin,
-        pan: values.pan,
-        existingTurnOver: values.turnover,  // Changed from turnover to existingTurnOver
-        firmName: values.firmName,
-        firmDescription: values.firmDescription,
-        sameAsContact: values.sameAsContact,
-        address1: values.firmAddress1,
-        address2: values.firmAddress2,
-        address3: values.firmAddress3,
-        supportingDocs: values.supportingDocs,
-      },
+  firmType: values.firmType,
+  gstin: values.gstin,        // ✅ FIXED
+  cin: values.cin,
+  pan: values.pan,
+  turnover: values.turnover,  // ✅ FIXED
+  firmName: values.firmName,
+  firmDescription: values.firmDescription,
+  sameAsContact: values.sameAsContact,
+  address1: values.firmAddress1,
+  address2: values.firmAddress2,
+  address3: values.firmAddress3,
+  supportingDocs: values.supportingDocs,
+},
+
       bank: {
         bankName: values.bankName,
         branchName: values.branchName,
@@ -250,21 +239,25 @@ const AssociatesForm = () => {
               </Typography>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 3 }}>
-                  <FormControl fullWidth>
-                    <InputLabel>Title</InputLabel>
-                    <Select
-                      name="title"
-                      value={values.title}
-                      onChange={handleChange}
-                    >
-                      {titles.map((title) => (
-                        <MenuItem key={title} value={title}>
-                          {title}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
+  <FormControl fullWidth>
+    <InputLabel id="title-label">Title</InputLabel>
+    <Select
+      labelId="title-label"
+      id="title"
+      name="title"
+      value={values.title || ""}
+      label="Title"
+      onChange={(e) => setFieldValue("title", e.target.value)}
+    >
+      {titles.map((title) => (
+        <MenuItem key={title} value={title}>
+          {title}
+        </MenuItem>
+      ))}
+    </Select>
+  </FormControl>
+</Grid>
+
                 <Grid size={{ xs: 6 }}>
                   <TextField
                     name="fullName"
