@@ -10,7 +10,7 @@ import {
     CircularProgress,
 } from "@mui/material";
 
-const PartySelector = ({ formik }) => {
+const PartySelector = ({ formik, prefillPartyName = "" }) => {
     const dispatch = useDispatch();
 
     const { list: associateList = [], loading: associateLoading } = useSelector(
@@ -79,10 +79,38 @@ const PartySelector = ({ formik }) => {
         }
 
         setFilteredAssociates(filtered);
-        formik.setFieldValue("partyName", ""); // reset on type change
-    }, [accountType, associateList, leadList]);
+
+        const norm = (s) => String(s || "").trim().toLowerCase();
+        const prefill = String(prefillPartyName || "").trim();
+
+        if (accountType === "Client" && prefill) {
+            const match = filtered.find(
+                (a) => a.isClient && norm(a.fullName) === norm(prefill)
+            );
+            formik.setFieldValue("partyName", match ? match.fullName : prefill);
+            return;
+        }
+
+        formik.setFieldValue("partyName", "");
+    }, [accountType, associateList, leadList, prefillPartyName]);
 
     const loading = associateLoading || leadStatus === "loading";
+
+    const normName = (s) => String(s || "").trim().toLowerCase();
+    const prefillTrim = String(prefillPartyName || "").trim();
+    const clientMatchedInList =
+        accountType === "Client" &&
+        prefillTrim &&
+        filteredAssociates.some(
+            (a) => a.isClient && normName(a.fullName) === normName(prefillTrim)
+        );
+    /** Show extra option when quotation name is not in leads (or leads still loading / empty). */
+    const showQuotationClientOption =
+        accountType === "Client" && prefillTrim && !clientMatchedInList;
+
+    const selectDisabled =
+        !accountType ||
+        (loading && !(accountType === "Client" && prefillTrim));
 
     return (
         <FormControl
@@ -92,17 +120,28 @@ const PartySelector = ({ formik }) => {
             <InputLabel>Party Name</InputLabel>
             <Select
                 name="partyName"
-                value={formik.values.partyName}
+                value={formik.values.partyName || ""}
                 onChange={formik.handleChange}
                 label="Party Name"
                 sx={{ bgcolor: "white" }}
-                disabled={!accountType || loading}
+                disabled={selectDisabled}
             >
-                {loading ? (
-                    <MenuItem disabled>
-                        <CircularProgress size={20} /> Loading...
+                {showQuotationClientOption && (
+                    <MenuItem value={prefillTrim}>
+                        {prefillTrim} (quotation client)
                     </MenuItem>
-                ) : filteredAssociates.length > 0 ? (
+                )}
+                {loading && (
+                    <MenuItem disabled>
+                        <CircularProgress size={20} sx={{ mr: 1 }} /> Loading
+                        directory…
+                    </MenuItem>
+                )}
+                {!loading &&
+                filteredAssociates.length === 0 &&
+                !showQuotationClientOption ? (
+                    <MenuItem disabled>No options available</MenuItem>
+                ) : (
                     filteredAssociates.map((a) => (
                         <MenuItem
                             key={a._id}
@@ -113,10 +152,13 @@ const PartySelector = ({ formik }) => {
                                 : a.personalDetails.fullName}
                         </MenuItem>
                     ))
-                ) : (
-                    <MenuItem disabled>No options available</MenuItem>
                 )}
             </Select>
+            {loading && accountType === "Client" && prefillTrim && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Client list is loading; quotation client is already selected above.
+                </Typography>
+            )}
         </FormControl>
     );
 };

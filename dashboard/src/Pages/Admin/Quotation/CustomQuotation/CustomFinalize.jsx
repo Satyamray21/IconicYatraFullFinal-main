@@ -1036,7 +1036,22 @@ const CustomFinalize = () => {
             });
             return;
         }
-        const party = encodeURIComponent(quotation.customer?.name || "");
+        const clientName =
+            quotation.customer?.name?.trim() ||
+            selectedQuotation?.clientDetails?.clientName?.trim() ||
+            "";
+        try {
+            sessionStorage.setItem(
+                "paymentFormPartyPrefill",
+                JSON.stringify({
+                    quotationRef: id,
+                    partyName: clientName,
+                })
+            );
+        } catch {
+            /* ignore quota / private mode */
+        }
+        const party = encodeURIComponent(clientName);
         navigate(
             `/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`
         );

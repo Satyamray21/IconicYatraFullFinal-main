@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
     Box,
     Button,
@@ -36,6 +36,32 @@ const PaymentsForm = () => {
     const { list: banks } = useSelector((state) => state.bank);
     const [searchParams] = useSearchParams();
     const quotationRefParam = searchParams.get("quotationRef")?.trim() || "";
+    const partyFromSearch = searchParams.get("party")?.trim() || "";
+    const [partyFromStorage, setPartyFromStorage] = useState("");
+
+    useEffect(() => {
+        if (!quotationRefParam) return;
+        if (partyFromSearch) {
+            setPartyFromStorage("");
+            return;
+        }
+        try {
+            const raw = sessionStorage.getItem("paymentFormPartyPrefill");
+            if (!raw) return;
+            const o = JSON.parse(raw);
+            if (
+                o?.quotationRef === quotationRefParam &&
+                String(o?.partyName || "").trim()
+            ) {
+                setPartyFromStorage(String(o.partyName).trim());
+                sessionStorage.removeItem("paymentFormPartyPrefill");
+            }
+        } catch {
+            /* ignore */
+        }
+    }, [quotationRefParam, partyFromSearch]);
+
+    const partyFromUrl = partyFromSearch || partyFromStorage;
 
     /** Default to Receive so the form is visible immediately (users can switch to Payment / Dr). */
     const [voucherType, setVoucherType] = useState("receive");
@@ -44,12 +70,13 @@ const PaymentsForm = () => {
     const [uploadFile, setUploadFile] = useState(null);
     const [companies, setCompanies] = useState([]);
 
-    const formik = useFormik({
-        initialValues: {
+    const formInitialValues = useMemo(
+        () => ({
             companyId: "",
             date: new Date().toISOString().split("T")[0],
-            accountType: "",
-            partyName: searchParams.get("party")?.trim() || "",
+            accountType:
+                quotationRefParam && partyFromUrl ? "Client" : "",
+            partyName: partyFromUrl,
             paymentMode: "",
             reference: "",
             particulars: quotationRefParam
@@ -57,7 +84,13 @@ const PaymentsForm = () => {
                 : "",
             amount: "",
             paymentLinkUsed: false,
-        },
+        }),
+        [quotationRefParam, partyFromUrl]
+    );
+
+    const formik = useFormik({
+        enableReinitialize: true,
+        initialValues: formInitialValues,
         validationSchema: Yup.object({
             date: Yup.string().required("Date is required"),
             accountType: Yup.string().required("Select account type"),
@@ -267,7 +300,10 @@ useEffect(() => {
                         </Grid>
 
                         <Grid size={{ xs: 12, md: 6 }}>
-                            <PartySelector formik={formik} />
+                            <PartySelector
+                                formik={formik}
+                                prefillPartyName={partyFromUrl}
+                            />
                         </Grid>
 
                         <Grid size={{ xs: 12, md: 6 }}>
