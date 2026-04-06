@@ -14,6 +14,8 @@ import {
 import { Formik, Form } from "formik";
 import { useSelector } from "react-redux";
 
+const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
+
 const FinalizeDialog = ({ open, onClose, onConfirm }) => {
     const [selectedOption, setSelectedOption] = useState("");
 
@@ -40,6 +42,14 @@ const FinalizeDialog = ({ open, onClose, onConfirm }) => {
         selectedQuotation?.tourDetails?.quotationDetails?.destinations?.[0]
             ?.deluxeHotels?.[0] ?? "N/A";
 
+    const superiorHotel =
+        selectedQuotation?.tourDetails?.quotationDetails?.destinations?.[0]
+            ?.superiorHotels?.[0] ?? "N/A";
+
+    const superiorCost =
+        selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations
+            ?.superior?.finalTotal ?? "N/A";
+
     const quotationOptions = [
         {
             label: "Standard",
@@ -51,11 +61,24 @@ const FinalizeDialog = ({ open, onClose, onConfirm }) => {
             hotel: deluxeHotel,
             cost: `₹ ${deluxeCost}`,
         },
+        {
+            label: "Superior",
+            hotel: superiorHotel,
+            cost: `₹ ${superiorCost}`,
+        },
     ];
 
     const handleSubmit = (values) => {
         onConfirm(values);
     };
+
+    const preselect = selectedQuotation?.finalizedPackage;
+    React.useEffect(() => {
+        if (open && preselect && FINAL_PACKAGES.includes(preselect)) {
+            setSelectedOption(preselect);
+        }
+        if (!open) setSelectedOption("");
+    }, [open, preselect]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -63,7 +86,16 @@ const FinalizeDialog = ({ open, onClose, onConfirm }) => {
                 Finalize Quotation
             </DialogTitle>
 
-            <Formik initialValues={{ quotation: "" }} onSubmit={handleSubmit}>
+            <Formik
+                enableReinitialize
+                initialValues={{
+                    quotation:
+                        preselect && FINAL_PACKAGES.includes(preselect)
+                            ? preselect
+                            : "",
+                }}
+                onSubmit={handleSubmit}
+            >
                 {({ setFieldValue }) => (
                     <Form>
                         <DialogContent>

@@ -29,6 +29,8 @@ const customQuotationSchema = new mongoose.Schema(
             arrivalCity: { type: String, required: true },
             departureCity: { type: String, required: true },
             quotationTitle: { type: String, required: true },
+            /** Optional override for the “Destination : …” line on finalize / PDF */
+            destinationSummary: { type: String },
             initalNotes: { type: String },
             bannerImage: { type: String },
             transport: { type: String, enum: ["Yes", "No"] },
@@ -36,6 +38,9 @@ const customQuotationSchema = new mongoose.Schema(
             validTill: { type: String },
             arrivalDate: { type: String, required: true },
             departureDate: { type: String, required: true },
+            /** Optional display overrides edited from CustomFinalize pickup section */
+            pickupArrivalNote: { type: String },
+            pickupDepartureNote: { type: String },
             itinerary: [itinerarySchema],
             vehicleDetails: vehicleDetailsSchema,
             policies: policySchema,
@@ -71,6 +76,11 @@ const customQuotationSchema = new mongoose.Schema(
 
                 },
 
+                mattress: {
+                    superiorMattressCost: { type: Number, default: 0 },
+                    deluxeMattressCost: { type: Number, default: 0 },
+                },
+
                 companyMargin: {
                     marginPercent: { type: Number, default: 0 },
                     marginAmount: { type: Number, default: 0 },
@@ -85,6 +95,7 @@ const customQuotationSchema = new mongoose.Schema(
                         default: "None",
                     },
                     applyGST: { type: Boolean, default: false },
+                    taxPercent: { type: Number, default: 0 },
                 },
                 packageCalculations: {
                     standard: packageCalculationSchema,
@@ -101,6 +112,19 @@ const customQuotationSchema = new mongoose.Schema(
         quotationId: {
             type: String,
             unique: true,
+        },
+
+        finalizeStatus: {
+            type: String,
+            enum: ["draft", "finalized"],
+            default: "draft",
+        },
+        finalizedPackage: {
+            type: String,
+            enum: ["Standard", "Deluxe", "Superior"],
+        },
+        finalizedAt: {
+            type: Date,
         },
     },
     { timestamps: true }

@@ -15,6 +15,7 @@ export const createVoucher = asyncHandler(async (req, res) => {
     amount,
     invoice,
     companyId,
+    quotationRef,
   } = req.body;
 
   if (!date || !accountType || !partyName || !paymentMode || !particulars || !amount) {
@@ -67,6 +68,7 @@ const invoiceId = `${monthNames[month-1]}/${year}/${formattedNumber}`;
       companyId,
       month,
       year,
+      quotationRef: quotationRef || undefined,
     });
   } catch (err) {
     // ✅ HANDLE DUPLICATE SAFELY
@@ -85,6 +87,24 @@ const invoiceId = `${monthNames[month-1]}/${year}/${formattedNumber}`;
 
 
 
+
+// @desc    List vouchers linked to a quotation reference (e.g. custom quotation id)
+export const getVouchersByQuotationRef = asyncHandler(async (req, res) => {
+  const { quotationRef } = req.params;
+  if (!quotationRef) {
+    res.status(400);
+    throw new Error("quotationRef is required");
+  }
+  const vouchers = await ReceivedVoucher.find({ quotationRef }).sort({
+    date: -1,
+    createdAt: -1,
+  });
+  res.status(200).json({
+    success: true,
+    count: vouchers.length,
+    data: vouchers,
+  });
+});
 
 // @desc    Get all vouchers
 export const getAllVouchers = asyncHandler(async (req, res) => {

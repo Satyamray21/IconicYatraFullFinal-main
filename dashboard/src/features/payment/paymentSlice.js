@@ -16,7 +16,7 @@ export const fetchVoucherById = createAsyncThunk("voucher/fetchById", async (id)
 // Create new voucher
 export const createVoucher = createAsyncThunk("voucher/create", async (voucherData) => {
     const res = await axios.post("/payment", voucherData);
-    return res.data.data;
+    return res.data?.data ?? res.data;
 });
 
 // Update voucher
