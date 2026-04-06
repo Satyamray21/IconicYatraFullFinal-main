@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo} from "react";
 import {
     Box,
     Button,
@@ -19,13 +19,13 @@ import {
 } from "@mui/material";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { updateVoucher } from "../../../../features/payment/paymentSlice";
 import axios from "../../../../utils/axios";
 import PartySelector from "./PartySelector";
-
+import { getAllBankDetails } from "../../../../features/bank/bankSlice";
 const paymentModes = ["Cash", "Yes Bank", "Kotak"];
 const paymentLink = "https://iconicyatra.com/payment";
 
@@ -33,12 +33,14 @@ const EditPaymentForm = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const { id } = useParams();
-
+    const { list: banks = [] } = useSelector((state) => state.bank);
     const [voucherType, setVoucherType] = useState("");
     const [previewImage, setPreviewImage] = useState(null);
     const [uploadFile, setUploadFile] = useState(null);
     const [companies, setCompanies] = useState([]);
-
+    const bankNames = useMemo(() => {
+        return banks?.filter(b => b?.bankName).map(b => b.bankName) || [];
+    }, [banks]);
     // ─────────────────────────────
     // 🧾 Formik setup
     // ─────────────────────────────
@@ -94,42 +96,55 @@ const EditPaymentForm = () => {
             }
         },
     });
-
+    useEffect(() => {
+        dispatch(getAllBankDetails());
+    }, [dispatch]);
     // ─────────────────────────────
     // 🌐 Fetch initial voucher data
     // ─────────────────────────────
-    useEffect(() => {
+  useEffect(() => {
+        if (!banks.length) return;
+
         const fetchVoucher = async () => {
             try {
                 const { data } = await axios.get(`/payment/${id}`);
                 const voucher = data?.data || data;
+
                 if (voucher) {
                     setVoucherType(
                         voucher.paymentType?.toLowerCase().includes("receive")
                             ? "receive"
                             : "payment"
                     );
+
+                    const validModes = ["Cash", ...bankNames];
+
                     formik.setValues({
                         companyId: voucher.companyId?._id || "",
                         date: formatDateForInput(voucher.date),
                         accountType: voucher.accountType || "",
                         partyName: voucher.partyName || "",
-                        paymentMode: voucher.paymentMode || "",
+                        paymentMode: validModes.includes(voucher.paymentMode)
+                            ? voucher.paymentMode
+                            : "",
                         reference: voucher.referenceNumber || "",
                         particulars: voucher.particulars || "",
                         amount: voucher.amount || "",
                         paymentLinkUsed: voucher.paymentLinkUsed || false,
                         paymentScreenshot: voucher.paymentScreenshot || "",
                     });
-                    if (voucher.paymentScreenshot)
+
+                    if (voucher.paymentScreenshot) {
                         setPreviewImage(voucher.paymentScreenshot);
+                    }
                 }
             } catch (error) {
                 console.error("Error fetching voucher:", error);
             }
         };
+
         fetchVoucher();
-    }, [id]);
+    }, [id, banks, bankNames]);
 
     // ─────────────────────────────
     // 🌐 Fetch companies
@@ -290,26 +305,35 @@ const EditPaymentForm = () => {
 
                     {/* Party Name */}
                     <Grid size={{ xs: 12, md: 6 }}>
-                        <PartySelector formik={formik} />
+                        <PartySelector formik={formik}
+                        prefillPartyName={formik.values.partyName}
+                         />
                     </Grid>
 
                     {/* Payment Mode */}
                     <Grid size={{ xs: 12, md: 6 }}>
-                        <FormControl
+                         <FormControl
                             fullWidth
                             error={formik.touched.paymentMode && Boolean(formik.errors.paymentMode)}
                         >
-                            <InputLabel>Payment Mode</InputLabel>
+                            <InputLabel>Payment Bank</InputLabel>
+
                             <Select
                                 name="paymentMode"
-                                value={formik.values.paymentMode}
+                                value={
+                                    ["Cash", ...bankNames].includes(formik.values.paymentMode)
+                                        ? formik.values.paymentMode
+                                        : ""
+                                }
                                 onChange={formik.handleChange}
                                 label="Payment Mode"
                                 sx={{ bgcolor: "white" }}
                             >
-                                {paymentModes.map((mode) => (
-                                    <MenuItem key={mode} value={mode}>
-                                        {mode}
+                                <MenuItem value="Cash">Cash</MenuItem>
+
+                                {bankNames.map((name, index) => (
+                                    <MenuItem key={index} value={name}>
+                                        {name}
                                     </MenuItem>
                                 ))}
                             </Select>

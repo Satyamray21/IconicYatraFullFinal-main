@@ -311,7 +311,7 @@ useEffect(() => {
                                 fullWidth
                                 error={formik.touched.paymentMode && Boolean(formik.errors.paymentMode)}
                             >
-                                <InputLabel>Payment Mode</InputLabel>
+                                <InputLabel>Payment Bank</InputLabel>
                                <Select
     name="paymentMode"
     value={formik.values.paymentMode}
