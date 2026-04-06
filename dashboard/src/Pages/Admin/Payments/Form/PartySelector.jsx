@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllAssociates } from "../../../../features/associate/associateSlice";
 import { getAllLeads } from "../../../../features/leads/leadSlice";
@@ -6,6 +6,7 @@ import {
     FormControl,
     InputLabel,
     Select,
+    Typography,
     MenuItem,
     CircularProgress,
 } from "@mui/material";
@@ -20,20 +21,26 @@ const PartySelector = ({ formik, prefillPartyName = "" }) => {
     const {
         list: leadList = [],
         status: leadStatus,
-        error: leadError,
     } = useSelector((state) => state.leads);
-
-    const [filteredAssociates, setFilteredAssociates] = useState([]);
 
     const accountType = formik.values.accountType;
 
-    // ✅ Fetch associates and leads once
-    useEffect(() => {
-        if (associateList.length === 0) dispatch(fetchAllAssociates());
-        if (leadList.length === 0) dispatch(getAllLeads());
-    }, [dispatch, associateList.length, leadList.length]);
+    const [filteredAssociates, setFilteredAssociates] = useState([]);
 
-    // ✅ Filter logic based on accountType
+    // ✅ Normalize helper
+    const norm = (s) => String(s || "").trim().toLowerCase();
+
+    // ─────────────────────────────
+    // Fetch Data
+    // ─────────────────────────────
+    useEffect(() => {
+        if (!associateList.length) dispatch(fetchAllAssociates());
+        if (!leadList.length) dispatch(getAllLeads());
+    }, [dispatch]);
+
+    // ─────────────────────────────
+    // Filter Data SAFELY
+    // ─────────────────────────────
     useEffect(() => {
         if (!accountType) {
             setFilteredAssociates([]);
@@ -42,69 +49,85 @@ const PartySelector = ({ formik, prefillPartyName = "" }) => {
 
         let filtered = [];
 
+        // ✅ SAFE associate filtering
+        const safeAssociates = associateList.filter(
+            (a) => a && a.personalDetails
+        );
+
         switch (accountType) {
             case "Vendor":
-                filtered = associateList.filter(
+                filtered = safeAssociates.filter(
                     (a) =>
-                        a.personalDetails.associateType === "Hotel Vendor" ||
-                        a.personalDetails.associateType === "Vehicle Vendor"
+                        a.personalDetails?.associateType === "Hotel Vendor" ||
+                        a.personalDetails?.associateType === "Vehicle Vendor"
                 );
                 break;
 
             case "Vehicle":
-                filtered = associateList.filter(
-                    (a) => a.personalDetails.associateType === "Vehicle Vendor"
+                filtered = safeAssociates.filter(
+                    (a) =>
+                        a.personalDetails?.associateType === "Vehicle Vendor"
                 );
                 break;
 
             case "Agent":
-                filtered = associateList.filter(
-                    (a) => a.personalDetails.associateType === "Sub Agent"
+                filtered = safeAssociates.filter(
+                    (a) =>
+                        a.personalDetails?.associateType === "Sub Agent"
                 );
                 break;
 
             case "Client":
-                // ✅ Show clients from leads
-                filtered = leadList.map((lead) => ({
-                    _id: lead._id,
-                    fullName: lead.personalDetails?.fullName || "Unnamed Client",
-                    mobile: lead.personalDetails?.mobile || "",
-                    isClient: true,
-                }));
+                // ✅ SAFE leads mapping
+                filtered = leadList
+                    .filter((lead) => lead && lead.personalDetails)
+                    .map((lead) => ({
+                        _id: lead._id,
+                        fullName:
+                            lead.personalDetails?.fullName || "Unnamed Client",
+                        mobile: lead.personalDetails?.mobile || "",
+                        isClient: true,
+                    }));
                 break;
 
             default:
                 filtered = [];
-                break;
         }
 
         setFilteredAssociates(filtered);
 
-        const norm = (s) => String(s || "").trim().toLowerCase();
+        // ─────────────────────────────
+        // Prefill logic
+        // ─────────────────────────────
         const prefill = String(prefillPartyName || "").trim();
 
         if (accountType === "Client" && prefill) {
             const match = filtered.find(
                 (a) => a.isClient && norm(a.fullName) === norm(prefill)
             );
-            formik.setFieldValue("partyName", match ? match.fullName : prefill);
+
+            formik.setFieldValue(
+                "partyName",
+                match ? match.fullName : prefill
+            );
             return;
         }
 
         formik.setFieldValue("partyName", "");
     }, [accountType, associateList, leadList, prefillPartyName]);
 
+    // ─────────────────────────────
     const loading = associateLoading || leadStatus === "loading";
 
-    const normName = (s) => String(s || "").trim().toLowerCase();
     const prefillTrim = String(prefillPartyName || "").trim();
+
     const clientMatchedInList =
         accountType === "Client" &&
         prefillTrim &&
         filteredAssociates.some(
-            (a) => a.isClient && normName(a.fullName) === normName(prefillTrim)
+            (a) => a.isClient && norm(a.fullName) === norm(prefillTrim)
         );
-    /** Show extra option when quotation name is not in leads (or leads still loading / empty). */
+
     const showQuotationClientOption =
         accountType === "Client" && prefillTrim && !clientMatchedInList;
 
@@ -112,51 +135,78 @@ const PartySelector = ({ formik, prefillPartyName = "" }) => {
         !accountType ||
         (loading && !(accountType === "Client" && prefillTrim));
 
+    // ✅ SAFE value (important for MUI crash fix)
+    const safeValue = useMemo(() => {
+        const values = filteredAssociates.map((a) =>
+            a.isClient
+                ? a.fullName
+                : a.personalDetails?.fullName
+        );
+
+        return values.includes(formik.values.partyName)
+            ? formik.values.partyName
+            : "";
+    }, [filteredAssociates, formik.values.partyName]);
+
+    // ─────────────────────────────
     return (
         <FormControl
             fullWidth
             error={formik.touched.partyName && Boolean(formik.errors.partyName)}
         >
             <InputLabel>Party Name</InputLabel>
+
             <Select
                 name="partyName"
-                value={formik.values.partyName || ""}
+                value={safeValue}
                 onChange={formik.handleChange}
                 label="Party Name"
                 sx={{ bgcolor: "white" }}
                 disabled={selectDisabled}
             >
+                {/* Quotation fallback */}
                 {showQuotationClientOption && (
                     <MenuItem value={prefillTrim}>
                         {prefillTrim} (quotation client)
                     </MenuItem>
                 )}
+
+                {/* Loading */}
                 {loading && (
                     <MenuItem disabled>
-                        <CircularProgress size={20} sx={{ mr: 1 }} /> Loading
-                        directory…
+                        <CircularProgress size={20} sx={{ mr: 1 }} />
+                        Loading...
                     </MenuItem>
                 )}
+
+                {/* Empty */}
                 {!loading &&
                 filteredAssociates.length === 0 &&
                 !showQuotationClientOption ? (
                     <MenuItem disabled>No options available</MenuItem>
                 ) : (
-                    filteredAssociates.map((a) => (
-                        <MenuItem
-                            key={a._id}
-                            value={a.isClient ? a.fullName : a.personalDetails.fullName}
-                        >
-                            {a.isClient
-                                ? `${a.fullName} (${a.mobile})`
-                                : a.personalDetails.fullName}
-                        </MenuItem>
-                    ))
+                    filteredAssociates.map((a) => {
+                        const name = a.isClient
+                            ? a.fullName
+                            : a.personalDetails?.fullName;
+
+                        if (!name) return null; // ✅ CRITICAL FIX
+
+                        return (
+                            <MenuItem key={a._id} value={name}>
+                                {a.isClient
+                                    ? `${a.fullName} (${a.mobile})`
+                                    : name}
+                            </MenuItem>
+                        );
+                    })
                 )}
             </Select>
+
+            {/* Info */}
             {loading && accountType === "Client" && prefillTrim && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                    Client list is loading; quotation client is already selected above.
+                <Typography variant="caption" sx={{ mt: 0.5 }}>
+                    Client list loading, using quotation client.
                 </Typography>
             )}
         </FormControl>
