@@ -43,6 +43,49 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { filterHotelsByCity } from "../../../../features/hotel/hotelSlice";
 
+const toHtmlParagraphs = (text = "") => {
+    const normalized = String(text || "").replace(/\r\n/g, "\n");
+    const parts = normalized
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+    return parts.map((line) => `<p>${line}</p>`).join("");
+};
+
+const normalizePolicyForEditor = (value) => {
+    if (Array.isArray(value)) {
+        if (value.length === 0) return "";
+        const merged = value.join("\n").trim();
+        if (!merged) return "";
+        if (/<[a-z][\s\S]*>/i.test(merged)) return merged;
+        return toHtmlParagraphs(merged);
+    }
+
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return "";
+        if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
+        return toHtmlParagraphs(trimmed);
+    }
+
+    return "";
+};
+
+const normalizePolicyState = (source = {}) => {
+    const policySource = source?.policy || source || {};
+    return {
+        inclusionPolicy: normalizePolicyForEditor(
+            policySource?.inclusionPolicy ?? policySource?.inclusions
+        ),
+        exclusionPolicy: normalizePolicyForEditor(
+            policySource?.exclusionPolicy ?? policySource?.exclusions
+        ),
+        paymentPolicy: normalizePolicyForEditor(policySource?.paymentPolicy),
+        cancellationPolicy: normalizePolicyForEditor(policySource?.cancellationPolicy),
+        termsAndConditions: normalizePolicyForEditor(policySource?.termsAndConditions),
+    };
+};
+
 const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -58,13 +101,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     const [filteredArrivalCities, setFilteredArrivalCities] = useState([]);
     const [filteredDepartureCities, setFilteredDepartureCities] = useState([]);
     // Keep your existing policyInputs useState with initialData only
-const [policyInputs, setPolicyInputs] = useState({
-    inclusionPolicy: initialData?.policy?.inclusionPolicy?.join('\n') || "",
-    exclusionPolicy: initialData?.policy?.exclusionPolicy?.join('\n') || "",
-    paymentPolicy: initialData?.policy?.paymentPolicy?.join('\n') || "",
-    cancellationPolicy: initialData?.policy?.cancellationPolicy?.join('\n') || "",
-    termsAndConditions: initialData?.policy?.termsAndConditions?.join('\n') || ""
-});
+const [policyInputs, setPolicyInputs] = useState(normalizePolicyState(initialData));
 
 // Add globalSettings state
 const [globalSettings, setGlobalSettings] = useState({
@@ -79,13 +116,7 @@ const [globalSettings, setGlobalSettings] = useState({
 const fetchGlobalSettings = async () => {
     try {
         const res = await axios.get("/global-settings");
-        const settings = {
-            inclusionPolicy: res.data.inclusions?.join('\n') || "",
-            exclusionPolicy: res.data.exclusions?.join('\n') || "",
-            paymentPolicy: res.data.paymentPolicy || "",
-            cancellationPolicy: res.data.cancellationPolicy || "",
-            termsAndConditions: res.data.termsAndConditions || ""
-        };
+        const settings = normalizePolicyState(res.data);
         setGlobalSettings(settings);
         
         // Only set global settings if no initial data exists
@@ -105,6 +136,20 @@ const fetchGlobalSettings = async () => {
 useEffect(() => {
     fetchGlobalSettings();
 }, []);
+
+useEffect(() => {
+    if (!initialData) return;
+    setPolicyInputs((prev) => {
+        const normalized = normalizePolicyState(initialData);
+        return {
+            inclusionPolicy: normalized.inclusionPolicy || prev.inclusionPolicy,
+            exclusionPolicy: normalized.exclusionPolicy || prev.exclusionPolicy,
+            paymentPolicy: normalized.paymentPolicy || prev.paymentPolicy,
+            cancellationPolicy: normalized.cancellationPolicy || prev.cancellationPolicy,
+            termsAndConditions: normalized.termsAndConditions || prev.termsAndConditions,
+        };
+    });
+}, [initialData]);
     // Add New Dialog states
     const [openDialog, setOpenDialog] = useState(false);
     const [currentField, setCurrentField] = useState("");
@@ -676,11 +721,11 @@ useEffect(() => {
                 })),
                 perPerson: tourDetails.perPerson || 1,
                 policy: {
-                    inclusionPolicy: policyInputs.inclusionPolicy.split('\n').filter(item => item.trim()),
-                    exclusionPolicy: policyInputs.exclusionPolicy.split('\n').filter(item => item.trim()),
-                    paymentPolicy: policyInputs.paymentPolicy.split('\n').filter(item => item.trim()),
-                    cancellationPolicy: policyInputs.cancellationPolicy.split('\n').filter(item => item.trim()),
-                    termsAndConditions: policyInputs.termsAndConditions.split('\n').filter(item => item.trim()),
+                    inclusionPolicy: policyInputs.inclusionPolicy ? [policyInputs.inclusionPolicy] : [],
+                    exclusionPolicy: policyInputs.exclusionPolicy ? [policyInputs.exclusionPolicy] : [],
+                    paymentPolicy: policyInputs.paymentPolicy ? [policyInputs.paymentPolicy] : [],
+                    cancellationPolicy: policyInputs.cancellationPolicy ? [policyInputs.cancellationPolicy] : [],
+                    termsAndConditions: policyInputs.termsAndConditions ? [policyInputs.termsAndConditions] : [],
                 },
                 status: "active"
             };
