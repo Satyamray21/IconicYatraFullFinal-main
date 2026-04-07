@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Drawer,
   List,
@@ -15,22 +15,26 @@ import {
   Toolbar,
   AppBar,
   Collapse,
-} from '@mui/material';
+} from "@mui/material";
 
-import MenuIcon from '@mui/icons-material/Menu';
-import { ExpandLess, ExpandMore } from '@mui/icons-material';
-
-import { Link, useLocation } from 'react-router-dom';
-import { sidebarItems } from './SidebarData';
-import logo from '../assets/Logo/logoiconic.jpg';
-
+import MenuIcon from "@mui/icons-material/Menu";
+import { ExpandLess, ExpandMore } from "@mui/icons-material";
+import { useDispatch, useSelector } from "react-redux";
+import { Link, useLocation } from "react-router-dom";
+import { sidebarItems } from "./SidebarData";
+import logo from "../assets/Logo/logoiconic.jpg";
+import { getCompany } from "../features/companyUI/companyUISlice";
 const drawerWidth = 200;
 
 const Sidebar = ({ children }) => {
+  const { data: company, status } = useSelector((state) => state.companyUI);
   const location = useLocation();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const dispatch = useDispatch();
+  useEffect(() => {
+    dispatch(getCompany());
+  }, [dispatch]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState({}); // 👈 NEW
 
@@ -47,8 +51,11 @@ const Sidebar = ({ children }) => {
 
   const drawerContent = (
     <Box>
-      <Box sx={{ p: 2, textAlign: 'center' }}>
-        <img src={logo} style={{ height: '50px', width: '150px' }} />
+      <Box sx={{ p: 2, textAlign: "center" }}>
+        <img
+          src={company?.company?.headerLogo?.url}
+          style={{ height: "50px", width: "150px" }}
+        />
       </Box>
 
       <Divider />
@@ -91,20 +98,20 @@ const Sidebar = ({ children }) => {
                             sx={{
                               pl: 4,
                               backgroundColor: isActive
-                                ? 'primary.main'
-                                : 'transparent',
-                              color: isActive ? 'white' : 'black',
-                              '&:hover': {
+                                ? "primary.main"
+                                : "transparent",
+                              color: isActive ? "white" : "black",
+                              "&:hover": {
                                 backgroundColor: isActive
-                                  ? 'primary.dark'
-                                  : '#e0e0e0',
+                                  ? "primary.dark"
+                                  : "#e0e0e0",
                               },
                             }}
                             onClick={() => isMobile && toggleDrawer()}
                           >
                             <ListItemIcon
                               sx={{
-                                color: isActive ? 'white' : 'black',
+                                color: isActive ? "white" : "black",
                                 minWidth: 40,
                               }}
                             >
@@ -131,16 +138,16 @@ const Sidebar = ({ children }) => {
                 component={Link}
                 to={item.route}
                 sx={{
-                  backgroundColor: isActive ? 'primary.main' : 'transparent',
-                  color: isActive ? 'white' : 'black',
-                  '&:hover': {
-                    backgroundColor: isActive ? 'primary.dark' : '#e0e0e0',
+                  backgroundColor: isActive ? "primary.main" : "transparent",
+                  color: isActive ? "white" : "black",
+                  "&:hover": {
+                    backgroundColor: isActive ? "primary.dark" : "#e0e0e0",
                   },
                 }}
                 onClick={() => isMobile && toggleDrawer()}
               >
                 <ListItemIcon
-                  sx={{ color: isActive ? 'white' : 'black', minWidth: 40 }}
+                  sx={{ color: isActive ? "white" : "black", minWidth: 40 }}
                 >
                   {item.icon}
                 </ListItemIcon>
@@ -155,7 +162,7 @@ const Sidebar = ({ children }) => {
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: "flex" }}>
       {/* Mobile AppBar */}
       {isMobile && (
         <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
@@ -171,15 +178,15 @@ const Sidebar = ({ children }) => {
 
       {/* Drawer */}
       <Drawer
-        variant={isMobile ? 'temporary' : 'permanent'}
+        variant={isMobile ? "temporary" : "permanent"}
         open={isMobile ? mobileOpen : true}
         onClose={toggleDrawer}
         ModalProps={{ keepMounted: true }}
         sx={{
           width: drawerWidth,
-          '& .MuiDrawer-paper': {
+          "& .MuiDrawer-paper": {
             width: drawerWidth,
-            backgroundColor: '#f5f5f5',
+            backgroundColor: "#f5f5f5",
           },
         }}
       >
