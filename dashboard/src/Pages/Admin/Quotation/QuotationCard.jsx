@@ -548,7 +548,9 @@ const QuotationCard = () => {
       noOfNight: item?.pickupDrop?.nights || "-",
       tourType: item?.clientDetails?.tourType || "-",
       type: "Full",
-      quotationStatus: item?.status || "Draft",
+      quotationStatus:
+        item?.status ||
+        (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft"),
       formStatus: "Completed",
       businessType: "Travel",
     })),
@@ -566,7 +568,9 @@ const QuotationCard = () => {
       noOfNight: item?.duration?.nights || "-",
       tourType: item?.tourType || "-",
       type: "Custom",
-      quotationStatus: item?.status || "Draft",
+      quotationStatus:
+        item?.status ||
+        (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft"),
       formStatus: "Completed",
       businessType: "Travel",
     })),
