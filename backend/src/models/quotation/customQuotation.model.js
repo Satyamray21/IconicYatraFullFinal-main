@@ -41,6 +41,11 @@ const customQuotationSchema = new mongoose.Schema(
             /** Optional display overrides edited from CustomFinalize pickup section */
             pickupArrivalNote: { type: String },
             pickupDepartureNote: { type: String },
+            vendorDetails: {
+                vendorType: { type: String, enum: ["single", "multiple"] },
+                hotelVendorName: { type: String },
+                vehicleVendorName: { type: String },
+            },
             itinerary: [itinerarySchema],
             vehicleDetails: vehicleDetailsSchema,
             policies: policySchema,
