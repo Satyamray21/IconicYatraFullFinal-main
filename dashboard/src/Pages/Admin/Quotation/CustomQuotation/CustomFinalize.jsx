@@ -974,6 +974,7 @@ useEffect(() => {
                 company: company?.company?.companyName,
                 address: company?.company?.address,
                 website: company?.company?.website,
+                gst:company?.company?.gst,
             },
             hotelPricingData,
             days: transformedDays,
@@ -3029,7 +3030,7 @@ useEffect(() => {
                                         {quotation.footer.website}
                                     </a>
                                     <Typography variant="subtitle1" sx={{ ml: 2 }}>
-                                        GST : 09EYCPK8832C1ZC
+                                        {quotation.footer.gst}
                                     </Typography>
                                 </Box>
                             </Box>
