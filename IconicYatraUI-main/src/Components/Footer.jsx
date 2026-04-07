@@ -1,4 +1,4 @@
-import React, { useEffect,useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Grid,
@@ -17,11 +17,13 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import Calendar from "./Calendar";
 import logo from "../assets/Logo/logoiconic.jpg";
-import { Facebook, Instagram, WhatsApp,YouTube } from "@mui/icons-material";
+import { Facebook, Instagram, WhatsApp, YouTube } from "@mui/icons-material";
 import PhoneInTalkIcon from "@mui/icons-material/PhoneInTalk";
 import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchPopularTours } from "../features/packageSlice";
+import {
+  fetchPopularTours,
+} from "../Features/packageSlice";
 
 import axios from "axios";
 
@@ -32,23 +34,30 @@ const Footer = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const API = import.meta.env.VITE_BASE_URL;
   const [socialLinks, setSocialLinks] = useState({});
- const { popular, loading } = useSelector((state) => state.packages);
+  const { popular = [], loading } =
+    useSelector((state) => state.packages);
 
-  const { data: company, status } = useSelector(
-  (state) => state.companyUI
-);
+  const { data: company, status } = useSelector((state) => state.companyUI);
+  const slugifySector = (value = "") =>
+    String(value)
+      .trim()
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-");
+
   // ✅ Fetch domestic packages on mount
- useEffect(() => {
-  dispatch(fetchPopularTours());
-  axios.get(`${API}/api/v1/social-links`)
-    .then((res) => {
-      setSocialLinks(res.data);
-    })
-    .catch((err) => {
-      console.error("Error fetching social links", err);
-    });
-}, [dispatch]);
-
+  useEffect(() => {
+    dispatch(fetchPopularTours());
+    axios
+      .get(`${API}/api/v1/social-links`)
+      .then((res) => {
+        setSocialLinks(res.data);
+      })
+      .catch((err) => {
+        console.error("Error fetching social links", err);
+      });
+  }, [dispatch]);
 
   const handlePaymentClick = () => {
     navigate("/payment");
@@ -58,8 +67,17 @@ const Footer = () => {
     window.open("/admin/login", "_blank");
   };
 
-  const handleTourClick = (id) => {
-    navigate(`/package/${id}`);
+  const handleTourClick = (tour) => {
+    if (!tour) return;
+    if (tour?.tourType === "International") {
+      const internationalDestination = (tour?.destinationCountry || "").trim();
+      if (!internationalDestination) return;
+      navigate(`/international/${slugifySector(internationalDestination)}`);
+      return;
+    }
+    const domesticSector = (tour?.sector || "").trim();
+    if (!domesticSector) return;
+    navigate(`/domestic/${slugifySector(domesticSector)}`);
   };
 
   return (
@@ -133,14 +151,13 @@ const Footer = () => {
               <Typography variant="body2" sx={{ color: "#e0e0e0" }}>
                 Loading tours...
               </Typography>
-            ) :  popular && popular.length > 0 ? (
-  popular.slice(0, 8).map((tour) => (
-
+            ) : popular && popular.length > 0 ? (
+              popular.slice(0, 8).map((tour) => (
                 <Link
                   key={tour._id}
                   component="button"
                   underline="none"
-                  onClick={() => handleTourClick(tour._id)}
+                  onClick={() => handleTourClick(tour)}
                   sx={{
                     display: "flex",
                     alignItems: "center",
@@ -163,9 +180,9 @@ const Footer = () => {
                   >
                     ›
                   </Box>
-                  {tour.tourType === "Domestic"
-      ? tour.sector
-      : tour.destinationCountry}
+                  {tour?.tourType === "International"
+                    ? tour?.destinationCountry
+                    : tour?.sector}
                 </Link>
               ))
             ) : (
@@ -253,7 +270,7 @@ const Footer = () => {
             <Box sx={{ display: "flex", alignItems: "flex-start" }}>
               <LocationOnIcon sx={{ mr: 2, color: "#ffd700", mt: 0.5 }} />
               <Typography variant="body2" sx={{ color: "#e0e0e0" }}>
-               {company?.company?.address}
+                {company?.company?.address}
               </Typography>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -265,7 +282,7 @@ const Footer = () => {
             <Box sx={{ display: "flex", alignItems: "center" }}>
               <PhoneInTalkIcon sx={{ mr: 2, color: "#ffd700" }} />
               <Typography variant="body2" sx={{ color: "#e0e0e0" }}>
-               {company?.company?.support}
+                {company?.company?.support}
               </Typography>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -298,8 +315,12 @@ const Footer = () => {
       </Grid>
 
       {/* Middle Section with Payment, Social, Support & Calendar */}
-      <Grid container alignItems="center" justifyContent="space-between" sx={{ mt: 5, mb: 3 }}>
-
+      <Grid
+        container
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ mt: 5, mb: 3 }}
+      >
         {/* Policies Links */}
         <Grid size={{ xs: 12, md: 4 }}>
           <Stack
@@ -315,13 +336,13 @@ const Footer = () => {
                 fontWeight: 500,
                 "&:hover": {
                   color: "#ffd700",
-                  transform: 'translateY(-1px)'
+                  transform: "translateY(-1px)",
                 },
               },
               "& p": {
                 color: "#ffd700",
                 mx: 1,
-                fontWeight: 'bold'
+                fontWeight: "bold",
               },
             }}
           >
@@ -341,102 +362,112 @@ const Footer = () => {
 
         {/* Social Icons */}
         <Grid size={{ xs: 12, md: 2 }}>
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="center"
-          sx={{mr: isMobile ? 0 : 4}}>
-  <Typography
-    variant="body2"
-    sx={{ whiteSpace: "nowrap", fontWeight: 600, color: "#ffd700" }}
-  >
-    Follow Us :
-  </Typography>
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent="center"
+            sx={{ mr: isMobile ? 0 : 4 }}
+          >
+            <Typography
+              variant="body2"
+              sx={{ whiteSpace: "nowrap", fontWeight: 600, color: "#ffd700" }}
+            >
+              Follow Us :
+            </Typography>
 
-  {/* FACEBOOK */}
-  {socialLinks?.facebook && (
-    <IconButton
-      size="small"
-      sx={{
-        background: 'rgba(255,255,255,0.1)',
-        color: '#fff',
-        '&:hover': {
-          background: '#1877f2',
-          transform: 'scale(1.1)'
-        },
-        transition: 'all 0.3s ease'
-      }}
-      href={socialLinks.facebook}
-      target="_blank"
-    >
-      <Facebook fontSize="small" />
-    </IconButton>
-  )}
+            {/* FACEBOOK */}
+            {socialLinks?.facebook && (
+              <IconButton
+                size="small"
+                sx={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  "&:hover": {
+                    background: "#1877f2",
+                    transform: "scale(1.1)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+                href={socialLinks.facebook}
+                target="_blank"
+              >
+                <Facebook fontSize="small" />
+              </IconButton>
+            )}
 
-  {/* INSTAGRAM */}
-  {socialLinks?.instagram && (
-    <IconButton
-      size="small"
-      sx={{
-        background: 'rgba(255,255,255,0.1)',
-        color: '#fff',
-        '&:hover': {
-          background: '#e1306c',
-          transform: 'scale(1.1)'
-        },
-        transition: 'all 0.3s ease'
-      }}
-      href={socialLinks.instagram}
-      target="_blank"
-    >
-      <Instagram fontSize="small" />
-    </IconButton>
-  )}
-{/* YOUTUBE */}
-{socialLinks?.youtube && (
-  <IconButton
-    size="small"
-    sx={{
-      background: 'rgba(255,255,255,0.1)',
-      color: '#fff',
-      '&:hover': {
-        background: '#ff0000',
-        transform: 'scale(1.1)'
-      },
-      transition: 'all 0.3s ease'
-    }}
-    href={socialLinks.youtube}
-    target="_blank"
-  >
-    <YouTube fontSize="small" />
-  </IconButton>
-)}
+            {/* INSTAGRAM */}
+            {socialLinks?.instagram && (
+              <IconButton
+                size="small"
+                sx={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  "&:hover": {
+                    background: "#e1306c",
+                    transform: "scale(1.1)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+                href={socialLinks.instagram}
+                target="_blank"
+              >
+                <Instagram fontSize="small" />
+              </IconButton>
+            )}
+            {/* YOUTUBE */}
+            {socialLinks?.youtube && (
+              <IconButton
+                size="small"
+                sx={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  "&:hover": {
+                    background: "#ff0000",
+                    transform: "scale(1.1)",
+                  },
+                  transition: "all 0.3s ease",
+                }}
+                href={socialLinks.youtube}
+                target="_blank"
+              >
+                <YouTube fontSize="small" />
+              </IconButton>
+            )}
 
-  {/* WHATSAPP (optional dynamic later) */}
-  <IconButton
-    size="small"
-    sx={{
-      background: 'rgba(255,255,255,0.1)',
-      color: '#fff',
-      '&:hover': {
-        background: '#25d366',
-        transform: 'scale(1.1)'
-      },
-      transition: 'all 0.3s ease'
-    }}
-    href="https://wa.me/917053900957"
-    target="_blank"
-  >
-    <WhatsApp fontSize="small" />
-  </IconButton>
-</Stack>
-
+            {/* WHATSAPP (optional dynamic later) */}
+            <IconButton
+              size="small"
+              sx={{
+                background: "rgba(255,255,255,0.1)",
+                color: "#fff",
+                "&:hover": {
+                  background: "#25d366",
+                  transform: "scale(1.1)",
+                },
+                transition: "all 0.3s ease",
+              }}
+              href="https://wa.me/917053900957"
+              target="_blank"
+            >
+              <WhatsApp fontSize="small" />
+            </IconButton>
+          </Stack>
         </Grid>
 
         {/* Support */}
         <Grid size={{ xs: 12, md: 3 }}>
-          <Stack direction={'row'} sx={{ textAlign: 'center' }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: '#ffd700' }}>
+          <Stack direction={"row"} sx={{ textAlign: "center" }}>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 600, color: "#ffd700" }}
+            >
               24x7 Customer Support:
             </Typography>
-            <Typography variant="body2" sx={{ color: '#e0e0e0', fontWeight: 500 }}>
+            <Typography
+              variant="body2"
+              sx={{ color: "#e0e0e0", fontWeight: 500 }}
+            >
               {company?.company?.call}
             </Typography>
           </Stack>
@@ -444,11 +475,13 @@ const Footer = () => {
 
         {/* Calendar */}
         <Grid size={{ xs: 12, md: 2 }}>
-          <Box sx={{
-            display: 'flex',
-            justifyContent: isMobile ? 'center' : 'center',
-            mt: isMobile ? 2 : 0
-          }}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: isMobile ? "center" : "center",
+              mt: isMobile ? 2 : 0,
+            }}
+          >
             <Calendar />
           </Box>
         </Grid>
@@ -456,25 +489,25 @@ const Footer = () => {
 
       {/* Alternative Payment Button for Mobile */}
       {isMobile && (
-        <Box sx={{ textAlign: 'center', mt: 3, mb: 2 }}>
+        <Box sx={{ textAlign: "center", mt: 3, mb: 2 }}>
           <Button
             variant="contained"
             startIcon={<PaymentIcon />}
             onClick={handlePaymentClick}
             sx={{
-              background: 'linear-gradient(45deg, #ff6b00 30%, #ffd700 90%)',
-              color: '#1f3c65',
-              fontWeight: 'bold',
-              borderRadius: '25px',
+              background: "linear-gradient(45deg, #ff6b00 30%, #ffd700 90%)",
+              color: "#1f3c65",
+              fontWeight: "bold",
+              borderRadius: "25px",
               px: 4,
               py: 1.5,
-              boxShadow: '0 4px 15px rgba(255, 107, 0, 0.3)',
-              '&:hover': {
-                background: 'linear-gradient(45deg, #ffd700 30%, #ff6b00 90%)',
-                boxShadow: '0 6px 20px rgba(255, 107, 0, 0.4)',
-                transform: 'translateY(-2px)',
+              boxShadow: "0 4px 15px rgba(255, 107, 0, 0.3)",
+              "&:hover": {
+                background: "linear-gradient(45deg, #ffd700 30%, #ff6b00 90%)",
+                boxShadow: "0 6px 20px rgba(255, 107, 0, 0.4)",
+                transform: "translateY(-2px)",
               },
-              transition: 'all 0.3s ease',
+              transition: "all 0.3s ease",
             }}
           >
             Quick Payment
@@ -483,15 +516,21 @@ const Footer = () => {
       )}
 
       {/* Bottom Footer */}
-      <Box sx={{
-        borderTop: '2px solid rgba(255,215,0,0.3)',
-        mt: 4,
-        pt: 3,
-        textAlign: 'center',
-        position: 'relative'
-      }}>
-        <Typography variant="body2" sx={{ color: '#e0e0e0', fontWeight: 500 }}>
-          © 2025 <Box component="span" sx={{ fontWeight: 'bold', color: '#ffd700' }}>iconicyatra.com</Box>. All rights reserved.
+      <Box
+        sx={{
+          borderTop: "2px solid rgba(255,215,0,0.3)",
+          mt: 4,
+          pt: 3,
+          textAlign: "center",
+          position: "relative",
+        }}
+      >
+        <Typography variant="body2" sx={{ color: "#e0e0e0", fontWeight: 500 }}>
+          © 2025{" "}
+          <Box component="span" sx={{ fontWeight: "bold", color: "#ffd700" }}>
+            iconicyatra.com
+          </Box>
+          . All rights reserved.
         </Typography>
       </Box>
     </Box>
