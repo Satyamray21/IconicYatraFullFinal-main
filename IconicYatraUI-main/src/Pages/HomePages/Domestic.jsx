@@ -20,6 +20,16 @@ import { BASE_URL } from "../../Utils/axiosInstance";
 import { Pagination } from "@mui/material";
 import InquiryFormDialog from "../../Components/InquiryFormDialog";
 
+const normalizeText = (value = "") =>
+  String(value).toLowerCase().trim().replace(/\s+/g, " ");
+const slugifyValue = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-");
+
 const Domestic = () => {
   const { destination } = useParams();
   const navigate = useNavigate();
@@ -39,26 +49,31 @@ const Domestic = () => {
 
   const [selectedDestination, setSelectedDestination] = useState("All");
 
-  // ✅ Fetch packages (avoid unnecessary API calls)
+  // ✅ Fetch packages (fetch more when filtering by sector to show all matches)
   useEffect(() => {
-  if (packages.length === 0) {
-    dispatch(fetchDomesticPackages({ page, limit: 9 }));
-  }
-}, [dispatch, packages.length]);
+    const limit = destination ? 200 : 9;
+    dispatch(fetchDomesticPackages({ page, limit }));
+  }, [dispatch, page, destination]);
 
-  // ✅ Handle destination filter
+  // ✅ Handle destination/sector filter from route
   useEffect(() => {
     if (destination && destination !== "All") {
-      const formattedDestination = destination
-        .replace(/-/g, " ")
-        .toLowerCase()
-        .trim();
+      const routeSlug = String(destination).toLowerCase().trim();
 
-      const matched = packages?.find(
-        (pkg) => pkg.title.toLowerCase().trim() === formattedDestination
+      const matchedBySector = packages?.find(
+        (pkg) => slugifyValue(pkg.sector) === routeSlug
       );
 
-      setSelectedDestination(matched ? matched.title : "All");
+      if (matchedBySector?.sector) {
+        setSelectedDestination(matchedBySector.sector);
+      } else {
+        const matchedByTitle = packages?.find(
+          (pkg) =>
+            slugifyValue(pkg.title) === routeSlug ||
+            normalizeText(pkg.title) === normalizeText(routeSlug.replace(/-/g, " "))
+        );
+        setSelectedDestination(matchedByTitle ? matchedByTitle.title : "All");
+      }
     } else {
       setSelectedDestination("All");
     }
@@ -72,8 +87,8 @@ const Domestic = () => {
       ? packages
       : packages.filter(
           (pkg) =>
-            pkg.title.toLowerCase().trim() ===
-            selectedDestination.toLowerCase().trim()
+            slugifyValue(pkg.sector) === slugifyValue(selectedDestination) ||
+            normalizeText(pkg.title) === normalizeText(selectedDestination)
         );
 
   const currentPackages = filteredPackages || [];
@@ -247,7 +262,7 @@ const Domestic = () => {
               </Grid>
 
               {/* Pagination */}
-              {totalPages > 1 && (
+              {selectedDestination === "All" && totalPages > 1 && (
                 <Box display="flex" justifyContent="center" mt={5}>
                  <Pagination
     count={totalPages}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   AppBar,
   Toolbar,
@@ -23,23 +23,43 @@ import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import MenuIcon from "@mui/icons-material/Menu";
 import logo from "../assets/Logo/logoiconic1.png";
-import {useSelector} from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchDomesticPackages,
+  fetchInternationalPackages,
+} from "../Features/packageSlice";
+
+const slugifySector = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-");
+
 const Navbar = () => {
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [menuType, setMenuType] = useState("");
+  const [domesticAnchorEl, setDomesticAnchorEl] = useState(null);
+  const [internationalAnchorEl, setInternationalAnchorEl] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [openCollapse, setOpenCollapse] = useState({});
   const isMobile = useMediaQuery("(max-width:900px)");
   const location = useLocation();
+  const dispatch = useDispatch();
 
-  const OpenMenu = (event, type) => {
-    setAnchorEl(event.currentTarget);
-    setMenuType(type);
+  const openDomesticMenu = (event) => {
+    setDomesticAnchorEl(event.currentTarget);
   };
 
-  const CloseMenu = () => {
-    setAnchorEl(null);
-    setMenuType("");
+  const closeDomesticMenu = () => {
+    setDomesticAnchorEl(null);
+  };
+
+  const openInternationalMenu = (event) => {
+    setInternationalAnchorEl(event.currentTarget);
+  };
+
+  const closeInternationalMenu = () => {
+    setInternationalAnchorEl(null);
   };
 
   const toggleDrawer = () => {
@@ -49,9 +69,45 @@ const Navbar = () => {
   const handleCollapse = (key) => {
     setOpenCollapse((prev) => ({ ...prev, [key]: !prev[key] }));
   };
-   const { data: company, status } = useSelector(
+  const { data: company } = useSelector(
     (state) => state.companyUI
   );
+  const { domestic: domesticPackages = [], international: internationalPackages = [] } =
+    useSelector((state) => state.packages);
+
+  useEffect(() => {
+    dispatch(fetchDomesticPackages({ page: 1, limit: 200 }));
+    dispatch(fetchInternationalPackages());
+  }, [dispatch]);
+
+  const domesticSectors = useMemo(() => {
+    const seen = new Set();
+    return domesticPackages
+      .map((pkg) => pkg?.sector?.trim())
+      .filter((sector) => {
+        if (!sector) return false;
+        const key = sector.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => a.localeCompare(b));
+  }, [domesticPackages]);
+
+  const internationalSectors = useMemo(() => {
+    const seen = new Set();
+    return internationalPackages
+      .map((pkg) => (pkg?.destinationCountry || "").trim())
+      .filter((sector) => {
+        if (!sector) return false;
+        const key = sector.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => a.localeCompare(b));
+  }, [internationalPackages]);
+
   const isActive = (path) => location.pathname === path;
   const isParentActive = (key) =>
     location.pathname === `/${key}` || location.pathname.startsWith(`/${key}/`);
@@ -94,8 +150,8 @@ const Navbar = () => {
 
                 {/* Domestic Link */}
                 <Button
-                  component={Link}
-                  to="/domestic"
+                  onClick={openDomesticMenu}
+                  endIcon={<ArrowDropDownIcon />}
                   sx={{
                     textTransform: "none",
                     fontWeight: 700,
@@ -108,11 +164,30 @@ const Navbar = () => {
                 >
                   Domestic
                 </Button>
+                <Menu
+                  anchorEl={domesticAnchorEl}
+                  open={Boolean(domesticAnchorEl)}
+                  onClose={closeDomesticMenu}
+                >
+                  <MenuItem component={Link} to="/domestic" onClick={closeDomesticMenu}>
+                    All Domestic Packages
+                  </MenuItem>
+                  {domesticSectors.map((sector) => (
+                    <MenuItem
+                      key={sector}
+                      component={Link}
+                      to={`/domestic/${slugifySector(sector)}`}
+                      onClick={closeDomesticMenu}
+                    >
+                      {sector}
+                    </MenuItem>
+                  ))}
+                </Menu>
 
                 {/* International Link */}
                 <Button
-                  component={Link}
-                  to="/international"
+                  onClick={openInternationalMenu}
+                  endIcon={<ArrowDropDownIcon />}
                   sx={{
                     textTransform: "none",
                     fontWeight: 700,
@@ -125,6 +200,29 @@ const Navbar = () => {
                 >
                   International
                 </Button>
+                <Menu
+                  anchorEl={internationalAnchorEl}
+                  open={Boolean(internationalAnchorEl)}
+                  onClose={closeInternationalMenu}
+                >
+                  <MenuItem
+                    component={Link}
+                    to="/international"
+                    onClick={closeInternationalMenu}
+                  >
+                    All International Packages
+                  </MenuItem>
+                  {internationalSectors.map((sector) => (
+                    <MenuItem
+                      key={sector}
+                      component={Link}
+                      to={`/international/${slugifySector(sector)}`}
+                      onClick={closeInternationalMenu}
+                    >
+                      {sector}
+                    </MenuItem>
+                  ))}
+                </Menu>
 
                 {/* Static Links */}
                 {["holidays", "spiritual-tour", "services", "contact"].map((page) => (
@@ -182,9 +280,7 @@ const Navbar = () => {
 
             {/* Domestic Link */}
             <ListItemButton
-              component={Link}
-              to="/domestic"
-              onClick={toggleDrawer}
+              onClick={() => handleCollapse("domestic")}
               sx={{
                 fontWeight: isParentActive("domestic") ? 700 : 500,
                 borderLeft: isParentActive("domestic")
@@ -194,13 +290,35 @@ const Navbar = () => {
               }}
             >
               <ListItemText primary="Domestic" />
+              {openCollapse.domestic ? <ExpandLess /> : <ExpandMore />}
             </ListItemButton>
+            <Collapse in={!!openCollapse.domestic} timeout="auto" unmountOnExit>
+              <List component="div" disablePadding>
+                <ListItemButton
+                  component={Link}
+                  to="/domestic"
+                  onClick={toggleDrawer}
+                  sx={{ pl: 4 }}
+                >
+                  <ListItemText primary="All Domestic Packages" />
+                </ListItemButton>
+                {domesticSectors.map((sector) => (
+                  <ListItemButton
+                    key={sector}
+                    component={Link}
+                    to={`/domestic/${slugifySector(sector)}`}
+                    onClick={toggleDrawer}
+                    sx={{ pl: 4 }}
+                  >
+                    <ListItemText primary={sector} />
+                  </ListItemButton>
+                ))}
+              </List>
+            </Collapse>
 
             {/* International Link */}
             <ListItemButton
-              component={Link}
-              to="/international"
-              onClick={toggleDrawer}
+              onClick={() => handleCollapse("international")}
               sx={{
                 fontWeight: isParentActive("international") ? 700 : 500,
                 borderLeft: isParentActive("international")
@@ -210,7 +328,31 @@ const Navbar = () => {
               }}
             >
               <ListItemText primary="International" />
+              {openCollapse.international ? <ExpandLess /> : <ExpandMore />}
             </ListItemButton>
+            <Collapse in={!!openCollapse.international} timeout="auto" unmountOnExit>
+              <List component="div" disablePadding>
+                <ListItemButton
+                  component={Link}
+                  to="/international"
+                  onClick={toggleDrawer}
+                  sx={{ pl: 4 }}
+                >
+                  <ListItemText primary="All International Packages" />
+                </ListItemButton>
+                {internationalSectors.map((sector) => (
+                  <ListItemButton
+                    key={sector}
+                    component={Link}
+                    to={`/international/${slugifySector(sector)}`}
+                    onClick={toggleDrawer}
+                    sx={{ pl: 4 }}
+                  >
+                    <ListItemText primary={sector} />
+                  </ListItemButton>
+                ))}
+              </List>
+            </Collapse>
 
             <Divider sx={{ my: 1 }} />
 

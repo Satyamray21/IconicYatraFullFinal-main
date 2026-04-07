@@ -19,6 +19,25 @@ import PackageCard from "../../Components/PackageCard";
 import { BASE_URL } from "../../Utils/axiosInstance";
 import InquiryFormDialog from "../../Components/InquiryFormDialog";
 
+const normalizeText = (value = "") =>
+  String(value).toLowerCase().trim().replace(/\s+/g, " ");
+const slugifyValue = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-");
+const matchesInternationalRoute = (pkg, routeSlug) => {
+  const candidates = [
+    pkg?.destinationCountry,
+    pkg?.sector,
+    pkg?.destination,
+    pkg?.title,
+  ].filter(Boolean);
+  return candidates.some((value) => slugifyValue(value) === routeSlug);
+};
+
 const International = () => {
   const { destination } = useParams();
   const navigate = useNavigate();
@@ -36,17 +55,29 @@ const International = () => {
     dispatch(fetchInternationalPackages());
   }, [dispatch]);
 
-  // ✅ Handle destination filter (via URL param)
+  // ✅ Handle destination/sector filter (via URL param)
   useEffect(() => {
     if (destination && destination !== "All") {
-      const formattedDestination = destination
-        .replace(/-/g, " ")
-        .toLowerCase()
-        .trim();
-      const matched = packages.find(
-        (pkg) => pkg.title.toLowerCase().trim() === formattedDestination
+      const routeSlug = String(destination).toLowerCase().trim();
+
+      const matchedBySector = packages.find(
+        (pkg) => matchesInternationalRoute(pkg, routeSlug)
       );
-      setSelectedDestination(matched ? matched.title : "All");
+
+      if (matchedBySector) {
+        setSelectedDestination(
+          matchedBySector.destinationCountry ||
+            matchedBySector.sector ||
+            matchedBySector.destination
+        );
+      } else {
+        const matchedByTitle = packages.find(
+          (pkg) =>
+            slugifyValue(pkg.title) === routeSlug ||
+            normalizeText(pkg.title) === normalizeText(routeSlug.replace(/-/g, " "))
+        );
+        setSelectedDestination(matchedByTitle ? matchedByTitle.title : "All");
+      }
     } else {
       setSelectedDestination("All");
     }
@@ -57,10 +88,13 @@ const International = () => {
     selectedDestination === "All"
       ? packages
       : packages.filter(
-        (pkg) =>
-          pkg.title.toLowerCase().trim() ===
-          selectedDestination.toLowerCase().trim()
-      );
+          (pkg) =>
+            slugifyValue(pkg.destinationCountry) ===
+              slugifyValue(selectedDestination) ||
+            slugifyValue(pkg.sector) === slugifyValue(selectedDestination) ||
+            slugifyValue(pkg.destination) === slugifyValue(selectedDestination) ||
+            normalizeText(pkg.title) === normalizeText(selectedDestination)
+        );
 
   // ✅ Handle click
   const handleCardClick = (id) => {
@@ -237,7 +271,9 @@ const International = () => {
                         : "https://via.placeholder.com/300x200?text=No+Image"
                     }
                     title={pkg.title || "No Title"}
-                    location={`${pkg.sector || "Unknown Sector"}, ${pkg.arrivalCity || "Unknown City"}`}
+                    location={`${pkg.destinationCountry || pkg.sector || "Unknown Country"}, ${
+                      pkg.arrivalCity || "Unknown City"
+                    }`}
                     // UPDATED: Price display with new logic
                     price={getPriceDisplay(pkg)}
                     priceNote={pkg.priceNote || ""}
