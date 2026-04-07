@@ -502,6 +502,7 @@ const CustomFinalize = () => {
         message: "",
         severity: "success"
     });
+    const { data: company, status } = useSelector((state) => state.companyUI);
     const [itineraryDialog, setItineraryDialog] = useState({
         open: false,
         mode: 'add',
@@ -965,14 +966,14 @@ useEffect(() => {
                 terms: policies.termsAndConditions?.join('\n') || "No terms and conditions specified",
             },
             footer: {
-                contact: `Amit Jaiswal`,
+                contact: company?.company?.contactPerson,
                 phone: "+91 7053900957",
                 email: "info@iconicyatra.com",
                 received: "₹ 0",
                 balance: "₹ 0",
-                company: "Iconic Yatra",
-                address: "B 25 2nd Floor Sector 64 ,Noida,Uttar Pardesh ,India",
-                website: "https://www.iconicyatra.com",
+                company: company?.company?.companyName,
+                address: company?.company?.address,
+                website: company?.company?.website,
             },
             hotelPricingData,
             days: transformedDays,
