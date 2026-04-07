@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
     Dialog,
     DialogTitle,
@@ -26,14 +26,21 @@ import AddIcon from "@mui/icons-material/Add";
 import BankDetailsDialog from "./BankDetailsDialog"; // Update the import path as per your project structure
 import AddBankDialog from "./AddBankDialog"; // Update the import path as per your project structure
 import AssociateDetailForm from "../../../Associates/Form/AssociatesForm";
-const HotelVendorDialog = ({ open, onClose }) => {
+import { useDispatch, useSelector } from "react-redux";
+import { fetchAllAssociates } from "../../../../../features/associate/associateSlice";
+
+const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
+    const dispatch = useDispatch();
+    const { list: associateList = [], loading: associatesLoading } = useSelector(
+        (state) => state.associate
+    );
     const [vendorType, setVendorType] = useState("single");
     const [addVendorDialogOpen, setAddVendorDialogOpen] = useState(false);
     const [vehicleVendorDialogOpen, setVehicleVendorDialogOpen] = useState(false);
     const [bankDetailsDialogOpen, setBankDetailsDialogOpen] = useState(false);
     const [addBankDialogOpen, setAddBankDialogOpen] = useState(false);
-    const [vendors, setVendors] = useState(["Vendor 1", "Vendor 2"]);
-    const [vehicleVendors, setVehicleVendors] = useState(["Vehicle Vendor 1", "Vehicle Vendor 2", "Vehicle Vendor 3"]);
+    const [vendors, setVendors] = useState([]);
+    const [vehicleVendors, setVehicleVendors] = useState([]);
     const [vehicleVendorForm, setVehicleVendorForm] = useState({
         vehicleVendorName: "",
         showAllVehicle: false,
@@ -57,6 +64,45 @@ const HotelVendorDialog = ({ open, onClose }) => {
         ifscCode: "",
         openingBalance: "",
     });
+
+    useEffect(() => {
+        if (open) dispatch(fetchAllAssociates());
+    }, [dispatch, open]);
+
+    const normalizeAssociates = useMemo(() => {
+        if (Array.isArray(associateList)) return associateList;
+        if (Array.isArray(associateList?.data)) return associateList.data;
+        if (Array.isArray(associateList?.data?.data)) return associateList.data.data;
+        return [];
+    }, [associateList]);
+
+    useEffect(() => {
+        if (!normalizeAssociates.length) return;
+
+        const hotelVendorNames = normalizeAssociates
+            .filter(
+                (a) => a?.personalDetails?.associateType === "Hotel Vendor"
+            )
+            .map((a) => a?.personalDetails?.fullName)
+            .filter(Boolean);
+
+        const vehicleVendorNames = normalizeAssociates
+            .filter(
+                (a) => a?.personalDetails?.associateType === "Vehicle Vendor"
+            )
+            .map((a) => a?.personalDetails?.fullName)
+            .filter(Boolean);
+
+        setVendors((prev) => {
+            const merged = [...hotelVendorNames, ...prev];
+            return Array.from(new Set(merged));
+        });
+
+        setVehicleVendors((prev) => {
+            const merged = [...vehicleVendorNames, ...prev];
+            return Array.from(new Set(merged));
+        });
+    }, [normalizeAssociates]);
 
     const formik = useFormik({
         initialValues: {
@@ -131,6 +177,13 @@ const HotelVendorDialog = ({ open, onClose }) => {
         console.log("Bank Details confirmed");
         console.log("Account Type:", accountType);
         console.log("Account Name:", accountName);
+        onConfirm?.({
+            vendorType,
+            hotelVendorName: formik.values.vendorName || "",
+            vehicleVendorName: vehicleVendorForm.vehicleVendorName || "",
+            accountType,
+            accountName,
+        });
         setBankDetailsDialogOpen(false);
         // You can add additional logic here for what happens after bank details confirmation
     };
@@ -201,6 +254,7 @@ const HotelVendorDialog = ({ open, onClose }) => {
             displayEmpty
         >
             <MenuItem value="">Hotel Vendor Name</MenuItem>
+            {associatesLoading && <MenuItem disabled>Loading vendors...</MenuItem>}
             {vendors.map((vendor) => (
                 <MenuItem key={vendor} value={vendor}>
                     {vendor}
@@ -224,6 +278,7 @@ const HotelVendorDialog = ({ open, onClose }) => {
             displayEmpty
         >
             <MenuItem value="">Vehicle Vendor</MenuItem>
+            {associatesLoading && <MenuItem disabled>Loading vendors...</MenuItem>}
             {vehicleVendors.map((vendor) => (
                 <MenuItem key={vendor} value={vendor}>
                     {vendor}

@@ -322,37 +322,101 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
                         quotation.pickupDrop = stepData.pickupDrop;
 
                     if (stepData.tourDetails) {
-                        quotation.tourDetails = {
-                            ...quotation.tourDetails,
-                            ...stepData.tourDetails,
-                        };
+                        // Normalize incoming keys (some clients may send keys with trailing spaces).
+                        const incomingTourDetails = Object.entries(
+                            stepData.tourDetails || {}
+                        ).reduce((acc, [k, v]) => {
+                            acc[String(k).trim()] = v;
+                            return acc;
+                        }, {});
 
-                        if (stepData.tourDetails.quotationDetails) {
+                        // Also sanitize already-saved malformed keys on existing documents
+                        // (e.g. "vendorDetails " from previous bad writes).
+                        const currentTourDetailsRaw =
+                            typeof quotation.tourDetails?.toObject === "function"
+                                ? quotation.tourDetails.toObject()
+                                : { ...(quotation.tourDetails || {}) };
+                        const currentTourDetails = {};
+                        Object.entries(currentTourDetailsRaw || {}).forEach(
+                            ([k, v]) => {
+                                const trimmed = String(k).trim();
+                                // Skip malformed vendorDetails variants; we'll rebuild from clean source below.
+                                if (trimmed === "vendorDetails" && k !== "vendorDetails") {
+                                    return;
+                                }
+                                currentTourDetails[trimmed] = v;
+                            }
+                        );
+
+                        // Prevent Mongoose cast errors when vendorDetails comes as undefined/non-object.
+                        const rawVendorDetails =
+                            incomingTourDetails.vendorDetails ??
+                            incomingTourDetails["vendorDetails "];
+                        if (
+                            rawVendorDetails === undefined ||
+                            rawVendorDetails === null ||
+                            rawVendorDetails === "undefined" ||
+                            rawVendorDetails === "null" ||
+                            typeof rawVendorDetails !== "object" ||
+                            Array.isArray(rawVendorDetails)
+                        ) {
+                            delete incomingTourDetails.vendorDetails;
+                            delete incomingTourDetails["vendorDetails "];
+                        } else {
+                            incomingTourDetails.vendorDetails = {
+                                vendorType: rawVendorDetails.vendorType || undefined,
+                                hotelVendorName:
+                                    rawVendorDetails.hotelVendorName || undefined,
+                                vehicleVendorName:
+                                    rawVendorDetails.vehicleVendorName || undefined,
+                            };
+                            delete incomingTourDetails["vendorDetails "];
+                        }
+
+                        const mergedTourDetails = {
+                            ...currentTourDetails,
+                            ...incomingTourDetails,
+                        };
+                        const mergedVendor = mergedTourDetails.vendorDetails;
+                        if (
+                            mergedVendor === undefined ||
+                            mergedVendor === null ||
+                            mergedVendor === "undefined" ||
+                            mergedVendor === "null" ||
+                            typeof mergedVendor !== "object" ||
+                            Array.isArray(mergedVendor)
+                        ) {
+                            delete mergedTourDetails.vendorDetails;
+                        }
+
+                        quotation.tourDetails = mergedTourDetails;
+
+                        if (incomingTourDetails.quotationDetails) {
                             quotation.tourDetails.quotationDetails = {
                                 ...quotation.tourDetails.quotationDetails,
-                                ...stepData.tourDetails.quotationDetails,
+                                ...incomingTourDetails.quotationDetails,
                             };
 
                             // ✅ Handle packageCalculations merge specifically
-                            if (stepData.tourDetails.quotationDetails.packageCalculations) {
+                            if (incomingTourDetails.quotationDetails.packageCalculations) {
                                 quotation.tourDetails.quotationDetails.packageCalculations = {
                                     // Keep existing package calculations if they exist
                                     ...quotation.tourDetails.quotationDetails.packageCalculations,
                                     // Merge with new package calculations
-                                    ...stepData.tourDetails.quotationDetails.packageCalculations,
+                                    ...incomingTourDetails.quotationDetails.packageCalculations,
 
                                     // Ensure all package types are properly merged
                                     standard: {
                                         ...(quotation.tourDetails.quotationDetails.packageCalculations?.standard || {}),
-                                        ...(stepData.tourDetails.quotationDetails.packageCalculations?.standard || {})
+                                        ...(incomingTourDetails.quotationDetails.packageCalculations?.standard || {})
                                     },
                                     deluxe: {
                                         ...(quotation.tourDetails.quotationDetails.packageCalculations?.deluxe || {}),
-                                        ...(stepData.tourDetails.quotationDetails.packageCalculations?.deluxe || {})
+                                        ...(incomingTourDetails.quotationDetails.packageCalculations?.deluxe || {})
                                     },
                                     superior: {
                                         ...(quotation.tourDetails.quotationDetails.packageCalculations?.superior || {}),
-                                        ...(stepData.tourDetails.quotationDetails.packageCalculations?.superior || {})
+                                        ...(incomingTourDetails.quotationDetails.packageCalculations?.superior || {})
                                     }
                                 };
                             }

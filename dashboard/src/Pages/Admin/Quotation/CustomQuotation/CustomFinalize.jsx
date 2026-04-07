@@ -509,6 +509,11 @@ const CustomFinalize = () => {
             destination: "",
             itinerary: "",
         },
+        finalizedVendorDetails: {
+            vendorType: "",
+            hotelVendorName: "",
+            vehicleVendorName: "",
+        },
         vehicles: [],
         pricing: { discount: "", gst: "", total: "" },
         policies: {
@@ -659,6 +664,25 @@ const CustomFinalize = () => {
         const t = calc[key]?.finalTotal;
         return typeof t === "number" ? t : null;
     }, [selectedQuotation]);
+
+    const finalizedVendors = React.useMemo(() => {
+        const savedNames = [
+            quotation?.finalizedVendorDetails?.hotelVendorName,
+            quotation?.finalizedVendorDetails?.vehicleVendorName,
+        ]
+            .map((n) => String(n || "").trim())
+            .filter(Boolean);
+        const rows = paymentHistory || [];
+        const paymentNames = rows
+            .filter(
+                (v) =>
+                    v?.paymentType === "Payment Voucher" ||
+                    v?.drCr === "Dr"
+            )
+            .map((v) => String(v?.partyName || "").trim())
+            .filter(Boolean);
+        return Array.from(new Set([...savedNames, ...paymentNames]));
+    }, [paymentHistory, quotation?.finalizedVendorDetails]);
 
     useEffect(() => {
         const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
@@ -819,6 +843,11 @@ const CustomFinalize = () => {
                 mealPlan: quotationDetails.mealPlan,
                 destination: destinationDisplay,
                 itinerary: tourDetails.initalNotes || "This is only tentative schedule for sightseeing and travel...",
+            },
+            finalizedVendorDetails: {
+                vendorType: tourDetails?.vendorDetails?.vendorType || "",
+                hotelVendorName: tourDetails?.vendorDetails?.hotelVendorName || "",
+                vehicleVendorName: tourDetails?.vendorDetails?.vehicleVendorName || "",
             },
             vehicles: vehicleDetails ? [{
                 pickup: {
@@ -1379,7 +1408,7 @@ const CustomFinalize = () => {
         setBranchName("");
     };
 
-    const handleBankConfirm = () => {
+    const handleBankConfirm = async (vendorPayload = {}) => {
         console.log("Bank details:", {
             accountType,
             accountName,
@@ -1388,6 +1417,33 @@ const CustomFinalize = () => {
             bankName,
             branchName,
         });
+        if (id) {
+            try {
+                await dispatch(
+                    updateCustomQuotation({
+                        quotationId: id,
+                        formData: {
+                            "tourDetails.vendorDetails.vendorType":
+                                vendorPayload.vendorType || "",
+                            "tourDetails.vendorDetails.hotelVendorName":
+                                vendorPayload.hotelVendorName || "",
+                            "tourDetails.vendorDetails.vehicleVendorName":
+                                vendorPayload.vehicleVendorName || "",
+                        },
+                    })
+                ).unwrap();
+                await refreshQuotationFromApi();
+            } catch (e) {
+                setSnackbar({
+                    open: true,
+                    message:
+                        typeof e === "string"
+                            ? e
+                            : e?.message || "Vendor details save failed",
+                    severity: "warning",
+                });
+            }
+        }
         setInvoiceGenerated(true);
         handleBankDialogClose();
     };
@@ -2223,6 +2279,47 @@ const CustomFinalize = () => {
                                     </Box>
                                 ))}
                             </Box>
+
+                            {/* Finalized Vendors */}
+                            {isFinalized && (
+                                <Box
+                                    mt={2}
+                                    p={2}
+                                    sx={{
+                                        backgroundColor: "grey.50",
+                                        borderRadius: 1,
+                                        borderLeft: "4px solid",
+                                        borderColor: "success.main",
+                                    }}
+                                >
+                                    <Typography
+                                        variant="subtitle2"
+                                        fontWeight="bold"
+                                        color="success.main"
+                                        sx={{ mb: 1 }}
+                                    >
+                                        Finalized Vendors
+                                    </Typography>
+
+                                    {finalizedVendors.length ? (
+                                        <Box display="flex" gap={1} flexWrap="wrap">
+                                            {finalizedVendors.map((name) => (
+                                                <Chip
+                                                    key={name}
+                                                    size="small"
+                                                    color="success"
+                                                    variant="outlined"
+                                                    label={name}
+                                                />
+                                            ))}
+                                        </Box>
+                                    ) : (
+                                        <Typography variant="body2" color="text.secondary">
+                                            No vendor payment vouchers linked yet.
+                                        </Typography>
+                                    )}
+                                </Box>
+                            )}
 
                             {/* Quotation Details */}
                             <Box mt={3}>
