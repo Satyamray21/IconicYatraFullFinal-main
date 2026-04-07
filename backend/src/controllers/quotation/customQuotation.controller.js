@@ -553,7 +553,9 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
   const { to, cc, type = "normal", subject, customText = {} } = req.body || {};
 
-  if (!to) throw new ApiError(400, "Receiver email is required");
+  if (!to || (Array.isArray(to) && to.length === 0)) {
+    throw new ApiError(400, "Receiver email is required");
+  }
 
   const quotation = await CustomQuotation.findOne({ quotationId }).lean();
   if (!quotation) throw new ApiError(404, "Quotation not found");
@@ -570,27 +572,35 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
       : `Quotation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`);
 
   const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
     auth: {
       user: process.env.gmail,
       pass: process.env.app_pass || process.env.EMAIL_PASS,
     },
   });
 
-  await transporter.sendMail({
-    from: `"Iconic Travel" <${process.env.gmail}>`,
-    to,
-    cc: cc || undefined,
-    subject: finalSubject,
-    text: body,
-  });
+  try {
+    await transporter.sendMail({
+      from: `"Iconic Travel" <${process.env.gmail}>`,
+      to,
+      cc: cc && cc.length ? cc : undefined,
+      replyTo: process.env.gmail,
+      subject: finalSubject,
+      html: body,
+      text: body.replace(/<[^>]*>/g, ""), // fallback
+    });
+  } catch (error) {
+    console.error("Mail Error:", error);
+    throw new ApiError(500, "Failed to send email");
+  }
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, { quotationId, type }, "Mail sent successfully"),
-    );
+  return res.status(200).json(
+    new ApiResponse(200, { quotationId, type }, "Mail sent successfully")
+  );
 });
+
 
 // Delete Quotation
 export const deleteCustomQuotation = asyncHandler(async (req, res) => {
