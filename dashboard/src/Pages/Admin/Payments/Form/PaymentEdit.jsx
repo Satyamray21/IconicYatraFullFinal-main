@@ -86,7 +86,7 @@ const EditPaymentForm = () => {
                     drCr: voucherType === "receive" ? "Cr" : "Dr",
                 };
 
-                await dispatch(updateVoucher({ id, updatedData: payload })).unwrap();
+                await dispatch(updateVoucher({ id, data: payload })).unwrap();
 
                 toast.success("Voucher updated successfully!");
                 navigate("/payments");
