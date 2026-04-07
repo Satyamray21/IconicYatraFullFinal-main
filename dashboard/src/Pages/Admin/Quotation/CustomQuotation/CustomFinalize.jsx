@@ -194,7 +194,7 @@ const TransactionSummaryDialog = ({
         "Type",
         "Party",
         "Particulars",
-        "Mode",
+        "Payment Bank",
         "Dr/Cr",
         "Amount",
     ];
@@ -445,7 +445,48 @@ const InvoicePdfDialog = ({ open, onClose, quotation, invoiceData }) => {
         </Dialog>
     );
 };
+const toHtmlParagraphs = (text = "") => {
+    const normalized = String(text || "").replace(/\r\n/g, "\n");
+    const parts = normalized
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+    return parts.map((line) => `<p>${line}</p>`).join("");
+};
 
+const normalizePolicyForEditor = (value) => {
+    if (Array.isArray(value)) {
+        if (value.length === 0) return "";
+        const merged = value.join("\n").trim();
+        if (!merged) return "";
+        // Return plain text joined with newlines, not HTML
+        return merged;
+    }
+
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return "";
+        // Strip HTML tags if any, or just return plain text
+        return trimmed.replace(/<[^>]*>/g, '');
+    }
+
+    return "";
+};
+
+const normalizePolicyState = (source = {}) => {
+    const policySource = source?.policy || source || {};
+    return {
+        inclusionPolicy: normalizePolicyForEditor(
+            policySource?.inclusionPolicy ?? policySource?.inclusions
+        ),
+        exclusionPolicy: normalizePolicyForEditor(
+            policySource?.exclusionPolicy ?? policySource?.exclusions
+        ),
+        paymentPolicy: normalizePolicyForEditor(policySource?.paymentPolicy),
+        cancellationPolicy: normalizePolicyForEditor(policySource?.cancellationPolicy),
+        termsAndConditions: normalizePolicyForEditor(policySource?.termsAndConditions),
+    };
+};
 const CustomFinalize = () => {
     // State
     const dispatch = useDispatch();
@@ -483,7 +524,54 @@ const CustomFinalize = () => {
     const [bannerUploading, setBannerUploading] = useState(false);
     const { id } = useParams(); // business quotationId e.g. ICYR_CQ_0001
     const navigate = useNavigate();
+    // ========== EDIT 1: Add this with your other state declarations ==========
+
+
+ // Add dependencies if needed (e.g., initialData)
     const { selectedQuotation, loading: reduxLoading, error } = useSelector(state => state.customQuotation);
+    // ========== EDIT 1: Add these in correct order ==========
+
+// 1. First declare policyInputs
+const [policyInputs, setPolicyInputs] = useState(normalizePolicyState(selectedQuotation));
+
+// 2. Then declare globalSettings
+const [globalSettings, setGlobalSettings] = useState({
+    inclusionPolicy: "",
+    exclusionPolicy: "",
+    paymentPolicy: "",
+    cancellationPolicy: "",
+    termsAndConditions: ""
+});
+
+const [isLoadingGlobalSettings, setIsLoadingGlobalSettings] = useState(false);
+
+// 3. Then declare fetchGlobalSettings (after both states exist)
+const fetchGlobalSettings = async () => {
+    try {
+        setIsLoadingGlobalSettings(true);
+        const res = await axios.get("/global-settings");
+        const settings = normalizePolicyState(res.data);
+        setGlobalSettings(settings);
+        
+        // Now policyInputs exists
+        setPolicyInputs(prev => ({
+            inclusionPolicy: prev.inclusionPolicy || settings.inclusionPolicy,
+            exclusionPolicy: prev.exclusionPolicy || settings.exclusionPolicy,
+            paymentPolicy: prev.paymentPolicy || settings.paymentPolicy,
+            cancellationPolicy: prev.cancellationPolicy || settings.cancellationPolicy,
+            termsAndConditions: prev.termsAndConditions || settings.termsAndConditions
+        }));
+    } catch (err) {
+        console.error("Failed to fetch global settings:", err);
+    } finally {
+        setIsLoadingGlobalSettings(false);
+    }
+};
+
+// 4. useEffect
+useEffect(() => {
+    fetchGlobalSettings();
+}, []);
     // Dynamic quotation state from API
     const [quotation, setQuotation] = useState({
         date: "",
@@ -1899,34 +1987,26 @@ const CustomFinalize = () => {
         {
             title: "Inclusion Policy",
             icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
-            content: (
-                <List dense>
-                    {quotation.policies.inclusions.map((i, k) => (
-                        <ListItem key={k}>
-                            <ListItemText primary={i} />
-                        </ListItem>
-                    ))}
-                </List>
-            ),
+            content: policyInputs.inclusionPolicy,
             field: "policies.inclusions",
             isArray: true,
         },
         {
             title: "Exclusion Policy",
             icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
-            content: quotation.policies.exclusions,
+            content: policyInputs.exclusionPolicy,
             field: "policies.exclusions",
         },
         {
             title: "Payment Policy",
             icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
-            content: quotation.policies.paymentPolicy,
+            content: policyInputs.paymentPolicy,
             field: "policies.paymentPolicy",
         },
         {
             title: "Cancellation & Refund",
             icon: <Warning sx={{ mr: 0.5, color: "warning.main" }} />,
-            content: quotation.policies.cancellationPolicy,
+            content: policyInputs.cancellationPolicy,
             field: "policies.cancellationPolicy",
         },
     ];
@@ -2885,7 +2965,7 @@ const CustomFinalize = () => {
                                             </IconButton>
                                         </Box>
                                         <Typography variant="body2">
-                                            {quotation.policies.terms}
+                                            {policyInputs.termsAndConditions}
                                         </Typography>
                                     </CardContent>
                                 </Card>
