@@ -139,9 +139,19 @@ export const buildCustomQuotationNormalEmail = (quotation, customText = {}) => {
         )}</p>
 
         <br/>
+        <p style="color:#d32f2f; font-weight:bold;">
+    ##PACKAGE COST FOR ALL PERSON = INR ${INR.format(totals.total)} As of now
+</p>
 
-        <p><b>Quotation ID:</b> ${safe(quotation?.quotationId, "N/A")}</p>
-        <p><b>Guest Name:</b> ${safe(quotation?.clientDetails?.clientName, "Guest")}</p>
+<p style="color:#000; font-weight:bold;">
+    SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only..
+</p>
+
+        <p style="color:#d32f2f; font-weight:bold;">
+        DETAILS OF TOUR PACKAGE:
+        </p>
+        
+        
 
         <p><b>Destination:</b> ${
             (destinations || [])
@@ -155,11 +165,14 @@ export const buildCustomQuotationNormalEmail = (quotation, customText = {}) => {
             rooms.sharingType,
             ""
         )}</p>
-
-        <p><b>Pick Up Point:</b> ${safe(pd.pickupLocation, "As per itinerary")}</p>
-        <p><b>Drop Point:</b> ${safe(pd.dropLocation, "As per itinerary")}</p>
-
+         <p><b>Transportation:</b> ${safe(
+            vehicle?.basicsDetails?.vehicleType,
+            "As per itinerary"
+        )}</p>
         <p><b>Tour Duration:</b> ${duration.nights} Nights ${duration.days} Days</p>
+        
+
+        
 
         <p><b>Arrival Date:</b> ${fmtDate(td.arrivalDate)} ${
             pd.pickupTime ? `, Time: ${pd.pickupTime}` : ""
@@ -168,20 +181,16 @@ export const buildCustomQuotationNormalEmail = (quotation, customText = {}) => {
         <p><b>Departure Date:</b> ${fmtDate(td.departureDate)} ${
             pd.dropTime ? `, Time: ${pd.dropTime}` : ""
         }</p>
-
-        <p><b>Hotel Type:</b> ${safe(rooms.roomType, "Standard")}</p>
+        <p><b>Pick Up Point:</b> ${safe(pd.pickupLocation, "As per itinerary")}</p>
+        <p><b>Drop Point:</b> ${safe(pd.dropLocation, "As per itinerary")}</p>
+        
         <p><b>Meal Plan:</b> ${safe(qd.mealPlan, "CP Plan")}</p>
 
-        <p><b>Transportation:</b> ${safe(
-            vehicle?.basicsDetails?.vehicleType,
-            "As per itinerary"
-        )}</p>
+       
 
         <br/>
 
-        <p><b>Package Cost (excluding GST):</b> INR ${INR.format(totals.beforeTax)}</p>
-        <p><b>GST (${totals.taxPercent}%):</b> INR ${INR.format(totals.taxAmount)}</p>
-        <p><b>Package Cost (including GST):</b> <b>INR ${INR.format(totals.total)}</b></p>
+>
 
         <br/>
 
