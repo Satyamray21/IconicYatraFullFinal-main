@@ -7,11 +7,18 @@ import {
   Button,
   TextField,
   Grid,
+  MenuItem,
 } from "@mui/material";
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
 
-const EmailQuotationDialog = ({ open, onClose, onSend }) => {
+const EmailQuotationDialog = ({
+  open,
+  onClose,
+  onSend,
+  initialValuesOverride,
+  templateBodies,
+}) => {
   const validationSchema = Yup.object({
     to: Yup.string().email("Invalid email").required("Required"),
     cc: Yup.string().email("Invalid email").nullable(),
@@ -23,7 +30,7 @@ const EmailQuotationDialog = ({ open, onClose, onSend }) => {
     signature: Yup.string().required("Required"),
   });
 
-  const initialValues = {
+  const baseInitialValues = {
     to: "",
     cc: "",
     recipientName: "",
@@ -32,7 +39,9 @@ const EmailQuotationDialog = ({ open, onClose, onSend }) => {
     greetLine: "",
     message: "",
     signature: "",
+    mailType: "normal",
   };
+  const initialValues = { ...baseInitialValues, ...(initialValuesOverride || {}) };
 
   const handleSubmit = (values) => {
     onSend(values); 
@@ -43,14 +52,35 @@ const EmailQuotationDialog = ({ open, onClose, onSend }) => {
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>Email</DialogTitle>
       <Formik
+        enableReinitialize
         initialValues={initialValues}
         validationSchema={validationSchema}
         onSubmit={handleSubmit}
       >
-        {({ errors, touched }) => (
+        {({ errors, touched, values, setFieldValue }) => (
           <Form>
             <DialogContent dividers>
               <Grid container spacing={2}>
+                {!!templateBodies && (
+                  <Grid size={{xs:12, sm:6}}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Mail Type"
+                      value={values.mailType || "normal"}
+                      onChange={(e) => {
+                        const type = e.target.value;
+                        setFieldValue("mailType", type);
+                        const tpl = templateBodies?.[type];
+                        if (tpl?.subject) setFieldValue("subject", tpl.subject);
+                        if (tpl?.message) setFieldValue("message", tpl.message);
+                      }}
+                    >
+                      <MenuItem value="normal">Normal Quotation</MenuItem>
+                      <MenuItem value="booking">Booking Confirmation</MenuItem>
+                    </TextField>
+                  </Grid>
+                )}
                 <Grid size={{xs:12, sm:6}}>
                   <Field
                     as={TextField}

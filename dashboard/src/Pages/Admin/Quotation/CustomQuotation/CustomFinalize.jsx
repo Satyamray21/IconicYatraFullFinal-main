@@ -556,6 +556,11 @@ const CustomFinalize = () => {
         taxType: "",
     });
     const [openEmailDialog, setOpenEmailDialog] = useState(false);
+    const [emailTemplateType, setEmailTemplateType] = useState("normal");
+    const [emailTemplateBodies, setEmailTemplateBodies] = useState({
+        normal: { subject: "", message: "" },
+        booking: { subject: "", message: "" },
+    });
     const [openBankDialog, setOpenBankDialog] = useState(false);
     const [flights, setFlights] = useState([]);
     const [openAddBankDialog, setOpenAddBankDialog] = useState(false);
@@ -987,20 +992,6 @@ const CustomFinalize = () => {
         }
     };
 
-    // Add loading state handling
-    if (reduxLoading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress />
-                <Typography variant="h6" sx={{ ml: 2 }}>
-                    Loading quotation data...
-                </Typography>
-            </Box>
-        );
-    }
-
-
-
     // Generate invoice data
     const generateInvoiceData = () => {
         return {
@@ -1053,8 +1044,109 @@ const CustomFinalize = () => {
     };
 
     // Dialog handlers
-    const handleEmailOpen = () => setOpenEmailDialog(true);
+    const handleEmailOpen = async () => {
+        if (!id) {
+            setSnackbar({
+                open: true,
+                message: "Missing quotation reference",
+                severity: "error",
+            });
+            return;
+        }
+        setEmailTemplateType("normal");
+        try {
+            const res = await axios.post(
+                `/customQT/${encodeURIComponent(id)}/email/preview`,
+                {}
+            );
+            const data = res?.data?.data || {};
+            setEmailTemplateBodies({
+                normal: {
+                    subject: data?.normal?.subject || "",
+                    message: data?.normal?.body || "",
+                },
+                booking: {
+                    subject: data?.booking?.subject || "",
+                    message: data?.booking?.body || "",
+                },
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message:
+                    e?.response?.data?.message ||
+                    "Failed to load email templates",
+                severity: "warning",
+            });
+        }
+        setOpenEmailDialog(true);
+    };
     const handleEmailClose = () => setOpenEmailDialog(false);
+    const handleEmailSend = async (values) => {
+        const to = String(values?.to || "").trim();
+        const cc = String(values?.cc || "").trim();
+        const subject = String(values?.subject || "");
+        if (!to) {
+            setSnackbar({
+                open: true,
+                message: "Please enter receiver email",
+                severity: "warning",
+            });
+            return;
+        }
+        try {
+            await axios.post(
+                `/customQT/${encodeURIComponent(id)}/email/send`,
+                {
+                    to,
+                    cc: cc || undefined,
+                    type: values?.mailType === "booking" ? "booking" : "normal",
+                    subject: subject || undefined,
+                }
+            );
+            setSnackbar({
+                open: true,
+                message: "Email sent successfully",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message:
+                    e?.response?.data?.message || "Failed to send email",
+                severity: "error",
+            });
+        }
+    };
+
+    const emailInitialValues = React.useMemo(() => {
+        const source = selectedQuotation || {};
+        const type = emailTemplateType === "booking" ? "booking" : "normal";
+        const tpl = emailTemplateBodies[type];
+        return {
+            to: "",
+            cc: "",
+            recipientName: source?.clientDetails?.clientName || quotation.customer?.name || "",
+            salutation: "Dear",
+            subject: tpl?.subject || "",
+            greetLine: "Please find below details:",
+            message: tpl?.message || "",
+            signature: "Warm Regards,\nReservation Team\nIconic Travel",
+            mailType: type,
+        };
+    }, [selectedQuotation, quotation.customer?.name, emailTemplateType, emailTemplateBodies]);
+
+    // Add loading state handling (keep after all hooks to avoid hook-order mismatch)
+    if (reduxLoading) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+                <CircularProgress />
+                <Typography variant="h6" sx={{ ml: 2 }}>
+                    Loading quotation data...
+                </Typography>
+            </Box>
+        );
+    }
 
     const handlePaymentOpen = () => {
         if (!id) {
@@ -1658,6 +1750,7 @@ const CustomFinalize = () => {
                 handleAddServiceOpen();
                 break;
             case "Email Quotation":
+                setEmailTemplateType("normal");
                 handleEmailOpen();
                 break;
             case "Preview PDF":
@@ -3001,6 +3094,9 @@ const CustomFinalize = () => {
                 open={openEmailDialog}
                 onClose={handleEmailClose}
                 customer={quotation.customer}
+                onSend={handleEmailSend}
+                initialValuesOverride={emailInitialValues}
+                templateBodies={emailTemplateBodies}
             />
             <TransactionSummaryDialog
                 open={openTransactionDialog}
