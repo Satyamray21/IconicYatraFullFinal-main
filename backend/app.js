@@ -116,6 +116,9 @@ import landingRoutes from "./src/routers/landingPage.router.js";
 
 app.use("/api/v1/landing-pages", landingRoutes);
 
+import destinationRoutes from "./src/routers/destination.routes.js";
+
+app.use("/api/v1/destinations", destinationRoutes);
 
 // ========== ADD BLOG ROUTES HERE ==========
 import blogRoutes from "./src/routers/blog.routes.js";
