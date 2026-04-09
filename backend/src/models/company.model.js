@@ -17,6 +17,7 @@ const companySchema = new mongoose.Schema(
         },
         termsConditions: { type: String },
         paymentLink: { type: String },
+        companyWebsite:{type:String},
         isActive: { type: Boolean, default: true },
     },
     { timestamps: true }
