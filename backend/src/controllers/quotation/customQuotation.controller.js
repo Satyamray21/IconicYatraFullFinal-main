@@ -527,6 +527,7 @@ const loadEmailMeta = async (company) => {
 
   return {
     companyName: company?.companyName || "Iconic Travel",
+    companyWebsite: company?.companyWebsite || "",
     globalInclusions: globalSettings?.inclusions || [],
     globalExclusions: globalSettings?.exclusions || [],
     globalCancellationPolicy: globalSettings?.cancellationPolicy || "",

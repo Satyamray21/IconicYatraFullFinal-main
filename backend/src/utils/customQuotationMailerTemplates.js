@@ -38,6 +38,7 @@ const pkgKey = (q = {}) => {
 
 const packageTotals = (q = {}) => {
     const qd = q?.tourDetails?.quotationDetails || {};
+    const quotationTitle=q?.tourDetails?.quotationTitle || {};
     const calc = qd.packageCalculations || {};
     const key = pkgKey(q);
 
@@ -181,6 +182,7 @@ export const buildCustomQuotationNormalEmail = (
     const totals = packageTotals(quotation);
     const key = pkgKey(quotation);
     const companyName = safe(options?.companyName, "Iconic Travel");
+    const companyWebsite=safe(options?.companyWebsite);
     const termsCombined = mergePolicies(
         toPolicyArray(td?.policies?.termsAndConditions),
         toPolicyArray(options?.globalTermsAndConditions),
@@ -214,12 +216,24 @@ export const buildCustomQuotationNormalEmail = (
         <p style="color:red; font-weight:bold;">
     ${safe(customText.opening, `GREETING FROM ${companyName.toUpperCase()}!!!`)}
 </p>
-
-
-        <p>${safe(
+ <p>${safe(
             customText.intro,
             "As per discussed with you short while ago please see the below packages and let us know."
         )}</p>
+   <p style="color:#000;">
+    <b>Official Website Visit @</b> <br/>
+    <a href="${companyWebsite}" target="_blank" style="font-weight:bold; color:#1976d2; text-decoration:none;">
+        ${companyWebsite}
+    </a>
+    <p>
+This is referenced in our discussion regarding your forthcoming Tour to the 
+<span style="color:#d32f2f; font-weight:bold;">
+    ${td.quotationTitle}
+</span>. It is my pleasure to have this opportunity to serve you. We are always here to assist you. The brief itinerary of your tour would like to as follows: please have a look...
+</p>
+
+
+       
 
         <br/>
         <p style="color:#d32f2f; font-weight:bold;">
@@ -237,9 +251,7 @@ export const buildCustomQuotationNormalEmail = (
         
 
         <p><b>Destination:</b> ${
-            (destinations || [])
-                .map((d) => `${toNum(d?.nights)}N ${safe(d?.cityName, "City")}`)
-                .join(", ")
+            td.quotationTitle
         }</p>
 
         <p><b>No. of Pax:</b> ${guestSummary(qd)}</p>
