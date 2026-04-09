@@ -48,7 +48,7 @@ import ShareIcon from "@mui/icons-material/Share";
 
 import { getAllVehicleQuotations } from "../../../features/quotation/vehicleQuotationSlice";
 import { getAllFlightQuotations } from "../../../features/quotation/flightQuotationSlice";
-import { fetchHotelQuotations } from "../../../features/quotation/hotelQuotation";
+import { fetchHotelQuotations, deleteHotelQuotation } from "../../../features/quotation/hotelQuotation";
 import {
   fetchQuickQuotations,
   sendQuickQuotationMail,
@@ -56,7 +56,12 @@ import {
 } from "../../../features/quotation/quickQuotationSlice";
 // Add Full and Custom Quotation imports
 import { getAllQuotations as getAllFullQuotations } from "../../../features/quotation/fullQuotationSlice";
-import { getAllCustomQuotations } from "../../../features/quotation/customQuotationSlice";
+import {
+  getAllCustomQuotations,
+  deleteCustomQuotation,
+} from "../../../features/quotation/customQuotationSlice";
+import { deleteVehicleQuotation } from "../../../features/quotation/vehicleQuotationSlice";
+import { deleteFlightQuotationById } from "../../../features/quotation/flightQuotationSlice";
 
 const stats = [
   { title: "Today's", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
@@ -105,6 +110,7 @@ const QuotationCard = () => {
   const [filterType, setFilterType] = useState("all");
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, quotationId: null, quotationType: "" });
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     dispatch(getAllVehicleQuotations());
@@ -150,15 +156,46 @@ const QuotationCard = () => {
     const { quotationId, quotationType } = deleteConfirm;
 
     try {
-      if (quotationType === "Quick") {
-        await dispatch(deleteQuickQuotation(quotationId)).unwrap();
-        setSnackbar({
-          open: true,
-          message: "Quotation deleted successfully!",
-          severity: "success"
-        });
+      setDeleteLoading(true);
+      switch (quotationType) {
+        case "Quick":
+          await dispatch(deleteQuickQuotation(quotationId)).unwrap();
+          await dispatch(fetchQuickQuotations()).unwrap();
+          break;
+        case "Vehicle":
+          await dispatch(deleteVehicleQuotation(quotationId)).unwrap();
+          await dispatch(getAllVehicleQuotations()).unwrap();
+          break;
+        case "Flight":
+          await dispatch(deleteFlightQuotationById(quotationId)).unwrap();
+          await dispatch(getAllFlightQuotations()).unwrap();
+          break;
+        case "Hotel":
+          await dispatch(deleteHotelQuotation(quotationId)).unwrap();
+          await dispatch(fetchHotelQuotations()).unwrap();
+          break;
+        case "Custom":
+          await dispatch(deleteCustomQuotation(quotationId)).unwrap();
+          await dispatch(getAllCustomQuotations()).unwrap();
+          break;
+        case "Full":
+          setSnackbar({
+            open: true,
+            message: "Delete for Full quotation is not available yet.",
+            severity: "warning"
+          });
+          setDeleteConfirm({ open: false, quotationId: null, quotationType: "" });
+          setDeleteLoading(false);
+          return;
+        default:
+          throw new Error("Unsupported quotation type");
       }
-      // Add other quotation type deletions here as needed
+
+      setSnackbar({
+        open: true,
+        message: `${quotationType} quotation deleted successfully!`,
+        severity: "success"
+      });
 
       setDeleteConfirm({ open: false, quotationId: null, quotationType: "" });
     } catch (error) {
@@ -167,6 +204,8 @@ const QuotationCard = () => {
         message: error || "Failed to delete quotation",
         severity: "error"
       });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -385,7 +424,7 @@ const QuotationCard = () => {
                 params.row.type
               );
             }}
-            disabled={quickLoading}
+            disabled={deleteLoading}
             sx={{
               backgroundColor: alpha(theme.palette.error.main, 0.1),
               '&:hover': {
@@ -396,7 +435,7 @@ const QuotationCard = () => {
               }
             }}
           >
-            {quickLoading ? (
+            {deleteLoading ? (
               <CircularProgress size={16} />
             ) : (
               <DeleteIcon fontSize="small" />
@@ -509,7 +548,9 @@ const QuotationCard = () => {
       noOfNight: item?.pickupDrop?.nights || "-",
       tourType: item?.clientDetails?.tourType || "-",
       type: "Full",
-      quotationStatus: item?.status || "Draft",
+      quotationStatus:
+        item?.status ||
+        (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft"),
       formStatus: "Completed",
       businessType: "Travel",
     })),
@@ -527,7 +568,9 @@ const QuotationCard = () => {
       noOfNight: item?.duration?.nights || "-",
       tourType: item?.tourType || "-",
       type: "Custom",
-      quotationStatus: item?.status || "Draft",
+      quotationStatus:
+        item?.status ||
+        (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft"),
       formStatus: "Completed",
       businessType: "Travel",
     })),
@@ -914,9 +957,9 @@ const QuotationCard = () => {
             onClick={handleConfirmDelete}
             variant="contained"
             color="error"
-            disabled={quickLoading}
+            disabled={deleteLoading}
           >
-            {quickLoading ? <CircularProgress size={24} /> : "Delete"}
+            {deleteLoading ? <CircularProgress size={24} /> : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>

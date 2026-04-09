@@ -91,10 +91,10 @@ const getInitialValues = (associate) => ({
   },
   firm: {
     firmType: associate?.firm?.firmType || "",
-    gstIn: associate?.firm?.gstIn || "",
+    gstin: associate?.firm?.gstin || "",
     cin: associate?.firm?.cin || "",
     pan: associate?.firm?.pan || "",
-    existingTurnOver: associate?.firm?.existingTurnOver || "",
+    turnover: associate?.firm?.turnover || "",
     firmName: associate?.firm?.firmName || "",
     firmDescription: associate?.firm?.firmDescription || "",
     sameAsContact: associate?.firm?.sameAsContact || false,
@@ -551,7 +551,7 @@ const EditAssociateForm = () => {
           </Grid>
           <Grid size={{ xs: 4 }}>
             <TextField
-              name="firm.gstIn"
+              name="firm.gstin"
               label="GSTIN"
               fullWidth
               value={values.firm?.gstIn || ""}
@@ -578,7 +578,7 @@ const EditAssociateForm = () => {
           </Grid>
           <Grid size={{ xs: 6 }}>
             <TextField
-              name="firm.existingTurnOver"
+              name="firm.turnover"
               label="Turnover"
               fullWidth
               value={values.firm?.existingTurnOver || ""}

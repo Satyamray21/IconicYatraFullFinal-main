@@ -194,7 +194,7 @@ const TransactionSummaryDialog = ({
         "Type",
         "Party",
         "Particulars",
-        "Mode",
+        "Payment Bank",
         "Dr/Cr",
         "Amount",
     ];
@@ -445,7 +445,48 @@ const InvoicePdfDialog = ({ open, onClose, quotation, invoiceData }) => {
         </Dialog>
     );
 };
+const toHtmlParagraphs = (text = "") => {
+    const normalized = String(text || "").replace(/\r\n/g, "\n");
+    const parts = normalized
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+    return parts.map((line) => `<p>${line}</p>`).join("");
+};
 
+const normalizePolicyForEditor = (value) => {
+    if (Array.isArray(value)) {
+        if (value.length === 0) return "";
+        const merged = value.join("\n").trim();
+        if (!merged) return "";
+        // Return plain text joined with newlines, not HTML
+        return merged;
+    }
+
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return "";
+        // Strip HTML tags if any, or just return plain text
+        return trimmed.replace(/<[^>]*>/g, '');
+    }
+
+    return "";
+};
+
+const normalizePolicyState = (source = {}) => {
+    const policySource = source?.policy || source || {};
+    return {
+        inclusionPolicy: normalizePolicyForEditor(
+            policySource?.inclusionPolicy ?? policySource?.inclusions
+        ),
+        exclusionPolicy: normalizePolicyForEditor(
+            policySource?.exclusionPolicy ?? policySource?.exclusions
+        ),
+        paymentPolicy: normalizePolicyForEditor(policySource?.paymentPolicy),
+        cancellationPolicy: normalizePolicyForEditor(policySource?.cancellationPolicy),
+        termsAndConditions: normalizePolicyForEditor(policySource?.termsAndConditions),
+    };
+};
 const CustomFinalize = () => {
     // State
     const dispatch = useDispatch();
@@ -461,6 +502,7 @@ const CustomFinalize = () => {
         message: "",
         severity: "success"
     });
+    const { data: company, status } = useSelector((state) => state.companyUI);
     const [itineraryDialog, setItineraryDialog] = useState({
         open: false,
         mode: 'add',
@@ -483,7 +525,54 @@ const CustomFinalize = () => {
     const [bannerUploading, setBannerUploading] = useState(false);
     const { id } = useParams(); // business quotationId e.g. ICYR_CQ_0001
     const navigate = useNavigate();
+    // ========== EDIT 1: Add this with your other state declarations ==========
+
+
+ // Add dependencies if needed (e.g., initialData)
     const { selectedQuotation, loading: reduxLoading, error } = useSelector(state => state.customQuotation);
+    // ========== EDIT 1: Add these in correct order ==========
+
+// 1. First declare policyInputs
+const [policyInputs, setPolicyInputs] = useState(normalizePolicyState(selectedQuotation));
+
+// 2. Then declare globalSettings
+const [globalSettings, setGlobalSettings] = useState({
+    inclusionPolicy: "",
+    exclusionPolicy: "",
+    paymentPolicy: "",
+    cancellationPolicy: "",
+    termsAndConditions: ""
+});
+
+const [isLoadingGlobalSettings, setIsLoadingGlobalSettings] = useState(false);
+
+// 3. Then declare fetchGlobalSettings (after both states exist)
+const fetchGlobalSettings = async () => {
+    try {
+        setIsLoadingGlobalSettings(true);
+        const res = await axios.get("/global-settings");
+        const settings = normalizePolicyState(res.data);
+        setGlobalSettings(settings);
+        
+        // Now policyInputs exists
+        setPolicyInputs(prev => ({
+            inclusionPolicy: prev.inclusionPolicy || settings.inclusionPolicy,
+            exclusionPolicy: prev.exclusionPolicy || settings.exclusionPolicy,
+            paymentPolicy: prev.paymentPolicy || settings.paymentPolicy,
+            cancellationPolicy: prev.cancellationPolicy || settings.cancellationPolicy,
+            termsAndConditions: prev.termsAndConditions || settings.termsAndConditions
+        }));
+    } catch (err) {
+        console.error("Failed to fetch global settings:", err);
+    } finally {
+        setIsLoadingGlobalSettings(false);
+    }
+};
+
+// 4. useEffect
+useEffect(() => {
+    fetchGlobalSettings();
+}, []);
     // Dynamic quotation state from API
     const [quotation, setQuotation] = useState({
         date: "",
@@ -508,6 +597,11 @@ const CustomFinalize = () => {
             mealPlan: "",
             destination: "",
             itinerary: "",
+        },
+        finalizedVendorDetails: {
+            vendorType: "",
+            hotelVendorName: "",
+            vehicleVendorName: "",
         },
         vehicles: [],
         pricing: { discount: "", gst: "", total: "" },
@@ -551,6 +645,11 @@ const CustomFinalize = () => {
         taxType: "",
     });
     const [openEmailDialog, setOpenEmailDialog] = useState(false);
+    const [emailTemplateType, setEmailTemplateType] = useState("normal");
+    const [emailTemplateBodies, setEmailTemplateBodies] = useState({
+        normal: { subject: "", message: "" },
+        booking: { subject: "", message: "" },
+    });
     const [openBankDialog, setOpenBankDialog] = useState(false);
     const [flights, setFlights] = useState([]);
     const [openAddBankDialog, setOpenAddBankDialog] = useState(false);
@@ -659,6 +758,25 @@ const CustomFinalize = () => {
         const t = calc[key]?.finalTotal;
         return typeof t === "number" ? t : null;
     }, [selectedQuotation]);
+
+    const finalizedVendors = React.useMemo(() => {
+        const savedNames = [
+            quotation?.finalizedVendorDetails?.hotelVendorName,
+            quotation?.finalizedVendorDetails?.vehicleVendorName,
+        ]
+            .map((n) => String(n || "").trim())
+            .filter(Boolean);
+        const rows = paymentHistory || [];
+        const paymentNames = rows
+            .filter(
+                (v) =>
+                    v?.paymentType === "Payment Voucher" ||
+                    v?.drCr === "Dr"
+            )
+            .map((v) => String(v?.partyName || "").trim())
+            .filter(Boolean);
+        return Array.from(new Set([...savedNames, ...paymentNames]));
+    }, [paymentHistory, quotation?.finalizedVendorDetails]);
 
     useEffect(() => {
         const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
@@ -820,6 +938,11 @@ const CustomFinalize = () => {
                 destination: destinationDisplay,
                 itinerary: tourDetails.initalNotes || "This is only tentative schedule for sightseeing and travel...",
             },
+            finalizedVendorDetails: {
+                vendorType: tourDetails?.vendorDetails?.vendorType || "",
+                hotelVendorName: tourDetails?.vendorDetails?.hotelVendorName || "",
+                vehicleVendorName: tourDetails?.vendorDetails?.vehicleVendorName || "",
+            },
             vehicles: vehicleDetails ? [{
                 pickup: {
                     date: formatDate(vehicleDetails.pickupDate),
@@ -843,14 +966,15 @@ const CustomFinalize = () => {
                 terms: policies.termsAndConditions?.join('\n') || "No terms and conditions specified",
             },
             footer: {
-                contact: `Amit Jaiswal`,
+                contact: company?.company?.contactPerson,
                 phone: "+91 7053900957",
                 email: "info@iconicyatra.com",
                 received: "₹ 0",
                 balance: "₹ 0",
-                company: "Iconic Yatra",
-                address: "B 25 2nd Floor Sector 64 ,Noida,Uttar Pardesh ,India",
-                website: "https://www.iconicyatra.com",
+                company: company?.company?.companyName,
+                address: company?.company?.address,
+                website: company?.company?.website,
+                gst:company?.company?.gst,
             },
             hotelPricingData,
             days: transformedDays,
@@ -958,20 +1082,6 @@ const CustomFinalize = () => {
         }
     };
 
-    // Add loading state handling
-    if (reduxLoading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress />
-                <Typography variant="h6" sx={{ ml: 2 }}>
-                    Loading quotation data...
-                </Typography>
-            </Box>
-        );
-    }
-
-
-
     // Generate invoice data
     const generateInvoiceData = () => {
         return {
@@ -1024,8 +1134,109 @@ const CustomFinalize = () => {
     };
 
     // Dialog handlers
-    const handleEmailOpen = () => setOpenEmailDialog(true);
+    const handleEmailOpen = async () => {
+        if (!id) {
+            setSnackbar({
+                open: true,
+                message: "Missing quotation reference",
+                severity: "error",
+            });
+            return;
+        }
+        setEmailTemplateType("normal");
+        try {
+            const res = await axios.post(
+                `/customQT/${encodeURIComponent(id)}/email/preview`,
+                {}
+            );
+            const data = res?.data?.data || {};
+            setEmailTemplateBodies({
+                normal: {
+                    subject: data?.normal?.subject || "",
+                    message: data?.normal?.body || "",
+                },
+                booking: {
+                    subject: data?.booking?.subject || "",
+                    message: data?.booking?.body || "",
+                },
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message:
+                    e?.response?.data?.message ||
+                    "Failed to load email templates",
+                severity: "warning",
+            });
+        }
+        setOpenEmailDialog(true);
+    };
     const handleEmailClose = () => setOpenEmailDialog(false);
+    const handleEmailSend = async (values) => {
+        const to = String(values?.to || "").trim();
+        const cc = String(values?.cc || "").trim();
+        const subject = String(values?.subject || "");
+        if (!to) {
+            setSnackbar({
+                open: true,
+                message: "Please enter receiver email",
+                severity: "warning",
+            });
+            return;
+        }
+        try {
+            await axios.post(
+                `/customQT/${encodeURIComponent(id)}/email/send`,
+                {
+                    to,
+                    cc: cc || undefined,
+                    type: values?.mailType === "booking" ? "booking" : "normal",
+                    subject: subject || undefined,
+                }
+            );
+            setSnackbar({
+                open: true,
+                message: "Email sent successfully",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message:
+                    e?.response?.data?.message || "Failed to send email",
+                severity: "error",
+            });
+        }
+    };
+
+    const emailInitialValues = React.useMemo(() => {
+        const source = selectedQuotation || {};
+        const type = emailTemplateType === "booking" ? "booking" : "normal";
+        const tpl = emailTemplateBodies[type];
+        return {
+            to: "",
+            cc: "",
+            recipientName: source?.clientDetails?.clientName || quotation.customer?.name || "",
+            salutation: "Dear",
+            subject: tpl?.subject || "",
+            greetLine: "Please find below details:",
+            message: tpl?.message || "",
+            signature: "Warm Regards,\nReservation Team\nIconic Travel",
+            mailType: type,
+        };
+    }, [selectedQuotation, quotation.customer?.name, emailTemplateType, emailTemplateBodies]);
+
+    // Add loading state handling (keep after all hooks to avoid hook-order mismatch)
+    if (reduxLoading) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+                <CircularProgress />
+                <Typography variant="h6" sx={{ ml: 2 }}>
+                    Loading quotation data...
+                </Typography>
+            </Box>
+        );
+    }
 
     const handlePaymentOpen = () => {
         if (!id) {
@@ -1379,7 +1590,7 @@ const CustomFinalize = () => {
         setBranchName("");
     };
 
-    const handleBankConfirm = () => {
+    const handleBankConfirm = async (vendorPayload = {}) => {
         console.log("Bank details:", {
             accountType,
             accountName,
@@ -1388,6 +1599,33 @@ const CustomFinalize = () => {
             bankName,
             branchName,
         });
+        if (id) {
+            try {
+                await dispatch(
+                    updateCustomQuotation({
+                        quotationId: id,
+                        formData: {
+                            "tourDetails.vendorDetails.vendorType":
+                                vendorPayload.vendorType || "",
+                            "tourDetails.vendorDetails.hotelVendorName":
+                                vendorPayload.hotelVendorName || "",
+                            "tourDetails.vendorDetails.vehicleVendorName":
+                                vendorPayload.vehicleVendorName || "",
+                        },
+                    })
+                ).unwrap();
+                await refreshQuotationFromApi();
+            } catch (e) {
+                setSnackbar({
+                    open: true,
+                    message:
+                        typeof e === "string"
+                            ? e
+                            : e?.message || "Vendor details save failed",
+                    severity: "warning",
+                });
+            }
+        }
         setInvoiceGenerated(true);
         handleBankDialogClose();
     };
@@ -1602,6 +1840,7 @@ const CustomFinalize = () => {
                 handleAddServiceOpen();
                 break;
             case "Email Quotation":
+                setEmailTemplateType("normal");
                 handleEmailOpen();
                 break;
             case "Preview PDF":
@@ -1750,34 +1989,26 @@ const CustomFinalize = () => {
         {
             title: "Inclusion Policy",
             icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
-            content: (
-                <List dense>
-                    {quotation.policies.inclusions.map((i, k) => (
-                        <ListItem key={k}>
-                            <ListItemText primary={i} />
-                        </ListItem>
-                    ))}
-                </List>
-            ),
+            content: policyInputs.inclusionPolicy,
             field: "policies.inclusions",
             isArray: true,
         },
         {
             title: "Exclusion Policy",
             icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
-            content: quotation.policies.exclusions,
+            content: policyInputs.exclusionPolicy,
             field: "policies.exclusions",
         },
         {
             title: "Payment Policy",
             icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
-            content: quotation.policies.paymentPolicy,
+            content: policyInputs.paymentPolicy,
             field: "policies.paymentPolicy",
         },
         {
             title: "Cancellation & Refund",
             icon: <Warning sx={{ mr: 0.5, color: "warning.main" }} />,
-            content: quotation.policies.cancellationPolicy,
+            content: policyInputs.cancellationPolicy,
             field: "policies.cancellationPolicy",
         },
     ];
@@ -2223,6 +2454,47 @@ const CustomFinalize = () => {
                                     </Box>
                                 ))}
                             </Box>
+
+                            {/* Finalized Vendors */}
+                            {isFinalized && (
+                                <Box
+                                    mt={2}
+                                    p={2}
+                                    sx={{
+                                        backgroundColor: "grey.50",
+                                        borderRadius: 1,
+                                        borderLeft: "4px solid",
+                                        borderColor: "success.main",
+                                    }}
+                                >
+                                    <Typography
+                                        variant="subtitle2"
+                                        fontWeight="bold"
+                                        color="success.main"
+                                        sx={{ mb: 1 }}
+                                    >
+                                        Finalized Vendors
+                                    </Typography>
+
+                                    {finalizedVendors.length ? (
+                                        <Box display="flex" gap={1} flexWrap="wrap">
+                                            {finalizedVendors.map((name) => (
+                                                <Chip
+                                                    key={name}
+                                                    size="small"
+                                                    color="success"
+                                                    variant="outlined"
+                                                    label={name}
+                                                />
+                                            ))}
+                                        </Box>
+                                    ) : (
+                                        <Typography variant="body2" color="text.secondary">
+                                            No vendor payment vouchers linked yet.
+                                        </Typography>
+                                    )}
+                                </Box>
+                            )}
 
                             {/* Quotation Details */}
                             <Box mt={3}>
@@ -2695,7 +2967,7 @@ const CustomFinalize = () => {
                                             </IconButton>
                                         </Box>
                                         <Typography variant="body2">
-                                            {quotation.policies.terms}
+                                            {policyInputs.termsAndConditions}
                                         </Typography>
                                     </CardContent>
                                 </Card>
@@ -2758,7 +3030,7 @@ const CustomFinalize = () => {
                                         {quotation.footer.website}
                                     </a>
                                     <Typography variant="subtitle1" sx={{ ml: 2 }}>
-                                        GST : 09EYCPK8832C1ZC
+                                        {quotation.footer.gst}
                                     </Typography>
                                 </Box>
                             </Box>
@@ -2904,6 +3176,9 @@ const CustomFinalize = () => {
                 open={openEmailDialog}
                 onClose={handleEmailClose}
                 customer={quotation.customer}
+                onSend={handleEmailSend}
+                initialValuesOverride={emailInitialValues}
+                templateBodies={emailTemplateBodies}
             />
             <TransactionSummaryDialog
                 open={openTransactionDialog}

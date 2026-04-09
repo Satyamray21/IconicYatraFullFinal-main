@@ -327,7 +327,7 @@ const InternationalPackage = () => {
                         overflow: 'hidden'
                       }}
                     >
-                      {pkg.sector || pkg.destination}
+                      {pkg.destinationCountry || pkg.sector || pkg.destination}
                     </Typography>
 
                     <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>

@@ -67,6 +67,8 @@ const StaffEditForm = lazy(() =>
   import("../Pages/Admin/Staff/Form/EditStaff"));
 
 const CompanyWebsiteEnquiry=lazy(()=>import("../Components/CompanyWebsiteEnquiry"));
+
+const DestinationMasterForm=lazy(()=>import("../Components/DestinationMasterForm"));
 // Payments
 const PaymentsCard = lazy(() =>
   import("../Pages/Admin/Payments/PaymentsCard")
@@ -417,7 +419,7 @@ const MainRoute = () => {
 />
  <Route path="/setting/social-links" element={<SocialLinksForm />} />
   <Route path="/setting/hero-section" element={<HeroSectionForm />} />
-
+  <Route path="/destination-description" element={<DestinationMasterForm />} />
           <Route
             path="*"
             element={
