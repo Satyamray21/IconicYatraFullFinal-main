@@ -321,7 +321,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         View Terms & Conditions
     </a>
 </p>
-        <p ><b>INCLUSIONS:</b></p>
+        <p style="color:#d32f2f; font-weight:bold;" ><b>INCLUSIONS:</b></p>
         <p>${policyLines(inclusionCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
