@@ -124,7 +124,7 @@ const bankHtmlSection = (bankDetails = []) => {
     if (!Array.isArray(bankDetails) || bankDetails.length === 0) return "";
     return `
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">NET BANKING DETAILS:</p>
+        <p style="color:#d32f2f; font-weight:bold;">NET BANKING PAYMENT DETAILS:</p>
         ${bankDetails
             .map(
                 (b, i) => `
@@ -145,6 +145,7 @@ const bankHtmlSection = (bankDetails = []) => {
 
 const bankTextSection = (bankDetails = []) => {
     if (!Array.isArray(bankDetails) || bankDetails.length === 0) return "";
+
     return [
         "NET BANKING DETAILS:",
         ...bankDetails.map(
@@ -160,8 +161,19 @@ const bankTextSection = (bankDetails = []) => {
                     "-"
                 )}`
         ),
+
+        // ✅ FIXED (HTML as string)
+        `<p>
+            <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
+            <span style="color:#2e7d32;">
+                All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
+                For more details, contact your Tour Expert.
+            </span>
+        </p>`
+
     ].join("\n");
 };
+
 
 /* =========================================================
    NORMAL QUOTATION EMAIL
@@ -177,15 +189,15 @@ export const buildCustomQuotationNormalEmail = (
     const vehicle = td?.vehicleDetails || {};
     const pd = vehicle?.pickupDropDetails || {};
     const destinations = qd?.destinations || [];
-
+    const termsandCondition=safe(options?.companyTermsConditions)
     const duration = nightsAndDays(destinations);
     const totals = packageTotals(quotation);
     const key = pkgKey(quotation);
     const companyName = safe(options?.companyName, "Iconic Travel");
     const companyWebsite=safe(options?.companyWebsite);
     const termsCombined = mergePolicies(
-        toPolicyArray(td?.policies?.termsAndConditions),
-        toPolicyArray(options?.globalTermsAndConditions),
+        
+       
         toPolicyArray(options?.companyTermsConditions)
     );
     const paymentCombined = mergePolicies(
@@ -287,8 +299,8 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 
         <br/>
 
-        <p><b>HOTEL NAMES/SIMILAR</b></p>
-        <p>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</p>
+        <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
+        <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p>
 
         <br/>
 
@@ -302,31 +314,44 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 
 
         <br/>
-
-        <p><b>INCLUSIONS:</b></p>
+         <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+        <p>
+    <b>As per company website - </b>
+    <a href="${termsandCondition}" target="_blank" style="color:#1976d2; font-weight:bold;">
+        View Terms & Conditions
+    </a>
+</p>
+        <p ><b>INCLUSIONS:</b></p>
         <p>${policyLines(inclusionCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
-        <p><b>EXCLUSIONS:</b></p>
+        <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
         <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
-        <p><b>CANCELLATION POLICY:</b></p>
+        <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
         <p>${policyLines(cancellationCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
-        <p><b>PAYMENT POLICY:</b></p>
+        <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
         <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
-        <p><b>TERMS & CONDITIONS:</b></p>
-        <p>${policyLines(termsCombined).replace(/\n/g, "<br/>")}</p>
+       
+
 
         ${bankHtmlSection(bankDetails)}
+        <p>
+    <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
+    <span style="color:#2e7d32;">
+        All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
+        For more details, contact your Tour Expert.
+    </span>
+</p>
 
         <br/>
 
@@ -479,8 +504,10 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
 
         "",
         bankTextSection(bankDetails),
-
+        
         "",
+       
+
         safe(
             customText.footer,
             "For any support or update, please reply on this email thread."
