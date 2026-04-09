@@ -113,7 +113,7 @@ const CompanyForm = () => {
     }
 
     if (values.signatureImage) {
-      formData.append("signatureImage", values.signatureImage);
+      formData.append("signature", values.signatureImage);
     }
 
     if (isEditMode) {
