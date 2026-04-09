@@ -16,7 +16,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { fetchDomesticPackages } from "../../Features/packageSlice";
 import PackageCard from "../../Components/PackageCard";
-import { BASE_URL } from "../../Utils/axiosInstance";
+import { BASE_URL, destinationAxios } from "../../Utils/axiosInstance";
 import { Pagination } from "@mui/material";
 import InquiryFormDialog from "../../Components/InquiryFormDialog";
 
@@ -29,6 +29,8 @@ const slugifyValue = (value = "") =>
     .replace(/&/g, "and")
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-");
+const DEFAULT_DOMESTIC_DESCRIPTION =
+  "Explore the beauty of India with our curated domestic tours";
 
 const Domestic = () => {
   const { destination } = useParams();
@@ -38,6 +40,9 @@ const Domestic = () => {
   const [page, setPage] = useState(1);
   const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
   const [selectedPackageTitle, setSelectedPackageTitle] = useState("");
+  const [domesticDescriptionsBySlug, setDomesticDescriptionsBySlug] = useState(
+    {}
+  );
 
   const {
     domestic: packages = [],
@@ -54,6 +59,39 @@ const Domestic = () => {
     const limit = destination ? 200 : 9;
     dispatch(fetchDomesticPackages({ page, limit }));
   }, [dispatch, page, destination]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchDomesticDescriptions = async () => {
+      try {
+        const res = await destinationAxios.get("/?tourType=Domestic");
+        if (!isMounted) return;
+
+        const map = (Array.isArray(res.data) ? res.data : []).reduce(
+          (acc, item) => {
+            const sector = item?.sector?.trim();
+            if (!sector) return acc;
+            acc[slugifyValue(sector)] = item?.description?.trim() || "";
+            return acc;
+          },
+          {}
+        );
+
+        setDomesticDescriptionsBySlug(map);
+      } catch (error) {
+        if (isMounted) {
+          setDomesticDescriptionsBySlug({});
+        }
+      }
+    };
+
+    fetchDomesticDescriptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // ✅ Handle destination/sector filter from route
   useEffect(() => {
@@ -92,6 +130,11 @@ const Domestic = () => {
         );
 
   const currentPackages = filteredPackages || [];
+  const selectedDescription =
+    selectedDestination === "All"
+      ? DEFAULT_DOMESTIC_DESCRIPTION
+      : domesticDescriptionsBySlug[slugifyValue(selectedDestination)] ||
+        DEFAULT_DOMESTIC_DESCRIPTION;
 
   // ✅ Navigate to details page (pass package data)
   const handleCardClick = (pkg) => {
@@ -213,7 +256,7 @@ const Domestic = () => {
             />
 
             <Typography variant="subtitle1" color="text.secondary">
-              Discover the best domestic travel packages
+              {selectedDescription}
             </Typography>
           </Box>
 
