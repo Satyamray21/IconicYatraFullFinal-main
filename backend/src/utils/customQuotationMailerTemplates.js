@@ -180,6 +180,7 @@ export const buildCustomQuotationNormalEmail = (
     const duration = nightsAndDays(destinations);
     const totals = packageTotals(quotation);
     const key = pkgKey(quotation);
+    const companyName = safe(options?.companyName, "Iconic Travel");
     const termsCombined = mergePolicies(
         toPolicyArray(td?.policies?.termsAndConditions),
         toPolicyArray(options?.globalTermsAndConditions),
@@ -188,6 +189,18 @@ export const buildCustomQuotationNormalEmail = (
     const paymentCombined = mergePolicies(
         toPolicyArray(td?.policies?.paymentPolicy),
         toPolicyArray(options?.globalPaymentPolicy)
+    );
+    const inclusionCombined = mergePolicies(
+        toPolicyArray(td?.policies?.inclusionPolicy),
+        toPolicyArray(options?.globalInclusions)
+    );
+    const exclusionCombined = mergePolicies(
+        toPolicyArray(td?.policies?.exclusionPolicy),
+        toPolicyArray(options?.globalExclusions)
+    );
+    const cancellationCombined = mergePolicies(
+        toPolicyArray(td?.policies?.cancellationPolicy),
+        toPolicyArray(options?.globalCancellationPolicy)
     );
     const bankDetails = options?.bankDetails || [];
 
@@ -199,7 +212,7 @@ export const buildCustomQuotationNormalEmail = (
         </p>
 
         <p style="color:red; font-weight:bold;">
-    ${safe(customText.opening, "GREETING FROM ICONIC TRAVEL!!!")}
+    ${safe(customText.opening, `GREETING FROM ${companyName.toUpperCase()}!!!`)}
 </p>
 
 
@@ -260,8 +273,6 @@ export const buildCustomQuotationNormalEmail = (
 
         <br/>
 
->
-
         <br/>
 
         <p><b>HOTEL NAMES/SIMILAR</b></p>
@@ -281,17 +292,17 @@ export const buildCustomQuotationNormalEmail = (
         <br/>
 
         <p><b>INCLUSIONS:</b></p>
-        <p>${policyLines(td?.policies?.inclusionPolicy).replace(/\n/g, "<br/>")}</p>
+        <p>${policyLines(inclusionCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
         <p><b>EXCLUSIONS:</b></p>
-        <p>${policyLines(td?.policies?.exclusionPolicy).replace(/\n/g, "<br/>")}</p>
+        <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
         <p><b>CANCELLATION POLICY:</b></p>
-        <p>${policyLines(td?.policies?.cancellationPolicy).replace(/\n/g, "<br/>")}</p>
+        <p>${policyLines(cancellationCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
@@ -310,7 +321,7 @@ export const buildCustomQuotationNormalEmail = (
         <p>
             ${safe(
                 customText.signature,
-                "Warm Regards<br/>Reservation Team<br/>Iconic Travel"
+                `Warm Regards<br/>Reservation Team<br/>${companyName}`
             ).replace(/\n/g, "<br/>")}
         </p>
 
@@ -331,6 +342,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
 
     const guests = guestSummary(qd);
     const duration = nightsAndDays(qd.destinations);
+    const companyName = safe(customText.companyName, "Iconic Travel");
 
     const pkgKeyVal = pkgKey(quotation);
     const totals = packageTotals(quotation);
@@ -361,13 +373,25 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         toPolicyArray(td?.policies?.paymentPolicy),
         toPolicyArray(customText.globalPaymentPolicy)
     );
+    const inclusionCombined = mergePolicies(
+        toPolicyArray(td?.policies?.inclusionPolicy),
+        toPolicyArray(customText.globalInclusions)
+    );
+    const exclusionCombined = mergePolicies(
+        toPolicyArray(td?.policies?.exclusionPolicy),
+        toPolicyArray(customText.globalExclusions)
+    );
+    const cancellationCombined = mergePolicies(
+        toPolicyArray(td?.policies?.cancellationPolicy),
+        toPolicyArray(customText.globalCancellationPolicy)
+    );
 
     return [
         `Dear ${safe(quotation?.clientDetails?.clientName, "Guest")},`,
 
         safe(
             customText.thankYou,
-            "Thank you for choosing Iconic Travel. Your package details are shared below."
+            `Thank you for choosing ${companyName}. Your package details are shared below.`
         ),
 
         "",
@@ -415,7 +439,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
 
         "",
         "INCLUSIONS OF TOUR:",
-        policyLines(td?.policies?.inclusionPolicy),
+        policyLines(inclusionCombined),
 
         "",
         "HOTEL NAMES/SIMILAR",
@@ -427,11 +451,11 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
 
         "",
         "COST EXCLUSIONS:",
-        policyLines(td?.policies?.exclusionPolicy),
+        policyLines(exclusionCombined),
 
         "",
         "CANCELLATION POLICY:",
-        policyLines(td?.policies?.cancellationPolicy),
+        policyLines(cancellationCombined),
 
         "",
         "PAYMENT POLICY:",
@@ -453,7 +477,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         "",
         safe(
             customText.signature,
-            "Warm Regards,\nReservation Team\nIconic Travel"
+            `Warm Regards,\nReservation Team\n${companyName}`
         ),
     ]
         .filter((x) => x !== undefined && x !== null && String(x).trim() !== "")

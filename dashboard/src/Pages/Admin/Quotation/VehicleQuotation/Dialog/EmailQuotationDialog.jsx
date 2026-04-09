@@ -8,6 +8,9 @@ import {
   TextField,
   Grid,
   MenuItem,
+  Paper,
+  Typography,
+  Box,
 } from "@mui/material";
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
@@ -182,16 +185,15 @@ const EmailQuotationDialog = ({
                   />
                 </Grid>
                 <Grid size={{xs:12}}>
-                  <Field
-                    as={TextField}
-                    name="message"
-                    label="Message"
-                    multiline
-                    minRows={4}
-                    fullWidth
-                    error={touched.message && Boolean(errors.message)}
-                    helperText={touched.message && errors.message}
-                  />
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Live Preview
+                  </Typography>
+                  <Paper variant="outlined" sx={{ p: 2, maxHeight: 280, overflow: "auto" }}>
+                    <Box
+                      sx={{ "& p": { m: 0, mb: 1 } }}
+                      dangerouslySetInnerHTML={{ __html: values.message || "<p>No preview</p>" }}
+                    />
+                  </Paper>
                 </Grid>
                 <Grid size={{xs:12}}>
                   <Field
