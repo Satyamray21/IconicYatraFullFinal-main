@@ -24,10 +24,8 @@ import ExpandMore from "@mui/icons-material/ExpandMore";
 import MenuIcon from "@mui/icons-material/Menu";
 import logo from "../assets/Logo/logoiconic1.png";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  fetchDomesticPackages,
-  fetchInternationalPackages,
-} from "../Features/packageSlice";
+import { fetchInternationalPackages } from "../Features/packageSlice";
+import { destinationAxios } from "../Utils/axiosInstance";
 
 const slugifySector = (value = "") =>
   String(value)
@@ -45,6 +43,7 @@ const Navbar = () => {
   const isMobile = useMediaQuery("(max-width:900px)");
   const location = useLocation();
   const dispatch = useDispatch();
+  const [domesticDestinations, setDomesticDestinations] = useState([]);
 
   const openDomesticMenu = (event) => {
     setDomesticAnchorEl(event.currentTarget);
@@ -72,18 +71,40 @@ const Navbar = () => {
   const { data: company } = useSelector(
     (state) => state.companyUI
   );
-  const { domestic: domesticPackages = [], international: internationalPackages = [] } =
+  const { international: internationalPackages = [] } =
     useSelector((state) => state.packages);
 
   useEffect(() => {
-    dispatch(fetchDomesticPackages({ page: 1, limit: 200 }));
     dispatch(fetchInternationalPackages());
   }, [dispatch]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchDomesticDestinations = async () => {
+      try {
+        const res = await destinationAxios.get("/?tourType=Domestic");
+        if (isMounted) {
+          setDomesticDestinations(Array.isArray(res.data) ? res.data : []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setDomesticDestinations([]);
+        }
+      }
+    };
+
+    fetchDomesticDestinations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const domesticSectors = useMemo(() => {
     const seen = new Set();
-    return domesticPackages
-      .map((pkg) => pkg?.sector?.trim())
+    return domesticDestinations
+      .map((item) => item?.sector?.trim())
       .filter((sector) => {
         if (!sector) return false;
         const key = sector.toLowerCase();
@@ -92,7 +113,7 @@ const Navbar = () => {
         return true;
       })
       .sort((a, b) => a.localeCompare(b));
-  }, [domesticPackages]);
+  }, [domesticDestinations]);
 
   const internationalSectors = useMemo(() => {
     const seen = new Set();

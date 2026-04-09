@@ -22,9 +22,18 @@ export const addDestination = async (req, res) => {
 // ✅ GET ALL DESTINATIONS
 export const getDestinations = async (req, res) => {
   try {
-    const { tourType } = req.query;
+    const { tourType, sector, country } = req.query;
 
-    const data = await DestinationMaster.find({ tourType });
+    const filter = {};
+    if (tourType) filter.tourType = tourType;
+    if (tourType === "Domestic" && sector) {
+      filter.sector = new RegExp(`^${sector.trim()}$`, "i");
+    }
+    if (tourType === "International" && country) {
+      filter.country = new RegExp(`^${country.trim()}$`, "i");
+    }
+
+    const data = await DestinationMaster.find(filter);
 
     res.json(data);
   } catch (err) {
