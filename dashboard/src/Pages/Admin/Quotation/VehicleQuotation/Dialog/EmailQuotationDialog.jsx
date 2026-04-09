@@ -15,19 +15,22 @@ import * as Yup from "yup";
 const EmailQuotationDialog = ({
   open,
   onClose,
-  onSend,
+  onSend = () => {},
+  onCompanyChange,
   initialValuesOverride,
   templateBodies,
+  companyOptions = [],
 }) => {
   const validationSchema = Yup.object({
     to: Yup.string().email("Invalid email").required("Required"),
     cc: Yup.string().email("Invalid email").nullable(),
-    recipientName: Yup.string().required("Required"),
-    salutation: Yup.string().required("Required"),
     subject: Yup.string().required("Required"),
-    greetLine: Yup.string().required("Required"),
     message: Yup.string().required("Required"),
-    signature: Yup.string().required("Required"),
+    companyId:
+      companyOptions.length > 0
+        ? Yup.string().required("Select company")
+        : Yup.string().nullable(),
+    senderAccount: Yup.string().required("Select sender email"),
   });
 
   const baseInitialValues = {
@@ -40,6 +43,8 @@ const EmailQuotationDialog = ({
     message: "",
     signature: "",
     mailType: "normal",
+    senderAccount: "gmail1",
+    companyId: "",
   };
   const initialValues = { ...baseInitialValues, ...(initialValuesOverride || {}) };
 
@@ -82,6 +87,47 @@ const EmailQuotationDialog = ({
                   </Grid>
                 )}
                 <Grid size={{xs:12, sm:6}}>
+                  <TextField
+                    select
+                    fullWidth
+                    name="companyId"
+                    label="Company"
+                    value={values.companyId || ""}
+                    onChange={async (e) => {
+                      const companyId = e.target.value;
+                      setFieldValue("companyId", companyId);
+                      if (typeof onCompanyChange === "function") {
+                        const nextType = values.mailType || "normal";
+                        const tpl = await onCompanyChange(companyId, nextType);
+                        if (tpl?.subject !== undefined) setFieldValue("subject", tpl.subject);
+                        if (tpl?.message !== undefined) setFieldValue("message", tpl.message);
+                      }
+                    }}
+                    error={touched.companyId && Boolean(errors.companyId)}
+                    helperText={touched.companyId && errors.companyId}
+                  >
+                    {companyOptions.map((company) => (
+                      <MenuItem key={company._id} value={company._id}>
+                        {company.companyName}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid size={{xs:12, sm:6}}>
+                  <Field
+                    as={TextField}
+                    select
+                    fullWidth
+                    name="senderAccount"
+                    label="Send From"
+                    error={touched.senderAccount && Boolean(errors.senderAccount)}
+                    helperText={touched.senderAccount && errors.senderAccount}
+                  >
+                    <MenuItem value="gmail1">Gmail 1</MenuItem>
+                    <MenuItem value="gmail2">Gmail 2</MenuItem>
+                  </Field>
+                </Grid>
+                <Grid size={{xs:12, sm:6}}>
                   <Field
                     as={TextField}
                     name="to"
@@ -107,8 +153,6 @@ const EmailQuotationDialog = ({
                     name="recipientName"
                     label="Recipient Name"
                     fullWidth
-                    error={touched.recipientName && Boolean(errors.recipientName)}
-                    helperText={touched.recipientName && errors.recipientName}
                   />
                 </Grid>
                 <Grid size={{xs:12, sm:6}}>
@@ -117,8 +161,6 @@ const EmailQuotationDialog = ({
                     name="salutation"
                     label="Salutation"
                     fullWidth
-                    error={touched.salutation && Boolean(errors.salutation)}
-                    helperText={touched.salutation && errors.salutation}
                   />
                 </Grid>
                 <Grid size={{xs:12}}>
@@ -137,8 +179,6 @@ const EmailQuotationDialog = ({
                     name="greetLine"
                     label="Greet Line"
                     fullWidth
-                    error={touched.greetLine && Boolean(errors.greetLine)}
-                    helperText={touched.greetLine && errors.greetLine}
                   />
                 </Grid>
                 <Grid size={{xs:12}}>
@@ -159,8 +199,6 @@ const EmailQuotationDialog = ({
                     name="signature"
                     label="Signature"
                     fullWidth
-                    error={touched.signature && Boolean(errors.signature)}
-                    helperText={touched.signature && errors.signature}
                   />
                 </Grid>
               </Grid>

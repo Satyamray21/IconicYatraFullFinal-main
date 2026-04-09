@@ -106,10 +106,70 @@ const itineraryLines = (itinerary = []) =>
 const policyLines = (arr = []) =>
     (arr || []).map((x) => safe(x)).filter(Boolean).join("\n");
 
+const toPolicyArray = (value) => {
+    if (Array.isArray(value)) return value.map((x) => safe(x)).filter(Boolean);
+    if (typeof value === "string") {
+        return value
+            .split("\n")
+            .map((x) => safe(x))
+            .filter(Boolean);
+    }
+    return [];
+};
+
+const mergePolicies = (...items) => [...new Set(items.flat().filter(Boolean))];
+
+const bankHtmlSection = (bankDetails = []) => {
+    if (!Array.isArray(bankDetails) || bankDetails.length === 0) return "";
+    return `
+        <br/>
+        <p style="color:#d32f2f; font-weight:bold;">NET BANKING DETAILS:</p>
+        ${bankDetails
+            .map(
+                (b, i) => `
+                    <div style="margin-bottom:8px;">
+                        <b>${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
+                    b?.branchName,
+                    "Branch"
+                )})</b><br/>
+                        Account Holder: ${safe(b?.accountHolderName, "-")}<br/>
+                        Account Number: ${safe(b?.accountNumber, "-")}<br/>
+                        IFSC: ${safe(b?.ifscCode, "-")}
+                    </div>
+                `
+            )
+            .join("")}
+    `;
+};
+
+const bankTextSection = (bankDetails = []) => {
+    if (!Array.isArray(bankDetails) || bankDetails.length === 0) return "";
+    return [
+        "NET BANKING DETAILS:",
+        ...bankDetails.map(
+            (b, i) =>
+                `${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
+                    b?.branchName,
+                    "Branch"
+                )}) | A/C Holder: ${safe(
+                    b?.accountHolderName,
+                    "-"
+                )} | A/C No: ${safe(b?.accountNumber, "-")} | IFSC: ${safe(
+                    b?.ifscCode,
+                    "-"
+                )}`
+        ),
+    ].join("\n");
+};
+
 /* =========================================================
    NORMAL QUOTATION EMAIL
 ========================================================= */
-export const buildCustomQuotationNormalEmail = (quotation, customText = {}) => {
+export const buildCustomQuotationNormalEmail = (
+    quotation,
+    customText = {},
+    options = {}
+) => {
     const td = quotation?.tourDetails || {};
     const qd = td?.quotationDetails || {};
     const rooms = qd?.rooms || {};
@@ -120,6 +180,16 @@ export const buildCustomQuotationNormalEmail = (quotation, customText = {}) => {
     const duration = nightsAndDays(destinations);
     const totals = packageTotals(quotation);
     const key = pkgKey(quotation);
+    const termsCombined = mergePolicies(
+        toPolicyArray(td?.policies?.termsAndConditions),
+        toPolicyArray(options?.globalTermsAndConditions),
+        toPolicyArray(options?.companyTermsConditions)
+    );
+    const paymentCombined = mergePolicies(
+        toPolicyArray(td?.policies?.paymentPolicy),
+        toPolicyArray(options?.globalPaymentPolicy)
+    );
+    const bankDetails = options?.bankDetails || [];
 
     return `
     <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
@@ -226,7 +296,14 @@ export const buildCustomQuotationNormalEmail = (quotation, customText = {}) => {
         <br/>
 
         <p><b>PAYMENT POLICY:</b></p>
-        <p>${policyLines(td?.policies?.paymentPolicy).replace(/\n/g, "<br/>")}</p>
+        <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
+
+        <br/>
+
+        <p><b>TERMS & CONDITIONS:</b></p>
+        <p>${policyLines(termsCombined).replace(/\n/g, "<br/>")}</p>
+
+        ${bankHtmlSection(bankDetails)}
 
         <br/>
 
@@ -273,6 +350,17 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         customText.nextPayableAmount !== undefined
             ? toNum(customText.nextPayableAmount)
             : dueAmount;
+
+    const bankDetails = customText.bankDetails || [];
+    const termsCombined = mergePolicies(
+        toPolicyArray(td?.policies?.termsAndConditions),
+        toPolicyArray(customText.globalTermsAndConditions),
+        toPolicyArray(customText.companyTermsConditions)
+    );
+    const paymentCombined = mergePolicies(
+        toPolicyArray(td?.policies?.paymentPolicy),
+        toPolicyArray(customText.globalPaymentPolicy)
+    );
 
     return [
         `Dear ${safe(quotation?.clientDetails?.clientName, "Guest")},`,
@@ -347,7 +435,14 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
 
         "",
         "PAYMENT POLICY:",
-        policyLines(td?.policies?.paymentPolicy),
+        policyLines(paymentCombined),
+
+        "",
+        "TERMS & CONDITIONS:",
+        policyLines(termsCombined),
+
+        "",
+        bankTextSection(bankDetails),
 
         "",
         safe(
