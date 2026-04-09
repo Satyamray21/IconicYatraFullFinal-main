@@ -28,6 +28,8 @@ const CompanyForm = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { id } = useParams();
+  const [logoPreview, setLogoPreview] = React.useState(null);
+  const [signaturePreview, setSignaturePreview] = React.useState(null);
 
   const { loading, success, error, company } = useSelector(
     (state) => state.company
@@ -46,6 +48,14 @@ const CompanyForm = () => {
     }
 
   }, [dispatch, id, isEditMode]);
+  useEffect(() => {
+  if (company) {
+    setLogoPreview(company.logo || null);
+    setSignaturePreview(
+      company?.authorizedSignatory?.signatureImage || null
+    );
+  }
+}, [company]);
 
   /* ================= SUCCESS ================= */
 
@@ -268,13 +278,19 @@ const CompanyForm = () => {
                 <Button variant="outlined" component="label" fullWidth>
                   Upload Logo
                   <input
-                    hidden
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) =>
-                      setFieldValue("logo", e.target.files[0])
-                    }
-                  />
+  hidden
+  type="file"
+  accept="image/*"
+  onChange={(e) => {
+    const file = e.target.files[0];
+    setFieldValue("logo", file);
+
+    if (file) {
+      setLogoPreview(URL.createObjectURL(file));
+    }
+  }}
+/>
+
                 </Button>
               </Grid>
 
@@ -282,15 +298,41 @@ const CompanyForm = () => {
                 <Button variant="outlined" component="label" fullWidth>
                   Upload Signature
                   <input
-                    hidden
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) =>
-                      setFieldValue("signatureImage", e.target.files[0])
-                    }
-                  />
+  hidden
+  type="file"
+  accept="image/*"
+  onChange={(e) => {
+    const file = e.target.files[0];
+    setFieldValue("signatureImage", file);
+
+    if (file) {
+      setSignaturePreview(URL.createObjectURL(file));
+    }
+  }}
+/>
+
                 </Button>
               </Grid>
+{logoPreview && (
+  <Grid item xs={6}>
+    <Typography variant="body2">Logo Preview:</Typography>
+    <img
+      src={logoPreview}
+      alt="logo"
+      style={{ width: "100%", maxHeight: 150, objectFit: "contain" }}
+    />
+  </Grid>
+)}
+{signaturePreview && (
+  <Grid item xs={6}>
+    <Typography variant="body2">Signature Preview:</Typography>
+    <img
+      src={signaturePreview}
+      alt="signature"
+      style={{ width: "100%", maxHeight: 150, objectFit: "contain" }}
+    />
+  </Grid>
+)}
 
               <Grid item xs={12} md={6}>
                 <Button
