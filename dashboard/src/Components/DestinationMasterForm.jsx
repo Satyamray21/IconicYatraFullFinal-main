@@ -8,7 +8,7 @@ import {
   Card,
   CardContent,
   TextField,
-  Button
+  Button,
 } from "@mui/material";
 
 import { ToastContainer, toast } from "react-toastify";
@@ -39,7 +39,7 @@ const DestinationMasterForm = () => {
 
     try {
       const res = await axios.get(
-        `/destinations/available?tourType=${tourType}`
+        `/destinations/available?tourType=${tourType}`,
       );
 
       // SAVE CACHE
@@ -49,21 +49,17 @@ const DestinationMasterForm = () => {
           ...res.data,
           tourTypeDescription:
             (res.data?.used || []).find((item) =>
-              tourType === "Domestic"
-                ? !item?.sector
-                : !item?.country
-            )?.tourTypeDescription || ""
-        }
+              tourType === "Domestic" ? !item?.sector : !item?.country,
+            )?.tourTypeDescription || "",
+        },
       }));
 
       setAvailableDestinations(res.data.available || []);
       setUsedDestinations(res.data.used || []);
       setTourTypeDescription(
         (res.data?.used || []).find((item) =>
-          tourType === "Domestic"
-            ? !item?.sector
-            : !item?.country
-        )?.tourTypeDescription || ""
+          tourType === "Domestic" ? !item?.sector : !item?.country,
+        )?.tourTypeDescription || "",
       );
     } catch (err) {
       console.error(err);
@@ -75,7 +71,7 @@ const DestinationMasterForm = () => {
     try {
       await axios.put(`/destinations/tour-type-description`, {
         tourType,
-        tourTypeDescription
+        tourTypeDescription,
       });
       toast.success("Tour type description updated ✅");
 
@@ -83,8 +79,8 @@ const DestinationMasterForm = () => {
         ...prev,
         [tourType]: {
           ...(prev[tourType] || {}),
-          tourTypeDescription
-        }
+          tourTypeDescription,
+        },
       }));
     } catch (err) {
       console.error(err);
@@ -101,7 +97,7 @@ const DestinationMasterForm = () => {
   // ---------------------------
   const handleDescriptionChange = (id, value) => {
     const updated = usedDestinations.map((item) =>
-      item._id === id ? { ...item, description: value } : item
+      item._id === id ? { ...item, description: value } : item,
     );
     setUsedDestinations(updated);
   };
@@ -112,7 +108,7 @@ const DestinationMasterForm = () => {
   const handleSave = async (item) => {
     try {
       await axios.put(`/destinations/update/${item._id}`, {
-        description: item.description
+        description: item.description,
       });
 
       toast.success("Description updated ✅");
@@ -122,12 +118,9 @@ const DestinationMasterForm = () => {
         ...prev,
         [tourType]: {
           ...prev[tourType],
-          used: prev[tourType].used.map((d) =>
-            d._id === item._id ? item : d
-          )
-        }
+          used: prev[tourType].used.map((d) => (d._id === item._id ? item : d)),
+        },
       }));
-
     } catch (err) {
       console.error(err);
       toast.error("Update failed ❌");
@@ -139,7 +132,7 @@ const DestinationMasterForm = () => {
       <ToastContainer position="top-right" autoClose={2000} />
 
       <Typography variant="h5" mb={2}>
-        Destination Master (CRM)
+        Destination Description
       </Typography>
 
       {/* TOUR TYPE */}
@@ -182,7 +175,7 @@ const DestinationMasterForm = () => {
 
       {/* ---------------- USED DESTINATIONS ---------------- */}
       {usedDestinations.filter((item) =>
-        tourType === "Domestic" ? !!item?.sector : !!item?.country
+        tourType === "Domestic" ? !!item?.sector : !!item?.country,
       ).length > 0 && (
         <>
           <Typography variant="h6" mb={2}>
@@ -191,49 +184,45 @@ const DestinationMasterForm = () => {
 
           {usedDestinations
             .filter((item) =>
-              tourType === "Domestic" ? !!item?.sector : !!item?.country
+              tourType === "Domestic" ? !!item?.sector : !!item?.country,
             )
             .map((item) => (
-            <Card key={item._id} sx={{ mb: 2 }}>
-              <CardContent>
-                <Typography fontWeight="bold" mb={1}>
-                  {tourType === "Domestic"
-                    ? item.sector
-                    : item.country}
-                </Typography>
+              <Card key={item._id} sx={{ mb: 2 }}>
+                <CardContent>
+                  <Typography fontWeight="bold" mb={1}>
+                    {tourType === "Domestic" ? item.sector : item.country}
+                  </Typography>
 
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={2}
-                  placeholder="Enter description..."
-                  value={item.description || ""}
-                  onChange={(e) =>
-                    handleDescriptionChange(item._id, e.target.value)
-                  }
-                />
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={2}
+                    placeholder="Enter description..."
+                    value={item.description || ""}
+                    onChange={(e) =>
+                      handleDescriptionChange(item._id, e.target.value)
+                    }
+                  />
 
-                <Button
-                  variant="contained"
-                  size="small"
-                  sx={{ mt: 1 }}
-                  onClick={() => handleSave(item)}
-                >
-                  Save
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                  <Button
+                    variant="contained"
+                    size="small"
+                    sx={{ mt: 1 }}
+                    onClick={() => handleSave(item)}
+                  >
+                    Save
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
         </>
       )}
 
       {/* EMPTY STATE */}
       {tourType &&
         usedDestinations.filter((item) =>
-          tourType === "Domestic" ? !!item?.sector : !!item?.country
-        ).length === 0 && (
-        <Typography>No destinations found</Typography>
-      )}
+          tourType === "Domestic" ? !!item?.sector : !!item?.country,
+        ).length === 0 && <Typography>No destinations found</Typography>}
     </Box>
   );
 };
