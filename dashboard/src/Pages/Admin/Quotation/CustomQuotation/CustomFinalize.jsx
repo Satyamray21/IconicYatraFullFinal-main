@@ -573,6 +573,19 @@ const fetchGlobalSettings = async () => {
 useEffect(() => {
     fetchGlobalSettings();
 }, []);
+useEffect(() => {
+    const fetchMailCompanies = async () => {
+        try {
+            const res = await axios.get("/company");
+            const list = res?.data?.data || [];
+            setMailCompanies(Array.isArray(list) ? list : []);
+        } catch (err) {
+            console.error("Failed to fetch companies for email:", err);
+            setMailCompanies([]);
+        }
+    };
+    fetchMailCompanies();
+}, []);
     // Dynamic quotation state from API
     const [quotation, setQuotation] = useState({
         date: "",
@@ -650,6 +663,7 @@ useEffect(() => {
         normal: { subject: "", message: "" },
         booking: { subject: "", message: "" },
     });
+    const [mailCompanies, setMailCompanies] = useState([]);
     const [openBankDialog, setOpenBankDialog] = useState(false);
     const [flights, setFlights] = useState([]);
     const [openAddBankDialog, setOpenAddBankDialog] = useState(false);
@@ -1134,6 +1148,30 @@ useEffect(() => {
     };
 
     // Dialog handlers
+    const refreshEmailTemplates = async (companyId) => {
+        const selectedCompany = mailCompanies.find((c) => c?._id === companyId);
+        const res = await axios.post(
+            `/customQT/${encodeURIComponent(id)}/email/preview`,
+            {
+                companyId: companyId || undefined,
+                companyName: selectedCompany?.companyName || undefined,
+            }
+        );
+        const data = res?.data?.data || {};
+        const nextTemplates = {
+            normal: {
+                subject: data?.normal?.subject || "",
+                message: data?.normal?.body || "",
+            },
+            booking: {
+                subject: data?.booking?.subject || "",
+                message: data?.booking?.body || "",
+            },
+        };
+        setEmailTemplateBodies(nextTemplates);
+        return nextTemplates;
+    };
+
     const handleEmailOpen = async () => {
         if (!id) {
             setSnackbar({
@@ -1144,22 +1182,9 @@ useEffect(() => {
             return;
         }
         setEmailTemplateType("normal");
+        const defaultCompany = mailCompanies?.[0];
         try {
-            const res = await axios.post(
-                `/customQT/${encodeURIComponent(id)}/email/preview`,
-                {}
-            );
-            const data = res?.data?.data || {};
-            setEmailTemplateBodies({
-                normal: {
-                    subject: data?.normal?.subject || "",
-                    message: data?.normal?.body || "",
-                },
-                booking: {
-                    subject: data?.booking?.subject || "",
-                    message: data?.booking?.body || "",
-                },
-            });
+            await refreshEmailTemplates(defaultCompany?._id);
         } catch (e) {
             setSnackbar({
                 open: true,
@@ -1176,6 +1201,8 @@ useEffect(() => {
         const to = String(values?.to || "").trim();
         const cc = String(values?.cc || "").trim();
         const subject = String(values?.subject || "");
+        const selectedCompany =
+            mailCompanies.find((c) => c?._id === values?.companyId) || null;
         if (!to) {
             setSnackbar({
                 open: true,
@@ -1192,6 +1219,9 @@ useEffect(() => {
                     cc: cc || undefined,
                     type: values?.mailType === "booking" ? "booking" : "normal",
                     subject: subject || undefined,
+                    senderAccount: values?.senderAccount || "gmail1",
+                    companyId: values?.companyId || undefined,
+                    companyName: selectedCompany?.companyName || undefined,
                 }
             );
             setSnackbar({
@@ -1223,8 +1253,10 @@ useEffect(() => {
             message: tpl?.message || "",
             signature: "Warm Regards,\nReservation Team\nIconic Travel",
             mailType: type,
+            senderAccount: "gmail1",
+            companyId: mailCompanies?.[0]?._id || "",
         };
-    }, [selectedQuotation, quotation.customer?.name, emailTemplateType, emailTemplateBodies]);
+    }, [selectedQuotation, quotation.customer?.name, emailTemplateType, emailTemplateBodies, mailCompanies]);
 
     // Add loading state handling (keep after all hooks to avoid hook-order mismatch)
     if (reduxLoading) {
@@ -3177,8 +3209,14 @@ useEffect(() => {
                 onClose={handleEmailClose}
                 customer={quotation.customer}
                 onSend={handleEmailSend}
+                onCompanyChange={async (companyId, mailType) => {
+                    const templates = await refreshEmailTemplates(companyId);
+                    const type = mailType === "booking" ? "booking" : "normal";
+                    return templates?.[type] || { subject: "", message: "" };
+                }}
                 initialValuesOverride={emailInitialValues}
                 templateBodies={emailTemplateBodies}
+                companyOptions={mailCompanies}
             />
             <TransactionSummaryDialog
                 open={openTransactionDialog}
