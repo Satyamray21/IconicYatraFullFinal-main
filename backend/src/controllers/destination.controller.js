@@ -4,13 +4,14 @@ import Package from "../models/package.model.js";
 // ✅ ADD DESTINATION
 export const addDestination = async (req, res) => {
   try {
-    const { tourType, sector, country, description } = req.body;
+    const { tourType, sector, country, description, tourTypeDescription } = req.body;
 
     const data = await DestinationMaster.create({
       tourType,
       sector: tourType === "Domestic" ? sector : "",
       country: tourType === "International" ? country : "",
-      description
+      description,
+      tourTypeDescription: tourTypeDescription || ""
     });
 
     res.json(data);
@@ -155,6 +156,36 @@ export const updateDescription = async (req, res) => {
 
     res.json(updated);
 
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const upsertTourTypeDescription = async (req, res) => {
+  try {
+    const { tourType, tourTypeDescription } = req.body;
+
+    if (!["Domestic", "International"].includes(tourType)) {
+      return res.status(400).json({ message: "Invalid tourType" });
+    }
+
+    const filter =
+      tourType === "Domestic"
+        ? { tourType, sector: { $in: ["", null] } }
+        : { tourType, country: { $in: ["", null] } };
+
+    const update =
+      tourType === "Domestic"
+        ? { tourType, sector: "", country: "", tourTypeDescription: tourTypeDescription || "" }
+        : { tourType, sector: "", country: "", tourTypeDescription: tourTypeDescription || "" };
+
+    const updated = await DestinationMaster.findOneAndUpdate(
+      filter,
+      update,
+      { new: true, upsert: true }
+    );
+
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

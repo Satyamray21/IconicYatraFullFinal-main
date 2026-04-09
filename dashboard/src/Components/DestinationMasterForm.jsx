@@ -18,6 +18,7 @@ const DestinationMasterForm = () => {
   const [tourType, setTourType] = useState("");
   const [availableDestinations, setAvailableDestinations] = useState([]);
   const [usedDestinations, setUsedDestinations] = useState([]);
+  const [tourTypeDescription, setTourTypeDescription] = useState("");
 
   // 🔥 CACHE (IMPORTANT)
   const [cache, setCache] = useState({});
@@ -32,6 +33,7 @@ const DestinationMasterForm = () => {
     if (cache[tourType]) {
       setAvailableDestinations(cache[tourType].available || []);
       setUsedDestinations(cache[tourType].used || []);
+      setTourTypeDescription(cache[tourType].tourTypeDescription || "");
       return;
     }
 
@@ -43,14 +45,50 @@ const DestinationMasterForm = () => {
       // SAVE CACHE
       setCache((prev) => ({
         ...prev,
-        [tourType]: res.data
+        [tourType]: {
+          ...res.data,
+          tourTypeDescription:
+            (res.data?.used || []).find((item) =>
+              tourType === "Domestic"
+                ? !item?.sector
+                : !item?.country
+            )?.tourTypeDescription || ""
+        }
       }));
 
       setAvailableDestinations(res.data.available || []);
       setUsedDestinations(res.data.used || []);
+      setTourTypeDescription(
+        (res.data?.used || []).find((item) =>
+          tourType === "Domestic"
+            ? !item?.sector
+            : !item?.country
+        )?.tourTypeDescription || ""
+      );
     } catch (err) {
       console.error(err);
       toast.error("Failed to load destinations ❌");
+    }
+  };
+
+  const handleSaveTourTypeDescription = async () => {
+    try {
+      await axios.put(`/destinations/tour-type-description`, {
+        tourType,
+        tourTypeDescription
+      });
+      toast.success("Tour type description updated ✅");
+
+      setCache((prev) => ({
+        ...prev,
+        [tourType]: {
+          ...(prev[tourType] || {}),
+          tourTypeDescription
+        }
+      }));
+    } catch (err) {
+      console.error(err);
+      toast.error("Tour type description update failed ❌");
     }
   };
 
@@ -116,14 +154,46 @@ const DestinationMasterForm = () => {
         <MenuItem value="International">International</MenuItem>
       </Select>
 
+      {!!tourType && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography fontWeight="bold" mb={1}>
+              {tourType} (All Packages) Description
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={2}
+              placeholder={`Enter ${tourType} all-packages description...`}
+              value={tourTypeDescription}
+              onChange={(e) => setTourTypeDescription(e.target.value)}
+            />
+            <Button
+              variant="contained"
+              size="small"
+              sx={{ mt: 1 }}
+              onClick={handleSaveTourTypeDescription}
+            >
+              Save
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ---------------- USED DESTINATIONS ---------------- */}
-      {usedDestinations.length > 0 && (
+      {usedDestinations.filter((item) =>
+        tourType === "Domestic" ? !!item?.sector : !!item?.country
+      ).length > 0 && (
         <>
           <Typography variant="h6" mb={2}>
             Manage Descriptions
           </Typography>
 
-          {usedDestinations.map((item) => (
+          {usedDestinations
+            .filter((item) =>
+              tourType === "Domestic" ? !!item?.sector : !!item?.country
+            )
+            .map((item) => (
             <Card key={item._id} sx={{ mb: 2 }}>
               <CardContent>
                 <Typography fontWeight="bold" mb={1}>
@@ -158,7 +228,10 @@ const DestinationMasterForm = () => {
       )}
 
       {/* EMPTY STATE */}
-      {tourType && usedDestinations.length === 0 && (
+      {tourType &&
+        usedDestinations.filter((item) =>
+          tourType === "Domestic" ? !!item?.sector : !!item?.country
+        ).length === 0 && (
         <Typography>No destinations found</Typography>
       )}
     </Box>

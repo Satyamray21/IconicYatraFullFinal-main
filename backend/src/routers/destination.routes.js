@@ -4,7 +4,8 @@ import {
   getDestinations,
   getAvailableDestinations,
   syncDestinationsFromPackages,
-  updateDescription
+  updateDescription,
+  upsertTourTypeDescription
 } from "../controllers/destination.controller.js";
 
 const router = express.Router();
@@ -17,6 +18,7 @@ router.get("/available", getAvailableDestinations);
 router.post("/sync-from-packages", syncDestinationsFromPackages);
 
 router.put("/update/:id", updateDescription);
+router.put("/tour-type-description", upsertTourTypeDescription);
 
 
 export default router;

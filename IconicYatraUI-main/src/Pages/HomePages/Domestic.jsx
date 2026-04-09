@@ -43,6 +43,7 @@ const Domestic = () => {
   const [domesticDescriptionsBySlug, setDomesticDescriptionsBySlug] = useState(
     {}
   );
+  const [domesticAllDescription, setDomesticAllDescription] = useState("");
 
   const {
     domestic: packages = [],
@@ -79,9 +80,14 @@ const Domestic = () => {
         );
 
         setDomesticDescriptionsBySlug(map);
+        const allDescriptionItem = (Array.isArray(res.data) ? res.data : []).find(
+          (item) => !item?.sector
+        );
+        setDomesticAllDescription(allDescriptionItem?.tourTypeDescription?.trim() || "");
       } catch (error) {
         if (isMounted) {
           setDomesticDescriptionsBySlug({});
+          setDomesticAllDescription("");
         }
       }
     };
@@ -132,7 +138,7 @@ const Domestic = () => {
   const currentPackages = filteredPackages || [];
   const selectedDescription =
     selectedDestination === "All"
-      ? DEFAULT_DOMESTIC_DESCRIPTION
+      ? domesticAllDescription || DEFAULT_DOMESTIC_DESCRIPTION
       : domesticDescriptionsBySlug[slugifyValue(selectedDestination)] ||
         DEFAULT_DOMESTIC_DESCRIPTION;
 

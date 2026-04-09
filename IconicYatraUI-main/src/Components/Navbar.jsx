@@ -23,8 +23,7 @@ import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import MenuIcon from "@mui/icons-material/Menu";
 import logo from "../assets/Logo/logoiconic1.png";
-import { useDispatch, useSelector } from "react-redux";
-import { fetchInternationalPackages } from "../Features/packageSlice";
+import { useSelector } from "react-redux";
 import { destinationAxios } from "../Utils/axiosInstance";
 
 const slugifySector = (value = "") =>
@@ -42,8 +41,8 @@ const Navbar = () => {
   const [openCollapse, setOpenCollapse] = useState({});
   const isMobile = useMediaQuery("(max-width:900px)");
   const location = useLocation();
-  const dispatch = useDispatch();
   const [domesticDestinations, setDomesticDestinations] = useState([]);
+  const [internationalDestinations, setInternationalDestinations] = useState([]);
 
   const openDomesticMenu = (event) => {
     setDomesticAnchorEl(event.currentTarget);
@@ -71,30 +70,33 @@ const Navbar = () => {
   const { data: company } = useSelector(
     (state) => state.companyUI
   );
-  const { international: internationalPackages = [] } =
-    useSelector((state) => state.packages);
-
-  useEffect(() => {
-    dispatch(fetchInternationalPackages());
-  }, [dispatch]);
-
   useEffect(() => {
     let isMounted = true;
 
-    const fetchDomesticDestinations = async () => {
+    const fetchDestinations = async () => {
       try {
-        const res = await destinationAxios.get("/?tourType=Domestic");
+        const [domesticRes, internationalRes] = await Promise.all([
+          destinationAxios.get("/?tourType=Domestic"),
+          destinationAxios.get("/?tourType=International")
+        ]);
+
         if (isMounted) {
-          setDomesticDestinations(Array.isArray(res.data) ? res.data : []);
+          setDomesticDestinations(
+            Array.isArray(domesticRes.data) ? domesticRes.data : []
+          );
+          setInternationalDestinations(
+            Array.isArray(internationalRes.data) ? internationalRes.data : []
+          );
         }
       } catch (error) {
         if (isMounted) {
           setDomesticDestinations([]);
+          setInternationalDestinations([]);
         }
       }
     };
 
-    fetchDomesticDestinations();
+    fetchDestinations();
 
     return () => {
       isMounted = false;
@@ -117,8 +119,8 @@ const Navbar = () => {
 
   const internationalSectors = useMemo(() => {
     const seen = new Set();
-    return internationalPackages
-      .map((pkg) => (pkg?.destinationCountry || "").trim())
+    return internationalDestinations
+      .map((item) => (item?.country || "").trim())
       .filter((sector) => {
         if (!sector) return false;
         const key = sector.toLowerCase();
@@ -127,7 +129,7 @@ const Navbar = () => {
         return true;
       })
       .sort((a, b) => a.localeCompare(b));
-  }, [internationalPackages]);
+  }, [internationalDestinations]);
 
   const isActive = (path) => location.pathname === path;
   const isParentActive = (key) =>

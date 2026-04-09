@@ -8,7 +8,11 @@ const DestinationMasterSchema = new mongoose.Schema({
   },
   sector: String,     // for Domestic
   country: String,    // for International
-  description: String
+  description: String,
+  tourTypeDescription: {
+    type: String,
+    default: ""
+  }
 });
 
 export default mongoose.model("DestinationMaster", DestinationMasterSchema);

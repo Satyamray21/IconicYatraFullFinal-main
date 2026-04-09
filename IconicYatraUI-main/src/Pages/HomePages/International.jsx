@@ -16,7 +16,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { fetchInternationalPackages } from "../../Features/packageSlice";
 import PackageCard from "../../Components/PackageCard";
-import { BASE_URL } from "../../Utils/axiosInstance";
+import { BASE_URL, destinationAxios } from "../../Utils/axiosInstance";
 import InquiryFormDialog from "../../Components/InquiryFormDialog";
 
 const normalizeText = (value = "") =>
@@ -37,6 +37,8 @@ const matchesInternationalRoute = (pkg, routeSlug) => {
   ].filter(Boolean);
   return candidates.some((value) => slugifyValue(value) === routeSlug);
 };
+const DEFAULT_INTERNATIONAL_DESCRIPTION =
+  "Discover amazing international travel destinations";
 
 const International = () => {
   const { destination } = useParams();
@@ -50,10 +52,50 @@ const International = () => {
   const [selectedDestination, setSelectedDestination] = useState("All");
   const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
   const [selectedPackageTitle, setSelectedPackageTitle] = useState("");
+  const [internationalDescriptionsBySlug, setInternationalDescriptionsBySlug] =
+    useState({});
+  const [internationalAllDescription, setInternationalAllDescription] =
+    useState("");
 
   useEffect(() => {
     dispatch(fetchInternationalPackages());
   }, [dispatch]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchInternationalDescriptions = async () => {
+      try {
+        const res = await destinationAxios.get("/?tourType=International");
+        if (!isMounted) return;
+
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const map = rows.reduce((acc, item) => {
+          const country = item?.country?.trim();
+          if (!country) return acc;
+          acc[slugifyValue(country)] = item?.description?.trim() || "";
+          return acc;
+        }, {});
+
+        setInternationalDescriptionsBySlug(map);
+        const allDescriptionItem = rows.find((item) => !item?.country);
+        setInternationalAllDescription(
+          allDescriptionItem?.tourTypeDescription?.trim() || ""
+        );
+      } catch (err) {
+        if (isMounted) {
+          setInternationalDescriptionsBySlug({});
+          setInternationalAllDescription("");
+        }
+      }
+    };
+
+    fetchInternationalDescriptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // ✅ Handle destination/sector filter (via URL param)
   useEffect(() => {
@@ -95,6 +137,11 @@ const International = () => {
             slugifyValue(pkg.destination) === slugifyValue(selectedDestination) ||
             normalizeText(pkg.title) === normalizeText(selectedDestination)
         );
+  const selectedDescription =
+    selectedDestination === "All"
+      ? internationalAllDescription || DEFAULT_INTERNATIONAL_DESCRIPTION
+      : internationalDescriptionsBySlug[slugifyValue(selectedDestination)] ||
+        DEFAULT_INTERNATIONAL_DESCRIPTION;
 
   // ✅ Handle click
   const handleCardClick = (id) => {
@@ -239,7 +286,7 @@ const International = () => {
               }}
             />
             <Typography variant="subtitle1" color="text.secondary">
-              Discover amazing international travel destinations
+              {selectedDescription}
             </Typography>
           </Box>
 
