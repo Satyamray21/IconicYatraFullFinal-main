@@ -1,7 +1,9 @@
 const INR = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
 
 const toNum = (v) => {
-    const n = Number(v);
+    if (v === undefined || v === null) return 0;
+    const normalized = String(v).replace(/[^0-9.-]/g, "");
+    const n = Number(normalized);
     return Number.isFinite(n) ? n : 0;
 };
 
@@ -397,6 +399,10 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         customText.nextPayableAmount !== undefined
             ? toNum(customText.nextPayableAmount)
             : dueAmount;
+    const paymentDueDate = safe(
+        customText.dueDate,
+        safe(customText.paymentDueDate)
+    );
     const bankDetails = customText?.bankDetails || [];
     const paymentCombined = mergePolicies(
         toPolicyArray(td?.policies?.paymentPolicy),
@@ -458,7 +464,9 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p><b>Received from client:</b> INR ${INR.format(receivedAmount)}${customText.receivedDate ? ` (paid on ${customText.receivedDate})` : ""}</p>
         <p><b>Balance due:</b> INR ${INR.format(dueAmount)}</p>
         <p><b>Next Payable Amount:</b> INR ${INR.format(nextPayableAmount)}</p>
-        ${customText.dueDate ? `<p><b>Payment Due Date:</b> ${customText.dueDate}</p>` : ""}
+        ${paymentDueDate ? `<p><b>Payment Due Date:</b> ${paymentDueDate}</p>` : ""}
+        <p style="color:#d32f2f; font-weight:bold;">Please clear your all dues as per the payment policy.</p>
+        <p style="color:#2e7d32; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
         <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p>

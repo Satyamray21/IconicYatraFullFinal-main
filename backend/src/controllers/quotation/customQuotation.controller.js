@@ -557,6 +557,40 @@ const mergeBookingEmailPayload = async (quotation, meta, bookingCustom = {}) => 
   };
 };
 
+const readBookingOverridesFromRequest = (reqBody = {}) => {
+  const customText = reqBody?.customText || {};
+  const booking = customText?.booking || {};
+  // Accept fallback keys from older/newer frontend payload shapes.
+  const topLevel = {
+    nextPayableAmount: reqBody?.nextPayableAmount,
+    dueDate: reqBody?.dueDate || reqBody?.paymentDueDate,
+    receivedAmount: reqBody?.receivedAmount,
+    dueAmount: reqBody?.dueAmount,
+  };
+  return {
+    ...(customText?.nextPayableAmount !== undefined
+      ? { nextPayableAmount: customText.nextPayableAmount }
+      : {}),
+    ...(customText?.dueDate !== undefined ? { dueDate: customText.dueDate } : {}),
+    ...(customText?.paymentDueDate !== undefined
+      ? { dueDate: customText.paymentDueDate }
+      : {}),
+    ...(customText?.receivedAmount !== undefined
+      ? { receivedAmount: customText.receivedAmount }
+      : {}),
+    ...(customText?.dueAmount !== undefined ? { dueAmount: customText.dueAmount } : {}),
+    ...(topLevel.nextPayableAmount !== undefined
+      ? { nextPayableAmount: topLevel.nextPayableAmount }
+      : {}),
+    ...(topLevel.dueDate !== undefined ? { dueDate: topLevel.dueDate } : {}),
+    ...(topLevel.receivedAmount !== undefined
+      ? { receivedAmount: topLevel.receivedAmount }
+      : {}),
+    ...(topLevel.dueAmount !== undefined ? { dueAmount: topLevel.dueAmount } : {}),
+    ...booking,
+  };
+};
+
 const loadEmailMeta = async (company) => {
   const globalSettings = await GlobalSettings.findOne().lean();
   const accountHolder = company?.companyName;
@@ -612,6 +646,7 @@ export const previewCustomQuotationMail = asyncHandler(async (req, res) => {
   if (!quotation) throw new ApiError(404, "Quotation not found");
 
   const customText = req.body?.customText || {};
+  const bookingOverrides = readBookingOverridesFromRequest(req.body || {});
   const selectedCompany = await resolveCompanyForEmail({
     companyId: req.body?.companyId,
     companyName: req.body?.companyName,
@@ -625,7 +660,7 @@ export const previewCustomQuotationMail = asyncHandler(async (req, res) => {
   const bookingPayload = await mergeBookingEmailPayload(
     quotation,
     meta,
-    customText.booking || {},
+    bookingOverrides,
   );
   const booking = buildCustomQuotationBookingEmail(quotation, bookingPayload);
 
@@ -680,7 +715,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
           await mergeBookingEmailPayload(
             quotation,
             meta,
-            customText.booking || {},
+            readBookingOverridesFromRequest(req.body || {}),
           ),
         )
       : buildCustomQuotationNormalEmail(
@@ -688,7 +723,10 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
           customText.normal || {},
           meta,
         );
-  const body = String(bodyHtml || "").trim() || generatedBody;
+  const body =
+    type === "booking"
+      ? generatedBody
+      : String(bodyHtml || "").trim() || generatedBody;
 
   const finalSubject =
     subject ||
