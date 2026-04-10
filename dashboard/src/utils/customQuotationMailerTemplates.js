@@ -228,67 +228,95 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
             ? customText.nextPayableAmount
             : dueAmount
     );
+    const companyName = safe(customText.companyName, "Iconic Travel");
+    const companyWebsite = safe(
+        customText.companyWebsite,
+        "https://www.iconictravel.in/"
+    );
+    const termsUrl = safe(
+        customText.companyTermsConditions,
+        "https://www.iconictravel.in/terms-conditions"
+    );
 
-    return [
-        `Dear ${safe(quotation?.clientDetails?.clientName, "Guest")},`,
-        safe(
+    return `
+    <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
+        <p style="color:red; font-weight:bold;">
+            ${safe(customText.greeting, `Dear ${safe(quotation?.clientDetails?.clientName, "Guest")},`)}
+        </p>
+        <p style="color:red; font-weight:bold;">
+            ${safe(customText.opening, `BOOKING CONFIRMATION FROM ${companyName.toUpperCase()}!!!`)}
+        </p>
+        <p>${safe(
             customText.thankYou,
-            "Thank you for choosing Iconic Travel. Your package details are shared below."
-        ),
-        "",
-        `${safe(td.quotationTitle, "Tour Package")}`,
-        "",
-        "DETAILS OF PACKAGE:",
-        `Guest Name: ${safe(quotation?.clientDetails?.clientName, "Guest")}`,
-        `Booking Id: ${safe(customText.bookingId, quotation?.quotationId)}`,
-        `Persons: ${guests.text}`,
-        `No. of Rooms: ${toNum(room.numberOfRooms)} ${safe(room.sharingType, "")}`.trim(),
-        `Transportation: ${safe(vehicle?.basicsDetails?.vehicleType, "As per itinerary")}`,
-        `Package Type: ${safe(customText.packageType, "Family Tour Package")}`,
-        `Duration: ${duration.nights} Nights ${duration.days} Days`,
-        `Date of Journey: ${fmtDate(td.arrivalDate)}${pd.pickupTime ? `, Time: ${pd.pickupTime}` : ""}`,
-        `Tour End Date: ${fmtDate(td.departureDate)}${pd.dropTime ? `, Time: ${pd.dropTime}` : ""}`,
-        `Pick Up Point: ${safe(pd.pickupLocation, "As per itinerary")}`,
-        `Drop Point: ${safe(pd.dropLocation, "As per itinerary")}`,
-        `Meal Plan: ${mealPlanText(safe(qd.mealPlan, "CP Plan"))}`,
-        "",
-        `Package Cost (excluding GST): INR ${renderMoney(beforeTax)}`,
-        `GST (${taxPercent}%): INR ${renderMoney(taxAmount)}`,
-        `Package Cost (including GST): INR ${renderMoney(total)}`,
-        "",
-        `Payment received: INR ${renderMoney(receivedAmount)}${
+            `Thank you for choosing ${companyName}. Your booking has been confirmed.`
+        )}</p>
+        <p style="color:#000;">
+            <b>Official Website Visit @</b> <br/>
+            <a href="${companyWebsite}" target="_blank" style="font-weight:bold; color:#1976d2; text-decoration:none;">
+                ${companyWebsite}
+            </a>
+        </p>
+        <p style="color:#d32f2f; font-weight:bold;">
+            BOOKING ID: ${safe(customText.bookingId, quotation?.quotationId)}
+        </p>
+        <p style="color:#d32f2f; font-weight:bold;">
+            ##PACKAGE COST FOR ALL PERSON = INR ${renderMoney(total)} As of now
+        </p>
+        <p style="color:#d32f2f; font-weight:bold;">DETAILS OF TOUR PACKAGE:</p>
+        <p><b>Destination:</b> ${safe(td.quotationTitle, "Tour Package")}</p>
+        <p><b>No. of Pax:</b> ${guests.text}</p>
+        <p><b>No. of Room:</b> ${toNum(room.numberOfRooms)} ${safe(room.sharingType, "")}</p>
+        <p><b>Transportation:</b> ${safe(vehicle?.basicsDetails?.vehicleType, "As per itinerary")}</p>
+        <p><b>Tour Duration:</b> ${duration.nights} Nights ${duration.days} Days</p>
+        <p><b>Arrival Date:</b> ${fmtDate(td.arrivalDate)}${pd.pickupTime ? `, Time: ${pd.pickupTime}` : ""}</p>
+        <p><b>Departure Date:</b> ${fmtDate(td.departureDate)}${pd.dropTime ? `, Time: ${pd.dropTime}` : ""}</p>
+        <p><b>Pick Up Point:</b> ${safe(pd.pickupLocation, "As per itinerary")}</p>
+        <p><b>Drop Point:</b> ${safe(pd.dropLocation, "As per itinerary")}</p>
+        <p><b>Meal Plan:</b> ${mealPlanText(safe(qd.mealPlan, "CP Plan"))}</p>
+        <br/>
+        <p style="color:#d32f2f; font-weight:bold;">PAYMENT STATUS:</p>
+        <p><b>Package Cost (excluding GST):</b> INR ${renderMoney(beforeTax)}</p>
+        <p><b>GST (${taxPercent}%):</b> INR ${renderMoney(taxAmount)}</p>
+        <p><b>Package Cost (including GST):</b> INR ${renderMoney(total)}</p>
+        <p><b>Payment received:</b> INR ${renderMoney(receivedAmount)}${
             customText.receivedDate ? ` (paid on ${customText.receivedDate})` : ""
-        }`,
-        `Remaining payment: INR ${renderMoney(dueAmount)}`,
-        `Next Payable Amount: INR ${renderMoney(nextPayableAmount)}`,
-        customText.dueDate ? `Payment Due Date: ${customText.dueDate}` : "",
-        "",
-        "INCLUSIONS OF TOUR:",
-        policyLines(td?.policies?.inclusionPolicy),
-        "",
-        "HOTEL NAMES/SIMILAR",
-        hotelLines(qd.destinations, pkgKey),
-        "",
-        "DAY WISE ITINERARY",
-        itineraryLines(td.itinerary),
-        "",
-        "COST EXCLUSIONS:",
-        policyLines(td?.policies?.exclusionPolicy),
-        "",
-        "CANCELLATION POLICY:",
-        policyLines(td?.policies?.cancellationPolicy),
-        "",
-        "PAYMENT POLICY:",
-        policyLines(td?.policies?.paymentPolicy),
-        "",
-        safe(
-            customText.footer,
-            "For any support or update, please reply on this email thread."
-        ),
-        "",
-        safe(customText.signature, "Warm Regards,\nReservation Team\nIconic Travel"),
-    ]
-        .filter((x) => x !== undefined && x !== null && String(x).trim() !== "")
-        .join("\n");
+        }</p>
+        <p><b>Remaining payment:</b> INR ${renderMoney(dueAmount)}</p>
+        <p><b>Next Payable Amount:</b> INR ${renderMoney(nextPayableAmount)}</p>
+        ${customText.dueDate ? `<p><b>Payment Due Date:</b> ${customText.dueDate}</p>` : ""}
+        <br/>
+        <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
+        <p><b>${hotelLines(qd.destinations, pkgKey).replace(/\n/g, "<br/>")}</b></p>
+        <br/>
+        <p style="color:#d32f2f; font-weight:bold;">DAY WISE ITINERARY</p>
+        <p style="white-space:pre-wrap;">${itineraryLines(td.itinerary)}</p>
+        <br/>
+        <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+        <p>
+            <b>As per company website - </b>
+            <a href="${termsUrl}" target="_blank" style="color:#1976d2; font-weight:bold;">
+                View Terms & Conditions
+            </a>
+        </p>
+        <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
+        <p style="white-space:pre-wrap;">${policyLines(td?.policies?.inclusionPolicy)}</p>
+        <br/>
+        <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
+        <p style="white-space:pre-wrap;">${policyLines(td?.policies?.exclusionPolicy)}</p>
+        <br/>
+        <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
+        <p style="white-space:pre-wrap;">${policyLines(td?.policies?.cancellationPolicy)}</p>
+        <br/>
+        <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+        <p style="white-space:pre-wrap;">${policyLines(td?.policies?.paymentPolicy)}</p>
+        <br/>
+        <p>
+            ${safe(
+                customText.signature,
+                `Warm Regards<br/>Reservation Team<br/>${companyName}`
+            ).replace(/\n/g, "<br/>")}
+        </p>
+    </div>
+    `;
 }
 
