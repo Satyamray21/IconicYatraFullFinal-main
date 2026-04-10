@@ -1223,6 +1223,7 @@ useEffect(() => {
                     cc: cc || undefined,
                     type: values?.mailType === "booking" ? "booking" : "normal",
                     subject: subject || undefined,
+                    bodyHtml: values?.message || undefined,
                     senderAccount: values?.senderAccount || "gmail1",
                     companyId: values?.companyId || undefined,
                     companyName: selectedCompany?.companyName || undefined,
