@@ -866,27 +866,31 @@ useEffect(() => {
             superior: dest.superiorHotels?.join(', ') || '-',
         })) || [];
 
-        // Add summary rows to hotel pricing data
+        // Add summary rows from packageCalculations (authoritative API totals).
         if (quotationDetails.destinations?.length > 0) {
-            const totalNights = quotationDetails.destinations.reduce((sum, dest) => sum + dest.nights, 0);
-            const totalStandard = quotationDetails.destinations.reduce((sum, dest) => sum + (dest.prices?.standard || 0), 0);
-            const totalDeluxe = quotationDetails.destinations.reduce((sum, dest) => sum + (dest.prices?.deluxe || 0), 0);
-            const totalSuperior = quotationDetails.destinations.reduce((sum, dest) => sum + (dest.prices?.superior || 0), 0);
+            const totalNights = quotationDetails.destinations.reduce(
+                (sum, dest) => sum + (Number(dest.nights) || 0),
+                0
+            );
+
+            const standardFinal = Number(pkgCalc?.standard?.finalTotal || 0);
+            const deluxeFinal = Number(pkgCalc?.deluxe?.finalTotal || 0);
+            const superiorFinal = Number(pkgCalc?.superior?.finalTotal || 0);
 
             hotelPricingData.push(
                 {
                     destination: "Quotation Cost",
                     nights: "-",
-                    standard: `₹ ${totalStandard.toLocaleString()}`,
-                    deluxe: `₹ ${totalDeluxe.toLocaleString()}`,
-                    superior: `₹ ${totalSuperior.toLocaleString()}`,
+                    standard: standardFinal > 0 ? `₹ ${Math.round(standardFinal).toLocaleString("en-IN")}` : "-",
+                    deluxe: deluxeFinal > 0 ? `₹ ${Math.round(deluxeFinal).toLocaleString("en-IN")}` : "-",
+                    superior: superiorFinal > 0 ? `₹ ${Math.round(superiorFinal).toLocaleString("en-IN")}` : "-",
                 },
                 {
                     destination: "Total Quotation Cost",
                     nights: `${totalNights} N`,
-                    standard: `₹ ${totalStandard.toLocaleString()}`,
-                    deluxe: `₹ ${totalDeluxe.toLocaleString()}`,
-                    superior: `₹ ${totalSuperior.toLocaleString()}`,
+                    standard: standardFinal > 0 ? `₹ ${Math.round(standardFinal).toLocaleString("en-IN")}` : "-",
+                    deluxe: deluxeFinal > 0 ? `₹ ${Math.round(deluxeFinal).toLocaleString("en-IN")}` : "-",
+                    superior: superiorFinal > 0 ? `₹ ${Math.round(superiorFinal).toLocaleString("en-IN")}` : "-",
                 }
             );
         }

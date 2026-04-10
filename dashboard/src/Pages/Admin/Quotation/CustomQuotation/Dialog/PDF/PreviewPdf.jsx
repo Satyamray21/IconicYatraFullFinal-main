@@ -1,810 +1,1200 @@
-// QuotationPDFDialog.jsx
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    Box,
-    Typography,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Divider,
-    Alert,
-    Snackbar,
-    CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Snackbar,
+  Alert,
+  CircularProgress,
+  Divider,
+  Chip,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import {
-    PictureAsPdf as PictureAsPdfIcon,
-    Download,
-    Print,
-    Close,
+  Download,
+  Print,
+  Close,
+  LocalPhone,
+  Email,
+  LocationOn,
+  Language,
+  Person,
+  FlightTakeoff,
+  FlightLand,
+  Hotel,
+  Restaurant,
+  Payments,
+  CheckCircle,
+  Cancel,
+  MoneyOff,
+  Description,
 } from "@mui/icons-material";
+import axios from "../../../../../../utils/axios";
 
 const QuotationPDFDialog = ({ open, onClose, quotation }) => {
-    const printRef = useRef();
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
+  const printRef = useRef();
+  const contentRef = useRef();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [imageElements, setImageElements] = useState({});
+  const [renderComplete, setRenderComplete] = useState(false);
+  const [companyOptions, setCompanyOptions] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
 
-    // Company logo URL
-    const companyLogo = "https://iconicyatra.com/assets/logoiconic-CDBgNKCW.jpg";
+  // Helper function to safely get nested values
+  const getValue = (obj, path, defaultValue = "N/A") => {
+    if (!obj) return defaultValue;
+    const keys = path.split(".");
+    let result = obj;
+    for (const key of keys) {
+      if (result === undefined || result === null) return defaultValue;
+      result = result[key];
+    }
+    return result !== undefined && result !== null && result !== "" ? result : defaultValue;
+  };
+  const getRawValue = (obj, path) => {
+    if (!obj) return undefined;
+    const keys = path.split(".");
+    let result = obj;
+    for (const key of keys) {
+      if (result === undefined || result === null) return undefined;
+      result = result[key];
+    }
+    return result;
+  };
 
-    // Default quotation data structure
-    const defaultQuotation = {
-        date: "27/08/2025",
-        reference: "41",
-        customer: {
-            name: "Amit Jaiswal",
-            location: "Andhya Pradesh",
-            phone: "+91 7053900957",
-            email: "amit.jaiswal@example.com",
-        },
-        pickup: {
-            arrival: "Arrival: Lucknow (22/08/2025) at Airport, 3:35PM",
-            departure: "Departure: Delhi (06/09/2025) from Local Address, 6:36PM",
-        },
-        hotel: {
-            guests: "6 Adults",
-            rooms: "3 Bedroom",
-            mealPlan: "CP, AP, EP",
-            destination: "3N Borong, 2N Damthang",
-            itinerary: "This is only tentative schedule for sightseeing and travel...",
-        },
-        pricing: {
-            discount: "₹ 200",
-            gst: "₹ 140",
-            total: "₹ 3,340",
-            received: "₹ 1,500",
-            balance: "₹ 1,840"
-        },
-        policies: {
-            inclusions: [
-                "All transfers tours in a Private AC cab.",
-                "Parking, Toll charges, Fuel and Driver expenses.",
-                "Hotel Taxes.",
-                "Car AC off during hill stations.",
-            ],
-            exclusions: "1. Any Cost change...",
-            paymentPolicy: "50% amount to pay at confirmation, balance before 10 days.",
-            cancellationPolicy: "1. Before 15 days: 50%. 2. Within 7 days: 100%.",
-            terms: "1. This is only a Quote. Availability is checked only on confirmation...",
-        },
-        footer: {
-            contact: "Amit Jaiswal | +91 7053900957 (Noida)",
-            phone: "+91 7053900957",
-            email: "amit.jaiswal@example.com",
-            company: "Iconic Yatra",
-            address: "Office No 15, Bhawani Market Sec 27, Noida, Uttar Pradesh – 201301",
-            website: "https://www.iconicyatra.com",
-        },
-        hotelPricingData: [
-            {
-                destination: "Borong",
-                nights: "3 N",
-                standard: "Tempo Heritage Resort",
-                deluxe: "Tempo Heritage Resort",
-                superior: "Yovage The Aryan Regency",
-            },
-            {
-                destination: "Damthang",
-                nights: "2 N",
-                standard: "Tempo Heritage Resort",
-                deluxe: "Tempo Heritage Resort",
-                superior: "Yovage The Aryan Regency",
-            },
-            {
-                destination: "Quotation Cost",
-                nights: "-",
-                standard: "₹ 40,366",
-                deluxe: "₹ 440,829",
-                superior: "₹ 92,358",
-            },
-            {
-                destination: "IGST",
-                nights: "-",
-                standard: "₹ 2,018.3",
-                deluxe: "₹ 22,041.4",
-                superior: "₹ 4,617.9",
-            },
-            {
-                destination: "Total Quotation Cost",
-                nights: "5 N",
-                standard: "₹ 42,384",
-                deluxe: "₹ 462,870",
-                superior: "₹ 96,976",
-            },
-        ],
-        days: [
-            { id: 1, date: "11/09/2025", title: "About Day 1", description: "Arrival and check-in process" },
-        ],
+  // Helper to format currency
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return "₹ 0";
+    let numAmount = amount;
+    if (typeof amount === "string") {
+      const cleaned = amount.replace(/[^0-9.-]/g, "");
+      numAmount = parseFloat(cleaned);
+    }
+    if (isNaN(numAmount)) return "₹ 0";
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(numAmount);
+  };
+
+  // Compress image to reduce size
+  const compressImage = (base64, maxWidth = 800, quality = 0.7) => {
+    return new Promise((resolve) => {
+      if (!base64) {
+        resolve(null);
+        return;
+      }
+      
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed);
+      };
+      img.onerror = () => {
+        console.error("Error compressing image");
+        resolve(base64);
+      };
+      img.src = base64;
+    });
+  };
+
+  // Convert image URL to Base64 with compression
+  const convertToBase64 = useCallback((url, compress = true) => {
+    return new Promise((resolve) => {
+      if (!url) {
+        resolve(null);
+        return;
+      }
+      
+      if (url.startsWith('data:image')) {
+        if (compress) {
+          compressImage(url, 800, 0.7).then(resolve);
+        } else {
+          resolve(url);
+        }
+        return;
+      }
+      
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      
+      const timeoutId = setTimeout(() => {
+        console.warn("Image load timeout:", url);
+        resolve(null);
+      }, 10000);
+      
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // Resize large images
+        const maxWidth = 800;
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const base64 = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(base64);
+      };
+      
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        console.warn("Failed to load image:", url);
+        resolve(null);
+      };
+      
+      img.src = url;
+    });
+  }, []);
+
+  // Extract all data from the quotation prop
+  const quotationData = quotation || {};
+  const selectedCompany = companyOptions.find((c) => c?._id === selectedCompanyId) || null;
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      if (!open) return;
+      try {
+        setLoadingCompanies(true);
+        const res = await axios.get("/company");
+        const list = Array.isArray(res?.data?.data) ? res.data.data : [];
+        setCompanyOptions(list);
+        if (!selectedCompanyId && list.length > 0) {
+          setSelectedCompanyId(list[0]._id);
+        }
+      } catch (err) {
+        console.error("Failed to fetch companies for PDF preview:", err);
+        setCompanyOptions([]);
+      } finally {
+        setLoadingCompanies(false);
+      }
     };
+    fetchCompanies();
+  }, [open]);
 
-    // Use provided quotation or default data
-    const quotationData = quotation || defaultQuotation;
+  // Safely extract all needed data
+  const customerName = getValue(quotationData, "customer.name", "Guest");
+  const customerLocation = getValue(quotationData, "customer.location");
+  const customerPhone = getValue(quotationData, "customer.phone");
+  const customerEmail = getValue(quotationData, "customer.email");
 
-    const handleDownloadPDF = async () => {
-        try {
-            setLoading(true);
-            setError("");
+  const pickupArrival = getValue(quotationData, "pickup.arrival");
+  const pickupDeparture = getValue(quotationData, "pickup.departure");
 
-            // Dynamically import the libraries
-            const [jsPDFModule, html2canvasModule] = await Promise.all([
-                import("jspdf"),
-                import("html2canvas")
-            ]);
+  const hotelGuests = getValue(quotationData, "hotel.guests");
+  const hotelRooms = getValue(quotationData, "hotel.rooms");
+  const hotelMealPlan = getValue(quotationData, "hotel.mealPlan");
+  const hotelType = getValue(quotationData, "hotel.hotelType");
+  const hotelDestination = getValue(quotationData, "hotel.destination");
+  const hotelItinerary = getValue(quotationData, "hotel.itinerary");
 
-            const jsPDF = jsPDFModule.default;
-            const html2canvas = html2canvasModule.default;
+  const quotationTitle = getValue(quotationData, "quotationTitle", "Travel Quotation");
+  const destinationSummary = getValue(quotationData, "destinationSummary");
+  const reference = getValue(quotationData, "reference");
+  const date = getValue(quotationData, "date");
 
-            // Create a new PDF document
-            const pdf = new jsPDF("p", "mm", "a4");
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
+  const pricingTotal = getRawValue(quotationData, "pricing.total");
+  const pricingDiscount = getValue(quotationData, "pricing.discount");
+  const pricingGst = getValue(quotationData, "pricing.gst");
 
-            // Get all page elements
-            const pages = printRef.current.querySelectorAll('.pdf-page');
+  const toNumber = (value) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" && !Number.isNaN(value)) return value;
+    const cleaned = String(value).replace(/[^0-9.-]/g, "");
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
 
-            for (let i = 0; i < pages.length; i++) {
-                const page = pages[i];
+  const totalFromPricing = toNumber(pricingTotal);
+  const totalFromFooter = toNumber(getRawValue(quotationData, "footer.total"));
+  const hotelPricingRows = Array.isArray(getRawValue(quotationData, "hotelPricingData"))
+    ? getRawValue(quotationData, "hotelPricingData")
+    : [];
+  const totalCostRow =
+    hotelPricingRows.find((row) =>
+      String(row?.destination || "").toLowerCase().includes("total quotation cost")
+    ) ||
+    hotelPricingRows.find((row) =>
+      String(row?.destination || "").toLowerCase().includes("quotation cost")
+    );
+  const totalFromHotelRow =
+    toNumber(totalCostRow?.standard) ||
+    toNumber(totalCostRow?.deluxe) ||
+    toNumber(totalCostRow?.superior);
+  // Prefer pricing table totals because quotation.pricing.total can be stale in some flows.
+  const effectiveTotal = totalFromHotelRow ?? totalFromPricing ?? totalFromFooter ?? 0;
 
-                // Show the current page and hide others
-                pages.forEach((p, index) => {
-                    p.style.display = index === i ? 'block' : 'none';
-                });
+  // Priority: selected company logo first, then quotation data logos
+  const logoUrl = selectedCompany?.logo ||
+                  getValue(quotationData, "logo") || 
+                  getValue(quotationData, "footer.logo") || 
+                  getValue(quotationData, "companyLogo") ||
+                  null;
 
-                // Capture the page as canvas
-                const canvas = await html2canvas(page, {
-                    scale: 2,
-                    useCORS: true,
-                    logging: false,
-                    backgroundColor: '#ffffff',
-                    width: page.offsetWidth,
-                    height: page.offsetHeight
-                });
+  const footerCompany =
+    selectedCompany?.companyName || getValue(quotationData, "footer.company", "Iconic Yatra");
+  const footerAddress = selectedCompany?.address || getValue(quotationData, "footer.address");
+  const footerPhone = selectedCompany?.phone || getValue(quotationData, "footer.phone");
+  const footerEmail = selectedCompany?.email || getValue(quotationData, "footer.email");
+  const footerWebsite =
+    selectedCompany?.companyWebsite || getValue(quotationData, "footer.website");
+  const footerContact =
+    selectedCompany?.authorizedSignatory?.name ||
+    getValue(quotationData, "footer.contact");
+  const footerContactDesignation =
+    selectedCompany?.authorizedSignatory?.designation || "";
+  const footerReceived = getValue(quotationData, "footer.received");
+  const footerBalance = getValue(quotationData, "footer.balance");
 
-                const imgData = canvas.toDataURL("image/png");
-                const imgWidth = pageWidth;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
+  const policiesExclusions = getValue(quotationData, "policies.exclusions", []);
+  const policiesPaymentPolicy = getValue(quotationData, "policies.paymentPolicy", []);
+  const policiesCancellationPolicy = getValue(quotationData, "policies.cancellationPolicy", []);
+  const policiesTerms = getValue(quotationData, "policies.terms", []);
 
-                // Add new page for all pages except the first one
-                if (i > 0) {
-                    pdf.addPage();
-                }
+  const days = getValue(quotationData, "days", []);
+  const bannerImage = getValue(quotationData, "bannerImage", "");
+  const hotelPricingData = hotelPricingRows;
+  const hasUsefulValue = (value) => {
+    const text = String(value || "").trim();
+    return Boolean(text) && text !== "-";
+  };
+  const showStandardCol = hotelPricingData.some((row) => hasUsefulValue(row?.standard));
+  const showDeluxeCol = hotelPricingData.some((row) => hasUsefulValue(row?.deluxe));
+  const showSuperiorCol = hotelPricingData.some((row) => hasUsefulValue(row?.superior));
 
-                // Add image to PDF
-                pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+  // Convert policies to array if they're strings
+  const inclusionArray = Array.isArray(policiesInclusions) ? policiesInclusions : 
+                        typeof policiesInclusions === "string" ? policiesInclusions.split("\n").filter(s => s.trim()) : 
+                        typeof policiesInclusions === "object" ? Object.values(policiesInclusions) : [];
+  const exclusionArray = Array.isArray(policiesExclusions) ? policiesExclusions : 
+                        typeof policiesExclusions === "string" ? policiesExclusions.split("\n").filter(s => s.trim()) : 
+                        typeof policiesExclusions === "object" ? Object.values(policiesExclusions) : [];
+  const paymentPolicyArray = Array.isArray(policiesPaymentPolicy) ? policiesPaymentPolicy : 
+                            typeof policiesPaymentPolicy === "string" ? policiesPaymentPolicy.split("\n").filter(s => s.trim()) : 
+                            typeof policiesPaymentPolicy === "object" ? Object.values(policiesPaymentPolicy) : [];
+  const cancellationArray = Array.isArray(policiesCancellationPolicy) ? policiesCancellationPolicy : 
+                           typeof policiesCancellationPolicy === "string" ? policiesCancellationPolicy.split("\n").filter(s => s.trim()) : 
+                           typeof policiesCancellationPolicy === "object" ? Object.values(policiesCancellationPolicy) : [];
+  const termsArray = Array.isArray(policiesTerms) ? policiesTerms : 
+                    typeof policiesTerms === "string" ? policiesTerms.split("\n").filter(s => s.trim()) : 
+                    typeof policiesTerms === "object" ? Object.values(policiesTerms) : [];
+
+  // Pre-load all images as base64 with compression
+  useEffect(() => {
+    const loadAllImages = async () => {
+      if (!open) return;
+      
+      setRenderComplete(false);
+      const loadedImages = {};
+      
+      console.log("Loading logo from URL:", logoUrl);
+      
+      // Load logo with compression (includes local logo if no other is provided)
+      if (logoUrl && typeof logoUrl === 'string' && logoUrl !== 'null') {
+        const base64Logo = await convertToBase64(logoUrl, true);
+        if (base64Logo) {
+          loadedImages.logo = base64Logo;
+          console.log("Logo loaded successfully, length:", base64Logo.length);
+        } else {
+          console.warn("Failed to load logo");
+        }
+      } else {
+        console.warn("No logo URL provided");
+      }
+      
+      // Load banner with compression
+      if (bannerImage && typeof bannerImage === 'string') {
+        const base64Banner = await convertToBase64(bannerImage, true);
+        if (base64Banner) loadedImages.banner = base64Banner;
+      }
+      
+      // Load day images with compression
+      for (let i = 0; i < days.length; i++) {
+        const day = days[i];
+        if (day.image && day.image.preview && typeof day.image.preview === 'string') {
+          const base64DayImage = await convertToBase64(day.image.preview, true);
+          if (base64DayImage) loadedImages[`day_${i}`] = base64DayImage;
+        }
+      }
+      
+      setImageElements(loadedImages);
+      setImagesLoaded(true);
+      
+      // Wait for DOM to update with images
+      setTimeout(() => {
+        setRenderComplete(true);
+      }, 500);
+    };
+    
+    if (open) {
+      loadAllImages();
+    }
+  }, [open, logoUrl, bannerImage, days, convertToBase64]);
+
+  const handleDownloadPDF = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      // Wait for render to complete
+      if (!renderComplete) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Dynamically import required libraries
+      const html2canvas = (await import("html2canvas")).default;
+      const jsPDF = (await import("jspdf")).default;
+
+      const element = printRef.current;
+      if (!element) {
+        throw new Error("PDF content not found");
+      }
+
+      // Store original styles
+      const originalStyle = {
+        overflow: element.style.overflow,
+        height: element.style.height,
+        maxHeight: element.style.maxHeight,
+      };
+
+      // Temporarily modify styles to capture full content
+      element.style.overflow = "visible";
+      element.style.height = "auto";
+      element.style.maxHeight = "none";
+
+      // Additional wait for any dynamic content
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Capture the entire content with optimized settings
+      const canvas = await html2canvas(element, {
+        scale: 2, // Increased for better quality
+        backgroundColor: "#ffffff",
+        logging: false,
+        useCORS: true,
+        allowTaint: false,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight,
+        onclone: (clonedDoc, element) => {
+          // Ensure all styles are applied in cloned document
+          const style = clonedDoc.createElement('style');
+          style.textContent = `
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
-
-            // Show all pages again
-            pages.forEach(page => {
-                page.style.display = 'block';
+            .pdf-page {
+              page-break-after: always;
+              break-after: page;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+            }
+            img {
+              max-width: 100%;
+              height: auto;
+            }
+          `;
+          clonedDoc.head.appendChild(style);
+          
+          // Ensure all images are loaded in cloned document
+          const images = clonedDoc.querySelectorAll('img');
+          return Promise.all(Array.from(images).map(img => {
+            if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+            return new Promise((resolve) => {
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+              setTimeout(resolve, 2000);
             });
-
-            // Save the PDF
-            pdf.save(`${quotationData.customer.name.replace(/\s+/g, '_')}_${quotationData.reference}.pdf`);
-
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-            setError("Failed to generate PDF. Please try again.");
-        } finally {
-            setLoading(false);
+          }));
         }
-    };
+      });
+      
+      // Restore original styles
+      element.style.overflow = originalStyle.overflow;
+      element.style.height = originalStyle.height;
+      element.style.maxHeight = originalStyle.maxHeight;
 
-    const handlePrint = () => {
-        const content = printRef.current;
-        if (content) {
-            const printWindow = window.open('', '_blank');
-            const printContent = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>${quotationData.customer.name} - Quotation</title>
-            <style>
-              body { 
-                font-family: Arial, sans-serif; 
-                margin: 0;
-                padding: 20px;
-                line-height: 1.4;
-                font-size: 12px;
-                color: #000;
+      // Convert canvas to JPEG with compression for smaller PDF size
+      const imgData = canvas.toDataURL("image/jpeg", 0.9);
+      
+      // PDF dimensions
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      const pdf = new jsPDF("p", "mm", "a4");
+      
+      // Add first page with compressed image
+      let heightLeft = imgHeight;
+      let position = 0;
+      let pageNum = 1;
+      
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+      
+      // Add subsequent pages if content overflows
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pageHeight;
+        pageNum++;
+      }
+      
+      // Add PDF metadata
+      pdf.setProperties({
+        title: `${customerName}_Quotation_${reference || Date.now()}`,
+        subject: `Travel Quotation for ${customerName}`,
+        author: footerCompany,
+        creator: "Iconic Yatra Travel Management System",
+        keywords: "travel, quotation, itinerary, package",
+      });
+      
+      // Add page numbers if multiple pages
+      if (pageNum > 1) {
+        for (let i = 1; i <= pageNum; i++) {
+          pdf.setPage(i);
+          pdf.setFontSize(8);
+          pdf.setTextColor(150, 150, 150);
+          pdf.text(`Page ${i} of ${pageNum}`, imgWidth - 30, pageHeight - 10);
+        }
+      }
+      
+      // Save the PDF
+      pdf.save(`${customerName.replace(/\s/g, '_')}_Quotation_${reference || Date.now()}.pdf`);
+      
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      setError("PDF generation failed: " + (err.message || "Please try again"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    const content = printRef.current.cloneNode(true);
+    
+    // Add print-specific styles
+    const styles = document.querySelector('style')?.innerHTML || '';
+    const materialStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map(link => link.href)
+      .filter(href => href.includes('mui') || href.includes('material'))
+      .map(href => `<link rel="stylesheet" href="${href}">`)
+      .join('');
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${customerName} - Travel Quotation</title>
+          <meta charset="UTF-8">
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: 'Segoe UI', 'Arial', sans-serif;
+              padding: 20px;
+              background: white;
+            }
+            @media print {
+              body {
+                padding: 0;
               }
-              .pdf-page { 
+              .pdf-page {
                 page-break-after: always;
-                margin-bottom: 20px;
-                padding: 20px;
+                break-after: page;
               }
-              .pdf-page:last-child { 
-                page-break-after: auto;
+              .no-break {
+                break-inside: avoid;
+                page-break-inside: avoid;
               }
-              table { 
-                width: 100%; 
-                border-collapse: collapse; 
-                margin: 10px 0; 
-              }
-              th, td { 
-                border: 1px solid #000; 
-                padding: 6px; 
-                text-align: left; 
-                font-size: 11px;
-              }
-              th { 
-                background-color: #f0f0f0; 
-                font-weight: bold; 
-              }
-              ol, ul { 
-                margin: 5px 0; 
-                padding-left: 20px; 
-              }
-              li { 
-                margin-bottom: 3px; 
-              }
-              .section { 
-                margin-bottom: 15px; 
-              }
-              .section-title { 
-                font-weight: bold; 
-                margin-bottom: 8px; 
-              }
-              .header { 
-                display: flex; 
-                justify-content: space-between; 
-                align-items: flex-start; 
-                margin-bottom: 20px; 
-              }
-              .logo-container { 
-                width: 100px;  /* Reduced from 150px */
-                height: 40px;  /* Reduced from 60px */
-                display: flex; 
-                align-items: center; 
-                justify-content: center;
-              }
-              .logo-img {
-                max-width: 100%;
-                max-height: 100%;
-                object-fit: contain;
-              }
-              .company-info { 
-                text-align: right; 
-              }
-              @media print {
-                body { margin: 0; padding: 15px; }
-                .pdf-page { margin: 0; padding: 15px; }
-              }
-            </style>
-          </head>
-          <body>
-            ${content.innerHTML}
-          </body>
-        </html>
-      `;
+            }
+            ${styles}
+          </style>
+          ${materialStyles}
+        </head>
+        <body>
+          ${content.innerHTML}
+          <script>
+            window.onload = () => {
+              window.print();
+              window.close();
+            };
+          <\/script>
+        </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+  };
 
-            printWindow.document.write(printContent);
-            printWindow.document.close();
-
-            // Wait for content to load before printing
-            setTimeout(() => {
-                printWindow.print();
-                printWindow.close();
-            }, 500);
-        }
-    };
-
-    const handleCloseError = () => {
-        setError("");
-    };
-
-    // PDF Content Component
-    const PDFContent = () => (
-        <Box sx={{
-            backgroundColor: "#fff",
-            fontFamily: "Arial, sans-serif",
-            lineHeight: 1.4,
-            fontSize: '12px',
-            color: '#000'
-        }}>
-            {/* Page 1 */}
-            <Box className="pdf-page" sx={{
-                minHeight: '270mm',
-                padding: '20px',
-                boxSizing: 'border-box'
-            }}>
-                {/* Header with Logo and Company Info */}
-                <Box className="header">
-                    <Box className="logo-container">
-                        <img
-                            src={companyLogo}
-                            alt={`${quotationData.footer.company} Logo`}
-                            className="logo-img"
-                            onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                            }}
-                        />
-                        <Box
-                            className="logo-fallback"
-                            sx={{
-                                display: 'none',
-                                width: '100px',  // Reduced size
-                                height: '40px',  // Reduced size
-                                backgroundColor: '#f0f0f0',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '1px solid #ddd',
-                                fontSize: '10px'  // Smaller font for fallback
-                            }}
-                        >
-                            <Typography variant="body2" color="textSecondary">
-                                {quotationData.footer.company}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box className="company-info">
-                        <Typography variant="h6" fontWeight="bold">
-                            QUOTATION
-                        </Typography>
-                        <Typography variant="body2">
-                            Date: {quotationData.date}
-                        </Typography>
-                        <Typography variant="body2">
-                            Ref: {quotationData.reference}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Kind Attention
+  // PDF Content Component - Renders EVERYTHING
+  const PDFContent = () => (
+    <Box 
+      ref={contentRef}
+      sx={{ 
+        fontFamily: "'Segoe UI', 'Arial', sans-serif", 
+        background: "#fff", 
+        width: "100%",
+        position: "relative",
+      }}
+    >
+      {/* PAGE 1 - Header, Customer Info, Itinerary */}
+      <Box className="pdf-page" sx={{ p: 3, pageBreakAfter: "always" }}>
+        
+        {/* Header Section with Centered Logo */}
+        <Box sx={{ textAlign: "center", mb: 3 }}>
+          {/* Logo Centered - Now using local logo from folder */}
+          <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+            {imageElements.logo ? (
+              <img 
+                src={imageElements.logo} 
+                alt="Company Logo" 
+                style={{ 
+                  height: "80px", 
+                  width: "auto", 
+                  objectFit: "contain",
+                  display: "block"
+                }}
+                crossOrigin="anonymous"
+                onError={(e) => {
+                  console.error("Logo failed to display in PDF");
+                  e.target.style.display = "none";
+                }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  width: "80px",
+                  height: "80px",
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto",
+                }}
+              >
+                <Typography variant="h4" sx={{ color: "white", fontWeight: "bold" }}>
+                  {footerCompany.charAt(0)}
                 </Typography>
-                <Typography variant="body1" fontWeight="bold" gutterBottom>
-                    {quotationData.customer.name}
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                    {quotationData.customer.location}
-                </Typography>
-
-                <Box sx={{ mt: 3 }} className="section">
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        About Us
-                    </Typography>
-                    <Typography variant="body1" paragraph>
-                        {quotationData.footer.company} is the main online Tour operator Platform. We are tour packages specialist for Domestic and International both, offering a wide range of administrations that incorporate travel services need are the bundles given by our organisation in particular Domestic Tour Packages and International Tour Packages.
-                    </Typography>
-                </Box>
-
-                <Box sx={{ mt: 3 }} className="section">
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        Pickup/Drop Details
-                    </Typography>
-                    <Typography variant="body1">
-                        {quotationData.pickup.arrival}
-                    </Typography>
-                    <Typography variant="body1">
-                        {quotationData.pickup.departure}
-                    </Typography>
-                    <Typography variant="body1" fontWeight="bold" sx={{ mt: 1 }}>
-                        Destination: {quotationData.hotel.destination}
-                    </Typography>
-                    <Typography variant="body1" paragraph sx={{ mt: 1 }}>
-                        {quotationData.hotel.itinerary}
-                    </Typography>
-                </Box>
-
-                <Box sx={{ mt: 3 }} className="section">
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        Day Wise Itinerary
-                    </Typography>
-                    <Typography variant="body1" fontStyle="italic" paragraph>
-                        This is only tentative schedule for sightseeing and travel. Actual sightseeing may get affected due to weather, road conditions, local authority notices, shortage of timing, or off days.
-                    </Typography>
-
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        {quotationData.days.map((day, index) => (
-                            <Typography key={day.id} variant="body1">
-                                <strong>Day {index + 1} ({day.date}):</strong> {day.title} - {day.description}
-                            </Typography>
-                        ))}
-                    </Box>
-                </Box>
-            </Box>
-
-            {/* Page 2 - Package Details & Pricing */}
-            <Box className="pdf-page" sx={{
-                minHeight: '270mm',
-                padding: '20px',
-                boxSizing: 'border-box'
-            }}>
-                <Box className="header">
-                    <Box className="logo-container">
-                        <img
-                            src={companyLogo}
-                            alt={`${quotationData.footer.company} Logo`}
-                            className="logo-img"
-                            onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                            }}
-                        />
-                        <Box
-                            className="logo-fallback"
-                            sx={{
-                                display: 'none',
-                                width: '100px',  // Reduced size
-                                height: '40px',  // Reduced size
-                                backgroundColor: '#f0f0f0',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '1px solid #ddd',
-                                fontSize: '10px'  // Smaller font for fallback
-                            }}
-                        >
-                            <Typography variant="body2" color="textSecondary">
-                                {quotationData.footer.company}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box className="company-info">
-                        <Typography variant="h6" fontWeight="bold">
-                            QUOTATION
-                        </Typography>
-                        <Typography variant="body2">
-                            Date: {quotationData.date}
-                        </Typography>
-                        <Typography variant="body2">
-                            Ref: {quotationData.reference}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Package Details
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                    No of Guest: {quotationData.hotel.guests}
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                    No of Rooms: {quotationData.hotel.rooms}
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                    Meal Plan: {quotationData.hotel.mealPlan}
-                </Typography>
-
-                {/* Hotel Pricing Table */}
-                <TableContainer component={Paper} sx={{ mt: 2, mb: 2, boxShadow: 'none' }}>
-                    <Table size="small" sx={{ border: '1px solid #000' }}>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Destination</TableCell>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Nights</TableCell>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Standard</TableCell>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Deluxe</TableCell>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Superior</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {quotationData.hotelPricingData.map((row, index) => (
-                                <TableRow key={index}>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.destination}
-                                    </TableCell>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.nights}
-                                    </TableCell>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.standard}
-                                    </TableCell>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.deluxe}
-                                    </TableCell>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.superior}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-
-                {/* Pricing Summary */}
-                <Box sx={{ p: 2, backgroundColor: '#f9f9f9', borderRadius: 1, border: '1px solid #ddd' }}>
-                    <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                        Pricing Summary
-                    </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2">Discount:</Typography>
-                        <Typography variant="body2">{quotationData.pricing.discount}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2">GST:</Typography>
-                        <Typography variant="body2">{quotationData.pricing.gst}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                        <Typography variant="body1" fontWeight="bold">Total:</Typography>
-                        <Typography variant="body1" fontWeight="bold">{quotationData.pricing.total}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                        <Typography variant="body2">Received:</Typography>
-                        <Typography variant="body2">{quotationData.pricing.received}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2">Balance:</Typography>
-                        <Typography variant="body2">{quotationData.pricing.balance}</Typography>
-                    </Box>
-                </Box>
-            </Box>
-
-            {/* Page 3 - Policies */}
-            <Box className="pdf-page" sx={{
-                minHeight: '270mm',
-                padding: '20px',
-                boxSizing: 'border-box'
-            }}>
-                <Box className="header">
-                    <Box className="logo-container">
-                        <img
-                            src={companyLogo}
-                            alt={`${quotationData.footer.company} Logo`}
-                            className="logo-img"
-                            onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                            }}
-                        />
-                        <Box
-                            className="logo-fallback"
-                            sx={{
-                                display: 'none',
-                                width: '100px',  // Reduced size
-                                height: '40px',  // Reduced size
-                                backgroundColor: '#f0f0f0',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '1px solid #ddd',
-                                fontSize: '10px'  // Smaller font for fallback
-                            }}
-                        >
-                            <Typography variant="body2" color="textSecondary">
-                                {quotationData.footer.company}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box className="company-info">
-                        <Typography variant="h6" fontWeight="bold">
-                            QUOTATION
-                        </Typography>
-                        <Typography variant="body2">
-                            Date: {quotationData.date}
-                        </Typography>
-                        <Typography variant="body2">
-                            Ref: {quotationData.reference}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* Inclusion Policy */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Inclusion Policy
-                </Typography>
-                <Box component="ol" sx={{ pl: 2 }}>
-                    {quotationData.policies.inclusions.map((inclusion, index) => (
-                        <Typography key={index} variant="body1" component="li">
-                            {inclusion}
-                        </Typography>
-                    ))}
-                </Box>
-
-                <Box sx={{ borderTop: '1px solid #000', my: 2 }} />
-
-                {/* Exclusion Policy */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Exclusion Policy
-                </Typography>
-                <Typography variant="body1" paragraph>
-                    {quotationData.policies.exclusions}
-                </Typography>
-
-                <Box sx={{ borderTop: '1px solid #000', my: 2 }} />
-
-                {/* Payment Policy */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Payment Policy
-                </Typography>
-                <Typography variant="body1" paragraph>
-                    {quotationData.policies.paymentPolicy}
-                </Typography>
-
-                <Box sx={{ borderTop: '1px solid #000', my: 2 }} />
-
-                {/* Cancellation Policy */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Cancellation & Refund Policy
-                </Typography>
-                <Typography variant="body1" paragraph>
-                    {quotationData.policies.cancellationPolicy}
-                </Typography>
-            </Box>
-
-            {/* Page 4 - Terms & Footer */}
-            <Box className="pdf-page" sx={{
-                minHeight: '270mm',
-                padding: '20px',
-                boxSizing: 'border-box'
-            }}>
-                <Box className="header">
-                    <Box className="logo-container">
-                        <img
-                            src={companyLogo}
-                            alt={`${quotationData.footer.company} Logo`}
-                            className="logo-img"
-                            onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                            }}
-                        />
-                        <Box
-                            className="logo-fallback"
-                            sx={{
-                                display: 'none',
-                                width: '100px',  // Reduced size
-                                height: '40px',  // Reduced size
-                                backgroundColor: '#f0f0f0',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '1px solid #ddd',
-                                fontSize: '10px'  // Smaller font for fallback
-                            }}
-                        >
-                            <Typography variant="body2" color="textSecondary">
-                                {quotationData.footer.company}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box className="company-info">
-                        <Typography variant="h6" fontWeight="bold">
-                            QUOTATION
-                        </Typography>
-                        <Typography variant="body2">
-                            Date: {quotationData.date}
-                        </Typography>
-                        <Typography variant="body2">
-                            Ref: {quotationData.reference}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* Terms & Conditions */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Terms & Conditions
-                </Typography>
-                <Typography variant="body1" paragraph>
-                    {quotationData.policies.terms}
-                </Typography>
-
-                <Box sx={{ borderTop: '1px solid #000', my: 2 }} />
-
-                {/* Footer */}
-                <Box sx={{ mt: 4 }} className="section" textAlign="center">
-                    <Typography variant="body1" fontWeight="bold" gutterBottom>
-                        Thanks & Regards,
-                    </Typography>
-                    <Typography variant="body1" fontWeight="bold" gutterBottom>
-                        {quotationData.footer.company}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                        {quotationData.footer.contact}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                        {quotationData.footer.address}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                        {quotationData.footer.website}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                        Phone: {quotationData.footer.phone} | Email: {quotationData.footer.email}
-                    </Typography>
-                    <Typography variant="body1" sx={{ mt: 2 }}>
-                        GST: 09EYCPK8832C1ZC
-                    </Typography>
-                </Box>
-            </Box>
+              </Box>
+            )}
+          </Box>
+          
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+            Travel. Explore. Experience.
+          </Typography>
+          
+          {/* Quotation Title and Reference */}
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="h6" fontWeight="bold" color="primary">
+              CUSTOM QUOTATION
+            </Typography>
+            {reference && reference !== "N/A" && (
+              <Typography variant="caption" display="block">
+                Ref No: {reference}
+              </Typography>
+            )}
+            {date && date !== "N/A" && (
+              <Typography variant="caption" display="block">
+                Date: {date}
+              </Typography>
+            )}
+          </Box>
         </Box>
-    );
 
-    return (
-        <Dialog
-            open={open}
-            onClose={onClose}
-            maxWidth="lg"
-            fullWidth
-            PaperProps={{ sx: { minHeight: "80vh", width: "90vw" } }}
-        >
-            <DialogTitle>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="h6" component="div" fontWeight="bold">
-                        Preview PDF - {quotationData.customer.name}
-                    </Typography>
-                    <Box display="flex" gap={1}>
-                        <Button
-                            variant="outlined"
-                            color="primary"
-                            onClick={handlePrint}
-                            startIcon={<Print />}
-                            disabled={loading}
-                        >
-                            Print
-                        </Button>
-                        <Button
-                            variant="contained"
-                            color="error"
-                            onClick={handleDownloadPDF}
-                            startIcon={loading ? <CircularProgress size={20} /> : <Download />}
-                            disabled={loading}
-                        >
-                            {loading ? "Generating..." : "Download PDF"}
-                        </Button>
-                    </Box>
+        <Divider sx={{ mb: 3 }} />
+
+        {/* Banner Image Section */}
+        {imageElements.banner ? (
+          <Box sx={{ position: "relative", mb: 3 }}>
+            <img
+              src={imageElements.banner}
+              alt="Banner"
+              style={{
+                width: "100%",
+                height: "200px",
+                objectFit: "cover",
+                borderRadius: "12px",
+              }}
+              crossOrigin="anonymous"
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
+                color: "white",
+                p: 2,
+                borderRadius: "0 0 12px 12px",
+              }}
+            >
+              <Typography variant="h5" fontWeight="bold">
+                {quotationTitle}
+              </Typography>
+              {destinationSummary && destinationSummary !== "N/A" && (
+                <Typography variant="body2">{destinationSummary}</Typography>
+              )}
+            </Box>
+          </Box>
+        ) : (
+          <Box sx={{ mb: 3, textAlign: "center", py: 3, bgcolor: "#f5f5f5", borderRadius: 2 }}>
+            <Typography variant="h4" fontWeight="bold" color="primary">
+              {quotationTitle}
+            </Typography>
+            {destinationSummary && destinationSummary !== "N/A" && (
+              <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+                {destinationSummary}
+              </Typography>
+            )}
+          </Box>
+        )}
+
+        {/* Customer Information Card */}
+        <Paper elevation={2} sx={{ p: 2, mb: 3, background: "#f8f9ff" }}>
+          <Typography variant="subtitle1" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+            <Person fontSize="small" color="primary" /> Customer Details
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <Typography fontWeight="bold" variant="body1">{customerName}</Typography>
+              {customerLocation && customerLocation !== "N/A" && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                  <LocationOn fontSize="small" sx={{ fontSize: 12, color: "#666" }} />
+                  <Typography variant="body2">{customerLocation}</Typography>
                 </Box>
-            </DialogTitle>
-            <DialogContent sx={{ p: 0, position: 'relative' }}>
-                {/* Error Snackbar */}
-                <Snackbar
-                    open={!!error}
-                    autoHideDuration={6000}
-                    onClose={handleCloseError}
-                    anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                >
-                    <Alert onClose={handleCloseError} severity="error" sx={{ width: '100%' }}>
-                        {error}
-                    </Alert>
-                </Snackbar>
+              )}
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              {customerPhone && customerPhone !== "N/A" && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <LocalPhone fontSize="small" sx={{ fontSize: 12, color: "#666" }} />
+                  <Typography variant="body2">{customerPhone}</Typography>
+                </Box>
+              )}
+              {customerEmail && customerEmail !== "N/A" && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                  <Email fontSize="small" sx={{ fontSize: 12, color: "#666" }} />
+                  <Typography variant="body2">{customerEmail}</Typography>
+                </Box>
+              )}
+            </Grid>
+          </Grid>
+        </Paper>
 
-                {loading && (
-                    <Box
-                        display="flex"
-                        justifyContent="center"
-                        alignItems="center"
-                        height="100%"
-                        position="absolute"
-                        top={0}
-                        left={0}
-                        right={0}
-                        bottom={0}
-                        bgcolor="rgba(255,255,255,0.8)"
-                        zIndex={1}
-                    >
-                        <Box textAlign="center">
-                            <CircularProgress size={40} />
-                            <Typography variant="body2" sx={{ mt: 1 }}>
-                                Generating PDF...
-                            </Typography>
-                        </Box>
-                    </Box>
+        {/* Travel & Hotel Details */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6}>
+            <Paper elevation={1} sx={{ p: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                <FlightTakeoff fontSize="small" color="primary" />
+                <Typography fontWeight="bold">Pickup Details</Typography>
+              </Box>
+              {pickupArrival && pickupArrival !== "N/A" ? (
+                <Typography variant="body2">Arrival: {pickupArrival}</Typography>
+              ) : (
+                <Typography variant="body2" color="text.secondary">Not specified</Typography>
+              )}
+              {pickupDeparture && pickupDeparture !== "N/A" ? (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+                  <FlightLand fontSize="small" color="primary" />
+                  <Typography variant="body2">Departure: {pickupDeparture}</Typography>
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Departure not specified
+                </Typography>
+              )}
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Paper elevation={1} sx={{ p: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                <Hotel fontSize="small" color="primary" />
+                <Typography fontWeight="bold">Accommodation</Typography>
+              </Box>
+              {hotelGuests && hotelGuests !== "N/A" && (
+                <Typography variant="body2">👥 Guests: {hotelGuests}</Typography>
+              )}
+              {hotelRooms && hotelRooms !== "N/A" && (
+                <Typography variant="body2">🛏️ Rooms: {hotelRooms}</Typography>
+              )}
+              {hotelType && hotelType !== "N/A" && (
+                <Typography variant="body2">⭐ Hotel Type: {hotelType}</Typography>
+              )}
+              {hotelMealPlan && hotelMealPlan !== "N/A" && (
+                <Typography variant="body2">🍽️ Meal Plan: {hotelMealPlan}</Typography>
+              )}
+              {hotelDestination && hotelDestination !== "N/A" && (
+                <Typography variant="body2">📍 Destination: {hotelDestination}</Typography>
+              )}
+              {!hotelGuests && !hotelRooms && !hotelType && !hotelMealPlan && (
+                <Typography variant="body2" color="text.secondary">Not specified</Typography>
+              )}
+            </Paper>
+          </Grid>
+        </Grid>
+
+        {/* Itinerary Section Title */}
+        <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          📋 Detailed Itinerary
+        </Typography>
+
+        {/* General Itinerary */}
+        {hotelItinerary && hotelItinerary !== "N/A" && (
+          <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {hotelItinerary}
+            </Typography>
+          </Paper>
+        )}
+
+        {/* Day-wise Itinerary */}
+        {days && days.length > 0 ? (
+          days.map((day, i) => (
+            <Paper key={i} elevation={1} sx={{ mb: 2, overflow: "hidden" }}>
+              {imageElements[`day_${i}`] && (
+                <img
+                  src={imageElements[`day_${i}`]}
+                  alt={day.title || `Day ${i + 1}`}
+                  style={{
+                    width: "100%",
+                    height: "200px",
+                    objectFit: "cover",
+                  }}
+                  crossOrigin="anonymous"
+                />
+              )}
+              <Box sx={{ p: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, flexWrap: "wrap", gap: 1 }}>
+                  <Typography fontWeight="bold" variant="subtitle1" color="primary">
+                    Day {i + 1}: {day.title || `Day ${i + 1}`}
+                  </Typography>
+                  {(day.date || day.dayDate) && (day.date !== "N/A" || day.dayDate !== "N/A") && (
+                    <Chip label={day.dayDate || day.date} size="small" sx={{ fontSize: "10px" }} />
+                  )}
+                </Box>
+                <Typography variant="body2" paragraph sx={{ mt: 1, whiteSpace: "pre-wrap" }}>
+                  {day.description || "No description available"}
+                </Typography>
+                {(day.meal || (day.hotel && day.hotel !== "N/A")) && (
+                  <Box sx={{ display: "flex", gap: 2, mt: 1, pt: 1, borderTop: "1px solid #f0f0f0", flexWrap: "wrap" }}>
+                    {day.meal && (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <Restaurant fontSize="small" sx={{ fontSize: 14, color: "#666" }} />
+                        <Typography variant="caption">Meal: {day.meal}</Typography>
+                      </Box>
+                    )}
+                    {day.hotel && day.hotel !== "N/A" && (
+                      <Typography variant="caption" color="text.secondary">
+                        🏨 Hotel: {day.hotel}
+                      </Typography>
+                    )}
+                  </Box>
                 )}
+              </Box>
+            </Paper>
+          ))
+        ) : (
+          <Paper sx={{ p: 2, textAlign: "center" }}>
+            <Typography color="text.secondary">No itinerary details available</Typography>
+          </Paper>
+        )}
+      </Box>
 
-                <Box sx={{ height: "70vh", width: "100%", overflow: 'auto' }} ref={printRef}>
-                    <PDFContent />
-                </Box>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose} startIcon={<Close />}>
-                    Close
-                </Button>
-            </DialogActions>
-        </Dialog>
-    );
+      {/* PAGE 2 - Pricing and Payment Summary */}
+      <Box className="pdf-page" sx={{ p: 3, pageBreakAfter: "always" }}>
+        
+        {/* Hotel Pricing Table */}
+        {hotelPricingData && hotelPricingData.length > 0 && (
+          <>
+            <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
+              🏨 Hotel & Package Pricing
+            </Typography>
+            <TableContainer component={Paper} elevation={2} sx={{ mb: 3, overflowX: "auto" }}>
+              <Table sx={{ minWidth: 650 }}>
+                <TableHead sx={{ background: "#667eea" }}>
+                  <TableRow>
+                    {hotelPricingData[0] && Object.keys(hotelPricingData[0]).map((header) => (
+                      (header === "destination" ||
+                        header === "nights" ||
+                        (header === "standard" && showStandardCol) ||
+                        (header === "deluxe" && showDeluxeCol) ||
+                        (header === "superior" && showSuperiorCol)) && (
+                        <TableCell key={header} sx={{ color: "white", fontWeight: "bold", textTransform: "capitalize" }}>
+                          {header.replace(/([A-Z])/g, ' $1').trim()}
+                        </TableCell>
+                      )
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {hotelPricingData.map((row, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>{row?.destination || "-"}</TableCell>
+                      <TableCell>{row?.nights || "-"}</TableCell>
+                      {showStandardCol && <TableCell>{row?.standard || "-"}</TableCell>}
+                      {showDeluxeCol && <TableCell>{row?.deluxe || "-"}</TableCell>}
+                      {showSuperiorCol && <TableCell>{row?.superior || "-"}</TableCell>}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
+        )}
+
+        {/* Payment Summary */}
+        <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
+          💰 Payment Summary
+        </Typography>
+
+        <TableContainer component={Paper} elevation={2} sx={{ mb: 3 }}>
+          <Table>
+            <TableHead sx={{ background: "#667eea" }}>
+              <TableRow>
+                <TableCell sx={{ color: "white", fontWeight: "bold", fontSize: "14px" }}>Particulars</TableCell>
+                <TableCell align="right" sx={{ color: "white", fontWeight: "bold", fontSize: "14px" }}>Amount (₹)</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {effectiveTotal > 0 && (
+                <TableRow>
+                  <TableCell>Total Package Cost</TableCell>
+                  <TableCell align="right">{formatCurrency(effectiveTotal)}</TableCell>
+                </TableRow>
+              )}
+              {pricingDiscount && pricingDiscount !== "N/A" && pricingDiscount !== "₹ 0" && pricingDiscount !== 0 && (
+                <TableRow>
+                  <TableCell>Discount</TableCell>
+                  <TableCell align="right" sx={{ color: "#2e7d32" }}>-{formatCurrency(pricingDiscount)}</TableCell>
+                </TableRow>
+              )}
+              {pricingGst && pricingGst !== "N/A" && pricingGst !== "₹ 0" && pricingGst !== 0 && (
+                <TableRow>
+                  <TableCell>GST</TableCell>
+                  <TableCell align="right">{formatCurrency(pricingGst)}</TableCell>
+                </TableRow>
+              )}
+              <TableRow sx={{ background: "#f5f5f5" }}>
+                <TableCell sx={{ fontWeight: "bold", fontSize: "16px" }}>Grand Total</TableCell>
+                <TableCell align="right" sx={{ fontWeight: "bold", fontSize: "16px" }}>
+                  {formatCurrency(effectiveTotal)}
+                </TableCell>
+              </TableRow>
+              {footerReceived && footerReceived !== "N/A" && footerReceived !== "₹ 0" && footerReceived !== 0 && (
+                <TableRow>
+                  <TableCell>Amount Received</TableCell>
+                  <TableCell align="right" sx={{ color: "#2e7d32", fontWeight: "bold" }}>
+                    {formatCurrency(footerReceived)}
+                  </TableCell>
+                </TableRow>
+              )}
+              {footerBalance && footerBalance !== "N/A" && footerBalance !== "₹ 0" && footerBalance !== 0 && (
+                <TableRow sx={{ background: "#fff3e0" }}>
+                  <TableCell sx={{ fontWeight: "bold", fontSize: "16px" }}>Balance Amount</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: "bold", fontSize: "18px", color: "#d32f2f" }}>
+                    {formatCurrency(footerBalance)}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {/* Additional Notes if any */}
+        {(pricingDiscount === "₹ 0" || pricingDiscount === 0) && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: "block" }}>
+            * No discount applied to this quotation
+          </Typography>
+        )}
+      </Box>
+
+      {/* PAGE 3 - All Policies and Terms */}
+      <Box className="pdf-page" sx={{ p: 3 }}>
+        
+        {/* Inclusion Policy */}
+        {inclusionArray.length > 0 && inclusionArray.some(item => item && item !== "") && (
+          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e8f5e9" }}>
+            <Typography fontWeight="bold" sx={{ color: "#2e7d32", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+              <CheckCircle fontSize="small" /> ✅ Inclusion Policy
+            </Typography>
+            {inclusionArray.map((item, idx) => (
+              item && item !== "" && (
+                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
+                  • {item}
+                </Typography>
+              )
+            ))}
+          </Paper>
+        )}
+
+        {/* Exclusion Policy */}
+        {exclusionArray.length > 0 && exclusionArray.some(item => item && item !== "") && (
+          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#ffebee" }}>
+            <Typography fontWeight="bold" sx={{ color: "#c62828", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+              <Cancel fontSize="small" /> ❌ Exclusion Policy
+            </Typography>
+            {exclusionArray.map((item, idx) => (
+              item && item !== "" && (
+                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
+                  • {item}
+                </Typography>
+              )
+            ))}
+          </Paper>
+        )}
+
+        {/* Payment Policy */}
+        {paymentPolicyArray.length > 0 && paymentPolicyArray.some(item => item && item !== "") && (
+          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e3f2fd" }}>
+            <Typography fontWeight="bold" sx={{ color: "#1565c0", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+              <Payments fontSize="small" /> 💳 Payment Policy
+            </Typography>
+            {paymentPolicyArray.map((item, idx) => (
+              item && item !== "" && (
+                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
+                  • {item}
+                </Typography>
+              )
+            ))}
+          </Paper>
+        )}
+
+        {/* Cancellation & Refund Policy */}
+        {cancellationArray.length > 0 && cancellationArray.some(item => item && item !== "") && (
+          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#fff3e0" }}>
+            <Typography fontWeight="bold" sx={{ color: "#e65100", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+              <MoneyOff fontSize="small" /> 🔄 Cancellation & Refund Policy
+            </Typography>
+            {cancellationArray.map((item, idx) => (
+              item && item !== "" && (
+                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
+                  • {item}
+                </Typography>
+              )
+            ))}
+          </Paper>
+        )}
+
+        {/* Terms & Conditions */}
+        {termsArray.length > 0 && termsArray.some(item => item && item !== "") && (
+          <Paper elevation={2} sx={{ p: 2, mb: 3, background: "#f5f5f5" }}>
+            <Typography fontWeight="bold" sx={{ color: "#424242", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+              <Description fontSize="small" /> 📋 Terms & Conditions
+            </Typography>
+            {termsArray.map((item, idx) => (
+              item && item !== "" && (
+                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
+                  {idx + 1}. {item}
+                </Typography>
+              )
+            ))}
+          </Paper>
+        )}
+
+        {/* Footer Section */}
+        <Divider sx={{ my: 2 }} />
+        <Box textAlign="center">
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2, mb: 1, flexWrap: "wrap" }}>
+            {imageElements.logo && (
+              <img 
+                src={imageElements.logo} 
+                alt="Company Logo" 
+                style={{ height: "40px", width: "auto", objectFit: "contain" }}
+                crossOrigin="anonymous"
+              />
+            )}
+            <Typography fontWeight="bold" sx={{ color: "#667eea", fontSize: "18px" }}>
+              {footerCompany}
+            </Typography>
+          </Box>
+          {footerAddress && footerAddress !== "N/A" && (
+            <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
+              📍 {footerAddress}
+            </Typography>
+          )}
+          <Box sx={{ display: "flex", justifyContent: "center", gap: 2, flexWrap: "wrap", mb: 1 }}>
+            {footerPhone && footerPhone !== "N/A" && (
+              <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                📞 {footerPhone}
+              </Typography>
+            )}
+            {footerEmail && footerEmail !== "N/A" && (
+              <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                ✉️ {footerEmail}
+              </Typography>
+            )}
+            {footerWebsite && footerWebsite !== "N/A" && (
+              <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                🌐 {footerWebsite}
+              </Typography>
+            )}
+          </Box>
+          {footerContact && footerContact !== "N/A" && (
+            <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+              👤 Contact Person: {footerContact}
+              {footerContactDesignation ? ` (${footerContactDesignation})` : ""}
+            </Typography>
+          )}
+          <Typography variant="caption" display="block" sx={{ mt: 2, color: "#999", fontSize: "10px" }}>
+            This is a computer generated quotation. No signature required.
+          </Typography>
+          <Typography variant="caption" display="block" sx={{ color: "#999", fontSize: "9px", mt: 0.5 }}>
+            © {new Date().getFullYear()} {footerCompany}. All rights reserved.
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>
+        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+          <Typography variant="h6" fontWeight="bold">
+            📄 Quotation Preview - {customerName}
+          </Typography>
+
+          <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel id="pdf-company-select-label">Company</InputLabel>
+              <Select
+                labelId="pdf-company-select-label"
+                value={selectedCompanyId}
+                label="Company"
+                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                disabled={loadingCompanies}
+              >
+                {companyOptions.map((c) => (
+                  <MenuItem key={c._id} value={c._id}>
+                    {c.companyName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button 
+              onClick={handlePrint} 
+              startIcon={<Print />} 
+              variant="outlined"
+              disabled={!renderComplete}
+            >
+              Print
+            </Button>
+            <Button
+              onClick={handleDownloadPDF}
+              startIcon={loading ? <CircularProgress size={20} /> : <Download />}
+              variant="contained"
+              disabled={loading || !renderComplete}
+              sx={{ background: "#667eea", "&:hover": { background: "#5a67d8" } }}
+            >
+              {loading ? "Generating PDF..." : "Download PDF"}
+            </Button>
+          </Box>
+        </Box>
+      </DialogTitle>
+
+      <DialogContent dividers>
+        <Snackbar 
+          open={!!error} 
+          autoHideDuration={6000} 
+          onClose={() => setError("")}
+          anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        >
+          <Alert severity="error" onClose={() => setError("")} sx={{ width: "100%" }}>
+            {error}
+          </Alert>
+        </Snackbar>
+
+        {(!imagesLoaded || !renderComplete) && open && (
+          <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" py={4}>
+            <CircularProgress size={40} />
+            <Typography variant="body1" sx={{ mt: 2 }}>
+              Loading all content and images...
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+              Please wait while we prepare your quotation
+            </Typography>
+          </Box>
+        )}
+
+        <Box 
+          ref={printRef} 
+          sx={{ 
+            maxHeight: "70vh", 
+            overflowY: "auto",
+            bgcolor: "#fff",
+            display: (imagesLoaded && renderComplete) ? "block" : "none",
+            "&::-webkit-scrollbar": { width: "8px" },
+            "&::-webkit-scrollbar-track": { background: "#f1f1f1", borderRadius: "4px" },
+            "&::-webkit-scrollbar-thumb": { background: "#888", borderRadius: "4px" },
+            "&::-webkit-scrollbar-thumb:hover": { background: "#555" },
+          }}
+        >
+          <PDFContent />
+        </Box>
+      </DialogContent>
+
+      <DialogActions>
+        <Button onClick={onClose} startIcon={<Close />} color="inherit">
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 };
 
 export default QuotationPDFDialog;
