@@ -15,6 +15,8 @@ export const createCompany = asyncHandler(async (req, res) => {
         stateCode,
         companyWebsite,
         authorizedSignatory,
+        authorizedSignatoryName,
+        authorizedSignatoryDesignation,
         termsConditions,
         paymentLink,
     } = req.body;
@@ -44,6 +46,10 @@ export const createCompany = asyncHandler(async (req, res) => {
             ? JSON.parse(authorizedSignatory)
             : authorizedSignatory;
 
+    const signatoryName = parsedSignatory?.name ?? authorizedSignatoryName;
+    const signatoryDesignation =
+        parsedSignatory?.designation ?? authorizedSignatoryDesignation;
+
     const company = await Company.create({
         companyName,
         address,
@@ -54,8 +60,8 @@ export const createCompany = asyncHandler(async (req, res) => {
         companyWebsite,
         logo: logoUrl,
         authorizedSignatory: {
-            name: parsedSignatory?.name,
-            designation: parsedSignatory?.designation,
+            name: signatoryName,
+            designation: signatoryDesignation,
             signatureImage: signatureUrl,
         },
         termsConditions,
@@ -86,7 +92,20 @@ export const getCompanyById = asyncHandler(async (req, res) => {
 // ✅ UPDATE Company
 export const updateCompany = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { companyName, address, phone, email, gstin, stateCode, authorizedSignatory, termsConditions, paymentLink ,companyWebsite} = req.body;
+    const {
+        companyName,
+        address,
+        phone,
+        email,
+        gstin,
+        stateCode,
+        authorizedSignatory,
+        authorizedSignatoryName,
+        authorizedSignatoryDesignation,
+        termsConditions,
+        paymentLink,
+        companyWebsite,
+    } = req.body;
 
     const company = await Company.findById(id);
     if (!company) throw new ApiError(404, "Company not found");
@@ -112,6 +131,13 @@ export const updateCompany = asyncHandler(async (req, res) => {
             ? JSON.parse(authorizedSignatory)
             : authorizedSignatory;
 
+    const nextSignatoryName =
+        parsedSignatory?.name ?? authorizedSignatoryName ?? company.authorizedSignatory?.name;
+    const nextSignatoryDesignation =
+        parsedSignatory?.designation ??
+        authorizedSignatoryDesignation ??
+        company.authorizedSignatory?.designation;
+
     company.companyName = companyName || company.companyName;
     company.address = address || company.address;
     company.phone = phone || company.phone;
@@ -120,9 +146,8 @@ export const updateCompany = asyncHandler(async (req, res) => {
     company.stateCode = stateCode || company.stateCode;
     company.logo = logoUrl;
     company.authorizedSignatory = {
-        name: parsedSignatory?.name || company.authorizedSignatory?.name,
-        designation:
-            parsedSignatory?.designation || company.authorizedSignatory?.designation,
+        name: nextSignatoryName,
+        designation: nextSignatoryDesignation,
         signatureImage: signatureUrl,
     };
     company.termsConditions = termsConditions || company.termsConditions;
