@@ -613,6 +613,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     cc,
     type = "normal",
     subject,
+    bodyHtml,
     customText = {},
     senderAccount,
     companyId,
@@ -629,7 +630,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   const selectedCompany = await resolveCompanyForEmail({ companyId, companyName });
   const meta = await loadEmailMeta(selectedCompany);
 
-  const body =
+  const generatedBody =
     type === "booking"
       ? buildCustomQuotationBookingEmail(quotation, {
           ...(customText.booking || {}),
@@ -640,6 +641,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
           customText.normal || {},
           meta,
         );
+  const body = String(bodyHtml || "").trim() || generatedBody;
 
   const finalSubject =
     subject ||
