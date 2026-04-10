@@ -11,7 +11,9 @@ import GlobalSettings from "../../models/globalSettings.model.js";
 import {
   buildCustomQuotationNormalEmail,
   buildCustomQuotationBookingEmail,
+  packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
+import ReceivedVoucher from "../../models/payment.model.js";
 
 // Counter Schema and Model - defined in the same file
 const counterSchema = new mongoose.Schema({
@@ -516,6 +518,45 @@ const resolveMailAuth = (senderAccount) => {
   return { user, pass };
 };
 
+/** Receive vouchers only — matches dashboard `summarizeVoucherAmounts` (Cr / Receive Voucher). */
+const sumReceivedFromClient = (vouchers) => {
+  let receivedFromClient = 0;
+  for (const v of vouchers || []) {
+    const n = Number(v?.amount) || 0;
+    const isReceive =
+      v?.drCr === "Cr" || v?.paymentType === "Receive Voucher";
+    if (isReceive) receivedFromClient += n;
+  }
+  return receivedFromClient;
+};
+
+/**
+ * Fills booking-mail payment lines when the client does not pass customText.booking amounts.
+ * Uses vouchers with quotationRef === quotation.quotationId and package total from packageTotals.
+ */
+const loadBookingPaymentDefaults = async (quotation) => {
+  const quotationId = quotation?.quotationId;
+  if (!quotationId) return {};
+
+  const vouchers = await ReceivedVoucher.find({
+    quotationRef: quotationId,
+  }).lean();
+  const receivedAmount = sumReceivedFromClient(vouchers);
+  const { total } = packageTotals(quotation);
+  const dueAmount = Math.max(0, total - receivedAmount);
+
+  return { receivedAmount, dueAmount };
+};
+
+const mergeBookingEmailPayload = async (quotation, meta, bookingCustom = {}) => {
+  const defaults = await loadBookingPaymentDefaults(quotation);
+  return {
+    ...meta,
+    ...defaults,
+    ...bookingCustom,
+  };
+};
+
 const loadEmailMeta = async (company) => {
   const globalSettings = await GlobalSettings.findOne().lean();
   const accountHolder = company?.companyName;
@@ -581,10 +622,12 @@ export const previewCustomQuotationMail = asyncHandler(async (req, res) => {
     customText.normal || {},
     meta,
   );
-  const booking = buildCustomQuotationBookingEmail(
+  const bookingPayload = await mergeBookingEmailPayload(
     quotation,
-    { ...(customText.booking || {}), ...meta },
+    meta,
+    customText.booking || {},
   );
+  const booking = buildCustomQuotationBookingEmail(quotation, bookingPayload);
 
   return res.status(200).json(
     new ApiResponse(
@@ -632,10 +675,14 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
 
   const generatedBody =
     type === "booking"
-      ? buildCustomQuotationBookingEmail(quotation, {
-          ...(customText.booking || {}),
-          ...meta,
-        })
+      ? buildCustomQuotationBookingEmail(
+          quotation,
+          await mergeBookingEmailPayload(
+            quotation,
+            meta,
+            customText.booking || {},
+          ),
+        )
       : buildCustomQuotationNormalEmail(
           quotation,
           customText.normal || {},
