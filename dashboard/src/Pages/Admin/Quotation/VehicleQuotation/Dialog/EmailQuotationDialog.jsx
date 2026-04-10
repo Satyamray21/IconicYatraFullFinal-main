@@ -66,6 +66,13 @@ const EmailQuotationDialog = ({
         onSubmit={handleSubmit}
       >
         {({ errors, touched, values, setFieldValue }) => (
+          (() => {
+            const appendToMessage = (snippet) => {
+              const current = values.message || "";
+              const separator = current && !current.endsWith("\n") ? "\n" : "";
+              setFieldValue("message", `${current}${separator}${snippet}`);
+            };
+            return (
           <Form>
             <DialogContent dividers>
               <Grid container spacing={2}>
@@ -186,6 +193,42 @@ const EmailQuotationDialog = ({
                 </Grid>
                 <Grid size={{xs:12}}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Email Body (Editable HTML)
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() =>
+                        appendToMessage(
+                          '<h3 style="color:#d32f2f; font-weight:bold;">YOUR HEADING</h3>'
+                        )
+                      }
+                    >
+                      Add Red Heading
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => appendToMessage("<p>Write your line here...</p>")}
+                    >
+                      Add Line
+                    </Button>
+                  </Box>
+                  <TextField
+                    fullWidth
+                    name="message"
+                    label="Message HTML"
+                    multiline
+                    minRows={8}
+                    value={values.message || ""}
+                    onChange={(e) => setFieldValue("message", e.target.value)}
+                    error={touched.message && Boolean(errors.message)}
+                    helperText={touched.message && errors.message}
+                  />
+                </Grid>
+                <Grid size={{xs:12}}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
                     Live Preview
                   </Typography>
                   <Paper variant="outlined" sx={{ p: 2, maxHeight: 280, overflow: "auto" }}>
@@ -214,6 +257,8 @@ const EmailQuotationDialog = ({
               </Button>
             </DialogActions>
           </Form>
+            );
+          })()
         )}
       </Formik>
     </Dialog>
