@@ -67,7 +67,9 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       if (result === undefined || result === null) return defaultValue;
       result = result[key];
     }
-    return result !== undefined && result !== null && result !== "" ? result : defaultValue;
+    return result !== undefined && result !== null && result !== ""
+      ? result
+      : defaultValue;
   };
   const getRawValue = (obj, path) => {
     if (!obj) return undefined;
@@ -89,9 +91,9 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       numAmount = parseFloat(cleaned);
     }
     if (isNaN(numAmount)) return "₹ 0";
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(numAmount);
@@ -104,24 +106,24 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
         resolve(null);
         return;
       }
-      
+
       const img = new Image();
       img.onload = () => {
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         let width = img.width;
         let height = img.height;
-        
+
         if (width > maxWidth) {
           height = (height * maxWidth) / width;
           width = maxWidth;
         }
-        
+
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
-        
-        const compressed = canvas.toDataURL('image/jpeg', quality);
+
+        const compressed = canvas.toDataURL("image/jpeg", quality);
         resolve(compressed);
       };
       img.onerror = () => {
@@ -139,8 +141,8 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
         resolve(null);
         return;
       }
-      
-      if (url.startsWith('data:image')) {
+
+      if (url.startsWith("data:image")) {
         if (compress) {
           compressImage(url, 800, 0.7).then(resolve);
         } else {
@@ -148,50 +150,51 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
         }
         return;
       }
-      
+
       const img = new Image();
       img.crossOrigin = "Anonymous";
-      
+
       const timeoutId = setTimeout(() => {
         console.warn("Image load timeout:", url);
         resolve(null);
       }, 10000);
-      
+
       img.onload = () => {
         clearTimeout(timeoutId);
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         let width = img.width;
         let height = img.height;
-        
+
         // Resize large images
         const maxWidth = 800;
         if (width > maxWidth) {
           height = (height * maxWidth) / width;
           width = maxWidth;
         }
-        
+
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
-        
-        const base64 = canvas.toDataURL('image/jpeg', 0.7);
+
+        const base64 = canvas.toDataURL("image/jpeg", 0.7);
         resolve(base64);
       };
-      
+
       img.onerror = () => {
         clearTimeout(timeoutId);
         console.warn("Failed to load image:", url);
         resolve(null);
       };
-      
+
       img.src = url;
     });
   }, []);
 
   // Extract all data from the quotation prop
   const quotationData = quotation || {};
-  const selectedCompany = companyOptions.find((c) => c?._id === selectedCompanyId) || null;
+  const selectedCompany =
+    companyOptions.find((c) => c?._id === selectedCompanyId) || null;
 
   useEffect(() => {
     const fetchCompanies = async () => {
@@ -230,7 +233,11 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
   const hotelDestination = getValue(quotationData, "hotel.destination");
   const hotelItinerary = getValue(quotationData, "hotel.itinerary");
 
-  const quotationTitle = getValue(quotationData, "quotationTitle", "Travel Quotation");
+  const quotationTitle = getValue(
+    quotationData,
+    "quotationTitle",
+    "Travel Quotation",
+  );
   const destinationSummary = getValue(quotationData, "destinationSummary");
   const reference = getValue(quotationData, "reference");
   const date = getValue(quotationData, "date");
@@ -250,37 +257,53 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
 
   const totalFromPricing = toNumber(pricingTotal);
   const totalFromFooter = toNumber(getRawValue(quotationData, "footer.total"));
-  const hotelPricingRows = Array.isArray(getRawValue(quotationData, "hotelPricingData"))
+  const hotelPricingRows = Array.isArray(
+    getRawValue(quotationData, "hotelPricingData"),
+  )
     ? getRawValue(quotationData, "hotelPricingData")
     : [];
   const totalCostRow =
     hotelPricingRows.find((row) =>
-      String(row?.destination || "").toLowerCase().includes("total quotation cost")
+      String(row?.destination || "")
+        .toLowerCase()
+        .includes("total quotation cost"),
     ) ||
     hotelPricingRows.find((row) =>
-      String(row?.destination || "").toLowerCase().includes("quotation cost")
+      String(row?.destination || "")
+        .toLowerCase()
+        .includes("quotation cost"),
     );
   const totalFromHotelRow =
     toNumber(totalCostRow?.standard) ||
     toNumber(totalCostRow?.deluxe) ||
     toNumber(totalCostRow?.superior);
   // Prefer pricing table totals because quotation.pricing.total can be stale in some flows.
-  const effectiveTotal = totalFromHotelRow ?? totalFromPricing ?? totalFromFooter ?? 0;
+  const effectiveTotal =
+    totalFromHotelRow ?? totalFromPricing ?? totalFromFooter ?? 0;
+  const standardTotal = toNumber(totalCostRow?.standard);
+  const deluxeTotal = toNumber(totalCostRow?.deluxe);
+  const superiorTotal = toNumber(totalCostRow?.superior);
 
   // Priority: selected company logo first, then quotation data logos
-  const logoUrl = selectedCompany?.logo ||
-                  getValue(quotationData, "logo") || 
-                  getValue(quotationData, "footer.logo") || 
-                  getValue(quotationData, "companyLogo") ||
-                  null;
+  const logoUrl =
+    selectedCompany?.logo ||
+    getValue(quotationData, "logo") ||
+    getValue(quotationData, "footer.logo") ||
+    getValue(quotationData, "companyLogo") ||
+    null;
 
   const footerCompany =
-    selectedCompany?.companyName || getValue(quotationData, "footer.company", "Iconic Yatra");
-  const footerAddress = selectedCompany?.address || getValue(quotationData, "footer.address");
-  const footerPhone = selectedCompany?.phone || getValue(quotationData, "footer.phone");
-  const footerEmail = selectedCompany?.email || getValue(quotationData, "footer.email");
+    selectedCompany?.companyName ||
+    getValue(quotationData, "footer.company", "Iconic Yatra");
+  const footerAddress =
+    selectedCompany?.address || getValue(quotationData, "footer.address");
+  const footerPhone =
+    selectedCompany?.phone || getValue(quotationData, "footer.phone");
+  const footerEmail =
+    selectedCompany?.email || getValue(quotationData, "footer.email");
   const footerWebsite =
-    selectedCompany?.companyWebsite || getValue(quotationData, "footer.website");
+    selectedCompany?.companyWebsite ||
+    getValue(quotationData, "footer.website");
   const footerContact =
     selectedCompany?.authorizedSignatory?.name ||
     getValue(quotationData, "footer.contact");
@@ -291,50 +314,103 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
 
   const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
   const policiesExclusions = getValue(quotationData, "policies.exclusions", []);
-  const policiesPaymentPolicy = getValue(quotationData, "policies.paymentPolicy", []);
-  const policiesCancellationPolicy = getValue(quotationData, "policies.cancellationPolicy", []);
+  const policiesPaymentPolicy = getValue(
+    quotationData,
+    "policies.paymentPolicy",
+    [],
+  );
+  const policiesCancellationPolicy = getValue(
+    quotationData,
+    "policies.cancellationPolicy",
+    [],
+  );
   const policiesTerms = getValue(quotationData, "policies.terms", []);
 
   const days = getValue(quotationData, "days", []);
   const bannerImage = getValue(quotationData, "bannerImage", "");
   const hotelPricingData = hotelPricingRows;
-  const hasUsefulValue = (value) => {
-    const text = String(value || "").trim();
-    return Boolean(text) && text !== "-";
+  const isSummaryPricingRow = (row) => {
+    const label = String(row?.destination || "").toLowerCase();
+    return label.includes("quotation cost") || label.includes("igst");
   };
-  const showStandardCol = hotelPricingData.some((row) => hasUsefulValue(row?.standard));
-  const showDeluxeCol = hotelPricingData.some((row) => hasUsefulValue(row?.deluxe));
-  const showSuperiorCol = hotelPricingData.some((row) => hasUsefulValue(row?.superior));
+  const hasHotelNameValue = (value) => {
+    const text = String(value || "").trim();
+    if (!text || text === "-") return false;
+    if (text.startsWith("₹")) return false;
+    return true;
+  };
+  const nonSummaryRows = hotelPricingData.filter(
+    (row) => !isSummaryPricingRow(row),
+  );
+  const renderHotelCellValue = (row, key) => {
+    const value = row?.[key];
+    if (isSummaryPricingRow(row)) return value || "-";
+    return hasHotelNameValue(value) ? value : "";
+  };
+  const showStandardCol = nonSummaryRows.some((row) =>
+    hasHotelNameValue(row?.standard),
+  );
+  const showDeluxeCol = nonSummaryRows.some((row) =>
+    hasHotelNameValue(row?.deluxe),
+  );
+  const showSuperiorCol = nonSummaryRows.some((row) =>
+    hasHotelNameValue(row?.superior),
+  );
+  const visiblePackageColumns = [
+    showStandardCol,
+    showDeluxeCol,
+    showSuperiorCol,
+  ].filter(Boolean).length;
 
   // Convert policies to array if they're strings
-  const inclusionArray = Array.isArray(policiesInclusions) ? policiesInclusions : 
-                        typeof policiesInclusions === "string" ? policiesInclusions.split("\n").filter(s => s.trim()) : 
-                        typeof policiesInclusions === "object" ? Object.values(policiesInclusions) : [];
-  const exclusionArray = Array.isArray(policiesExclusions) ? policiesExclusions : 
-                        typeof policiesExclusions === "string" ? policiesExclusions.split("\n").filter(s => s.trim()) : 
-                        typeof policiesExclusions === "object" ? Object.values(policiesExclusions) : [];
-  const paymentPolicyArray = Array.isArray(policiesPaymentPolicy) ? policiesPaymentPolicy : 
-                            typeof policiesPaymentPolicy === "string" ? policiesPaymentPolicy.split("\n").filter(s => s.trim()) : 
-                            typeof policiesPaymentPolicy === "object" ? Object.values(policiesPaymentPolicy) : [];
-  const cancellationArray = Array.isArray(policiesCancellationPolicy) ? policiesCancellationPolicy : 
-                           typeof policiesCancellationPolicy === "string" ? policiesCancellationPolicy.split("\n").filter(s => s.trim()) : 
-                           typeof policiesCancellationPolicy === "object" ? Object.values(policiesCancellationPolicy) : [];
-  const termsArray = Array.isArray(policiesTerms) ? policiesTerms : 
-                    typeof policiesTerms === "string" ? policiesTerms.split("\n").filter(s => s.trim()) : 
-                    typeof policiesTerms === "object" ? Object.values(policiesTerms) : [];
+  const inclusionArray = Array.isArray(policiesInclusions)
+    ? policiesInclusions
+    : typeof policiesInclusions === "string"
+      ? policiesInclusions.split("\n").filter((s) => s.trim())
+      : typeof policiesInclusions === "object"
+        ? Object.values(policiesInclusions)
+        : [];
+  const exclusionArray = Array.isArray(policiesExclusions)
+    ? policiesExclusions
+    : typeof policiesExclusions === "string"
+      ? policiesExclusions.split("\n").filter((s) => s.trim())
+      : typeof policiesExclusions === "object"
+        ? Object.values(policiesExclusions)
+        : [];
+  const paymentPolicyArray = Array.isArray(policiesPaymentPolicy)
+    ? policiesPaymentPolicy
+    : typeof policiesPaymentPolicy === "string"
+      ? policiesPaymentPolicy.split("\n").filter((s) => s.trim())
+      : typeof policiesPaymentPolicy === "object"
+        ? Object.values(policiesPaymentPolicy)
+        : [];
+  const cancellationArray = Array.isArray(policiesCancellationPolicy)
+    ? policiesCancellationPolicy
+    : typeof policiesCancellationPolicy === "string"
+      ? policiesCancellationPolicy.split("\n").filter((s) => s.trim())
+      : typeof policiesCancellationPolicy === "object"
+        ? Object.values(policiesCancellationPolicy)
+        : [];
+  const termsArray = Array.isArray(policiesTerms)
+    ? policiesTerms
+    : typeof policiesTerms === "string"
+      ? policiesTerms.split("\n").filter((s) => s.trim())
+      : typeof policiesTerms === "object"
+        ? Object.values(policiesTerms)
+        : [];
 
   // Pre-load all images as base64 with compression
   useEffect(() => {
     const loadAllImages = async () => {
       if (!open) return;
-      
+
       setRenderComplete(false);
       const loadedImages = {};
-      
+
       console.log("Loading logo from URL:", logoUrl);
-      
+
       // Load logo with compression (includes local logo if no other is provided)
-      if (logoUrl && typeof logoUrl === 'string' && logoUrl !== 'null') {
+      if (logoUrl && typeof logoUrl === "string" && logoUrl !== "null") {
         const base64Logo = await convertToBase64(logoUrl, true);
         if (base64Logo) {
           loadedImages.logo = base64Logo;
@@ -345,31 +421,35 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       } else {
         console.warn("No logo URL provided");
       }
-      
+
       // Load banner with compression
-      if (bannerImage && typeof bannerImage === 'string') {
+      if (bannerImage && typeof bannerImage === "string") {
         const base64Banner = await convertToBase64(bannerImage, true);
         if (base64Banner) loadedImages.banner = base64Banner;
       }
-      
+
       // Load day images with compression
       for (let i = 0; i < days.length; i++) {
         const day = days[i];
-        if (day.image && day.image.preview && typeof day.image.preview === 'string') {
+        if (
+          day.image &&
+          day.image.preview &&
+          typeof day.image.preview === "string"
+        ) {
           const base64DayImage = await convertToBase64(day.image.preview, true);
           if (base64DayImage) loadedImages[`day_${i}`] = base64DayImage;
         }
       }
-      
+
       setImageElements(loadedImages);
       setImagesLoaded(true);
-      
+
       // Wait for DOM to update with images
       setTimeout(() => {
         setRenderComplete(true);
       }, 500);
     };
-    
+
     if (open) {
       loadAllImages();
     }
@@ -382,7 +462,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
 
       // Wait for render to complete
       if (!renderComplete) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
 
       // Dynamically import required libraries
@@ -407,7 +487,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       element.style.maxHeight = "none";
 
       // Additional wait for any dynamic content
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Capture the entire content with optimized settings
       const canvas = await html2canvas(element, {
@@ -420,7 +500,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
         windowHeight: element.scrollHeight,
         onclone: (clonedDoc, element) => {
           // Ensure all styles are applied in cloned document
-          const style = clonedDoc.createElement('style');
+          const style = clonedDoc.createElement("style");
           style.textContent = `
             * {
               box-sizing: border-box;
@@ -441,20 +521,23 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             }
           `;
           clonedDoc.head.appendChild(style);
-          
+
           // Ensure all images are loaded in cloned document
-          const images = clonedDoc.querySelectorAll('img');
-          return Promise.all(Array.from(images).map(img => {
-            if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
-            return new Promise((resolve) => {
-              img.onload = () => resolve();
-              img.onerror = () => resolve();
-              setTimeout(resolve, 2000);
-            });
-          }));
-        }
+          const images = clonedDoc.querySelectorAll("img");
+          return Promise.all(
+            Array.from(images).map((img) => {
+              if (img.complete && img.naturalHeight !== 0)
+                return Promise.resolve();
+              return new Promise((resolve) => {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+                setTimeout(resolve, 2000);
+              });
+            }),
+          );
+        },
       });
-      
+
       // Restore original styles
       element.style.overflow = originalStyle.overflow;
       element.style.height = originalStyle.height;
@@ -462,31 +545,49 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
 
       // Convert canvas to JPEG with compression for smaller PDF size
       const imgData = canvas.toDataURL("image/jpeg", 0.9);
-      
+
       // PDF dimensions
       const imgWidth = 210; // A4 width in mm
       const pageHeight = 297; // A4 height in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
+
       const pdf = new jsPDF("p", "mm", "a4");
-      
+
       // Add first page with compressed image
       let heightLeft = imgHeight;
       let position = 0;
       let pageNum = 1;
-      
-      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, 'FAST');
+
+      pdf.addImage(
+        imgData,
+        "JPEG",
+        0,
+        position,
+        imgWidth,
+        imgHeight,
+        undefined,
+        "FAST",
+      );
       heightLeft -= pageHeight;
-      
+
       // Add subsequent pages if content overflows
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        pdf.addImage(
+          imgData,
+          "JPEG",
+          0,
+          position,
+          imgWidth,
+          imgHeight,
+          undefined,
+          "FAST",
+        );
         heightLeft -= pageHeight;
         pageNum++;
       }
-      
+
       // Add PDF metadata
       pdf.setProperties({
         title: `${customerName}_Quotation_${reference || Date.now()}`,
@@ -495,7 +596,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
         creator: "Iconic Yatra Travel Management System",
         keywords: "travel, quotation, itinerary, package",
       });
-      
+
       // Add page numbers if multiple pages
       if (pageNum > 1) {
         for (let i = 1; i <= pageNum; i++) {
@@ -505,10 +606,11 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           pdf.text(`Page ${i} of ${pageNum}`, imgWidth - 30, pageHeight - 10);
         }
       }
-      
+
       // Save the PDF
-      pdf.save(`${customerName.replace(/\s/g, '_')}_Quotation_${reference || Date.now()}.pdf`);
-      
+      pdf.save(
+        `${customerName.replace(/\s/g, "_")}_Quotation_${reference || Date.now()}.pdf`,
+      );
     } catch (err) {
       console.error("PDF generation error:", err);
       setError("PDF generation failed: " + (err.message || "Please try again"));
@@ -518,17 +620,19 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
   };
 
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open("", "_blank");
     const content = printRef.current.cloneNode(true);
-    
+
     // Add print-specific styles
-    const styles = document.querySelector('style')?.innerHTML || '';
-    const materialStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-      .map(link => link.href)
-      .filter(href => href.includes('mui') || href.includes('material'))
-      .map(href => `<link rel="stylesheet" href="${href}">`)
-      .join('');
-    
+    const styles = document.querySelector("style")?.innerHTML || "";
+    const materialStyles = Array.from(
+      document.querySelectorAll('link[rel="stylesheet"]'),
+    )
+      .map((link) => link.href)
+      .filter((href) => href.includes("mui") || href.includes("material"))
+      .map((href) => `<link rel="stylesheet" href="${href}">`)
+      .join("");
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -574,37 +678,36 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
         </body>
       </html>
     `);
-    
+
     printWindow.document.close();
   };
 
   // PDF Content Component - Renders EVERYTHING
   const PDFContent = () => (
-    <Box 
+    <Box
       ref={contentRef}
-      sx={{ 
-        fontFamily: "'Segoe UI', 'Arial', sans-serif", 
-        background: "#fff", 
+      sx={{
+        fontFamily: "'Segoe UI', 'Arial', sans-serif",
+        background: "#fff",
         width: "100%",
         position: "relative",
       }}
     >
       {/* PAGE 1 - Header, Customer Info, Itinerary */}
       <Box className="pdf-page" sx={{ p: 3, pageBreakAfter: "always" }}>
-        
         {/* Header Section with Centered Logo */}
         <Box sx={{ textAlign: "center", mb: 3 }}>
           {/* Logo Centered - Now using local logo from folder */}
           <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
             {imageElements.logo ? (
-              <img 
-                src={imageElements.logo} 
-                alt="Company Logo" 
-                style={{ 
-                  height: "80px", 
-                  width: "auto", 
+              <img
+                src={imageElements.logo}
+                alt="Company Logo"
+                style={{
+                  height: "80px",
+                  width: "auto",
                   objectFit: "contain",
-                  display: "block"
+                  display: "block",
                 }}
                 crossOrigin="anonymous"
                 onError={(e) => {
@@ -617,7 +720,8 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
                 sx={{
                   width: "80px",
                   height: "80px",
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  background:
+                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                   borderRadius: "50%",
                   display: "flex",
                   alignItems: "center",
@@ -625,17 +729,20 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
                   margin: "0 auto",
                 }}
               >
-                <Typography variant="h4" sx={{ color: "white", fontWeight: "bold" }}>
+                <Typography
+                  variant="h4"
+                  sx={{ color: "white", fontWeight: "bold" }}
+                >
                   {footerCompany.charAt(0)}
                 </Typography>
               </Box>
             )}
           </Box>
-          
+
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
             Travel. Explore. Experience.
           </Typography>
-          
+
           {/* Quotation Title and Reference */}
           <Box sx={{ mt: 2 }}>
             <Typography variant="h6" fontWeight="bold" color="primary">
@@ -676,7 +783,8 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
                 bottom: 0,
                 left: 0,
                 right: 0,
-                background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
+                background:
+                  "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
                 color: "white",
                 p: 2,
                 borderRadius: "0 0 12px 12px",
@@ -691,7 +799,15 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             </Box>
           </Box>
         ) : (
-          <Box sx={{ mb: 3, textAlign: "center", py: 3, bgcolor: "#f5f5f5", borderRadius: 2 }}>
+          <Box
+            sx={{
+              mb: 3,
+              textAlign: "center",
+              py: 3,
+              bgcolor: "#f5f5f5",
+              borderRadius: 2,
+            }}
+          >
             <Typography variant="h4" fontWeight="bold" color="primary">
               {quotationTitle}
             </Typography>
@@ -705,15 +821,31 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
 
         {/* Customer Information Card */}
         <Paper elevation={2} sx={{ p: 2, mb: 3, background: "#f8f9ff" }}>
-          <Typography variant="subtitle1" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+          <Typography
+            variant="subtitle1"
+            fontWeight="bold"
+            sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+          >
             <Person fontSize="small" color="primary" /> Customer Details
           </Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
-              <Typography fontWeight="bold" variant="body1">{customerName}</Typography>
+              <Typography fontWeight="bold" variant="body1">
+                {customerName}
+              </Typography>
               {customerLocation && customerLocation !== "N/A" && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
-                  <LocationOn fontSize="small" sx={{ fontSize: 12, color: "#666" }} />
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    mt: 0.5,
+                  }}
+                >
+                  <LocationOn
+                    fontSize="small"
+                    sx={{ fontSize: 12, color: "#666" }}
+                  />
                   <Typography variant="body2">{customerLocation}</Typography>
                 </Box>
               )}
@@ -721,13 +853,26 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             <Grid item xs={12} sm={6}>
               {customerPhone && customerPhone !== "N/A" && (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <LocalPhone fontSize="small" sx={{ fontSize: 12, color: "#666" }} />
+                  <LocalPhone
+                    fontSize="small"
+                    sx={{ fontSize: 12, color: "#666" }}
+                  />
                   <Typography variant="body2">{customerPhone}</Typography>
                 </Box>
               )}
               {customerEmail && customerEmail !== "N/A" && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
-                  <Email fontSize="small" sx={{ fontSize: 12, color: "#666" }} />
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    mt: 0.5,
+                  }}
+                >
+                  <Email
+                    fontSize="small"
+                    sx={{ fontSize: 12, color: "#666" }}
+                  />
                   <Typography variant="body2">{customerEmail}</Typography>
                 </Box>
               )}
@@ -739,22 +884,36 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6}>
             <Paper elevation={1} sx={{ p: 2 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+              <Box
+                sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+              >
                 <FlightTakeoff fontSize="small" color="primary" />
                 <Typography fontWeight="bold">Pickup Details</Typography>
               </Box>
               {pickupArrival && pickupArrival !== "N/A" ? (
-                <Typography variant="body2">Arrival: {pickupArrival}</Typography>
+                <Typography variant="body2">
+                  Arrival: {pickupArrival}
+                </Typography>
               ) : (
-                <Typography variant="body2" color="text.secondary">Not specified</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Not specified
+                </Typography>
               )}
               {pickupDeparture && pickupDeparture !== "N/A" ? (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}
+                >
                   <FlightLand fontSize="small" color="primary" />
-                  <Typography variant="body2">Departure: {pickupDeparture}</Typography>
+                  <Typography variant="body2">
+                    Departure: {pickupDeparture}
+                  </Typography>
                 </Box>
               ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1 }}
+                >
                   Departure not specified
                 </Typography>
               )}
@@ -762,34 +921,50 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           </Grid>
           <Grid item xs={12} sm={6}>
             <Paper elevation={1} sx={{ p: 2 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+              <Box
+                sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+              >
                 <Hotel fontSize="small" color="primary" />
                 <Typography fontWeight="bold">Accommodation</Typography>
               </Box>
               {hotelGuests && hotelGuests !== "N/A" && (
-                <Typography variant="body2">👥 Guests: {hotelGuests}</Typography>
+                <Typography variant="body2">
+                  👥 Guests: {hotelGuests}
+                </Typography>
               )}
               {hotelRooms && hotelRooms !== "N/A" && (
                 <Typography variant="body2">🛏️ Rooms: {hotelRooms}</Typography>
               )}
               {hotelType && hotelType !== "N/A" && (
-                <Typography variant="body2">⭐ Hotel Type: {hotelType}</Typography>
+                <Typography variant="body2">
+                  ⭐ Hotel Type: {hotelType}
+                </Typography>
               )}
               {hotelMealPlan && hotelMealPlan !== "N/A" && (
-                <Typography variant="body2">🍽️ Meal Plan: {hotelMealPlan}</Typography>
+                <Typography variant="body2">
+                  🍽️ Meal Plan: {hotelMealPlan}
+                </Typography>
               )}
               {hotelDestination && hotelDestination !== "N/A" && (
-                <Typography variant="body2">📍 Destination: {hotelDestination}</Typography>
+                <Typography variant="body2">
+                  📍 Destination: {hotelDestination}
+                </Typography>
               )}
               {!hotelGuests && !hotelRooms && !hotelType && !hotelMealPlan && (
-                <Typography variant="body2" color="text.secondary">Not specified</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Not specified
+                </Typography>
               )}
             </Paper>
           </Grid>
         </Grid>
 
         {/* Itinerary Section Title */}
-        <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography
+          variant="h6"
+          fontWeight="bold"
+          sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+        >
           📋 Detailed Itinerary
         </Typography>
 
@@ -819,23 +994,61 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
                 />
               )}
               <Box sx={{ p: 2 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, flexWrap: "wrap", gap: 1 }}>
-                  <Typography fontWeight="bold" variant="subtitle1" color="primary">
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    mb: 1,
+                    flexWrap: "wrap",
+                    gap: 1,
+                  }}
+                >
+                  <Typography
+                    fontWeight="bold"
+                    variant="subtitle1"
+                    color="primary"
+                  >
                     Day {i + 1}: {day.title || `Day ${i + 1}`}
                   </Typography>
-                  {(day.date || day.dayDate) && (day.date !== "N/A" || day.dayDate !== "N/A") && (
-                    <Chip label={day.dayDate || day.date} size="small" sx={{ fontSize: "10px" }} />
-                  )}
+                  {(day.date || day.dayDate) &&
+                    (day.date !== "N/A" || day.dayDate !== "N/A") && (
+                      <Chip
+                        label={day.dayDate || day.date}
+                        size="small"
+                        sx={{ fontSize: "10px" }}
+                      />
+                    )}
                 </Box>
-                <Typography variant="body2" paragraph sx={{ mt: 1, whiteSpace: "pre-wrap" }}>
+                <Typography
+                  variant="body2"
+                  paragraph
+                  sx={{ mt: 1, whiteSpace: "pre-wrap" }}
+                >
                   {day.description || "No description available"}
                 </Typography>
                 {(day.meal || (day.hotel && day.hotel !== "N/A")) && (
-                  <Box sx={{ display: "flex", gap: 2, mt: 1, pt: 1, borderTop: "1px solid #f0f0f0", flexWrap: "wrap" }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      gap: 2,
+                      mt: 1,
+                      pt: 1,
+                      borderTop: "1px solid #f0f0f0",
+                      flexWrap: "wrap",
+                    }}
+                  >
                     {day.meal && (
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                        <Restaurant fontSize="small" sx={{ fontSize: 14, color: "#666" }} />
-                        <Typography variant="caption">Meal: {day.meal}</Typography>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                      >
+                        <Restaurant
+                          fontSize="small"
+                          sx={{ fontSize: 14, color: "#666" }}
+                        />
+                        <Typography variant="caption">
+                          Meal: {day.meal}
+                        </Typography>
                       </Box>
                     )}
                     {day.hotel && day.hotel !== "N/A" && (
@@ -850,35 +1063,49 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           ))
         ) : (
           <Paper sx={{ p: 2, textAlign: "center" }}>
-            <Typography color="text.secondary">No itinerary details available</Typography>
+            <Typography color="text.secondary">
+              No itinerary details available
+            </Typography>
           </Paper>
         )}
       </Box>
 
       {/* PAGE 2 - Pricing and Payment Summary */}
       <Box className="pdf-page" sx={{ p: 3, pageBreakAfter: "always" }}>
-        
         {/* Hotel Pricing Table */}
         {hotelPricingData && hotelPricingData.length > 0 && (
           <>
             <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
               🏨 Hotel & Package Pricing
             </Typography>
-            <TableContainer component={Paper} elevation={2} sx={{ mb: 3, overflowX: "auto" }}>
+            <TableContainer
+              component={Paper}
+              elevation={2}
+              sx={{ mb: 3, overflowX: "auto" }}
+            >
               <Table sx={{ minWidth: 650 }}>
                 <TableHead sx={{ background: "#667eea" }}>
                   <TableRow>
-                    {hotelPricingData[0] && Object.keys(hotelPricingData[0]).map((header) => (
-                      (header === "destination" ||
-                        header === "nights" ||
-                        (header === "standard" && showStandardCol) ||
-                        (header === "deluxe" && showDeluxeCol) ||
-                        (header === "superior" && showSuperiorCol)) && (
-                        <TableCell key={header} sx={{ color: "white", fontWeight: "bold", textTransform: "capitalize" }}>
-                          {header.replace(/([A-Z])/g, ' $1').trim()}
-                        </TableCell>
-                      )
-                    ))}
+                    {hotelPricingData[0] &&
+                      Object.keys(hotelPricingData[0]).map(
+                        (header) =>
+                          (header === "destination" ||
+                            header === "nights" ||
+                            (header === "standard" && showStandardCol) ||
+                            (header === "deluxe" && showDeluxeCol) ||
+                            (header === "superior" && showSuperiorCol)) && (
+                            <TableCell
+                              key={header}
+                              sx={{
+                                color: "white",
+                                fontWeight: "bold",
+                                textTransform: "capitalize",
+                              }}
+                            >
+                              {header.replace(/([A-Z])/g, " $1").trim()}
+                            </TableCell>
+                          ),
+                      )}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -886,9 +1113,21 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
                     <TableRow key={idx}>
                       <TableCell>{row?.destination || "-"}</TableCell>
                       <TableCell>{row?.nights || "-"}</TableCell>
-                      {showStandardCol && <TableCell>{row?.standard || "-"}</TableCell>}
-                      {showDeluxeCol && <TableCell>{row?.deluxe || "-"}</TableCell>}
-                      {showSuperiorCol && <TableCell>{row?.superior || "-"}</TableCell>}
+                      {showStandardCol && (
+                        <TableCell>
+                          {renderHotelCellValue(row, "standard")}
+                        </TableCell>
+                      )}
+                      {showDeluxeCol && (
+                        <TableCell>
+                          {renderHotelCellValue(row, "deluxe")}
+                        </TableCell>
+                      )}
+                      {showSuperiorCol && (
+                        <TableCell>
+                          {renderHotelCellValue(row, "superior")}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -906,58 +1145,139 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           <Table>
             <TableHead sx={{ background: "#667eea" }}>
               <TableRow>
-                <TableCell sx={{ color: "white", fontWeight: "bold", fontSize: "14px" }}>Particulars</TableCell>
-                <TableCell align="right" sx={{ color: "white", fontWeight: "bold", fontSize: "14px" }}>Amount (₹)</TableCell>
+                <TableCell
+                  sx={{ color: "white", fontWeight: "bold", fontSize: "14px" }}
+                >
+                  Particulars
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{ color: "white", fontWeight: "bold", fontSize: "14px" }}
+                >
+                  Amount (₹)
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {effectiveTotal > 0 && (
-                <TableRow>
-                  <TableCell>Total Package Cost</TableCell>
-                  <TableCell align="right">{formatCurrency(effectiveTotal)}</TableCell>
-                </TableRow>
+              {visiblePackageColumns > 1 ? (
+                <>
+                  {showStandardCol && standardTotal > 0 && (
+                    <TableRow>
+                      <TableCell>Total Package Cost (Standard)</TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(standardTotal)}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {showDeluxeCol && deluxeTotal > 0 && (
+                    <TableRow>
+                      <TableCell>Total Package Cost (Deluxe)</TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(deluxeTotal)}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {showSuperiorCol && superiorTotal > 0 && (
+                    <TableRow>
+                      <TableCell>Total Package Cost (Superior)</TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(superiorTotal)}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
+              ) : (
+                effectiveTotal > 0 && (
+                  <TableRow>
+                    <TableCell>Total Package Cost</TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(effectiveTotal)}
+                    </TableCell>
+                  </TableRow>
+                )
               )}
-              {pricingDiscount && pricingDiscount !== "N/A" && pricingDiscount !== "₹ 0" && pricingDiscount !== 0 && (
-                <TableRow>
-                  <TableCell>Discount</TableCell>
-                  <TableCell align="right" sx={{ color: "#2e7d32" }}>-{formatCurrency(pricingDiscount)}</TableCell>
-                </TableRow>
-              )}
-              {pricingGst && pricingGst !== "N/A" && pricingGst !== "₹ 0" && pricingGst !== 0 && (
-                <TableRow>
-                  <TableCell>GST</TableCell>
-                  <TableCell align="right">{formatCurrency(pricingGst)}</TableCell>
-                </TableRow>
-              )}
-              <TableRow sx={{ background: "#f5f5f5" }}>
-                <TableCell sx={{ fontWeight: "bold", fontSize: "16px" }}>Grand Total</TableCell>
-                <TableCell align="right" sx={{ fontWeight: "bold", fontSize: "16px" }}>
-                  {formatCurrency(effectiveTotal)}
-                </TableCell>
-              </TableRow>
-              {footerReceived && footerReceived !== "N/A" && footerReceived !== "₹ 0" && footerReceived !== 0 && (
-                <TableRow>
-                  <TableCell>Amount Received</TableCell>
-                  <TableCell align="right" sx={{ color: "#2e7d32", fontWeight: "bold" }}>
-                    {formatCurrency(footerReceived)}
+              {visiblePackageColumns <= 1 &&
+                pricingDiscount &&
+                pricingDiscount !== "N/A" &&
+                pricingDiscount !== "₹ 0" &&
+                pricingDiscount !== 0 && (
+                  <TableRow>
+                    <TableCell>Discount</TableCell>
+                    <TableCell align="right" sx={{ color: "#2e7d32" }}>
+                      -{formatCurrency(pricingDiscount)}
+                    </TableCell>
+                  </TableRow>
+                )}
+              {visiblePackageColumns <= 1 &&
+                pricingGst &&
+                pricingGst !== "N/A" &&
+                pricingGst !== "₹ 0" &&
+                pricingGst !== 0 && (
+                  <TableRow>
+                    <TableCell>GST</TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(pricingGst)}
+                    </TableCell>
+                  </TableRow>
+                )}
+              {visiblePackageColumns <= 1 && (
+                <TableRow sx={{ background: "#f5f5f5" }}>
+                  <TableCell sx={{ fontWeight: "bold", fontSize: "16px" }}>
+                    Grand Total
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ fontWeight: "bold", fontSize: "16px" }}
+                  >
+                    {formatCurrency(effectiveTotal)}
                   </TableCell>
                 </TableRow>
               )}
-              {footerBalance && footerBalance !== "N/A" && footerBalance !== "₹ 0" && footerBalance !== 0 && (
-                <TableRow sx={{ background: "#fff3e0" }}>
-                  <TableCell sx={{ fontWeight: "bold", fontSize: "16px" }}>Balance Amount</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: "bold", fontSize: "18px", color: "#d32f2f" }}>
-                    {formatCurrency(footerBalance)}
-                  </TableCell>
-                </TableRow>
-              )}
+              {footerReceived &&
+                footerReceived !== "N/A" &&
+                footerReceived !== "₹ 0" &&
+                footerReceived !== 0 && (
+                  <TableRow>
+                    <TableCell>Amount Received</TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{ color: "#2e7d32", fontWeight: "bold" }}
+                    >
+                      {formatCurrency(footerReceived)}
+                    </TableCell>
+                  </TableRow>
+                )}
+              {footerBalance &&
+                footerBalance !== "N/A" &&
+                footerBalance !== "₹ 0" &&
+                footerBalance !== 0 && (
+                  <TableRow sx={{ background: "#fff3e0" }}>
+                    <TableCell sx={{ fontWeight: "bold", fontSize: "16px" }}>
+                      Balance Amount
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontWeight: "bold",
+                        fontSize: "18px",
+                        color: "#d32f2f",
+                      }}
+                    >
+                      {formatCurrency(footerBalance)}
+                    </TableCell>
+                  </TableRow>
+                )}
             </TableBody>
           </Table>
         </TableContainer>
 
         {/* Additional Notes if any */}
         {(pricingDiscount === "₹ 0" || pricingDiscount === 0) && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: "block" }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ mt: 2, display: "block" }}
+          >
             * No discount applied to this quotation
           </Typography>
         )}
@@ -965,121 +1285,223 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
 
       {/* PAGE 3 - All Policies and Terms */}
       <Box className="pdf-page" sx={{ p: 3 }}>
-        
         {/* Inclusion Policy */}
-        {inclusionArray.length > 0 && inclusionArray.some(item => item && item !== "") && (
-          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e8f5e9" }}>
-            <Typography fontWeight="bold" sx={{ color: "#2e7d32", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-              <CheckCircle fontSize="small" /> ✅ Inclusion Policy
-            </Typography>
-            {inclusionArray.map((item, idx) => (
-              item && item !== "" && (
-                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
-                  • {item}
-                </Typography>
-              )
-            ))}
-          </Paper>
-        )}
+        {inclusionArray.length > 0 &&
+          inclusionArray.some((item) => item && item !== "") && (
+            <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e8f5e9" }}>
+              <Typography
+                fontWeight="bold"
+                sx={{
+                  color: "#2e7d32",
+                  mb: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <CheckCircle fontSize="small" /> ✅ Inclusion Policy
+              </Typography>
+              {inclusionArray.map(
+                (item, idx) =>
+                  item &&
+                  item !== "" && (
+                    <Typography
+                      key={idx}
+                      variant="body2"
+                      sx={{ mb: 0.5, ml: 2 }}
+                    >
+                      • {item}
+                    </Typography>
+                  ),
+              )}
+            </Paper>
+          )}
 
         {/* Exclusion Policy */}
-        {exclusionArray.length > 0 && exclusionArray.some(item => item && item !== "") && (
-          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#ffebee" }}>
-            <Typography fontWeight="bold" sx={{ color: "#c62828", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-              <Cancel fontSize="small" /> ❌ Exclusion Policy
-            </Typography>
-            {exclusionArray.map((item, idx) => (
-              item && item !== "" && (
-                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
-                  • {item}
-                </Typography>
-              )
-            ))}
-          </Paper>
-        )}
+        {exclusionArray.length > 0 &&
+          exclusionArray.some((item) => item && item !== "") && (
+            <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#ffebee" }}>
+              <Typography
+                fontWeight="bold"
+                sx={{
+                  color: "#c62828",
+                  mb: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <Cancel fontSize="small" /> ❌ Exclusion Policy
+              </Typography>
+              {exclusionArray.map(
+                (item, idx) =>
+                  item &&
+                  item !== "" && (
+                    <Typography
+                      key={idx}
+                      variant="body2"
+                      sx={{ mb: 0.5, ml: 2 }}
+                    >
+                      • {item}
+                    </Typography>
+                  ),
+              )}
+            </Paper>
+          )}
 
         {/* Payment Policy */}
-        {paymentPolicyArray.length > 0 && paymentPolicyArray.some(item => item && item !== "") && (
-          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e3f2fd" }}>
-            <Typography fontWeight="bold" sx={{ color: "#1565c0", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-              <Payments fontSize="small" /> 💳 Payment Policy
-            </Typography>
-            {paymentPolicyArray.map((item, idx) => (
-              item && item !== "" && (
-                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
-                  • {item}
-                </Typography>
-              )
-            ))}
-          </Paper>
-        )}
+        {paymentPolicyArray.length > 0 &&
+          paymentPolicyArray.some((item) => item && item !== "") && (
+            <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e3f2fd" }}>
+              <Typography
+                fontWeight="bold"
+                sx={{
+                  color: "#1565c0",
+                  mb: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <Payments fontSize="small" /> 💳 Payment Policy
+              </Typography>
+              {paymentPolicyArray.map(
+                (item, idx) =>
+                  item &&
+                  item !== "" && (
+                    <Typography
+                      key={idx}
+                      variant="body2"
+                      sx={{ mb: 0.5, ml: 2 }}
+                    >
+                      • {item}
+                    </Typography>
+                  ),
+              )}
+            </Paper>
+          )}
 
         {/* Cancellation & Refund Policy */}
-        {cancellationArray.length > 0 && cancellationArray.some(item => item && item !== "") && (
-          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#fff3e0" }}>
-            <Typography fontWeight="bold" sx={{ color: "#e65100", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-              <MoneyOff fontSize="small" /> 🔄 Cancellation & Refund Policy
-            </Typography>
-            {cancellationArray.map((item, idx) => (
-              item && item !== "" && (
-                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
-                  • {item}
-                </Typography>
-              )
-            ))}
-          </Paper>
-        )}
+        {cancellationArray.length > 0 &&
+          cancellationArray.some((item) => item && item !== "") && (
+            <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#fff3e0" }}>
+              <Typography
+                fontWeight="bold"
+                sx={{
+                  color: "#e65100",
+                  mb: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <MoneyOff fontSize="small" /> 🔄 Cancellation & Refund Policy
+              </Typography>
+              {cancellationArray.map(
+                (item, idx) =>
+                  item &&
+                  item !== "" && (
+                    <Typography
+                      key={idx}
+                      variant="body2"
+                      sx={{ mb: 0.5, ml: 2 }}
+                    >
+                      • {item}
+                    </Typography>
+                  ),
+              )}
+            </Paper>
+          )}
 
         {/* Terms & Conditions */}
-        {termsArray.length > 0 && termsArray.some(item => item && item !== "") && (
-          <Paper elevation={2} sx={{ p: 2, mb: 3, background: "#f5f5f5" }}>
-            <Typography fontWeight="bold" sx={{ color: "#424242", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-              <Description fontSize="small" /> 📋 Terms & Conditions
-            </Typography>
-            {termsArray.map((item, idx) => (
-              item && item !== "" && (
-                <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
-                  {idx + 1}. {item}
-                </Typography>
-              )
-            ))}
-          </Paper>
-        )}
+        {termsArray.length > 0 &&
+          termsArray.some((item) => item && item !== "") && (
+            <Paper elevation={2} sx={{ p: 2, mb: 3, background: "#f5f5f5" }}>
+              <Typography
+                fontWeight="bold"
+                sx={{
+                  color: "#424242",
+                  mb: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                <Description fontSize="small" /> 📋 Terms & Conditions
+              </Typography>
+              {termsArray.map(
+                (item, idx) =>
+                  item &&
+                  item !== "" && (
+                    <Typography
+                      key={idx}
+                      variant="body2"
+                      sx={{ mb: 0.5, ml: 2 }}
+                    >
+                      {idx + 1}. {item}
+                    </Typography>
+                  ),
+              )}
+            </Paper>
+          )}
 
         {/* Footer Section */}
         <Divider sx={{ my: 2 }} />
         <Box textAlign="center">
-          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2, mb: 1, flexWrap: "wrap" }}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: 2,
+              mb: 1,
+              flexWrap: "wrap",
+            }}
+          >
             {imageElements.logo && (
-              <img 
-                src={imageElements.logo} 
-                alt="Company Logo" 
+              <img
+                src={imageElements.logo}
+                alt="Company Logo"
                 style={{ height: "40px", width: "auto", objectFit: "contain" }}
                 crossOrigin="anonymous"
               />
             )}
-            <Typography fontWeight="bold" sx={{ color: "#667eea", fontSize: "18px" }}>
-              {footerCompany}
-            </Typography>
           </Box>
           {footerAddress && footerAddress !== "N/A" && (
             <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
               📍 {footerAddress}
             </Typography>
           )}
-          <Box sx={{ display: "flex", justifyContent: "center", gap: 2, flexWrap: "wrap", mb: 1 }}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 2,
+              flexWrap: "wrap",
+              mb: 1,
+            }}
+          >
             {footerPhone && footerPhone !== "N/A" && (
-              <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+              >
                 📞 {footerPhone}
               </Typography>
             )}
             {footerEmail && footerEmail !== "N/A" && (
-              <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+              >
                 ✉️ {footerEmail}
               </Typography>
             )}
             {footerWebsite && footerWebsite !== "N/A" && (
-              <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+              >
                 🌐 {footerWebsite}
               </Typography>
             )}
@@ -1090,10 +1512,18 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
               {footerContactDesignation ? ` (${footerContactDesignation})` : ""}
             </Typography>
           )}
-          <Typography variant="caption" display="block" sx={{ mt: 2, color: "#999", fontSize: "10px" }}>
+          <Typography
+            variant="caption"
+            display="block"
+            sx={{ mt: 2, color: "#999", fontSize: "10px" }}
+          >
             This is a computer generated quotation. No signature required.
           </Typography>
-          <Typography variant="caption" display="block" sx={{ color: "#999", fontSize: "9px", mt: 0.5 }}>
+          <Typography
+            variant="caption"
+            display="block"
+            sx={{ color: "#999", fontSize: "9px", mt: 0.5 }}
+          >
             © {new Date().getFullYear()} {footerCompany}. All rights reserved.
           </Typography>
         </Box>
@@ -1104,7 +1534,13 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+        <Box
+          display="flex"
+          justifyContent="space-between"
+          alignItems="center"
+          flexWrap="wrap"
+          gap={2}
+        >
           <Typography variant="h6" fontWeight="bold">
             📄 Quotation Preview - {customerName}
           </Typography>
@@ -1126,9 +1562,9 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
                 ))}
               </Select>
             </FormControl>
-            <Button 
-              onClick={handlePrint} 
-              startIcon={<Print />} 
+            <Button
+              onClick={handlePrint}
+              startIcon={<Print />}
               variant="outlined"
               disabled={!renderComplete}
             >
@@ -1136,10 +1572,15 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             </Button>
             <Button
               onClick={handleDownloadPDF}
-              startIcon={loading ? <CircularProgress size={20} /> : <Download />}
+              startIcon={
+                loading ? <CircularProgress size={20} /> : <Download />
+              }
               variant="contained"
               disabled={loading || !renderComplete}
-              sx={{ background: "#667eea", "&:hover": { background: "#5a67d8" } }}
+              sx={{
+                background: "#667eea",
+                "&:hover": { background: "#5a67d8" },
+              }}
             >
               {loading ? "Generating PDF..." : "Download PDF"}
             </Button>
@@ -1148,19 +1589,29 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       </DialogTitle>
 
       <DialogContent dividers>
-        <Snackbar 
-          open={!!error} 
-          autoHideDuration={6000} 
+        <Snackbar
+          open={!!error}
+          autoHideDuration={6000}
           onClose={() => setError("")}
           anchorOrigin={{ vertical: "top", horizontal: "center" }}
         >
-          <Alert severity="error" onClose={() => setError("")} sx={{ width: "100%" }}>
+          <Alert
+            severity="error"
+            onClose={() => setError("")}
+            sx={{ width: "100%" }}
+          >
             {error}
           </Alert>
         </Snackbar>
 
         {(!imagesLoaded || !renderComplete) && open && (
-          <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" py={4}>
+          <Box
+            display="flex"
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            py={4}
+          >
             <CircularProgress size={40} />
             <Typography variant="body1" sx={{ mt: 2 }}>
               Loading all content and images...
@@ -1171,16 +1622,22 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           </Box>
         )}
 
-        <Box 
-          ref={printRef} 
-          sx={{ 
-            maxHeight: "70vh", 
+        <Box
+          ref={printRef}
+          sx={{
+            maxHeight: "70vh",
             overflowY: "auto",
             bgcolor: "#fff",
-            display: (imagesLoaded && renderComplete) ? "block" : "none",
+            display: imagesLoaded && renderComplete ? "block" : "none",
             "&::-webkit-scrollbar": { width: "8px" },
-            "&::-webkit-scrollbar-track": { background: "#f1f1f1", borderRadius: "4px" },
-            "&::-webkit-scrollbar-thumb": { background: "#888", borderRadius: "4px" },
+            "&::-webkit-scrollbar-track": {
+              background: "#f1f1f1",
+              borderRadius: "4px",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              background: "#888",
+              borderRadius: "4px",
+            },
             "&::-webkit-scrollbar-thumb:hover": { background: "#555" },
           }}
         >
