@@ -87,6 +87,9 @@ const CompanyForm = () => {
     email: isEditMode ? company?.email || "" : "",
     gstin: isEditMode ? company?.gstin || "" : "",
     stateCode: isEditMode ? company?.stateCode || "" : "",
+    companyWebsite: isEditMode ? company?.companyWebsite || "" : "",
+    authorizedSignatoryName: isEditMode ? company?.authorizedSignatory?.name || "" : "",
+    authorizedSignatoryDesignation: isEditMode ? company?.authorizedSignatory?.designation || "" : "",
     termsConditions: isEditMode ? company?.termsConditions || "" : "",
     paymentLink: isEditMode ? company?.paymentLink || "" : "",
     isActive: isEditMode ? company?.isActive ?? true : true,
@@ -114,9 +117,18 @@ const CompanyForm = () => {
     formData.append("email", values.email);
     formData.append("gstin", values.gstin);
     formData.append("stateCode", values.stateCode);
+    formData.append("companyWebsite", values.companyWebsite);
     formData.append("termsConditions", values.termsConditions);
     formData.append("paymentLink", values.paymentLink);
     formData.append("isActive", values.isActive);
+
+    formData.append(
+      "authorizedSignatory",
+      JSON.stringify({
+        name: values.authorizedSignatoryName,
+        designation: values.authorizedSignatoryDesignation
+      })
+    );
 
     if (values.logo) {
       formData.append("logo", values.logo);
@@ -244,6 +256,36 @@ const CompanyForm = () => {
                   label="Payment Link"
                   name="paymentLink"
                   value={values.paymentLink}
+                  onChange={handleChange}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Company Website"
+                  name="companyWebsite"
+                  value={values.companyWebsite}
+                  onChange={handleChange}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Authorized Signatory Name"
+                  name="authorizedSignatoryName"
+                  value={values.authorizedSignatoryName}
+                  onChange={handleChange}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Authorized Signatory Designation"
+                  name="authorizedSignatoryDesignation"
+                  value={values.authorizedSignatoryDesignation}
                   onChange={handleChange}
                 />
               </Grid>
