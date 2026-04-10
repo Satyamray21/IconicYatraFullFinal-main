@@ -36,7 +36,7 @@ const pkgKey = (q = {}) => {
     return ["standard", "deluxe", "superior"].includes(p) ? p : "standard";
 };
 
-const packageTotals = (q = {}) => {
+export const packageTotals = (q = {}) => {
     const qd = q?.tourDetails?.quotationDetails || {};
     const quotationTitle=q?.tourDetails?.quotationTitle || {};
     const calc = qd.packageCalculations || {};
@@ -455,8 +455,8 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p><b>Package Cost (excluding GST):</b> INR ${INR.format(beforeTax)}</p>
         <p><b>GST (${taxPercent}%):</b> INR ${INR.format(taxAmount)}</p>
         <p><b>Package Cost (including GST):</b> INR ${INR.format(total)}</p>
-        <p><b>Payment received:</b> INR ${INR.format(receivedAmount)}${customText.receivedDate ? ` (paid on ${customText.receivedDate})` : ""}</p>
-        <p><b>Remaining payment:</b> INR ${INR.format(dueAmount)}</p>
+        <p><b>Received from client:</b> INR ${INR.format(receivedAmount)}${customText.receivedDate ? ` (paid on ${customText.receivedDate})` : ""}</p>
+        <p><b>Balance due:</b> INR ${INR.format(dueAmount)}</p>
         <p><b>Next Payable Amount:</b> INR ${INR.format(nextPayableAmount)}</p>
         ${customText.dueDate ? `<p><b>Payment Due Date:</b> ${customText.dueDate}</p>` : ""}
         <br/>
