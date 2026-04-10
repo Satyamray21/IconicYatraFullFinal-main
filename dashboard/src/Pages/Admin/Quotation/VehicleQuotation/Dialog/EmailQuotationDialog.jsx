@@ -48,6 +48,8 @@ const EmailQuotationDialog = ({
     mailType: "normal",
     senderAccount: "gmail1",
     companyId: "",
+    nextPayableAmount: "",
+    paymentDueDate: "",
   };
   const initialValues = { ...baseInitialValues, ...(initialValuesOverride || {}) };
 
@@ -71,6 +73,22 @@ const EmailQuotationDialog = ({
               const current = values.message || "";
               const separator = current && !current.endsWith("\n") ? "\n" : "";
               setFieldValue("message", `${current}${separator}${snippet}`);
+            };
+            const addPaymentReminderBlock = () => {
+              const amount = String(values.nextPayableAmount || "").trim() || "2400";
+              const dueDate = String(values.paymentDueDate || "").trim() || "DD/MM/YYYY";
+              appendToMessage(
+                `<p style="color:#d32f2f; font-weight:bold;"><b>Next Payable Amount:</b> INR ${amount}</p>`
+              );
+              appendToMessage(
+                `<p><b>Payment Due Date:</b> ${dueDate}</p>`
+              );
+              appendToMessage(
+                `<p style="color:#d32f2f; font-weight:bold;">Please clear your all dues as per the payment policy.</p>`
+              );
+              appendToMessage(
+                `<p style="color:#2e7d32; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>`
+              );
             };
             return (
           <Form>
@@ -192,6 +210,33 @@ const EmailQuotationDialog = ({
                   />
                 </Grid>
                 <Grid size={{xs:12}}>
+                  {(values.mailType || "normal") === "booking" && (
+                    <Grid container spacing={2} sx={{ mb: 1 }}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <TextField
+                          fullWidth
+                          name="nextPayableAmount"
+                          label="Next Payable Amount (INR)"
+                          value={values.nextPayableAmount || ""}
+                          onChange={(e) =>
+                            setFieldValue("nextPayableAmount", e.target.value)
+                          }
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <TextField
+                          fullWidth
+                          name="paymentDueDate"
+                          label="Payment Due Date"
+                          placeholder="DD/MM/YYYY"
+                          value={values.paymentDueDate || ""}
+                          onChange={(e) =>
+                            setFieldValue("paymentDueDate", e.target.value)
+                          }
+                        />
+                      </Grid>
+                    </Grid>
+                  )}
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
                     Email Body (Editable HTML)
                   </Typography>
@@ -214,6 +259,15 @@ const EmailQuotationDialog = ({
                     >
                       Add Line
                     </Button>
+                    {(values.mailType || "normal") === "booking" && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={addPaymentReminderBlock}
+                      >
+                        Add Payment Reminder Block
+                      </Button>
+                    )}
                   </Box>
                   <TextField
                     fullWidth
