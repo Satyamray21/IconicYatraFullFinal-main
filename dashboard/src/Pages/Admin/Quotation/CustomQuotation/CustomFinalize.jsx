@@ -1205,6 +1205,19 @@ useEffect(() => {
         const to = String(values?.to || "").trim();
         const cc = String(values?.cc || "").trim();
         const subject = String(values?.subject || "");
+        const isBookingMail = values?.mailType === "booking";
+        const nextPayableRaw = String(values?.nextPayableAmount || "").trim();
+        const parsedNextPayable = Number(
+            nextPayableRaw.replace(/[^0-9.-]/g, "")
+        );
+        const dueDateRaw = String(values?.paymentDueDate || "").trim();
+        const nextPayableAmount =
+            nextPayableRaw === "" || !Number.isFinite(parsedNextPayable)
+                ? undefined
+                : parsedNextPayable;
+        const hasBookingOverrides =
+            isBookingMail &&
+            (dueDateRaw !== "" || Number.isFinite(nextPayableAmount));
         const selectedCompany =
             mailCompanies.find((c) => c?._id === values?.companyId) || null;
         if (!to) {
@@ -1221,12 +1234,26 @@ useEffect(() => {
                 {
                     to,
                     cc: cc || undefined,
-                    type: values?.mailType === "booking" ? "booking" : "normal",
+                    type: isBookingMail ? "booking" : "normal",
                     subject: subject || undefined,
-                    bodyHtml: values?.message || undefined,
+                    // For booking mails, always let backend build from template with latest payment data/overrides.
+                    bodyHtml:
+                        isBookingMail
+                            ? undefined
+                            : values?.message || undefined,
                     senderAccount: values?.senderAccount || "gmail1",
                     companyId: values?.companyId || undefined,
                     companyName: selectedCompany?.companyName || undefined,
+                    customText: isBookingMail
+                        ? {
+                            booking: {
+                                ...(Number.isFinite(nextPayableAmount)
+                                    ? { nextPayableAmount }
+                                    : {}),
+                                ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
+                            },
+                        }
+                        : undefined,
                 }
             );
             setSnackbar({
@@ -1260,6 +1287,8 @@ useEffect(() => {
             mailType: type,
             senderAccount: "gmail1",
             companyId: mailCompanies?.[0]?._id || "",
+            nextPayableAmount: "",
+            paymentDueDate: "",
         };
     }, [selectedQuotation, quotation.customer?.name, emailTemplateType, emailTemplateBodies, mailCompanies]);
 
