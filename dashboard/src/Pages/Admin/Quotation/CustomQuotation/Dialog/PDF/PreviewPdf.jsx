@@ -62,6 +62,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
     inclusions: [],
     exclusions: [],
     paymentPolicy: "",
+    cancellationPolicy: "",
   });
 
   // Helper function to safely get nested values
@@ -255,12 +256,16 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       if (!open) return;
       try {
         const res = await axios.get("/global-settings");
-        const data = res?.data?.data || {};
+        const data = res?.data?.data || res?.data || {};
         setGlobalPolicyDefaults({
           inclusions: Array.isArray(data?.inclusions) ? data.inclusions : [],
           exclusions: Array.isArray(data?.exclusions) ? data.exclusions : [],
           paymentPolicy:
             typeof data?.paymentPolicy === "string" ? data.paymentPolicy : "",
+          cancellationPolicy:
+            typeof data?.cancellationPolicy === "string"
+              ? data.cancellationPolicy
+              : "",
         });
       } catch (err) {
         console.error("Failed to fetch global settings for PDF:", err);
@@ -268,6 +273,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           inclusions: [],
           exclusions: [],
           paymentPolicy: "",
+          cancellationPolicy: "",
         });
       }
     };
@@ -436,12 +442,30 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       : typeof policiesCancellationPolicy === "object"
         ? Object.values(policiesCancellationPolicy)
         : [];
+  const exclusionArray = Array.isArray(globalPolicyDefaults.exclusions)
+    ? globalPolicyDefaults.exclusions
+    : [];
+  const paymentPolicyArray =
+    typeof globalPolicyDefaults.paymentPolicy === "string"
+      ? globalPolicyDefaults.paymentPolicy.split("\n").filter((s) => s.trim())
+      : [];
+  const globalCancellationArray =
+    typeof globalPolicyDefaults.cancellationPolicy === "string"
+      ? globalPolicyDefaults.cancellationPolicy
+          .split("\n")
+          .filter((s) => s.trim())
+      : [];
   const finalInclusionArray =
-    inclusionArray.filter((item) => String(item || "").trim()).length > 0
-      ? inclusionArray.filter((item) => String(item || "").trim())
-      : (globalPolicyDefaults.inclusions?.length
-          ? globalPolicyDefaults.inclusions
-          : fallbackInclusions);
+    globalPolicyDefaults.inclusions?.length > 0
+      ? globalPolicyDefaults.inclusions
+      : fallbackInclusions;
+  const finalExclusionArray = exclusionArray.filter((item) =>
+    String(item || "").trim(),
+  );
+  const finalPaymentPolicyArray = paymentPolicyArray.filter((item) =>
+    String(item || "").trim(),
+  );
+  const finalCancellationArray = globalCancellationArray;
 
   const normalizeWebUrl = (value) => {
     if (value === undefined || value === null) return "";
@@ -1373,77 +1397,63 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             </Paper>
           )}
 
-        {/* Exclusion Policy — as per company website */}
-        <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#ffebee" }}>
-          <Typography
-            fontWeight="bold"
-            sx={{
-              color: "#c62828",
-              mb: 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-            }}
-          >
-            <Cancel fontSize="small" /> Exclusion Policy
-          </Typography>
-          <Typography variant="body2" sx={{ ml: 0 }}>
-            As per company website
-            {exclusionsPolicyHref ? (
-              <>
-                {": "}
-                <Link
-                  href={exclusionsPolicyHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  underline="always"
-                >
-                  {exclusionsPolicyHref}
-                </Link>
-              </>
-            ) : (
-              "."
+        {/* Exclusion Policy */}
+        {finalExclusionArray.length > 0 && (
+          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#ffebee" }}>
+            <Typography
+              fontWeight="bold"
+              sx={{
+                color: "#c62828",
+                mb: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+              }}
+            >
+              <Cancel fontSize="small" /> ❌ Exclusion Policy
+            </Typography>
+            {finalExclusionArray.map(
+              (item, idx) =>
+                item &&
+                item !== "" && (
+                  <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
+                    • {item}
+                  </Typography>
+                ),
             )}
-          </Typography>
-        </Paper>
+          </Paper>
+        )}
 
-        {/* Payment Policy — as per company website */}
-        <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e3f2fd" }}>
-          <Typography
-            fontWeight="bold"
-            sx={{
-              color: "#1565c0",
-              mb: 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-            }}
-          >
-            <Payments fontSize="small" /> Payment Policy
-          </Typography>
-          <Typography variant="body2" sx={{ ml: 0 }}>
-            As per company website
-            {paymentPolicyHref ? (
-              <>
-                {": "}
-                <Link
-                  href={paymentPolicyHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  underline="always"
-                >
-                  {paymentPolicyHref}
-                </Link>
-              </>
-            ) : (
-              "."
+        {/* Payment Policy */}
+        {finalPaymentPolicyArray.length > 0 && (
+          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e3f2fd" }}>
+            <Typography
+              fontWeight="bold"
+              sx={{
+                color: "#1565c0",
+                mb: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+              }}
+            >
+              <Payments fontSize="small" /> 💳 Payment Policy
+            </Typography>
+            {finalPaymentPolicyArray.map(
+              (item, idx) =>
+                item &&
+                item !== "" && (
+                  <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
+                    • {item}
+                  </Typography>
+                ),
             )}
-          </Typography>
-        </Paper>
+          </Paper>
+        )}
 
         {/* Cancellation & Refund Policy */}
-        {cancellationArray.length > 0 &&
-          cancellationArray.some((item) => item && item !== "") && (
+        {finalCancellationArray.length > 0 &&
+          finalCancellationArray.some((item) => item && item !== "") && (
             <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#fff3e0" }}>
               <Typography
                 fontWeight="bold"
@@ -1457,7 +1467,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
               >
                 <MoneyOff fontSize="small" /> 🔄 Cancellation & Refund Policy
               </Typography>
-              {cancellationArray.map(
+              {finalCancellationArray.map(
                 (item, idx) =>
                   item &&
                   item !== "" && (
