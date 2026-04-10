@@ -24,6 +24,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Link,
 } from "@mui/material";
 import {
   Download,
@@ -57,6 +58,11 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
   const [companyOptions, setCompanyOptions] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [globalPolicyDefaults, setGlobalPolicyDefaults] = useState({
+    inclusions: [],
+    exclusions: [],
+    paymentPolicy: "",
+  });
 
   // Helper function to safely get nested values
   const getValue = (obj, path, defaultValue = "N/A") => {
@@ -134,7 +140,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
     });
   };
 
-  // Convert image URL to Base64 with compression
+  // Convert remote image to data URL (fetch first — works better with Cloudinary + html2canvas)
   const convertToBase64 = useCallback((url, compress = true) => {
     return new Promise((resolve) => {
       if (!url) {
@@ -151,43 +157,70 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
         return;
       }
 
-      const img = new Image();
-      img.crossOrigin = "Anonymous";
-
-      const timeoutId = setTimeout(() => {
-        console.warn("Image load timeout:", url);
-        resolve(null);
-      }, 10000);
-
-      img.onload = () => {
-        clearTimeout(timeoutId);
-        const canvas = document.createElement("canvas");
-        let width = img.width;
-        let height = img.height;
-
-        // Resize large images
-        const maxWidth = 800;
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const base64 = canvas.toDataURL("image/jpeg", 0.7);
-        resolve(base64);
+      const finishWithCanvas = () => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        const timeoutId = setTimeout(() => {
+          console.warn("Image load timeout:", url);
+          resolve(null);
+        }, 12000);
+        img.onload = () => {
+          clearTimeout(timeoutId);
+          try {
+            const canvas = document.createElement("canvas");
+            let width = img.width;
+            let height = img.height;
+            const maxWidth = 800;
+            if (width > maxWidth) {
+              height = (height * maxWidth) / width;
+              width = maxWidth;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            const base64 = canvas.toDataURL("image/jpeg", 0.7);
+            resolve(base64);
+          } catch {
+            resolve(null);
+          }
+        };
+        img.onerror = () => {
+          clearTimeout(timeoutId);
+          console.warn("Failed to load image (canvas path):", url);
+          resolve(null);
+        };
+        img.src = url;
       };
 
-      img.onerror = () => {
-        clearTimeout(timeoutId);
-        console.warn("Failed to load image:", url);
-        resolve(null);
-      };
-
-      img.src = url;
+      fetch(url, { mode: "cors", credentials: "omit", cache: "force-cache" })
+        .then((res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          return res.blob();
+        })
+        .then(
+          (blob) =>
+            new Promise((res, rej) => {
+              const reader = new FileReader();
+              reader.onloadend = () => res(reader.result);
+              reader.onerror = rej;
+              reader.readAsDataURL(blob);
+            }),
+        )
+        .then((dataUrl) => {
+          if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image")) {
+            finishWithCanvas();
+            return;
+          }
+          if (compress) {
+            compressImage(dataUrl, 800, 0.7).then(resolve);
+          } else {
+            resolve(dataUrl);
+          }
+        })
+        .catch(() => {
+          finishWithCanvas();
+        });
     });
   }, []);
 
@@ -215,6 +248,30 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       }
     };
     fetchCompanies();
+  }, [open]);
+
+  useEffect(() => {
+    const fetchGlobalPolicyDefaults = async () => {
+      if (!open) return;
+      try {
+        const res = await axios.get("/global-settings");
+        const data = res?.data?.data || {};
+        setGlobalPolicyDefaults({
+          inclusions: Array.isArray(data?.inclusions) ? data.inclusions : [],
+          exclusions: Array.isArray(data?.exclusions) ? data.exclusions : [],
+          paymentPolicy:
+            typeof data?.paymentPolicy === "string" ? data.paymentPolicy : "",
+        });
+      } catch (err) {
+        console.error("Failed to fetch global settings for PDF:", err);
+        setGlobalPolicyDefaults({
+          inclusions: [],
+          exclusions: [],
+          paymentPolicy: "",
+        });
+      }
+    };
+    fetchGlobalPolicyDefaults();
   }, [open]);
 
   // Safely extract all needed data
@@ -312,19 +369,21 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
   const footerReceived = getValue(quotationData, "footer.received");
   const footerBalance = getValue(quotationData, "footer.balance");
 
+  const fallbackInclusions = [
+    "Welcome Drink on Arrival.",
+    "Sanitised Private Vehicle AC for Sightseeing as per State Norms.",
+    "Hotel Category Standard Type or Similar.",
+    "Accommodation on Double Sharing Basis.",
+    "Daily Complementary Breakfast as per Hotel Menu.",
+    "Pick Up & Drop Facility From Airport/Railway Station.",
+    "All Sightseeing as per places given or state norms on Priavte Basis.",
+  ];
   const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
-  const policiesExclusions = getValue(quotationData, "policies.exclusions", []);
-  const policiesPaymentPolicy = getValue(
-    quotationData,
-    "policies.paymentPolicy",
-    [],
-  );
   const policiesCancellationPolicy = getValue(
     quotationData,
     "policies.cancellationPolicy",
     [],
   );
-  const policiesTerms = getValue(quotationData, "policies.terms", []);
 
   const days = getValue(quotationData, "days", []);
   const bannerImage = getValue(quotationData, "bannerImage", "");
@@ -370,20 +429,6 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       : typeof policiesInclusions === "object"
         ? Object.values(policiesInclusions)
         : [];
-  const exclusionArray = Array.isArray(policiesExclusions)
-    ? policiesExclusions
-    : typeof policiesExclusions === "string"
-      ? policiesExclusions.split("\n").filter((s) => s.trim())
-      : typeof policiesExclusions === "object"
-        ? Object.values(policiesExclusions)
-        : [];
-  const paymentPolicyArray = Array.isArray(policiesPaymentPolicy)
-    ? policiesPaymentPolicy
-    : typeof policiesPaymentPolicy === "string"
-      ? policiesPaymentPolicy.split("\n").filter((s) => s.trim())
-      : typeof policiesPaymentPolicy === "object"
-        ? Object.values(policiesPaymentPolicy)
-        : [];
   const cancellationArray = Array.isArray(policiesCancellationPolicy)
     ? policiesCancellationPolicy
     : typeof policiesCancellationPolicy === "string"
@@ -391,13 +436,28 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       : typeof policiesCancellationPolicy === "object"
         ? Object.values(policiesCancellationPolicy)
         : [];
-  const termsArray = Array.isArray(policiesTerms)
-    ? policiesTerms
-    : typeof policiesTerms === "string"
-      ? policiesTerms.split("\n").filter((s) => s.trim())
-      : typeof policiesTerms === "object"
-        ? Object.values(policiesTerms)
-        : [];
+  const finalInclusionArray =
+    inclusionArray.filter((item) => String(item || "").trim()).length > 0
+      ? inclusionArray.filter((item) => String(item || "").trim())
+      : (globalPolicyDefaults.inclusions?.length
+          ? globalPolicyDefaults.inclusions
+          : fallbackInclusions);
+
+  const normalizeWebUrl = (value) => {
+    if (value === undefined || value === null) return "";
+    const s = String(value).trim();
+    if (!s || s === "N/A") return "";
+    if (/^https?:\/\//i.test(s)) return s;
+    return "";
+  };
+  const companyWebsiteHref =
+    normalizeWebUrl(selectedCompany?.companyWebsite) ||
+    normalizeWebUrl(footerWebsite);
+  const paymentPolicyHref =
+    normalizeWebUrl(selectedCompany?.paymentLink) || companyWebsiteHref;
+  const termsConditionsHref =
+    normalizeWebUrl(selectedCompany?.termsConditions) || companyWebsiteHref;
+  const exclusionsPolicyHref = companyWebsiteHref;
 
   // Pre-load all images as base64 with compression
   useEffect(() => {
@@ -486,8 +546,20 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       element.style.height = "auto";
       element.style.maxHeight = "none";
 
+      // Re-embed logo as data URL so the capture always includes it (CORS-safe for canvas)
+      if (logoUrl && typeof logoUrl === "string") {
+        const freshLogo = await convertToBase64(logoUrl, true);
+        if (freshLogo) {
+          element.querySelectorAll('img[alt="Company Logo"]').forEach((img) => {
+            img.removeAttribute("crossorigin");
+            img.src = freshLogo;
+          });
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+
       // Additional wait for any dynamic content
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 600));
 
       // Capture the entire content with optimized settings
       const canvas = await html2canvas(element, {
@@ -498,8 +570,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
         allowTaint: false,
         windowWidth: element.scrollWidth,
         windowHeight: element.scrollHeight,
-        onclone: (clonedDoc, element) => {
-          // Ensure all styles are applied in cloned document
+        onclone: async (clonedDoc) => {
           const style = clonedDoc.createElement("style");
           style.textContent = `
             * {
@@ -522,16 +593,22 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           `;
           clonedDoc.head.appendChild(style);
 
-          // Ensure all images are loaded in cloned document
           const images = clonedDoc.querySelectorAll("img");
-          return Promise.all(
-            Array.from(images).map((img) => {
-              if (img.complete && img.naturalHeight !== 0)
-                return Promise.resolve();
-              return new Promise((resolve) => {
+          await Promise.all(
+            Array.from(images).map(async (img) => {
+              const src = img.getAttribute("src") || img.src || "";
+              if (src && /^https?:\/\//i.test(src)) {
+                const inlined = await convertToBase64(src, true);
+                if (inlined) {
+                  img.removeAttribute("crossorigin");
+                  img.src = inlined;
+                }
+              }
+              if (img.complete && img.naturalHeight !== 0) return;
+              await new Promise((resolve) => {
                 img.onload = () => resolve();
                 img.onerror = () => resolve();
-                setTimeout(resolve, 2000);
+                setTimeout(resolve, 3000);
               });
             }),
           );
@@ -1247,26 +1324,6 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
                     </TableCell>
                   </TableRow>
                 )}
-              {footerBalance &&
-                footerBalance !== "N/A" &&
-                footerBalance !== "₹ 0" &&
-                footerBalance !== 0 && (
-                  <TableRow sx={{ background: "#fff3e0" }}>
-                    <TableCell sx={{ fontWeight: "bold", fontSize: "16px" }}>
-                      Balance Amount
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        fontWeight: "bold",
-                        fontSize: "18px",
-                        color: "#d32f2f",
-                      }}
-                    >
-                      {formatCurrency(footerBalance)}
-                    </TableCell>
-                  </TableRow>
-                )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -1286,8 +1343,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       {/* PAGE 3 - All Policies and Terms */}
       <Box className="pdf-page" sx={{ p: 3 }}>
         {/* Inclusion Policy */}
-        {inclusionArray.length > 0 &&
-          inclusionArray.some((item) => item && item !== "") && (
+        {finalInclusionArray.length > 0 && (
             <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e8f5e9" }}>
               <Typography
                 fontWeight="bold"
@@ -1301,7 +1357,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
               >
                 <CheckCircle fontSize="small" /> ✅ Inclusion Policy
               </Typography>
-              {inclusionArray.map(
+              {finalInclusionArray.map(
                 (item, idx) =>
                   item &&
                   item !== "" && (
@@ -1317,69 +1373,73 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             </Paper>
           )}
 
-        {/* Exclusion Policy */}
-        {exclusionArray.length > 0 &&
-          exclusionArray.some((item) => item && item !== "") && (
-            <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#ffebee" }}>
-              <Typography
-                fontWeight="bold"
-                sx={{
-                  color: "#c62828",
-                  mb: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                }}
-              >
-                <Cancel fontSize="small" /> ❌ Exclusion Policy
-              </Typography>
-              {exclusionArray.map(
-                (item, idx) =>
-                  item &&
-                  item !== "" && (
-                    <Typography
-                      key={idx}
-                      variant="body2"
-                      sx={{ mb: 0.5, ml: 2 }}
-                    >
-                      • {item}
-                    </Typography>
-                  ),
-              )}
-            </Paper>
-          )}
+        {/* Exclusion Policy — as per company website */}
+        <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#ffebee" }}>
+          <Typography
+            fontWeight="bold"
+            sx={{
+              color: "#c62828",
+              mb: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <Cancel fontSize="small" /> Exclusion Policy
+          </Typography>
+          <Typography variant="body2" sx={{ ml: 0 }}>
+            As per company website
+            {exclusionsPolicyHref ? (
+              <>
+                {": "}
+                <Link
+                  href={exclusionsPolicyHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="always"
+                >
+                  {exclusionsPolicyHref}
+                </Link>
+              </>
+            ) : (
+              "."
+            )}
+          </Typography>
+        </Paper>
 
-        {/* Payment Policy */}
-        {paymentPolicyArray.length > 0 &&
-          paymentPolicyArray.some((item) => item && item !== "") && (
-            <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e3f2fd" }}>
-              <Typography
-                fontWeight="bold"
-                sx={{
-                  color: "#1565c0",
-                  mb: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                }}
-              >
-                <Payments fontSize="small" /> 💳 Payment Policy
-              </Typography>
-              {paymentPolicyArray.map(
-                (item, idx) =>
-                  item &&
-                  item !== "" && (
-                    <Typography
-                      key={idx}
-                      variant="body2"
-                      sx={{ mb: 0.5, ml: 2 }}
-                    >
-                      • {item}
-                    </Typography>
-                  ),
-              )}
-            </Paper>
-          )}
+        {/* Payment Policy — as per company website */}
+        <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e3f2fd" }}>
+          <Typography
+            fontWeight="bold"
+            sx={{
+              color: "#1565c0",
+              mb: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <Payments fontSize="small" /> Payment Policy
+          </Typography>
+          <Typography variant="body2" sx={{ ml: 0 }}>
+            As per company website
+            {paymentPolicyHref ? (
+              <>
+                {": "}
+                <Link
+                  href={paymentPolicyHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="always"
+                >
+                  {paymentPolicyHref}
+                </Link>
+              </>
+            ) : (
+              "."
+            )}
+          </Typography>
+        </Paper>
 
         {/* Cancellation & Refund Policy */}
         {cancellationArray.length > 0 &&
@@ -1413,37 +1473,39 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             </Paper>
           )}
 
-        {/* Terms & Conditions */}
-        {termsArray.length > 0 &&
-          termsArray.some((item) => item && item !== "") && (
-            <Paper elevation={2} sx={{ p: 2, mb: 3, background: "#f5f5f5" }}>
-              <Typography
-                fontWeight="bold"
-                sx={{
-                  color: "#424242",
-                  mb: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                }}
-              >
-                <Description fontSize="small" /> 📋 Terms & Conditions
-              </Typography>
-              {termsArray.map(
-                (item, idx) =>
-                  item &&
-                  item !== "" && (
-                    <Typography
-                      key={idx}
-                      variant="body2"
-                      sx={{ mb: 0.5, ml: 2 }}
-                    >
-                      {idx + 1}. {item}
-                    </Typography>
-                  ),
-              )}
-            </Paper>
-          )}
+        {/* Terms & Conditions — link from company */}
+        <Paper elevation={2} sx={{ p: 2, mb: 3, background: "#f5f5f5" }}>
+          <Typography
+            fontWeight="bold"
+            sx={{
+              color: "#424242",
+              mb: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <Description fontSize="small" /> Terms &amp; Conditions
+          </Typography>
+          <Typography variant="body2" sx={{ ml: 0 }}>
+            As per company website
+            {termsConditionsHref ? (
+              <>
+                {": "}
+                <Link
+                  href={termsConditionsHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="always"
+                >
+                  {termsConditionsHref}
+                </Link>
+              </>
+            ) : (
+              "."
+            )}
+          </Typography>
+        </Paper>
 
         {/* Footer Section */}
         <Divider sx={{ my: 2 }} />
