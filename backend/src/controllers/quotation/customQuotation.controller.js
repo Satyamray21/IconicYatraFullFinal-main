@@ -508,15 +508,18 @@ const resolveCompanyForEmail = async ({ companyId, companyName }) => {
 
 const resolveMailAuth = (senderAccount) => {
   const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
+
   const user = useSecondary
-    ? process.env.gmail2 || process.env.gmail
-    : process.env.gmail;
+    ? process.env.EMAIL_USER2
+    : process.env.EMAIL_USER;
+
   const pass = useSecondary
-    ? process.env.app_pass2 || process.env.EMAIL_PASS2 || process.env.app_pass || process.env.EMAIL_PASS
-    : process.env.app_pass || process.env.EMAIL_PASS;
+    ? process.env.EMAIL_PASS2
+    : process.env.EMAIL_PASS;
 
   return { user, pass };
 };
+
 
 /** Receive vouchers only — matches dashboard `summarizeVoucherAmounts` (Cr / Receive Voucher). */
 const sumReceivedFromClient = (vouchers) => {
