@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
     Dialog,
     DialogActions,
@@ -16,7 +16,18 @@ import { useSelector } from "react-redux";
 
 const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
 
-const FinalizeDialog = ({ open, onClose, onConfirm }) => {
+/**
+ * @param {object} props
+ * @param {{ label: string, hotel: string, cost: string }[]} [props.packageOptionsOverride] When set (e.g. quick quotation), these options replace Redux-driven package rows.
+ * @param {string} [props.preselectedPackageLabel] Pre-select radio when it matches an option label (quick finalize uses this).
+ */
+const FinalizeDialog = ({
+    open,
+    onClose,
+    onConfirm,
+    packageOptionsOverride,
+    preselectedPackageLabel,
+}) => {
     const [selectedOption, setSelectedOption] = useState("");
 
     const { selectedQuotation } = useSelector(
@@ -50,35 +61,49 @@ const FinalizeDialog = ({ open, onClose, onConfirm }) => {
         selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations
             ?.superior?.finalTotal ?? "N/A";
 
-    const quotationOptions = [
-        {
-            label: "Standard",
-            hotel: standardHotel,
-            cost: `₹ ${standardCost}`,
-        },
-        {
-            label: "Deluxe",
-            hotel: deluxeHotel,
-            cost: `₹ ${deluxeCost}`,
-        },
-        {
-            label: "Superior",
-            hotel: superiorHotel,
-            cost: `₹ ${superiorCost}`,
-        },
-    ];
+    const quotationOptionsFromRedux = useMemo(
+        () => [
+            {
+                label: "Standard",
+                hotel: standardHotel,
+                cost: `₹ ${standardCost}`,
+            },
+            {
+                label: "Deluxe",
+                hotel: deluxeHotel,
+                cost: `₹ ${deluxeCost}`,
+            },
+            {
+                label: "Superior",
+                hotel: superiorHotel,
+                cost: `₹ ${superiorCost}`,
+            },
+        ],
+        [standardCost, deluxeCost, superiorCost, standardHotel, deluxeHotel, superiorHotel]
+    );
+
+    const quotationOptions =
+        Array.isArray(packageOptionsOverride) && packageOptionsOverride.length
+            ? packageOptionsOverride
+            : quotationOptionsFromRedux;
 
     const handleSubmit = (values) => {
         onConfirm(values);
     };
 
-    const preselect = selectedQuotation?.finalizedPackage;
+    const preselect =
+        preselectedPackageLabel != null && String(preselectedPackageLabel).trim()
+            ? String(preselectedPackageLabel).trim()
+            : selectedQuotation?.finalizedPackage;
     React.useEffect(() => {
-        if (open && preselect && FINAL_PACKAGES.includes(preselect)) {
-            setSelectedOption(preselect);
+        if (open && preselect) {
+            const match = quotationOptions.some((o) => o.label === preselect);
+            if (match) setSelectedOption(preselect);
+            else if (FINAL_PACKAGES.includes(preselect))
+                setSelectedOption(preselect);
         }
         if (!open) setSelectedOption("");
-    }, [open, preselect]);
+    }, [open, preselect, quotationOptions]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -90,7 +115,9 @@ const FinalizeDialog = ({ open, onClose, onConfirm }) => {
                 enableReinitialize
                 initialValues={{
                     quotation:
-                        preselect && FINAL_PACKAGES.includes(preselect)
+                        preselect &&
+                        (FINAL_PACKAGES.includes(preselect) ||
+                            quotationOptions.some((o) => o.label === preselect))
                             ? preselect
                             : "",
                 }}

@@ -48,7 +48,15 @@ const TierPreview = ({ title, color, pkg }) => (
  * Same pricing rules as customquotationStep6 — changing margin, discount, GST % or GST On
  * recalculates all three packages immediately.
  */
-const CostingEditDialog = ({ open, onClose, quotation, quotationId, onSaved }) => {
+const CostingEditDialog = ({
+    open,
+    onClose,
+    quotation,
+    quotationId,
+    onSaved,
+    /** When set, called instead of updateCustomQuotationCosting (e.g. quick quotations). */
+    saveCostingOverride,
+}) => {
     const dispatch = useDispatch();
     const [saving, setSaving] = useState(false);
     const [marginPercent, setMarginPercent] = useState("");
@@ -118,31 +126,37 @@ const CostingEditDialog = ({ open, onClose, quotation, quotationId, onSaved }) =
     ]);
 
     const handleSave = async () => {
-        if (!quotationId || !pricing) return;
+        if (!pricing) return;
+        if (!saveCostingOverride && !quotationId) return;
         setSaving(true);
         try {
-            await dispatch(
-                updateCustomQuotationCosting({
-                    quotationId,
-                    body: {
-                        packageCalculations: {
-                            standard: pricing.standard,
-                            deluxe: pricing.deluxe,
-                            superior: pricing.superior,
-                        },
-                        companyMargin: {
-                            marginPercent: toNum(marginPercent),
-                            marginAmount: toNum(marginAmount),
-                        },
-                        discount: toNum(discount),
-                        taxes: {
-                            gstOn,
-                            taxPercent: toNum(taxPercent),
-                            applyGST: gstOn !== "None",
-                        },
-                    },
-                })
-            ).unwrap();
+            const body = {
+                packageCalculations: {
+                    standard: pricing.standard,
+                    deluxe: pricing.deluxe,
+                    superior: pricing.superior,
+                },
+                companyMargin: {
+                    marginPercent: toNum(marginPercent),
+                    marginAmount: toNum(marginAmount),
+                },
+                discount: toNum(discount),
+                taxes: {
+                    gstOn,
+                    taxPercent: toNum(taxPercent),
+                    applyGST: gstOn !== "None",
+                },
+            };
+            if (saveCostingOverride) {
+                await saveCostingOverride(body);
+            } else {
+                await dispatch(
+                    updateCustomQuotationCosting({
+                        quotationId,
+                        body,
+                    })
+                ).unwrap();
+            }
             onSaved?.();
             onClose();
         } catch (e) {
@@ -249,7 +263,11 @@ const CostingEditDialog = ({ open, onClose, quotation, quotationId, onSaved }) =
                 <Button
                     variant="contained"
                     onClick={handleSave}
-                    disabled={saving || !quotationId || !pricing}
+                    disabled={
+                        saving ||
+                        !pricing ||
+                        (!saveCostingOverride && !quotationId)
+                    }
                     startIcon={saving ? <CircularProgress size={18} /> : null}
                 >
                     Save costing

@@ -80,6 +80,22 @@ export const sendQuickQuotationMail = createAsyncThunk(
     }
 );
 
+export const finalizeQuickQuotation = createAsyncThunk(
+    "quickQuotation/finalize",
+    async ({ id, finalizedPackage }, { rejectWithValue }) => {
+        try {
+            const { data } = await api.patch(`/quickQT/${id}/finalize`, {
+                finalizedPackage,
+            });
+            return data?.data ?? data;
+        } catch (err) {
+            return rejectWithValue(
+                err.response?.data?.message || "Failed to finalize quotation"
+            );
+        }
+    }
+);
+
 const quickQuotationSlice = createSlice({
     name: "quickQuotation",
     initialState: {
@@ -173,6 +189,13 @@ const quickQuotationSlice = createSlice({
                 state.successMessage = action.payload.message;
             })
             .addCase(sendQuickQuotationMail.rejected, (state, action) => {
+                state.error = action.payload;
+            })
+            .addCase(finalizeQuickQuotation.fulfilled, (state, action) => {
+                state.currentQuotation = action.payload;
+                state.successMessage = "Quotation finalized successfully!";
+            })
+            .addCase(finalizeQuickQuotation.rejected, (state, action) => {
                 state.error = action.payload;
             });
     },

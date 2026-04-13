@@ -11,21 +11,33 @@ import { useDispatch } from "react-redux";
 import CustomQuotationForm from "../customquotationStep6";
 import { updateQuotationStep } from "../../../../../features/quotation/customQuotationSlice";
 
-const FinalizeHotelsPricingDialog = ({ open, onClose, quotation, quotationId, onSaved }) => {
+const FinalizeHotelsPricingDialog = ({
+    open,
+    onClose,
+    quotation,
+    quotationId,
+    onSaved,
+    /** When set, skips custom quotation step 6 API (e.g. quick quotation). */
+    onSaveHotelsPricing,
+}) => {
     const dispatch = useDispatch();
 
     const handleSubmit = async (finalData) => {
-        await dispatch(
-            updateQuotationStep({
-                quotationId,
-                stepNumber: 6,
-                stepData: {
-                    clientDetails: finalData.clientDetails,
-                    pickupDrop: finalData.pickupDrop,
-                    tourDetails: finalData.tourDetails,
-                },
-            })
-        ).unwrap();
+        if (onSaveHotelsPricing) {
+            await onSaveHotelsPricing(finalData);
+        } else {
+            await dispatch(
+                updateQuotationStep({
+                    quotationId,
+                    stepNumber: 6,
+                    stepData: {
+                        clientDetails: finalData.clientDetails,
+                        pickupDrop: finalData.pickupDrop,
+                        tourDetails: finalData.tourDetails,
+                    },
+                })
+            ).unwrap();
+        }
         onSaved?.();
         onClose();
     };
