@@ -575,7 +575,7 @@ function transformQuickApiToDisplay(apiData, company) {
         bannerImage: pkg.bannerImage || "",
         customer: {
             name: apiData.customerName || "",
-            location: pkg.clientLocation || "",
+            location: pkg.sector || "",
             phone: apiData.phone || "",
             email: apiData.email || "",
         },
@@ -1076,7 +1076,24 @@ const QuickFinalize = () => {
         const n = Number(currentQuotation?.totalCost);
         return Number.isFinite(n) ? n : null;
     }, [currentQuotation]);
-
+    const finalizedVendors = React.useMemo(() => {
+            const savedNames = [
+                quotation?.finalizedVendorDetails?.hotelVendorName,
+                quotation?.finalizedVendorDetails?.vehicleVendorName,
+            ]
+                .map((n) => String(n || "").trim())
+                .filter(Boolean);
+            const rows = paymentHistory || [];
+            const paymentNames = rows
+                .filter(
+                    (v) =>
+                        v?.paymentType === "Payment Voucher" ||
+                        v?.drCr === "Dr"
+                )
+                .map((v) => String(v?.partyName || "").trim())
+                .filter(Boolean);
+            return Array.from(new Set([...savedNames, ...paymentNames]));
+        }, [paymentHistory, quotation?.finalizedVendorDetails]);
     useEffect(() => {
         const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
         setQuotation((prev) => ({
@@ -1904,7 +1921,7 @@ const QuickFinalize = () => {
     // UI Data
     const infoMap = {
         call: `📞 ${quotation.footer.phone}`,
-        email: `✉️ ${quotation.footer.email}`,
+        email: `✉️ ${quotation.customer?.email}`,
         payment: `Received: ${quotation.footer.received}\n Balance: ${quotation.footer.balance}`,
         quotation: `Total Quotation Cost: ${quotation.pricing.total}`,
         guest: `No. of Guests: ${quotation.hotel.guests}`,
@@ -2280,7 +2297,45 @@ const QuickFinalize = () => {
                                     </Box>
                                 ))}
                             </Box>
+{isFinalized && (
+                                <Box
+                                    mt={2}
+                                    p={2}
+                                    sx={{
+                                        backgroundColor: "grey.50",
+                                        borderRadius: 1,
+                                        borderLeft: "4px solid",
+                                        borderColor: "success.main",
+                                    }}
+                                >
+                                    <Typography
+                                        variant="subtitle2"
+                                        fontWeight="bold"
+                                        color="success.main"
+                                        sx={{ mb: 1 }}
+                                    >
+                                        Finalized Vendors
+                                    </Typography>
 
+                                    {finalizedVendors.length ? (
+                                        <Box display="flex" gap={1} flexWrap="wrap">
+                                            {finalizedVendors.map((name) => (
+                                                <Chip
+                                                    key={name}
+                                                    size="small"
+                                                    color="success"
+                                                    variant="outlined"
+                                                    label={name}
+                                                />
+                                            ))}
+                                        </Box>
+                                    ) : (
+                                        <Typography variant="body2" color="text.secondary">
+                                            No vendor payment vouchers linked yet.
+                                        </Typography>
+                                    )}
+                                </Box>
+                            )}
                             {/* Quotation Details */}
                             <Box mt={3}>
                                 <Box
