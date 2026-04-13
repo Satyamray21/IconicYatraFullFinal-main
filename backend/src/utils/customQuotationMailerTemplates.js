@@ -500,3 +500,120 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
     </div>
     `;
 }
+
+const hotelsForCategoryNight = (nightBlock, cat) => {
+  const c = String(cat).toLowerCase();
+  return (nightBlock?.hotels || [])
+    .filter(
+      (h) =>
+        String(h.category).toLowerCase() === c &&
+        h.hotelName &&
+        !/^TBD$/i.test(String(h.hotelName).trim()),
+    )
+    .map((h) => String(h.hotelName).trim());
+};
+
+/**
+ * Maps a QuickQuotation lean document into the shape expected by
+ * {@link buildCustomQuotationNormalEmail} / {@link buildCustomQuotationBookingEmail}
+ * (hotels from destinationNights, itinerary from package days, totals from totalCost).
+ */
+export function adaptQuickQuotationForCustomMailer(quick = {}) {
+  const pkg = quick.packageSnapshot || {};
+  const policy = quick.policy || pkg.policy || {};
+  const total = toNum(quick.totalCost);
+  const approxBeforeTax =
+    total > 0 ? Math.round((total / 1.05) * 100) / 100 : 0;
+
+  let destinations = [];
+  if (Array.isArray(pkg.destinationNights) && pkg.destinationNights.length) {
+    destinations = pkg.destinationNights.map((d) => {
+      let standardHotels = hotelsForCategoryNight(d, "standard");
+      const deluxeHotels = hotelsForCategoryNight(d, "deluxe");
+      const superiorHotels = hotelsForCategoryNight(d, "superior");
+      const firstAny = (d.hotels || []).find(
+        (h) =>
+          h.hotelName && !/^TBD$/i.test(String(h.hotelName).trim()),
+      );
+      if (!standardHotels.length && firstAny) {
+        standardHotels = [String(firstAny.hotelName).trim()];
+      }
+      return {
+        cityName: safe(d.destination, "City"),
+        nights: toNum(d.nights),
+        standardHotels,
+        deluxeHotels,
+        superiorHotels,
+      };
+    });
+  } else if (Array.isArray(pkg.stayLocations) && pkg.stayLocations.length) {
+    destinations = pkg.stayLocations.map((l) => ({
+      cityName: safe(l.city, "City"),
+      nights: toNum(l.nights),
+      standardHotels: ["Premium Deluxe Hotel (3★ Category)"],
+      deluxeHotels: [],
+      superiorHotels: [],
+    }));
+  }
+
+  const itinerary = (pkg.days || []).map((day) => ({
+    dayTitle: safe(day.title, "Day"),
+    dayNote: safe(day.notes || day.aboutCity, ""),
+  }));
+
+  return {
+    quotationId: String(quick._id || ""),
+    clientDetails: { clientName: safe(quick.customerName, "Guest") },
+    finalizedPackage: "Standard",
+    tourDetails: {
+      quotationTitle: safe(
+        pkg.displayTitle,
+        safe(pkg.title, safe(pkg.sector, "Tour Package")),
+      ),
+      arrivalDate: pkg.validFrom || quick.createdAt,
+      departureDate: pkg.validTill || pkg.validFrom || quick.createdAt,
+      policies: {
+        inclusionPolicy: toPolicyArray(policy.inclusionPolicy),
+        exclusionPolicy: toPolicyArray(policy.exclusionPolicy),
+        paymentPolicy: toPolicyArray(policy.paymentPolicy),
+        cancellationPolicy: toPolicyArray(policy.cancellationPolicy),
+        termsAndConditions: toPolicyArray(policy.termsAndConditions),
+      },
+      itinerary,
+      quotationDetails: {
+        adults: toNum(quick.adults),
+        children: toNum(quick.children),
+        kids: toNum(quick.kids),
+        infants: toNum(quick.infants),
+        mealPlan: safe(pkg.mealPlan?.planType, "CP"),
+        rooms: { numberOfRooms: 1, sharingType: "Double sharing" },
+        destinations,
+        packageCalculations: {
+          standard: {
+            finalTotal: total,
+            afterDiscount: approxBeforeTax,
+          },
+          deluxe: { finalTotal: 0, afterDiscount: 0 },
+          superior: { finalTotal: 0, afterDiscount: 0 },
+        },
+        taxes: { taxPercent: 5, applyGST: true, gstOn: "package" },
+      },
+      vehicleDetails: {
+        basicsDetails: {
+          vehicleType: safe(
+            quick.transportation || pkg.transportation,
+            "As per itinerary",
+          ),
+        },
+        pickupDropDetails: {
+          pickupLocation: safe(quick.pickupPoint, "As per itinerary"),
+          dropLocation: safe(quick.dropPoint, "As per itinerary"),
+          pickupDate: quick.createdAt,
+          dropDate: quick.createdAt,
+          pickupTime: "",
+          dropTime: "",
+        },
+      },
+    },
+  };
+}

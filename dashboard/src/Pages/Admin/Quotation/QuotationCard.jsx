@@ -627,7 +627,8 @@ const QuotationCard = () => {
         });
         break;
       case "Quick":
-        navigate(`/quickfinalize/${params.row.quoteId}`);
+        // Must use Mongo _id — quoteId is only a display label (QT-xxxxxx)
+        navigate(`/quickfinalize/${params.row.originalId}`);
         break;
       default:
         break;

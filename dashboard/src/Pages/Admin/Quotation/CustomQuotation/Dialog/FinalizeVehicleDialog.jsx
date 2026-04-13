@@ -11,19 +11,31 @@ import { useDispatch } from "react-redux";
 import CustomQuotationStep5 from "../customquotationStep5";
 import { updateQuotationStep } from "../../../../../features/quotation/customQuotationSlice";
 
-const FinalizeVehicleDialog = ({ open, onClose, quotation, quotationId, onSaved }) => {
+const FinalizeVehicleDialog = ({
+    open,
+    onClose,
+    quotation,
+    quotationId,
+    onSaved,
+    /** When set, skips custom quotation step 5 API (e.g. quick quotation). */
+    onSaveVehicle,
+}) => {
     const dispatch = useDispatch();
     const td = quotation?.tourDetails;
     const cd = quotation?.clientDetails;
 
     const handleNext = async (vehiclePayload) => {
-        await dispatch(
-            updateQuotationStep({
-                quotationId,
-                stepNumber: 5,
-                stepData: vehiclePayload,
-            })
-        ).unwrap();
+        if (onSaveVehicle) {
+            await onSaveVehicle(vehiclePayload);
+        } else {
+            await dispatch(
+                updateQuotationStep({
+                    quotationId,
+                    stepNumber: 5,
+                    stepData: vehiclePayload,
+                })
+            ).unwrap();
+        }
         onSaved?.();
         onClose();
     };

@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useParams, useNavigate } from "react-router-dom";
 import {
     Box,
     Grid,
@@ -60,12 +62,28 @@ import {
     Add,
     Download,
     Error,
+    Calculate,
 } from "@mui/icons-material";
 
 import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
-import MakePaymentDialog from "../VehicleQuotation/Dialog/MakePaymentDialog";
-import FinalizeDialog from "./Dialog/FinalizeDialog";
-import HotelVendorDialog from "./Dialog/HotelVendor";
+import FinalizeDialog from "../CustomQuotation/Dialog/FinalizeDialog";
+import CostingEditDialog from "../CustomQuotation/Dialog/CostingEditDialog";
+import FinalizeVehicleDialog from "../CustomQuotation/Dialog/FinalizeVehicleDialog";
+import FinalizeHotelsPricingDialog from "../CustomQuotation/Dialog/FinalizeHotelsPricingDialog";
+import HotelVendorDialog from "../CustomQuotation/Dialog/HotelVendor";
+import {
+    quickToHotelsFormData,
+    quickToCostingQuotation,
+    finalizeHotelsFormDataToQuickUpdate,
+    vehicleStepPayloadToQuickUpdate,
+    costingBodyToQuickUpdate,
+} from "../../../../utils/quickQuotationFinalizeAdapters";
+import {
+    fetchQuickQuotationById,
+    updateQuickQuotation,
+    finalizeQuickQuotation,
+} from "../../../../features/quotation/quickQuotationSlice";
+import axios from "../../../../utils/axios";
 import AddBankDialog from "../VehicleQuotation/Dialog/AddBankDialog";
 import EditDialog from "../VehicleQuotation/Dialog/EditDialog";
 import AddServiceDialog from "../VehicleQuotation/Dialog/AddServiceDialog";
@@ -73,15 +91,144 @@ import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 
-// Transaction Summary Dialog Component
-const TransactionSummaryDialog = ({ open, onClose }) => {
+function setQuotationValueByPath(prev, path, value) {
+    const parts = path.split(".");
+    if (parts.length === 1) {
+        return { ...prev, [path]: value };
+    }
+    const next = { ...prev };
+    let cur = next;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const p = parts[i];
+        cur[p] = cur[p] && typeof cur[p] === "object" ? { ...cur[p] } : {};
+        cur = cur[p];
+    }
+    cur[parts[parts.length - 1]] = value;
+    return next;
+}
+
+function linesToPolicyArray(v) {
+    if (Array.isArray(v)) return v.map(String);
+    if (typeof v === "string") {
+        return v.split("\n").map((s) => s.trim()).filter(Boolean);
+    }
+    return [String(v)];
+}
+
+function buildQuickMongoSetFromEditDialog(editDialog, newValue) {
+    if (editDialog.field === "pickup" && editDialog.nestedKey === "arrival") {
+        return { pickupPoint: String(newValue) };
+    }
+    if (editDialog.field === "pickup" && editDialog.nestedKey === "departure") {
+        return { dropPoint: String(newValue) };
+    }
+    switch (editDialog.field) {
+        case "policies.inclusions":
+            return { "policy.inclusionPolicy": linesToPolicyArray(newValue) };
+        case "policies.exclusions":
+            return { "policy.exclusionPolicy": linesToPolicyArray(newValue) };
+        case "policies.paymentPolicy":
+            return { "policy.paymentPolicy": linesToPolicyArray(newValue) };
+        case "policies.cancellationPolicy":
+            return { "policy.cancellationPolicy": linesToPolicyArray(newValue) };
+        case "policies.terms":
+            return { "policy.termsAndConditions": linesToPolicyArray(newValue) };
+        case "hotel.itinerary":
+            return { message: String(newValue) };
+        case "customer.name":
+            return { customerName: String(newValue) };
+        case "customer.email":
+            return { email: String(newValue) };
+        case "customer.location":
+            return { packageSnapshot: { clientLocation: String(newValue) } };
+        case "footer.contact":
+            return {
+                packageSnapshot: {
+                    quotationDetails: {
+                        signatureDetails: { signedBy: String(newValue) },
+                    },
+                },
+            };
+        case "quotationHeaderTitle":
+            return { packageSnapshot: { displayTitle: String(newValue) } };
+        case "destinationLine":
+            return { packageSnapshot: { displayDestination: String(newValue) } };
+        default:
+            return null;
+    }
+}
+
+function summarizeVoucherAmounts(vouchers) {
+    let receivedFromClient = 0;
+    let paidToVendor = 0;
+    (vouchers || []).forEach((v) => {
+        const n = Number(v.amount) || 0;
+        const isReceive =
+            v.drCr === "Cr" || v.paymentType === "Receive Voucher";
+        const isPayment =
+            v.drCr === "Dr" || v.paymentType === "Payment Voucher";
+        if (isReceive) receivedFromClient += n;
+        else if (isPayment) paidToVendor += n;
+    });
+    return {
+        receivedFromClient,
+        paidToVendor,
+        net: receivedFromClient - paidToVendor,
+        cr: receivedFromClient,
+        dr: paidToVendor,
+    };
+}
+
+const QUICK_PACKAGE_LABEL = "Quick Package";
+
+const normalizePolicyForEditor = (value) => {
+    if (Array.isArray(value)) {
+        if (value.length === 0) return "";
+        return value.join("\n").trim().replace(/<[^>]*>/g, "");
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        return trimmed ? trimmed.replace(/<[^>]*>/g, "") : "";
+    }
+    return "";
+};
+
+const normalizePolicyState = (source = {}) => {
+    const policySource = source?.policy || source || {};
+    return {
+        inclusionPolicy: normalizePolicyForEditor(
+            policySource?.inclusionPolicy ?? policySource?.inclusions
+        ),
+        exclusionPolicy: normalizePolicyForEditor(
+            policySource?.exclusionPolicy ?? policySource?.exclusions
+        ),
+        paymentPolicy: normalizePolicyForEditor(policySource?.paymentPolicy),
+        cancellationPolicy: normalizePolicyForEditor(
+            policySource?.cancellationPolicy
+        ),
+        termsAndConditions: normalizePolicyForEditor(
+            policySource?.termsAndConditions
+        ),
+    };
+};
+
+const TransactionSummaryDialog = ({
+    open,
+    onClose,
+    loading,
+    rows,
+    quotationRef,
+}) => {
+    const totals = summarizeVoucherAmounts(rows);
+
     const tableHeaders = [
-        "Sr No.",
-        "Receipt",
-        "Invoice",
-        "Party Name",
-        "Transaction Remark",
-        "Transaction...",
+        "Sr.",
+        "Receipt #",
+        "Voucher id",
+        "Type",
+        "Party",
+        "Particulars",
+        "Payment Bank",
         "Dr/Cr",
         "Amount",
     ];
@@ -96,10 +243,78 @@ const TransactionSummaryDialog = ({ open, onClose }) => {
         >
             <DialogTitle>
                 <Typography variant="h6" component="div" fontWeight="bold">
-                    Transaction Summary
+                    Payment history{quotationRef ? ` — ${quotationRef}` : ""}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Receive vouchers count as money from the client; payment vouchers count as money paid to vendors.
                 </Typography>
             </DialogTitle>
             <DialogContent>
+                {!loading && rows?.length > 0 && (
+                    <Box
+                        sx={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 2,
+                            mb: 2,
+                        }}
+                    >
+                        <Paper
+                            variant="outlined"
+                            sx={{
+                                flex: "1 1 200px",
+                                p: 2,
+                                borderLeft: "4px solid",
+                                borderColor: "success.main",
+                            }}
+                        >
+                            <Typography variant="caption" color="text.secondary">
+                                Received from client
+                            </Typography>
+                            <Typography variant="h6" color="success.main" fontWeight="bold">
+                                ₹{totals.receivedFromClient.toLocaleString("en-IN")}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Receive vouchers (Cr)
+                            </Typography>
+                        </Paper>
+                        <Paper
+                            variant="outlined"
+                            sx={{
+                                flex: "1 1 200px",
+                                p: 2,
+                                borderLeft: "4px solid",
+                                borderColor: "warning.main",
+                            }}
+                        >
+                            <Typography variant="caption" color="text.secondary">
+                                Paid to vendors
+                            </Typography>
+                            <Typography variant="h6" color="warning.main" fontWeight="bold">
+                                ₹{totals.paidToVendor.toLocaleString("en-IN")}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Payment vouchers (Dr)
+                            </Typography>
+                        </Paper>
+                        <Paper
+                            variant="outlined"
+                            sx={{
+                                flex: "1 1 200px",
+                                p: 2,
+                                borderLeft: "4px solid",
+                                borderColor: "info.main",
+                            }}
+                        >
+                            <Typography variant="caption" color="text.secondary">
+                                Net (client in − vendor out)
+                            </Typography>
+                            <Typography variant="h6" fontWeight="bold">
+                                ₹{totals.net.toLocaleString("en-IN")}
+                            </Typography>
+                        </Paper>
+                    </Box>
+                )}
                 <TableContainer
                     component={Paper}
                     variant="outlined"
@@ -125,23 +340,56 @@ const TransactionSummaryDialog = ({ open, onClose }) => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            <TableRow>
-                                <TableCell
-                                    colSpan={tableHeaders.length}
-                                    align="center"
-                                    sx={{
-                                        height: 120,
-                                        color: "text.secondary",
-                                        fontStyle: "italic",
-                                    }}
-                                >
-                                    No data
-                                </TableCell>
-                            </TableRow>
+                            {loading ? (
+                                <TableRow>
+                                    <TableCell colSpan={tableHeaders.length} align="center" sx={{ py: 4 }}>
+                                        <CircularProgress size={32} />
+                                    </TableCell>
+                                </TableRow>
+                            ) : rows?.length ? (
+                                rows.map((v, index) => (
+                                    <TableRow key={v._id || index} hover>
+                                        <TableCell>{index + 1}</TableCell>
+                                        <TableCell>{v.receiptNumber}</TableCell>
+                                        <TableCell>{v.invoiceId}</TableCell>
+                                        <TableCell>{v.paymentType}</TableCell>
+                                        <TableCell>{v.partyName}</TableCell>
+                                        <TableCell sx={{ maxWidth: 220 }}>{v.particulars}</TableCell>
+                                        <TableCell>{v.paymentMode}</TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                size="small"
+                                                label={v.drCr || "—"}
+                                                color={v.drCr === "Cr" ? "success" : v.drCr === "Dr" ? "warning" : "default"}
+                                            />
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            ₹{(Number(v.amount) || 0).toLocaleString("en-IN")}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell
+                                        colSpan={tableHeaders.length}
+                                        align="center"
+                                        sx={{
+                                            height: 120,
+                                            color: "text.secondary",
+                                            fontStyle: "italic",
+                                        }}
+                                    >
+                                        No vouchers linked to this quotation yet.
+                                    </TableCell>
+                                </TableRow>
+                            )}
                         </TableBody>
                     </Table>
                 </TableContainer>
             </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Close</Button>
+            </DialogActions>
         </Dialog>
     );
 };
@@ -232,12 +480,209 @@ const InvoicePdfDialog = ({ open, onClose, quotation, invoiceData }) => {
     );
 };
 
+const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-IN");
+};
+
+function transformQuickApiToDisplay(apiData, company) {
+    if (!apiData) return null;
+    const pkg = apiData.packageSnapshot || apiData.packageId || {};
+    const policy = apiData.policy || {};
+    const adults = Number(apiData.adults) || 0;
+    const children = Number(apiData.children) || 0;
+    const kids = Number(apiData.kids) || 0;
+    const infants = Number(apiData.infants) || 0;
+    const totalGuests = adults + children + kids + infants;
+    const totalCost = Number(apiData.totalCost) || 0;
+    const destLine =
+        pkg.displayDestination ||
+        pkg.sector ||
+        pkg.destinationCountry ||
+        (Array.isArray(pkg.stayLocations)
+            ? pkg.stayLocations.map((l) => `${l.nights || 0}N ${l.city || ""}`).join(", ")
+            : "") ||
+        "—";
+
+    const pickHotel = (nightBlock, cat) => {
+        const c = String(cat).toLowerCase();
+        const h = (nightBlock?.hotels || []).find(
+            (x) =>
+                String(x.category).toLowerCase() === c &&
+                x.hotelName &&
+                !/^TBD$/i.test(String(x.hotelName).trim())
+        );
+        return h?.hotelName || "—";
+    };
+
+    let hotelPricingData = [];
+    if (Array.isArray(pkg.destinationNights) && pkg.destinationNights.length) {
+        hotelPricingData = pkg.destinationNights.map((d) => ({
+            destination: d.destination || "—",
+            nights: `${d.nights || 0} N`,
+            standard: pickHotel(d, "standard"),
+            deluxe: pickHotel(d, "deluxe"),
+            superior: pickHotel(d, "superior"),
+        }));
+    } else if (Array.isArray(pkg.stayLocations) && pkg.stayLocations.length) {
+        hotelPricingData = pkg.stayLocations.map((l) => ({
+            destination: l.city || "—",
+            nights: `${l.nights || 0} N`,
+            standard: "—",
+            deluxe: "—",
+            superior: "—",
+        }));
+    }
+    if (totalCost > 0) {
+        hotelPricingData.push({
+            destination: "Total package cost",
+            nights: "-",
+            standard: `₹ ${Math.round(totalCost).toLocaleString("en-IN")}`,
+            deluxe: "—",
+            superior: "—",
+        });
+    }
+
+    const itineraryDays = Array.isArray(pkg.days)
+        ? pkg.days.map((day, index) => ({
+            id: index + 1,
+            date: formatDate(apiData.createdAt),
+            title: day.title || `Day ${index + 1}`,
+            description: day.notes || day.aboutCity || "",
+            image: day.dayImage
+                ? {
+                      preview: day.dayImage,
+                      url: day.dayImage,
+                      name: "Itinerary",
+                  }
+                : null,
+        }))
+        : [];
+
+    return {
+        date: formatDate(apiData.createdAt),
+        reference: String(apiData._id || ""),
+        actions: [
+            "Finalize",
+            "Add Service",
+            "Email Quotation",
+            "Preview PDF",
+            "Make Payment",
+            "Add Flight",
+            "Transaction",
+        ],
+        bannerImage: pkg.bannerImage || "",
+        customer: {
+            name: apiData.customerName || "",
+            location: pkg.clientLocation || "",
+            phone: apiData.phone || "",
+            email: apiData.email || "",
+        },
+        pickup: {
+            arrival: apiData.pickupPoint
+                ? `Pickup: ${apiData.pickupPoint}`
+                : "Pickup: —",
+            departure: apiData.dropPoint
+                ? `Drop: ${apiData.dropPoint}`
+                : "Drop: —",
+        },
+        quotationTitle: pkg.displayTitle || pkg.title || "",
+        destinationSummary: destLine,
+        hotel: {
+            guests: `${totalGuests} (${adults} Adults, ${children} Children${kids ? `, ${kids} Kids` : ""}${infants ? `, ${infants} Infants` : ""})`,
+            rooms: (() => {
+                const r = pkg.quotationDetails?.rooms;
+                if (!r) return "—";
+                const n = r.numberOfRooms ?? "—";
+                const sh = r.sharingType || "";
+                return `${n}${sh ? ` · ${sh}` : ""}`;
+            })(),
+            mealPlan: pkg.quotationDetails?.mealPlan || pkg.mealPlan?.planType || "—",
+            destination: destLine,
+            itinerary:
+                apiData.message ||
+                "This is only a tentative schedule for sightseeing and travel...",
+        },
+        finalizedVendorDetails: {
+            vendorType: apiData.vendorDetails?.vendorType || "",
+            hotelVendorName: apiData.vendorDetails?.hotelVendorName || "",
+            vehicleVendorName: apiData.vendorDetails?.vehicleVendorName || "",
+        },
+        vehicles: [],
+        pricing: {
+            discount: "—",
+            gst: "—",
+            total:
+                totalCost > 0
+                    ? `₹ ${Math.round(totalCost).toLocaleString("en-IN")}`
+                    : "—",
+        },
+        policies: {
+            inclusions: policy.inclusionPolicy || [],
+            exclusions:
+                (policy.exclusionPolicy || []).join("\n") ||
+                "No exclusions specified",
+            paymentPolicy:
+                (policy.paymentPolicy || []).join("\n") ||
+                "No payment policy specified",
+            cancellationPolicy:
+                (policy.cancellationPolicy || []).join("\n") ||
+                "No cancellation policy specified",
+            terms:
+                (policy.termsAndConditions || []).join("\n") ||
+                "No terms and conditions specified",
+        },
+        footer: {
+            contact:
+                pkg.quotationDetails?.signatureDetails?.signedBy ||
+                company?.company?.contactPerson ||
+                "",
+            phone: company?.company?.phone || apiData.phone || "",
+            email: company?.company?.email || apiData.email || "",
+            received: "₹ 0",
+            balance: "₹ 0",
+            company: company?.company?.companyName || "Iconic Yatra",
+            address: company?.company?.address || "",
+            website: company?.company?.website || "",
+            gst: company?.company?.gst || "",
+        },
+        hotelPricingData,
+        days: itineraryDays,
+    };
+}
+
 const QuickFinalize = () => {
-    // State
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
+    const { id } = useParams();
+    const { data: company } = useSelector((state) => state.companyUI);
+    const { currentQuotation, loading: reduxLoading } = useSelector(
+        (state) => state.quickQuotation
+    );
+
+    /** Canonical Mongo id for APIs (payments, PATCH). URL may still be QT-xxxxxx until backend resolves. */
+    const apiEntityId = useMemo(() => {
+        if (currentQuotation?._id) return String(currentQuotation._id);
+        if (id && /^[a-f\d]{24}$/i.test(String(id))) return String(id);
+        return id;
+    }, [currentQuotation?._id, id]);
+
+    const costingQuotation = useMemo(
+        () =>
+            currentQuotation ? quickToCostingQuotation(currentQuotation) : null,
+        [currentQuotation]
+    );
+
+    const hotelsDialogQuotation = useMemo(
+        () =>
+            currentQuotation ? quickToHotelsFormData(currentQuotation) : null,
+        [currentQuotation]
+    );
+
     const [activeInfo, setActiveInfo] = useState(null);
     const [openFinalize, setOpenFinalize] = useState(false);
     const [openAddFlight, setOpenAddFlight] = useState(false);
-    const [vendor, setVendor] = useState("");
     const [isFinalized, setIsFinalized] = useState(false);
     const [invoiceGenerated, setInvoiceGenerated] = useState(false);
     const [openInvoiceDialog, setOpenInvoiceDialog] = useState(false);
@@ -257,96 +702,56 @@ const QuickFinalize = () => {
     });
 
     const [quotation, setQuotation] = useState({
-        date: "27/08/2025",
-        reference: "41",
-        actions: ["Finalize", "Add Service", "Email Quotation", "Preview PDF", "Make Payment", "Add Flight", "Transaction"],
-        bannerImage: "",
-        customer: {
-            name: "Amit Jaiswal",
-            location: "Andhya Pradesh",
-            phone: "+91 7053900957",
-            email: "amit.jaiswal@example.com",
-        },
-        pickup: {
-            arrival: "Arrival: Lucknow (22/08/2025) at Airport, 3:35PM",
-            departure: "Departure: Delhi (06/09/2025) from Local Address, 6:36PM",
-        },
-        hotel: {
-            guests: "6 Adults",
-            rooms: "3 Bedroom",
-            mealPlan: "CP, AP, EP",
-            destination: "3N Borong, 2N Damthang",
-            itinerary: "This is only tentative schedule for sightseeing and travel...",
-        },
-        vehicles: [
-            {
-                pickup: { date: "22/08/2025", time: "3:35PM" },
-                drop: { date: "06/09/2025", time: "6:36PM" },
-            },
+        date: "",
+        reference: "",
+        actions: [
+            "Finalize",
+            "Add Service",
+            "Email Quotation",
+            "Preview PDF",
+            "Make Payment",
+            "Add Flight",
+            "Transaction",
         ],
-        pricing: { discount: "₹ 200", gst: "₹ 140", total: "₹ 3,340" },
+        bannerImage: "",
+        quotationTitle: "",
+        destinationSummary: "",
+        customer: { name: "", location: "", phone: "", email: "" },
+        pickup: { arrival: "", departure: "" },
+        hotel: {
+            guests: "",
+            rooms: "",
+            mealPlan: "",
+            destination: "",
+            itinerary: "",
+        },
+        finalizedVendorDetails: {
+            vendorType: "",
+            hotelVendorName: "",
+            vehicleVendorName: "",
+        },
+        vehicles: [],
+        pricing: { discount: "", gst: "", total: "" },
         policies: {
-            inclusions: [
-                "All transfers tours in a Private AC cab.",
-                "Parking, Toll charges, Fuel and Driver expenses.",
-                "Hotel Taxes.",
-                "Car AC off during hill stations.",
-            ],
-            exclusions: "1. Any Cost change...",
-            paymentPolicy: "50% amount to pay at confirmation, balance before 10 days.",
-            cancellationPolicy: "1. Before 15 days: 50%. 2. Within 7 days: 100%.",
-            terms: "1. This is only a Quote. Availability is checked only on confirmation...",
+            inclusions: [],
+            exclusions: "",
+            paymentPolicy: "",
+            cancellationPolicy: "",
+            terms: "",
         },
         footer: {
-            contact: "Amit Jaiswal | +91 7053900957 (Noida)",
-            phone: "+91 7053900957",
-            email: "amit.jaiswal@example.com",
-            received: "₹ 1,500",
-            balance: "₹ 1,840",
+            contact: "",
+            phone: "",
+            email: "",
+            received: "₹ 0",
+            balance: "₹ 0",
             company: "Iconic Yatra",
-            address: "Office No 15, Bhawani Market Sec 27, Noida, Uttar Pradesh – 201301",
-            website: "https://www.iconicyatra.com",
+            address: "",
+            website: "",
+            gst: "",
         },
-        hotelPricingData: [
-            {
-                destination: "Borong",
-                nights: "3 N",
-                standard: "Tempo Heritage Resort",
-                deluxe: "Tempo Heritage Resort",
-                superior: "Yovage The Aryan Regency",
-            },
-            {
-                destination: "Damthang",
-                nights: "2 N",
-                standard: "Tempo Heritage Resort",
-                deluxe: "Tempo Heritage Resort",
-                superior: "Yovage The Aryan Regency",
-            },
-            {
-                destination: "Quotation Cost",
-                nights: "-",
-                standard: "₹ 40,366",
-                deluxe: "₹ 440,829",
-                superior: "₹ 92,358",
-            },
-            {
-                destination: "IGST",
-                nights: "-",
-                standard: "₹ 2,018.3",
-                deluxe: "₹ 22,041.4",
-                superior: "₹ 4,617.9",
-            },
-            {
-                destination: "Total Quotation Cost",
-                nights: "5 N",
-                standard: "₹ 42,384",
-                deluxe: "₹ 462,870",
-                superior: "₹ 96,976",
-            },
-        ],
-        days: [
-            { id: 1, date: "11/09/2025", title: "About Day 1", description: "Arrival and check-in process" },
-        ],
+        hotelPricingData: [],
+        days: [],
     });
 
     const [invoiceData, setInvoiceData] = useState(null);
@@ -368,11 +773,39 @@ const QuickFinalize = () => {
         taxType: "",
     });
     const [openEmailDialog, setOpenEmailDialog] = useState(false);
-    const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
+    const [emailTemplateType, setEmailTemplateType] = useState("normal");
+    const [emailTemplateBodies, setEmailTemplateBodies] = useState({
+        normal: { subject: "", message: "" },
+        booking: { subject: "", message: "" },
+    });
+    const [mailCompanies, setMailCompanies] = useState([]);
+    const [policyInputs, setPolicyInputs] = useState({
+        inclusionPolicy: "",
+        exclusionPolicy: "",
+        paymentPolicy: "",
+        cancellationPolicy: "",
+        termsAndConditions: "",
+    });
     const [openBankDialog, setOpenBankDialog] = useState(false);
     const [flights, setFlights] = useState([]);
     const [openAddBankDialog, setOpenAddBankDialog] = useState(false);
     const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
+    const [openCostingEdit, setOpenCostingEdit] = useState(false);
+    const [openVehicleFinalizeDialog, setOpenVehicleFinalizeDialog] =
+        useState(false);
+    const [openHotelsPricingDialog, setOpenHotelsPricingDialog] =
+        useState(false);
+    const [guestCountsDialog, setGuestCountsDialog] = useState({
+        open: false,
+        adults: 0,
+        children: 0,
+        kids: 0,
+        infants: 0,
+    });
+    const [bannerUploading, setBannerUploading] = useState(false);
+    const [itinerarySaving, setItinerarySaving] = useState(false);
+    const [paymentHistory, setPaymentHistory] = useState([]);
+    const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
     const [days, setDays] = useState([
         { id: 1, date: "11/09/2025", title: "About Day 1", image: null },
     ]);
@@ -402,8 +835,283 @@ const QuickFinalize = () => {
         { value: "non", label: "Non", rate: 0 },
     ];
 
-    // Generate invoice data
+    const loadPaymentHistory = useCallback(async () => {
+        if (!apiEntityId) return;
+        setPaymentHistoryLoading(true);
+        try {
+            const res = await axios.get(
+                `/payment/by-quotation/${encodeURIComponent(apiEntityId)}`
+            );
+            setPaymentHistory(res.data?.data || []);
+        } catch (e) {
+            console.error(e);
+            setPaymentHistory([]);
+        } finally {
+            setPaymentHistoryLoading(false);
+        }
+    }, [apiEntityId]);
+
+    const refreshQuotationFromApi = async () => {
+        if (!id) return;
+        const refreshed = await dispatch(fetchQuickQuotationById(id)).unwrap();
+        const t = transformQuickApiToDisplay(refreshed, company);
+        if (t) {
+            setQuotation(t);
+            setDays(t.days?.length ? t.days : []);
+            setPolicyInputs(normalizePolicyState(refreshed));
+        }
+    };
+
+    const persistItineraryForDays = async (nextDays) => {
+        if (!apiEntityId || !Array.isArray(nextDays)) return;
+        const pkgDays = nextDays.map((d) => ({
+            title: d.title || "",
+            notes: d.description || d.notes || "",
+            aboutCity: "",
+            dayImage:
+                typeof d.image?.url === "string" && d.image.url
+                    ? d.image.url
+                    : typeof d.image === "string"
+                      ? d.image
+                      : "",
+        }));
+        setItinerarySaving(true);
+        try {
+            await dispatch(
+                updateQuickQuotation({
+                    id: apiEntityId,
+                    formData: { packageSnapshot: { days: pkgDays } },
+                })
+            ).unwrap();
+            await refreshQuotationFromApi();
+            setSnackbar({
+                open: true,
+                message: "Itinerary saved",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message: String(e?.message || e || "Failed to save itinerary"),
+                severity: "error",
+            });
+        } finally {
+            setItinerarySaving(false);
+        }
+    };
+
+    const openGuestCountsDialog = () => {
+        const q = currentQuotation;
+        if (!q) return;
+        const qd = q.packageSnapshot?.quotationDetails;
+        setGuestCountsDialog({
+            open: true,
+            adults: Number(q.adults) || 0,
+            children: Number(q.children) || 0,
+            kids: Number(q.kids) || Number(qd?.kids) || 0,
+            infants: Number(q.infants) || Number(qd?.infants) || 0,
+        });
+    };
+
+    const handleSaveGuestCounts = async () => {
+        const { adults, children, kids, infants } = guestCountsDialog;
+        const a = Math.max(0, Number(adults) || 0);
+        const c = Math.max(0, Number(children) || 0);
+        const k = Math.max(0, Number(kids) || 0);
+        const inf = Math.max(0, Number(infants) || 0);
+        if (!apiEntityId) {
+            setSnackbar({
+                open: true,
+                message: "Missing quotation id",
+                severity: "error",
+            });
+            return;
+        }
+        setGuestCountsDialog((s) => ({ ...s, open: false }));
+        try {
+            await dispatch(
+                updateQuickQuotation({
+                    id: apiEntityId,
+                    formData: {
+                        adults: a,
+                        children: c,
+                        kids: k,
+                        infants: inf,
+                        packageSnapshot: {
+                            quotationDetails: { kids: k, infants: inf },
+                        },
+                    },
+                })
+            ).unwrap();
+            await refreshQuotationFromApi();
+            setSnackbar({
+                open: true,
+                message: "Guest counts saved",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message: String(e?.message || e || "Save failed"),
+                severity: "error",
+            });
+        }
+    };
+
+    const handleBannerFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        if (!apiEntityId) {
+            setSnackbar({
+                open: true,
+                message: "Cannot upload: no quotation id",
+                severity: "error",
+            });
+            return;
+        }
+        setBannerUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append("bannerImage", file);
+            await axios.post(
+                `/quickQT/${encodeURIComponent(apiEntityId)}/banner`,
+                fd,
+                { headers: { "Content-Type": "multipart/form-data" } }
+            );
+            await refreshQuotationFromApi();
+            setSnackbar({
+                open: true,
+                message: "Banner image uploaded",
+                severity: "success",
+            });
+        } catch (err) {
+            setSnackbar({
+                open: true,
+                message:
+                    err?.response?.data?.message ||
+                    err?.message ||
+                    "Banner upload failed",
+                severity: "error",
+            });
+        } finally {
+            setBannerUploading(false);
+        }
+    };
+
+    useEffect(() => {
+        const loadCompanies = async () => {
+            try {
+                const res = await axios.get("/company");
+                const list = res?.data?.data || [];
+                setMailCompanies(Array.isArray(list) ? list : []);
+            } catch (err) {
+                console.error(err);
+                setMailCompanies([]);
+            }
+        };
+        loadCompanies();
+    }, []);
+
+    useEffect(() => {
+        const loadGlobal = async () => {
+            try {
+                const res = await axios.get("/global-settings");
+                const settings = normalizePolicyState(res.data);
+                setPolicyInputs((prev) => ({
+                    inclusionPolicy:
+                        prev.inclusionPolicy || settings.inclusionPolicy,
+                    exclusionPolicy:
+                        prev.exclusionPolicy || settings.exclusionPolicy,
+                    paymentPolicy:
+                        prev.paymentPolicy || settings.paymentPolicy,
+                    cancellationPolicy:
+                        prev.cancellationPolicy || settings.cancellationPolicy,
+                    termsAndConditions:
+                        prev.termsAndConditions || settings.termsAndConditions,
+                }));
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        loadGlobal();
+    }, []);
+
+    useEffect(() => {
+        if (!id) {
+            setSnackbar({
+                open: true,
+                message: "No quotation ID in URL",
+                severity: "error",
+            });
+            return;
+        }
+        dispatch(fetchQuickQuotationById(id))
+            .unwrap()
+            .catch((err) => {
+                setSnackbar({
+                    open: true,
+                    message: err || "Failed to load quotation",
+                    severity: "error",
+                });
+            });
+    }, [dispatch, id]);
+
+    useEffect(() => {
+        if (!currentQuotation) return;
+        const t = transformQuickApiToDisplay(currentQuotation, company);
+        if (t) {
+            setQuotation(t);
+            setDays(t.days?.length ? t.days : []);
+            setPolicyInputs(normalizePolicyState(currentQuotation));
+        }
+        setIsFinalized(currentQuotation.finalizeStatus === "finalized");
+    }, [currentQuotation, company]);
+
+    useEffect(() => {
+        loadPaymentHistory();
+    }, [loadPaymentHistory]);
+
+    const packageTotalForFooter = useMemo(() => {
+        const n = Number(currentQuotation?.totalCost);
+        return Number.isFinite(n) ? n : null;
+    }, [currentQuotation]);
+
+    useEffect(() => {
+        const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
+        setQuotation((prev) => ({
+            ...prev,
+            footer: {
+                ...prev.footer,
+                received: `₹ ${receivedFromClient.toLocaleString("en-IN")}`,
+                balance:
+                    packageTotalForFooter != null
+                        ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}`
+                        : prev.footer.balance,
+            },
+        }));
+    }, [paymentHistory, packageTotalForFooter]);
+
+    const finalizePackageOptions = useMemo(() => {
+        const pkg = currentQuotation?.packageSnapshot || currentQuotation?.packageId || {};
+        const title = pkg.packageName || pkg.title || "Package";
+        const total = Number(currentQuotation?.totalCost) || 0;
+        return [
+            {
+                label: QUICK_PACKAGE_LABEL,
+                hotel: String(title),
+                cost:
+                    total > 0
+                        ? `₹ ${Math.round(total).toLocaleString("en-IN")}`
+                        : "—",
+            },
+        ];
+    }, [currentQuotation]);
+
     const generateInvoiceData = () => {
+        const total = Number(currentQuotation?.totalCost) || 0;
+        const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
+        const balance = Math.max(0, total - receivedFromClient);
         return {
             company: {
                 name: quotation.footer.company,
@@ -411,14 +1119,14 @@ const QuickFinalize = () => {
                 phone: quotation.footer.phone,
                 email: quotation.footer.email,
                 state: "9 - Uttar Pradesh",
-                gstin: "09EYCPK8832C1ZC",
+                gstin: quotation.footer.gst || "09EYCPK8832C1ZC",
             },
             customer: {
                 name: quotation.customer.name,
                 mobile: quotation.customer.phone,
                 email: quotation.customer.email,
-                state: "28 - Andhra Pradesh (Old)",
-                gstin: "28ABCDE1234F1Z2",
+                state: "",
+                gstin: "",
             },
             invoice: {
                 number: `INV-${quotation.reference}`,
@@ -429,36 +1137,216 @@ const QuickFinalize = () => {
             items: [
                 {
                     id: 1,
-                    particulars: "Hotel Booking Services",
+                    particulars: `Package — ${quotation.hotel.destination}`,
                     hsnSac: "998314",
-                    price: 2500,
-                    amount: 2500,
-                },
-                {
-                    id: 2,
-                    particulars: "Transportation Services",
-                    hsnSac: "996411",
-                    price: 840,
-                    amount: 840,
+                    price: total,
+                    amount: total,
                 },
             ],
             summary: {
-                subTotal: 3340,
-                total: 3340,
-                received: 1500,
-                balance: 1840,
+                subTotal: total,
+                total,
+                received: receivedFromClient,
+                balance,
             },
             description: `Travel services for ${quotation.hotel.destination} - ${quotation.hotel.guests}`,
             terms: "Payment due within 15 days. Thanks for choosing our services.",
         };
     };
 
-    // Dialog handlers
-    const handleEmailOpen = () => setOpenEmailDialog(true);
+    const emailInitialValues = useMemo(() => {
+        const type = emailTemplateType === "booking" ? "booking" : "normal";
+        const tpl = emailTemplateBodies[type];
+        return {
+            to: currentQuotation?.email || quotation.customer?.email || "",
+            cc: "",
+            recipientName:
+                currentQuotation?.customerName || quotation.customer?.name || "",
+            salutation: "Dear",
+            subject: tpl?.subject || "",
+            greetLine: "Please find below details:",
+            message: tpl?.message || "",
+            signature: "Warm Regards,\nReservation Team\nIconic Travel",
+            mailType: type,
+            senderAccount: "gmail1",
+            companyId: mailCompanies?.[0]?._id || "",
+            nextPayableAmount: "",
+            paymentDueDate: "",
+        };
+    }, [
+        currentQuotation,
+        quotation.customer?.name,
+        quotation.customer?.email,
+        emailTemplateType,
+        emailTemplateBodies,
+        mailCompanies,
+    ]);
+
+    if (reduxLoading && !currentQuotation) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+                <CircularProgress />
+                <Typography variant="h6" sx={{ ml: 2 }}>
+                    Loading quotation data...
+                </Typography>
+            </Box>
+        );
+    }
+
+    const refreshEmailTemplates = async (companyId) => {
+        const selectedCompany = mailCompanies.find((c) => c?._id === companyId);
+        const res = await axios.post(
+            `/quickQT/${encodeURIComponent(apiEntityId)}/email/preview`,
+            {
+                companyId: companyId || undefined,
+                companyName: selectedCompany?.companyName || undefined,
+            }
+        );
+        const data = res?.data?.data || {};
+        const nextTemplates = {
+            normal: {
+                subject: data?.normal?.subject || "",
+                message: data?.normal?.body || "",
+            },
+            booking: {
+                subject: data?.booking?.subject || "",
+                message: data?.booking?.body || "",
+            },
+        };
+        setEmailTemplateBodies(nextTemplates);
+        return nextTemplates;
+    };
+
+    const handleEmailOpen = async () => {
+        if (!apiEntityId) {
+            setSnackbar({
+                open: true,
+                message: "Missing quotation reference",
+                severity: "error",
+            });
+            return;
+        }
+        setEmailTemplateType("normal");
+        const defaultCompany = mailCompanies?.[0];
+        try {
+            await refreshEmailTemplates(defaultCompany?._id);
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message:
+                    e?.response?.data?.message ||
+                    "Failed to load email templates",
+                severity: "warning",
+            });
+        }
+        setOpenEmailDialog(true);
+    };
     const handleEmailClose = () => setOpenEmailDialog(false);
 
-    const handlePaymentOpen = () => setOpenPaymentDialog(true);
-    const handlePaymentClose = () => setOpenPaymentDialog(false);
+    const handleEmailSend = async (values) => {
+        const to = String(values?.to || "").trim();
+        const cc = String(values?.cc || "").trim();
+        const subject = String(values?.subject || "");
+        const isBookingMail = values?.mailType === "booking";
+        const nextPayableRaw = String(values?.nextPayableAmount || "").trim();
+        const parsedNextPayable = Number(
+            nextPayableRaw.replace(/[^0-9.-]/g, "")
+        );
+        const dueDateRaw = String(values?.paymentDueDate || "").trim();
+        const nextPayableAmount =
+            nextPayableRaw === "" || !Number.isFinite(parsedNextPayable)
+                ? undefined
+                : parsedNextPayable;
+        const hasBookingOverrides =
+            isBookingMail &&
+            (dueDateRaw !== "" || Number.isFinite(nextPayableAmount));
+        const selectedCompany =
+            mailCompanies.find((c) => c?._id === values?.companyId) || null;
+        if (!to) {
+            setSnackbar({
+                open: true,
+                message: "Please enter receiver email",
+                severity: "warning",
+            });
+            return;
+        }
+        try {
+            await axios.post(`/quickQT/${encodeURIComponent(apiEntityId)}/email/send`, {
+                to,
+                cc: cc || undefined,
+                type: isBookingMail ? "booking" : "normal",
+                subject: subject || undefined,
+                bodyHtml:
+                    isBookingMail
+                        ? undefined
+                        : values?.message || undefined,
+                senderAccount: values?.senderAccount || "gmail1",
+                companyId: values?.companyId || undefined,
+                companyName: selectedCompany?.companyName || undefined,
+                customText: isBookingMail
+                    ? {
+                        booking: {
+                            ...(Number.isFinite(nextPayableAmount)
+                                ? { nextPayableAmount }
+                                : {}),
+                            ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
+                        },
+                    }
+                    : hasBookingOverrides
+                        ? {
+                            booking: {
+                                ...(Number.isFinite(nextPayableAmount)
+                                    ? { nextPayableAmount }
+                                    : {}),
+                                ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
+                            },
+                        }
+                        : undefined,
+            });
+            setSnackbar({
+                open: true,
+                message: "Email sent successfully",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message:
+                    e?.response?.data?.message || "Failed to send email",
+                severity: "error",
+            });
+        }
+    };
+
+    const handlePaymentOpen = () => {
+        if (!apiEntityId) {
+            setSnackbar({
+                open: true,
+                message: "Missing quotation reference",
+                severity: "error",
+            });
+            return;
+        }
+        const clientName =
+            quotation.customer?.name?.trim() ||
+            currentQuotation?.customerName?.trim() ||
+            "";
+        try {
+            sessionStorage.setItem(
+                "paymentFormPartyPrefill",
+                JSON.stringify({
+                    quotationRef: apiEntityId,
+                    partyName: clientName,
+                })
+            );
+        } catch {
+            /* ignore */
+        }
+        const party = encodeURIComponent(clientName);
+        navigate(
+            `/payments-form?quotationRef=${encodeURIComponent(apiEntityId)}&party=${party}`
+        );
+    };
 
     const handleFinalizeOpen = () => setOpenFinalize(true);
     const handleFinalizeClose = () => setOpenFinalize(false);
@@ -498,16 +1386,94 @@ const QuickFinalize = () => {
         });
     };
 
-    const handleEditSave = () => {
-        setQuotation((prev) => ({
-            ...prev,
-            [editDialog.field]: editDialog.nested
-                ? {
-                    ...prev[editDialog.field],
-                    [editDialog.nestedKey]: editDialog.value,
-                }
-                : editDialog.value,
-        }));
+    const handleEditSave = async () => {
+        let newValue = editDialog.value;
+
+        if (editDialog.field === "policies.inclusions") {
+            try {
+                const parsed = JSON.parse(editDialog.value);
+                newValue = Array.isArray(parsed) ? parsed : [String(parsed)];
+            } catch {
+                newValue = linesToPolicyArray(editDialog.value);
+            }
+        } else if (editDialog.field.startsWith("policies.")) {
+            newValue = linesToPolicyArray(editDialog.value);
+        }
+
+        if (editDialog.field === "quotationHeaderTitle") {
+            const t = String(newValue).trim();
+            const name =
+                currentQuotation?.customerName ||
+                quotation.customer?.name ||
+                "Guest";
+            newValue = t || `Quick Quotation For ${name}`;
+        }
+
+        setQuotation((prev) => {
+            if (editDialog.field === "quotationHeaderTitle") {
+                return { ...prev, quotationTitle: newValue };
+            }
+            if (editDialog.field === "destinationLine") {
+                return {
+                    ...prev,
+                    destinationSummary: newValue,
+                    hotel: { ...prev.hotel, destination: newValue },
+                };
+            }
+            if (editDialog.field === "customer.location") {
+                return {
+                    ...prev,
+                    customer: { ...prev.customer, location: newValue },
+                };
+            }
+            if (editDialog.field === "footer.contact") {
+                return {
+                    ...prev,
+                    footer: { ...prev.footer, contact: newValue },
+                };
+            }
+            if (editDialog.nested && editDialog.nestedKey) {
+                return {
+                    ...prev,
+                    [editDialog.field]: {
+                        ...prev[editDialog.field],
+                        [editDialog.nestedKey]: newValue,
+                    },
+                };
+            }
+            return setQuotationValueByPath(prev, editDialog.field, newValue);
+        });
+
+        const mongoSet = buildQuickMongoSetFromEditDialog(editDialog, newValue);
+        if (mongoSet && apiEntityId) {
+            try {
+                await dispatch(
+                    updateQuickQuotation({ id: apiEntityId, formData: mongoSet })
+                ).unwrap();
+                await refreshQuotationFromApi();
+                setSnackbar({
+                    open: true,
+                    message: "Saved to server",
+                    severity: "success",
+                });
+            } catch (e) {
+                setSnackbar({
+                    open: true,
+                    message:
+                        typeof e === "string"
+                            ? e
+                            : e?.message || "Saved locally; server update failed",
+                    severity: "warning",
+                });
+            }
+        } else if (mongoSet && !apiEntityId) {
+            setSnackbar({
+                open: true,
+                message: "Cannot sync: no quotation id in URL",
+                severity: "warning",
+            });
+        }
+
         handleEditClose();
     };
 
@@ -515,10 +1481,39 @@ const QuickFinalize = () => {
         setEditDialog({ ...editDialog, value: e.target.value });
     };
 
-    const handleConfirm = () => {
-        setIsFinalized(true);
-        setOpenFinalize(false);
-        setOpenBankDialog(true);
+    const handleConfirm = async (values) => {
+        const pkg = values?.quotation;
+        if (!pkg || !apiEntityId) {
+            setSnackbar({
+                open: true,
+                message: "Confirm package selection to finalize",
+                severity: "error",
+            });
+            return;
+        }
+        try {
+            await dispatch(
+                finalizeQuickQuotation({
+                    id: apiEntityId,
+                    finalizedPackage: pkg,
+                })
+            ).unwrap();
+            await dispatch(fetchQuickQuotationById(id)).unwrap();
+            setIsFinalized(true);
+            setOpenFinalize(false);
+            setOpenBankDialog(true);
+            setSnackbar({
+                open: true,
+                message: "Quotation finalized",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message: e || "Could not finalize quotation",
+                severity: "error",
+            });
+        }
     };
 
     const handleBankDialogClose = () => {
@@ -531,15 +1526,34 @@ const QuickFinalize = () => {
         setBranchName("");
     };
 
-    const handleBankConfirm = () => {
-        console.log("Bank details:", {
-            accountType,
-            accountName,
-            accountNumber,
-            ifscCode,
-            bankName,
-            branchName,
-        });
+    const handleBankConfirm = async (vendorPayload = {}) => {
+        if (apiEntityId) {
+            try {
+                await dispatch(
+                    updateQuickQuotation({
+                        id: apiEntityId,
+                        formData: {
+                            vendorDetails: {
+                                vendorType: vendorPayload.vendorType || "",
+                                hotelVendorName: vendorPayload.hotelVendorName || "",
+                                vehicleVendorName:
+                                    vendorPayload.vehicleVendorName || "",
+                            },
+                        },
+                    })
+                ).unwrap();
+                await refreshQuotationFromApi();
+            } catch (e) {
+                setSnackbar({
+                    open: true,
+                    message:
+                        typeof e === "string"
+                            ? e
+                            : e?.message || "Vendor details save failed",
+                    severity: "warning",
+                });
+            }
+        }
         setInvoiceGenerated(true);
         handleBankDialogClose();
     };
@@ -657,23 +1671,53 @@ const QuickFinalize = () => {
         handleAddFlightClose();
     };
 
-    const handleDayImageUpload = (dayId, file) => {
-        if (file) {
-            setDays((prev) =>
-                prev.map((day) =>
-                    day.id === dayId
-                        ? {
-                            ...day,
-                            image: {
-                                file,
-                                preview: URL.createObjectURL(file),
-                                name: file.name,
-                            },
-                        }
-                        : day
-                )
+    const handleDayImageUpload = async (dayId, file) => {
+        if (!file) {
+            const next = days.map((day) =>
+                day.id === dayId ? { ...day, image: null } : day
             );
-            console.log(`Image uploaded for Day ${dayId}:`, file.name);
+            setDays(next);
+            await persistItineraryForDays(next);
+            return;
+        }
+        if (!apiEntityId) {
+            setSnackbar({
+                open: true,
+                message: "Cannot upload: no quotation id",
+                severity: "error",
+            });
+            return;
+        }
+        try {
+            const fd = new FormData();
+            fd.append("image", file);
+            const { data } = await axios.post(
+                `/quickQT/${encodeURIComponent(apiEntityId)}/day-image`,
+                fd,
+                { headers: { "Content-Type": "multipart/form-data" } }
+            );
+            const url = data?.url;
+            if (!url) throw new Error("No image URL returned");
+            const next = days.map((day) =>
+                day.id === dayId
+                    ? {
+                          ...day,
+                          image: {
+                              preview: url,
+                              url,
+                              name: file.name,
+                          },
+                      }
+                    : day
+            );
+            setDays(next);
+            await persistItineraryForDays(next);
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message: String(e?.message || e || "Upload failed"),
+                severity: "error",
+            });
         }
     };
 
@@ -690,12 +1734,14 @@ const QuickFinalize = () => {
         ]);
     };
 
-    const handleRemoveDay = (dayId) => {
-        if (days.length > 1) {
-            setDays((prev) => prev.filter((day) => day.id !== dayId));
-        } else {
+    const handleRemoveDay = async (dayId) => {
+        if (days.length <= 1) {
             alert("At least one day is required");
+            return;
         }
+        const next = days.filter((day) => day.id !== dayId);
+        setDays(next);
+        await persistItineraryForDays(next);
     };
 
     // PDF Dialog Handlers - FIXED VERSION
@@ -759,6 +1805,7 @@ const QuickFinalize = () => {
                 handleAddFlightOpen();
                 break;
             case "Transaction":
+                loadPaymentHistory();
                 setOpenTransactionDialog(true);
                 break;
             default:
@@ -801,40 +1848,36 @@ const QuickFinalize = () => {
             return;
         }
 
-        try {
-            if (mode === 'add') {
-                const newDay = {
-                    id: Date.now(),
-                    date: new Date().toLocaleDateString(),
-                    title,
-                    description,
-                    image: null
-                };
-
-                setDays(prev => [...prev, newDay]);
-            } else if (mode === 'edit') {
-                setDays(prev =>
-                    prev.map(day =>
-                        day.id === id ? { ...day, title, description } : day
-                    )
-                );
-            }
-
-            setItineraryDialog({ open: false, mode: 'add', day: null, title: "", description: "", id: null });
-
-            setSnackbar({
-                open: true,
-                message: `Itinerary ${mode === 'add' ? 'added' : 'updated'} successfully`,
-                severity: "success"
-            });
-
-        } catch (error) {
-            setSnackbar({
-                open: true,
-                message: "Failed to save itinerary",
-                severity: "error"
-            });
+        let nextDays;
+        if (mode === "add") {
+            const newDay = {
+                id: Date.now(),
+                date: new Date().toLocaleDateString(),
+                title,
+                description,
+                image: null,
+            };
+            nextDays = [...days, newDay];
+            setDays(nextDays);
+        } else if (mode === "edit") {
+            nextDays = days.map((day) =>
+                day.id === id ? { ...day, title, description } : day
+            );
+            setDays(nextDays);
+        } else {
+            return;
         }
+
+        setItineraryDialog({
+            open: false,
+            mode: "add",
+            day: null,
+            title: "",
+            description: "",
+            id: null,
+        });
+
+        await persistItineraryForDays(nextDays);
     };
 
     const handleCloseItineraryDialog = () => {
@@ -847,6 +1890,15 @@ const QuickFinalize = () => {
 
     const handleCloseInvoiceDialog = () => {
         setOpenInvoiceDialog(false);
+    };
+
+    const handleStep5Or6Saved = async () => {
+        await refreshQuotationFromApi();
+        setSnackbar({
+            open: true,
+            message: "Saved",
+            severity: "success",
+        });
     };
 
     // UI Data
@@ -866,6 +1918,10 @@ const QuickFinalize = () => {
         { k: "guest", icon: <Person /> },
     ];
 
+    const snap = currentQuotation?.packageSnapshot || {};
+    const qdSnap = snap.quotationDetails || {};
+    const vehicleSnap = snap.vehicleDetails;
+
     const Accordions = [
         { title: "Hotel Details" },
         { title: "Vehicle Details" },
@@ -877,34 +1933,26 @@ const QuickFinalize = () => {
         {
             title: "Inclusion Policy",
             icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
-            content: (
-                <List dense>
-                    {quotation.policies.inclusions.map((i, k) => (
-                        <ListItem key={k}>
-                            <ListItemText primary={i} />
-                        </ListItem>
-                    ))}
-                </List>
-            ),
+            content: policyInputs.inclusionPolicy,
             field: "policies.inclusions",
             isArray: true,
         },
         {
             title: "Exclusion Policy",
             icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
-            content: quotation.policies.exclusions,
+            content: policyInputs.exclusionPolicy,
             field: "policies.exclusions",
         },
         {
             title: "Payment Policy",
             icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
-            content: quotation.policies.paymentPolicy,
+            content: policyInputs.paymentPolicy,
             field: "policies.paymentPolicy",
         },
         {
             title: "Cancellation & Refund",
             icon: <Warning sx={{ mr: 0.5, color: "warning.main" }} />,
-            content: quotation.policies.cancellationPolicy,
+            content: policyInputs.cancellationPolicy,
             field: "policies.cancellationPolicy",
         },
     ];
@@ -930,7 +1978,7 @@ const QuickFinalize = () => {
             icon: <Group sx={{ fontSize: 16, mr: 0.5 }} />,
             text: `No of Guest: ${quotation.hotel.guests}`,
             editable: true,
-            field: "hotel.guests",
+            editGuestCounts: true,
         },
     ];
 
@@ -955,6 +2003,33 @@ const QuickFinalize = () => {
                             {a}
                         </Button>
                     ))}
+                <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<Calculate />}
+                    disabled={!currentQuotation}
+                    onClick={() => setOpenCostingEdit(true)}
+                >
+                    Edit costing
+                </Button>
+                <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<Route />}
+                    disabled={!currentQuotation || !apiEntityId}
+                    onClick={() => setOpenVehicleFinalizeDialog(true)}
+                >
+                    Edit vehicle & pickup
+                </Button>
+                <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<Business />}
+                    disabled={!currentQuotation || !apiEntityId}
+                    onClick={() => setOpenHotelsPricingDialog(true)}
+                >
+                    Edit hotels & pricing
+                </Button>
                 {isFinalized && !invoiceGenerated && (
                     <Button
                         variant="contained"
@@ -993,9 +2068,21 @@ const QuickFinalize = () => {
                                     <LocationOn
                                         sx={{ fontSize: 18, mr: 0.5, color: "text.secondary" }}
                                     />
-                                    <Typography variant="body2" color="text.secondary">
-                                        {quotation.customer.location}
+                                    <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                                        {quotation.customer.location || "—"}
                                     </Typography>
+                                    <IconButton
+                                        size="small"
+                                        onClick={() =>
+                                            handleEditOpen(
+                                                "customer.location",
+                                                quotation.customer.location || "",
+                                                "Customer location"
+                                            )
+                                        }
+                                    >
+                                        <Edit fontSize="small" />
+                                    </IconButton>
                                 </Box>
                                 <Box display="flex" gap={1} sx={{ flexWrap: "wrap", mb: 2 }}>
                                     {infoChips.map(({ k, icon }) => (
@@ -1031,7 +2118,67 @@ const QuickFinalize = () => {
                                             </Typography>
                                         </AccordionSummary>
                                         <AccordionDetails>
-                                            <Typography variant="body2">Details go here.</Typography>
+                                            {a.title === "Vehicle Details" ? (
+                                                <Box>
+                                                    <Typography variant="body2">
+                                                        <strong>Type:</strong>{" "}
+                                                        {vehicleSnap?.basicsDetails?.vehicleType ||
+                                                            currentQuotation?.transportation ||
+                                                            "—"}
+                                                    </Typography>
+                                                    <Typography variant="body2">
+                                                        <strong>Trip:</strong>{" "}
+                                                        {vehicleSnap?.basicsDetails?.tripType || "—"}
+                                                    </Typography>
+                                                    <Typography variant="body2">
+                                                        <strong>Vehicle cost:</strong> ₹
+                                                        {vehicleSnap?.costDetails?.totalCost ?? "0"}
+                                                    </Typography>
+                                                    <Divider sx={{ my: 1 }} />
+                                                    <Typography variant="body2">
+                                                        <strong>Pickup:</strong>{" "}
+                                                        {vehicleSnap?.pickupDropDetails
+                                                            ?.pickupLocation ||
+                                                            currentQuotation?.pickupPoint ||
+                                                            "—"}
+                                                    </Typography>
+                                                    <Typography variant="body2">
+                                                        <strong>Drop:</strong>{" "}
+                                                        {vehicleSnap?.pickupDropDetails
+                                                            ?.dropLocation ||
+                                                            currentQuotation?.dropPoint ||
+                                                            "—"}
+                                                    </Typography>
+                                                </Box>
+                                            ) : a.title === "Hotel Details" ? (
+                                                <Box>
+                                                    {(snap.destinationNights || []).length === 0 ? (
+                                                        <Typography variant="body2">
+                                                            No destination nights on snapshot.
+                                                        </Typography>
+                                                    ) : (
+                                                        (snap.destinationNights || []).map((d, idx) => (
+                                                            <Typography key={idx} variant="body2">
+                                                                {d.destination} — {d.nights}N
+                                                            </Typography>
+                                                        ))
+                                                    )}
+                                                </Box>
+                                            ) : a.title === "Company Margin" ? (
+                                                <Typography variant="body2">
+                                                    Margin %:{" "}
+                                                    {qdSnap.companyMargin?.marginPercent ?? "—"} ·
+                                                    Margin ₹:{" "}
+                                                    {qdSnap.companyMargin?.marginAmount ?? "—"} ·
+                                                    Discount: {qdSnap.discount ?? "—"} · GST:{" "}
+                                                    {qdSnap.taxes?.taxPercent ?? "—"}% (
+                                                    {qdSnap.taxes?.gstOn ?? "—"})
+                                                </Typography>
+                                            ) : (
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Not used for quick quotations.
+                                                </Typography>
+                                            )}
                                         </AccordionDetails>
                                     </Accordion>
                                 ))}
@@ -1116,13 +2263,15 @@ const QuickFinalize = () => {
                                             <IconButton
                                                 size="small"
                                                 onClick={() =>
-                                                    handleEditOpen(
-                                                        i.field,
-                                                        i.text,
-                                                        i.nestedKey || i.field,
-                                                        !!i.nestedKey,
-                                                        i.nestedKey
-                                                    )
+                                                    i.editGuestCounts
+                                                        ? openGuestCountsDialog()
+                                                        : handleEditOpen(
+                                                              i.field,
+                                                              i.text,
+                                                              i.nestedKey || i.field,
+                                                              !!i.nestedKey,
+                                                              i.nestedKey
+                                                          )
                                                 }
                                             >
                                                 <Edit fontSize="small" />
@@ -1134,55 +2283,106 @@ const QuickFinalize = () => {
 
                             {/* Quotation Details */}
                             <Box mt={3}>
-                                <Box display="flex" alignItems="center">
-                                    <FormatQuoteIcon sx={{ mr: 1 }} />
-                                    <Typography
-                                        variant="h6"
-                                        fontWeight="bold"
-                                        color="warning.main"
-                                    >
-                                        Quick Quotation For {quotation.customer.name}
-                                    </Typography>
-                                </Box>
-
-                                <Box display="flex" alignItems="center" mt={1}>
-                                    <Route sx={{ mr: 0.5 }} />
-                                    <Typography variant="subtitle2">
-                                        Destination : {quotation.hotel.destination}
-                                    </Typography>
-                                </Box>
-
-                                <Box display="flex" alignItems="center" mt={1}>
-                                    <ImageIcon sx={{ mr: 0.5 }} />
-                                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
-                                        Add Banner Image
-                                    </Typography>
-                                    <Button component="label" sx={{ textTransform: "none" }}>
-                                        <AddCircleOutline />
-                                        <input
-                                            type="file"
-                                            hidden
-                                            accept="image/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files[0];
-                                                if (file) {
-                                                    setQuotation((prev) => ({
-                                                        ...prev,
-                                                        bannerImage: file.name,
-                                                    }));
-                                                    console.log("Selected file:", file);
-                                                }
-                                            }}
-                                        />
-                                    </Button>
-                                    {quotation.bannerImage && (
+                                <Box
+                                    display="flex"
+                                    alignItems="center"
+                                    justifyContent="space-between"
+                                    gap={1}
+                                >
+                                    <Box display="flex" alignItems="center" flexWrap="wrap" gap={0.5}>
+                                        <FormatQuoteIcon sx={{ mr: 1 }} />
                                         <Typography
-                                            variant="body2"
-                                            sx={{ ml: 2, fontStyle: "italic" }}
+                                            variant="h6"
+                                            fontWeight="bold"
+                                            color="warning.main"
                                         >
-                                            Selected: {quotation.bannerImage}
+                                            {quotation.quotationTitle?.trim()
+                                                ? quotation.quotationTitle
+                                                : `Quick Quotation For ${quotation.customer.name}`}
                                         </Typography>
-                                    )}
+                                    </Box>
+                                    <IconButton
+                                        size="small"
+                                        aria-label="Edit quotation title"
+                                        onClick={() =>
+                                            handleEditOpen(
+                                                "quotationHeaderTitle",
+                                                quotation.quotationTitle?.trim() ||
+                                                    `Quick Quotation For ${quotation.customer.name}`,
+                                                "Quotation title (shown in header)"
+                                            )
+                                        }
+                                    >
+                                        <Edit fontSize="small" />
+                                    </IconButton>
+                                </Box>
+
+                                <Box
+                                    display="flex"
+                                    alignItems="center"
+                                    mt={1}
+                                    justifyContent="space-between"
+                                    gap={1}
+                                >
+                                    <Box display="flex" alignItems="center" flexWrap="wrap">
+                                        <Route sx={{ mr: 0.5 }} />
+                                        <Typography variant="subtitle2">
+                                            Destination : {quotation.hotel.destination}
+                                        </Typography>
+                                    </Box>
+                                    <IconButton
+                                        size="small"
+                                        aria-label="Edit destination line"
+                                        onClick={() =>
+                                            handleEditOpen(
+                                                "destinationLine",
+                                                quotation.hotel.destination,
+                                                "Destination line"
+                                            )
+                                        }
+                                    >
+                                        <Edit fontSize="small" />
+                                    </IconButton>
+                                </Box>
+
+                                <Box display="flex" flexDirection="column" gap={1} mt={1}>
+                                    <Box display="flex" alignItems="center" flexWrap="wrap" gap={1}>
+                                        <ImageIcon sx={{ mr: 0.5 }} />
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                            Banner image
+                                        </Typography>
+                                        <Button
+                                            component="label"
+                                            variant="outlined"
+                                            size="small"
+                                            startIcon={
+                                                bannerUploading ? (
+                                                    <CircularProgress size={16} />
+                                                ) : (
+                                                    <AddCircleOutline />
+                                                )
+                                            }
+                                            disabled={bannerUploading || !apiEntityId}
+                                            sx={{ textTransform: "none" }}
+                                        >
+                                            {bannerUploading ? "Uploading…" : "Upload image"}
+                                            <input
+                                                type="file"
+                                                hidden
+                                                accept="image/*"
+                                                onChange={handleBannerFileChange}
+                                            />
+                                        </Button>
+                                    </Box>
+                                    {quotation.bannerImage &&
+                                        String(quotation.bannerImage).startsWith("http") && (
+                                            <Box
+                                                component="img"
+                                                src={quotation.bannerImage}
+                                                alt="Banner"
+                                                sx={{ maxWidth: 360, maxHeight: 120, borderRadius: 1 }}
+                                            />
+                                        )}
                                 </Box>
 
                                 {/* Itinerary */}
@@ -1207,6 +2407,7 @@ const QuickFinalize = () => {
                                         </Typography>
                                         <IconButton
                                             size="small"
+                                            disabled={itinerarySaving}
                                             onClick={() =>
                                                 handleEditOpen(
                                                     "hotel.itinerary",
@@ -1231,6 +2432,7 @@ const QuickFinalize = () => {
                                                     size="small"
                                                     onClick={handleAddItinerary}
                                                     startIcon={<Add />}
+                                                    disabled={itinerarySaving}
                                                 >
                                                     Add Day
                                                 </Button>
@@ -1246,6 +2448,7 @@ const QuickFinalize = () => {
                                                             <Box>
                                                                 <IconButton
                                                                     size="small"
+                                                                    disabled={itinerarySaving}
                                                                     onClick={() => handleEditItinerary(day, index)}
                                                                 >
                                                                     <Edit fontSize="small" />
@@ -1254,6 +2457,7 @@ const QuickFinalize = () => {
                                                                     <IconButton
                                                                         size="small"
                                                                         color="error"
+                                                                        disabled={itinerarySaving}
                                                                         onClick={() => handleRemoveDay(day.id)}
                                                                     >
                                                                         <Delete />
@@ -1274,6 +2478,7 @@ const QuickFinalize = () => {
                                                                 variant="outlined"
                                                                 size="small"
                                                                 startIcon={<AddCircleOutline />}
+                                                                disabled={itinerarySaving || !apiEntityId}
                                                             >
                                                                 Upload Image
                                                                 <input
@@ -1375,7 +2580,16 @@ const QuickFinalize = () => {
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                            {quotation.hotelPricingData.map((row, index) => (
+                                            {(quotation.hotelPricingData || []).length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={5} align="center">
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            No destination rows for this package.
+                                                        </Typography>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                            (quotation.hotelPricingData || []).map((row, index) => (
                                                 <TableRow
                                                     key={index}
                                                     sx={{
@@ -1395,7 +2609,7 @@ const QuickFinalize = () => {
                                                     <TableCell>{row.deluxe}</TableCell>
                                                     <TableCell>{row.superior}</TableCell>
                                                 </TableRow>
-                                            ))}
+                                            )))}
                                         </TableBody>
                                     </Table>
                                 </TableContainer>
@@ -1428,7 +2642,9 @@ const QuickFinalize = () => {
                                                             handleEditOpen(
                                                                 p.field,
                                                                 p.isArray
-                                                                    ? JSON.stringify(p.content)
+                                                                    ? typeof p.content === "string"
+                                                                        ? p.content
+                                                                        : JSON.stringify(p.content)
                                                                     : p.content,
                                                                 p.title
                                                             )
@@ -1437,7 +2653,19 @@ const QuickFinalize = () => {
                                                         <Edit fontSize="small" />
                                                     </IconButton>
                                                 </Box>
-                                                <Typography variant="body2">{p.content}</Typography>
+                                                {p.isArray && typeof p.content === "string" ? (
+                                                    <List dense>
+                                                        {linesToPolicyArray(p.content).map((line, k) => (
+                                                            <ListItem key={k}>
+                                                                <ListItemText primary={line} />
+                                                            </ListItem>
+                                                        ))}
+                                                    </List>
+                                                ) : (
+                                                    <Typography variant="body2" whiteSpace="pre-line">
+                                                        {p.content}
+                                                    </Typography>
+                                                )}
                                             </CardContent>
                                         </Card>
                                     </Grid>
@@ -1468,7 +2696,7 @@ const QuickFinalize = () => {
                                                 onClick={() =>
                                                     handleEditOpen(
                                                         "policies.terms",
-                                                        quotation.policies.terms,
+                                                        policyInputs.termsAndConditions,
                                                         "Terms & Conditions"
                                                     )
                                                 }
@@ -1476,8 +2704,8 @@ const QuickFinalize = () => {
                                                 <Edit fontSize="small" />
                                             </IconButton>
                                         </Box>
-                                        <Typography variant="body2">
-                                            {quotation.policies.terms}
+                                        <Typography variant="body2" whiteSpace="pre-line">
+                                            {policyInputs.termsAndConditions}
                                         </Typography>
                                     </CardContent>
                                 </Card>
@@ -1562,22 +2790,116 @@ const QuickFinalize = () => {
             </Snackbar>
 
             {/* Dialogs */}
+            <CostingEditDialog
+                open={openCostingEdit}
+                onClose={() => setOpenCostingEdit(false)}
+                quotation={costingQuotation}
+                quotationId={apiEntityId}
+                onSaved={handleStep5Or6Saved}
+                saveCostingOverride={async (body) => {
+                    if (!apiEntityId || !currentQuotation) return;
+                    const formData = costingBodyToQuickUpdate(currentQuotation, body);
+                    await dispatch(
+                        updateQuickQuotation({ id: apiEntityId, formData })
+                    ).unwrap();
+                }}
+            />
+            <FinalizeVehicleDialog
+                open={openVehicleFinalizeDialog}
+                onClose={() => setOpenVehicleFinalizeDialog(false)}
+                quotation={hotelsDialogQuotation}
+                quotationId={apiEntityId}
+                onSaved={handleStep5Or6Saved}
+                onSaveVehicle={async (vehiclePayload) => {
+                    if (!apiEntityId || !currentQuotation) return;
+                    const formData = vehicleStepPayloadToQuickUpdate(
+                        currentQuotation,
+                        vehiclePayload
+                    );
+                    await dispatch(
+                        updateQuickQuotation({ id: apiEntityId, formData })
+                    ).unwrap();
+                }}
+            />
+            <FinalizeHotelsPricingDialog
+                open={openHotelsPricingDialog}
+                onClose={() => setOpenHotelsPricingDialog(false)}
+                quotation={hotelsDialogQuotation}
+                quotationId={apiEntityId}
+                onSaved={handleStep5Or6Saved}
+                onSaveHotelsPricing={async (finalData) => {
+                    if (!apiEntityId || !currentQuotation) return;
+                    const formData = finalizeHotelsFormDataToQuickUpdate(
+                        currentQuotation,
+                        finalData
+                    );
+                    await dispatch(
+                        updateQuickQuotation({ id: apiEntityId, formData })
+                    ).unwrap();
+                }}
+            />
+            <Dialog
+                open={guestCountsDialog.open}
+                onClose={() =>
+                    setGuestCountsDialog((s) => ({ ...s, open: false }))
+                }
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Edit guest counts</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Updates adults, children, kids, and infants (stored on this quick
+                        quotation).
+                    </Typography>
+                    <Grid container spacing={2}>
+                        {[
+                            { key: "adults", label: "Adults" },
+                            { key: "children", label: "Children" },
+                            { key: "kids", label: "Kids" },
+                            { key: "infants", label: "Infants" },
+                        ].map(({ key, label }) => (
+                            <Grid size={{ xs: 6 }} key={key}>
+                                <TextField
+                                    label={label}
+                                    type="number"
+                                    fullWidth
+                                    inputProps={{ min: 0 }}
+                                    value={guestCountsDialog[key]}
+                                    onChange={(e) =>
+                                        setGuestCountsDialog((s) => ({
+                                            ...s,
+                                            [key]: e.target.value,
+                                        }))
+                                    }
+                                />
+                            </Grid>
+                        ))}
+                    </Grid>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() =>
+                            setGuestCountsDialog((s) => ({ ...s, open: false }))
+                        }
+                    >
+                        Cancel
+                    </Button>
+                    <Button variant="contained" onClick={handleSaveGuestCounts}>
+                        Save
+                    </Button>
+                </DialogActions>
+            </Dialog>
             <FinalizeDialog
                 open={openFinalize}
                 onClose={handleFinalizeClose}
-                vendor={vendor}
-                setVendor={setVendor}
                 onConfirm={handleConfirm}
+                packageOptionsOverride={finalizePackageOptions}
+                preselectedPackageLabel={currentQuotation?.finalizedPackage}
             />
             <HotelVendorDialog
                 open={openBankDialog}
                 onClose={handleBankDialogClose}
-                accountType={accountType}
-                setAccountType={setAccountType}
-                accountName={accountName}
-                setAccountName={accountName}
-                accountOptions={accountOptions}
-                onAddBankOpen={handleAddBankOpen}
                 onConfirm={handleBankConfirm}
             />
             <AddBankDialog
@@ -1616,14 +2938,22 @@ const QuickFinalize = () => {
                 open={openEmailDialog}
                 onClose={handleEmailClose}
                 customer={quotation.customer}
-            />
-            <MakePaymentDialog
-                open={openPaymentDialog}
-                onClose={handlePaymentClose}
+                onSend={handleEmailSend}
+                onCompanyChange={async (companyId, mailType) => {
+                    const templates = await refreshEmailTemplates(companyId);
+                    const type = mailType === "booking" ? "booking" : "normal";
+                    return templates?.[type] || { subject: "", message: "" };
+                }}
+                initialValuesOverride={emailInitialValues}
+                templateBodies={emailTemplateBodies}
+                companyOptions={mailCompanies}
             />
             <TransactionSummaryDialog
                 open={openTransactionDialog}
                 onClose={() => setOpenTransactionDialog(false)}
+                loading={paymentHistoryLoading}
+                rows={paymentHistory}
+                quotationRef={apiEntityId}
             />
 
             {/* Invoice PDF Dialog */}

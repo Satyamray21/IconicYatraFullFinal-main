@@ -15,6 +15,8 @@ const quickQuotationSchema = new mongoose.Schema(
 
         adults: { type: Number, required: true },
         children: { type: Number, default: 0 },
+        kids: { type: Number, default: 0 },
+        infants: { type: Number, default: 0 },
 
         message: { type: String },
 
@@ -50,6 +52,20 @@ const quickQuotationSchema = new mongoose.Schema(
         policy: {
             type: policySchema,
             default: {},
+        },
+
+        finalizeStatus: {
+            type: String,
+            enum: ["draft", "finalized"],
+            default: "draft",
+        },
+        finalizedAt: { type: Date },
+        /** Label chosen at finalize (e.g. "Quick Package"); used for UI preselect */
+        finalizedPackage: { type: String, default: "" },
+        vendorDetails: {
+            vendorType: { type: String, default: "" },
+            hotelVendorName: { type: String, default: "" },
+            vehicleVendorName: { type: String, default: "" },
         },
     },
     { timestamps: true }
