@@ -1,7 +1,20 @@
 import QuickQuotation from "../../models/quotation/quickQuotation.model.js";
 import Package from "../../models/package.model.js";
 import Company from "../../models/company.model.js";
+import { uploadOnCloudinary } from "../../utils/cloudinary.js";
+import ReceivedVoucher from "../../models/payment.model.js";
+import GlobalSettings from "../../models/globalSettings.model.js";
+import Bank from "../../models/bankDetails.js";
+import {
+  adaptQuickQuotationForCustomMailer,
+  buildCustomQuotationNormalEmail,
+  buildCustomQuotationBookingEmail,
+  packageTotals,
+} from "../../utils/customQuotationMailerTemplates.js";
 import nodemailer from "nodemailer";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -22,13 +35,75 @@ const logoSrc = logoBase64
   ? `data:image/png;base64,${logoBase64}`
   : "https://www.iconicyatra.com/static/media/logo.7803301b9efb5c74d172.png";
 
+/**
+ * Dashboard lists show quoteId as QT- + last 6 hex chars of Mongo _id.
+ * Accept either full ObjectId or that display ref in :id route params.
+ */
+async function resolveQuickQuotationMongoId(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  if (/^[a-f\d]{24}$/i.test(s)) return s;
+  const m = /^QT-([a-f\d]{6})$/i.exec(s);
+  if (!m) return null;
+  const suffix = m[1].toLowerCase();
+  const rows = await QuickQuotation.aggregate([
+    { $project: { _id: 1, suf: { $substrCP: [{ $toString: "$_id" }, 18, 6] } } },
+    { $match: { $expr: { $eq: [{ $toLower: "$suf" }, suffix] } } },
+    { $limit: 2 },
+  ]);
+  if (rows.length === 0) return null;
+  if (rows.length > 1) {
+    throw new ApiError(
+      400,
+      "Multiple quotations match this short id; use the full quotation id from the list."
+    );
+  }
+  return String(rows[0]._id);
+}
+
+function mergeQuotationDetails(prev = {}, next = {}) {
+  const out = { ...prev, ...next };
+  if (next.signatureDetails && typeof next.signatureDetails === "object") {
+    out.signatureDetails = {
+      ...(prev.signatureDetails && typeof prev.signatureDetails === "object"
+        ? prev.signatureDetails
+        : {}),
+      ...next.signatureDetails,
+    };
+  }
+  if (next.rooms && typeof next.rooms === "object") {
+    out.rooms = { ...(prev.rooms || {}), ...next.rooms };
+  }
+  if (next.companyMargin && typeof next.companyMargin === "object") {
+    out.companyMargin = { ...(prev.companyMargin || {}), ...next.companyMargin };
+  }
+  if (next.taxes && typeof next.taxes === "object") {
+    out.taxes = { ...(prev.taxes || {}), ...next.taxes };
+  }
+  if (next.mattress && typeof next.mattress === "object") {
+    out.mattress = { ...(prev.mattress || {}), ...next.mattress };
+  }
+  return out;
+}
+
+function mergePackageSnapshot(prev = {}, next = {}) {
+  if (!next || typeof next !== "object") return prev || {};
+  const out = { ...prev, ...next };
+  if (next.quotationDetails && typeof next.quotationDetails === "object") {
+    out.quotationDetails = mergeQuotationDetails(
+      prev.quotationDetails || {},
+      next.quotationDetails
+    );
+  }
+  return out;
+}
 
 // ==========================
 // Create QuickQuotation
 // ==========================
 export const createQuickQuotation = async (req, res) => {
   try {
-    const { customerName, email, phone, packageId, adults, children, message, totalCost, transportation, pickupPoint, dropPoint } = req.body;
+    const { customerName, email, phone, packageId, adults, children, kids, infants, message, totalCost, transportation, pickupPoint, dropPoint } = req.body;
 
     if (!customerName || !email || !packageId) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -44,6 +119,8 @@ export const createQuickQuotation = async (req, res) => {
       packageId,
       adults,
       children,
+      kids: kids ?? 0,
+      infants: infants ?? 0,
       message,
 
       pickupPoint: pickupPoint || "",
@@ -86,14 +163,24 @@ export const getAllQuickQuotations = async (req, res) => {
 // ==========================
 export const getQuickQuotationById = async (req, res) => {
   try {
-    const quotation = await QuickQuotation.findById(req.params.id)
-      .populate("packageId", "packageName price duration");
+    const mongoId = await resolveQuickQuotationMongoId(req.params.id);
+    if (!mongoId)
+      return res.status(404).json({ message: "Quotation not found" });
+
+    const quotation = await QuickQuotation.findById(mongoId).populate(
+      "packageId",
+    );
 
     if (!quotation)
       return res.status(404).json({ message: "Quotation not found" });
 
     res.status(200).json(quotation);
   } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({
+        message: error.message,
+      });
+    }
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -103,17 +190,112 @@ export const getQuickQuotationById = async (req, res) => {
 // ==========================
 export const updateQuickQuotation = async (req, res) => {
   try {
-    const updated = await QuickQuotation.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    const mongoId = await resolveQuickQuotationMongoId(req.params.id);
+    if (!mongoId)
+      return res.status(404).json({ message: "Quotation not found" });
+
+    const existing = await QuickQuotation.findById(mongoId).lean();
+    if (!existing)
+      return res.status(404).json({ message: "Quotation not found" });
+
+    const body = { ...req.body };
+    if (body.packageSnapshot && typeof body.packageSnapshot === "object") {
+      body.packageSnapshot = mergePackageSnapshot(
+        existing.packageSnapshot || {},
+        body.packageSnapshot
+      );
+    }
+    if (body.policy && typeof body.policy === "object") {
+      body.policy = {
+        ...(existing.policy && typeof existing.policy === "object"
+          ? existing.policy
+          : {}),
+        ...body.policy,
+      };
+    }
+    if (body.vendorDetails && typeof body.vendorDetails === "object") {
+      body.vendorDetails = {
+        ...(existing.vendorDetails || {}),
+        ...body.vendorDetails,
+      };
+    }
+
+    const updated = await QuickQuotation.findByIdAndUpdate(mongoId, body, {
+      new: true,
+    });
 
     if (!updated)
       return res.status(404).json({ message: "Quotation not found" });
 
     res.status(200).json({ message: "Quotation updated", quotation: updated });
   } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+/** POST multipart field `bannerImage` — Cloudinary URL saved on packageSnapshot.bannerImage */
+export const uploadQuickQuotationBanner = async (req, res) => {
+  try {
+    const mongoId = await resolveQuickQuotationMongoId(req.params.id);
+    if (!mongoId)
+      return res.status(404).json({ message: "Quotation not found" });
+    const file = req.file;
+    if (!file?.path)
+      return res.status(400).json({ message: "bannerImage file required" });
+
+    const uploaded = await uploadOnCloudinary(file.path, file.mimetype);
+    if (!uploaded?.secure_url) {
+      return res.status(500).json({ message: "Image upload failed" });
+    }
+
+    const existing = await QuickQuotation.findById(mongoId).lean();
+    if (!existing)
+      return res.status(404).json({ message: "Quotation not found" });
+
+    const mergedSnap = mergePackageSnapshot(existing.packageSnapshot || {}, {
+      bannerImage: uploaded.secure_url,
+    });
+
+    const updated = await QuickQuotation.findByIdAndUpdate(
+      mongoId,
+      { packageSnapshot: mergedSnap },
+      { new: true }
+    );
+
+    res
+      .status(200)
+      .json({ message: "Banner image uploaded", quotation: updated });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+/** POST multipart field `image` — returns { url } for itinerary day images */
+export const uploadQuickQuotationDayImage = async (req, res) => {
+  try {
+    const mongoId = await resolveQuickQuotationMongoId(req.params.id);
+    if (!mongoId)
+      return res.status(404).json({ message: "Quotation not found" });
+    const file = req.file;
+    if (!file?.path)
+      return res.status(400).json({ message: "image file required" });
+
+    const uploaded = await uploadOnCloudinary(file.path, file.mimetype);
+    if (!uploaded?.secure_url) {
+      return res.status(500).json({ message: "Image upload failed" });
+    }
+
+    res.status(200).json({ url: uploaded.secure_url });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -123,12 +305,19 @@ export const updateQuickQuotation = async (req, res) => {
 // ==========================
 export const deleteQuickQuotation = async (req, res) => {
   try {
-    const deleted = await QuickQuotation.findByIdAndDelete(req.params.id);
+    const mongoId = await resolveQuickQuotationMongoId(req.params.id);
+    if (!mongoId)
+      return res.status(404).json({ message: "Quotation not found" });
+
+    const deleted = await QuickQuotation.findByIdAndDelete(mongoId);
     if (!deleted)
       return res.status(404).json({ message: "Quotation not found" });
 
     res.status(200).json({ message: "Quotation deleted successfully" });
   } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -185,12 +374,308 @@ export const sendQuotationMail = async (
 // ==========================
 // Send Quotation Mail (Manual Trigger)
 // ==========================
+const resolveCompanyForEmail = async ({ companyId, companyName }) => {
+  if (companyId) {
+    const byId = await Company.findById(companyId).lean();
+    if (byId) return byId;
+  }
+  if (companyName) {
+    const byName = await Company.findOne({
+      companyName: { $regex: `^${String(companyName).trim()}$`, $options: "i" },
+    }).lean();
+    if (byName) return byName;
+  }
+  return null;
+};
+
+const resolveMailAuth = (senderAccount) => {
+  const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
+  const user = useSecondary
+    ? process.env.gmail2 || process.env.gmail
+    : process.env.gmail;
+  const pass = useSecondary
+    ? process.env.app_pass2 || process.env.EMAIL_PASS2 || process.env.app_pass || process.env.EMAIL_PASS
+    : process.env.app_pass || process.env.EMAIL_PASS;
+  return { user, pass };
+};
+
+const sumReceivedFromClient = (vouchers) => {
+  let receivedFromClient = 0;
+  for (const v of vouchers || []) {
+    const n = Number(v?.amount) || 0;
+    const isReceive =
+      v?.drCr === "Cr" || v?.paymentType === "Receive Voucher";
+    if (isReceive) receivedFromClient += n;
+  }
+  return receivedFromClient;
+};
+
+const attachCompanyLogoFields = (company) => {
+  const c = { ...company };
+  c.logoPath = c.logo
+    ? path.join(__dirname, "../../../public/", c.logo)
+    : null;
+  c.logoCid = c.logo ? "companyLogo" : null;
+  c.logoFilename = c.logo || null;
+  c.appPassword =
+    c.email === process.env.gmail
+      ? process.env.app_pass
+      : process.env.EMAIL_PASS;
+  return c;
+};
+
+const loadEmailMetaQuick = async (company) => {
+  const globalSettings = await GlobalSettings.findOne().lean();
+  const accountHolder = company?.companyName;
+  const bankDetails = accountHolder
+    ? await Bank.find({
+        accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
+      }).lean()
+    : [];
+
+  const pickHttp = (v) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return /^https?:\/\//i.test(s) ? s : "";
+  };
+
+  return {
+    companyName: company?.companyName || "Iconic Travel",
+    companyWebsite: company?.companyWebsite || "",
+    globalInclusions: globalSettings?.inclusions || [],
+    globalExclusions: globalSettings?.exclusions || [],
+    globalCancellationPolicy: globalSettings?.cancellationPolicy || "",
+    globalPaymentPolicy: globalSettings?.paymentPolicy || "",
+    globalTermsAndConditions: globalSettings?.termsAndConditions || "",
+    companyTermsConditions: company?.termsConditions || "",
+    companyCancellationPolicyUrl: pickHttp(company?.cancellationPolicy),
+    companyPaymentLink: pickHttp(company?.paymentLink),
+    bankDetails,
+  };
+};
+
+const readBookingOverridesFromRequest = (reqBody = {}) => {
+  const customText = reqBody?.customText || {};
+  const booking = customText?.booking || {};
+  const topLevel = {
+    nextPayableAmount: reqBody?.nextPayableAmount,
+    dueDate: reqBody?.dueDate || reqBody?.paymentDueDate,
+    receivedAmount: reqBody?.receivedAmount,
+    dueAmount: reqBody?.dueAmount,
+  };
+  return {
+    ...(customText?.nextPayableAmount !== undefined
+      ? { nextPayableAmount: customText.nextPayableAmount }
+      : {}),
+    ...(customText?.dueDate !== undefined ? { dueDate: customText.dueDate } : {}),
+    ...(customText?.paymentDueDate !== undefined
+      ? { dueDate: customText.paymentDueDate }
+      : {}),
+    ...(customText?.receivedAmount !== undefined
+      ? { receivedAmount: customText.receivedAmount }
+      : {}),
+    ...(customText?.dueAmount !== undefined ? { dueAmount: customText.dueAmount } : {}),
+    ...(topLevel.nextPayableAmount !== undefined
+      ? { nextPayableAmount: topLevel.nextPayableAmount }
+      : {}),
+    ...(topLevel.dueDate !== undefined ? { dueDate: topLevel.dueDate } : {}),
+    ...(topLevel.receivedAmount !== undefined
+      ? { receivedAmount: topLevel.receivedAmount }
+      : {}),
+    ...(topLevel.dueAmount !== undefined ? { dueAmount: topLevel.dueAmount } : {}),
+    ...booking,
+  };
+};
+
+async function mergeQuickBookingEmailPayload(shaped, meta, reqBody, mongoId) {
+  const bookingOverrides = readBookingOverridesFromRequest(reqBody || {});
+  const vouchers = await ReceivedVoucher.find({
+    quotationRef: String(mongoId),
+  }).lean();
+  const receivedAmount = sumReceivedFromClient(vouchers);
+  const { total } = packageTotals(shaped);
+  const dueAmount = Math.max(0, total - receivedAmount);
+  return {
+    ...meta,
+    receivedAmount,
+    dueAmount,
+    ...bookingOverrides,
+  };
+}
+
+/** Same templates as custom quotation (hotels, itinerary, policies, booking payment block). */
+export const previewQuickQuotationMail = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const mongoId = await resolveQuickQuotationMongoId(id);
+  if (!mongoId) throw new ApiError(404, "Quotation not found");
+  const quotation = await QuickQuotation.findById(mongoId).populate("packageId").lean();
+  if (!quotation) throw new ApiError(404, "Quotation not found");
+
+  const selectedCompany = await resolveCompanyForEmail({
+    companyId: req.body?.companyId,
+    companyName: req.body?.companyName,
+  });
+  if (!selectedCompany) {
+    throw new ApiError(400, "Company not found for preview");
+  }
+
+  const shaped = adaptQuickQuotationForCustomMailer(quotation);
+  const meta = await loadEmailMetaQuick(selectedCompany);
+  const normalBody = buildCustomQuotationNormalEmail(
+    shaped,
+    req.body?.customText?.normal || {},
+    meta,
+  );
+  const bookingPayload = await mergeQuickBookingEmailPayload(
+    shaped,
+    meta,
+    req.body,
+    mongoId,
+  );
+  const bookingBody = buildCustomQuotationBookingEmail(shaped, bookingPayload);
+
+  const shortRef = `QT-${mongoId.slice(-6)}`;
+  const guestName = quotation.customerName || "Guest";
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        normal: {
+          subject: `Quotation ${shortRef} - ${guestName}`,
+          body: normalBody,
+        },
+        booking: {
+          subject: `Booking Confirmation ${shortRef} - ${guestName}`,
+          body: bookingBody,
+        },
+      },
+      "Quick quotation email preview generated"
+    )
+  );
+});
+
+/** Dashboard parity with custom QT: to/cc/type/subject/bodyHtml/senderAccount */
+export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const mongoId = await resolveQuickQuotationMongoId(id);
+  if (!mongoId) throw new ApiError(404, "Quotation not found");
+  const {
+    to,
+    cc,
+    type = "normal",
+    subject,
+    bodyHtml,
+    senderAccount,
+    companyId,
+    companyName,
+  } = req.body || {};
+
+  if (!to || (Array.isArray(to) && to.length === 0)) {
+    throw new ApiError(400, "Receiver email is required");
+  }
+
+  const quotation = await QuickQuotation.findById(mongoId).populate("packageId").lean();
+  if (!quotation) throw new ApiError(404, "Quotation not found");
+
+  const selectedCompany = await resolveCompanyForEmail({ companyId, companyName });
+  if (!selectedCompany) throw new ApiError(400, "Company not found");
+
+  const shaped = adaptQuickQuotationForCustomMailer(quotation);
+  const meta = await loadEmailMetaQuick(selectedCompany);
+
+  const generatedBody =
+    type === "booking"
+      ? buildCustomQuotationBookingEmail(
+          shaped,
+          await mergeQuickBookingEmailPayload(shaped, meta, req.body, mongoId),
+        )
+      : buildCustomQuotationNormalEmail(
+          shaped,
+          req.body?.customText?.normal || {},
+          meta,
+        );
+  const body =
+    type === "booking"
+      ? generatedBody
+      : String(bodyHtml || "").trim() || generatedBody;
+
+  const shortRef = `QT-${mongoId.slice(-6)}`;
+  const guestName = quotation.customerName || "Guest";
+  const finalSubject =
+    subject ||
+    (type === "booking"
+      ? `Booking Confirmation ${shortRef} - ${guestName}`
+      : `Quotation ${shortRef} - ${guestName}`);
+
+  const auth = resolveMailAuth(senderAccount);
+  if (!auth.user || !auth.pass) {
+    throw new ApiError(
+      500,
+      "Sender email credentials are not configured for selected account"
+    );
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: { user: auth.user, pass: auth.pass },
+  });
+
+  try {
+    await transporter.sendMail({
+      from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+      to,
+      cc: cc && String(cc).trim() ? cc : undefined,
+      replyTo: selectedCompany?.email || auth.user,
+      subject: finalSubject,
+      html: body,
+      text: body.replace(/<[^>]*>/g, ""),
+    });
+  } catch (error) {
+    console.error("Quick QT mail error:", error);
+    throw new ApiError(500, "Failed to send email");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { quotationId: mongoId, type, senderAccount: senderAccount || "gmail1" },
+      "Mail sent successfully"
+    )
+  );
+});
+
+export const finalizeQuickQuotation = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const mongoId = await resolveQuickQuotationMongoId(id);
+  if (!mongoId) throw new ApiError(404, "Quotation not found");
+  const { finalizedPackage } = req.body || {};
+  const quotation = await QuickQuotation.findById(mongoId);
+  if (!quotation) throw new ApiError(404, "Quotation not found");
+
+  quotation.finalizeStatus = "finalized";
+  quotation.finalizedAt = new Date();
+  if (finalizedPackage != null && String(finalizedPackage).trim()) {
+    quotation.finalizedPackage = String(finalizedPackage).trim();
+  }
+  await quotation.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, quotation, "Quotation finalized successfully")
+  );
+});
+
 export const sendQuickQuotationMail = async (req, res) => {
   try {
     const { id } = req.params;
     const { companyName } = req.body; // <-- Now taking company Name
 
-    const quotation = await QuickQuotation.findById(id).populate("packageId");
+    const mongoId = await resolveQuickQuotationMongoId(id);
+    if (!mongoId)
+      return res.status(404).json({ message: "Quotation not found" });
+
+    const quotation = await QuickQuotation.findById(mongoId).populate("packageId");
     if (!quotation)
       return res.status(404).json({ message: "Quotation not found" });
 
@@ -205,19 +690,7 @@ export const sendQuickQuotationMail = async (req, res) => {
       });
     }
 
-    // Logo setup
-    company.logoPath = company.logo
-      ? path.join(__dirname, "../../../public/", company.logo)
-      : null;
-
-    company.logoCid = company.logo ? "companyLogo" : null;
-    company.logoFilename = company.logo || null;
-
-    // 🔥 Set correct email password
-    company.appPassword =
-      company.email === process.env.gmail
-        ? process.env.app_pass // Iconic Yatra
-        : process.env.EMAIL_PASS; // Iconic Travel
+    Object.assign(company, attachCompanyLogoFields(company));
 
     // Send email
     const emailResult = await sendQuotationMail(
@@ -466,5 +939,3 @@ const getQuotationEmailTemplate = (customerName, pkg, quotation, company) => {
   </div>
 `;
 };
-
-export default getQuotationEmailTemplate;

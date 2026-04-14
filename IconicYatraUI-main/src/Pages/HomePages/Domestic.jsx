@@ -16,9 +16,21 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { fetchDomesticPackages } from "../../Features/packageSlice";
 import PackageCard from "../../Components/PackageCard";
-import { BASE_URL } from "../../Utils/axiosInstance";
+import { BASE_URL, destinationAxios } from "../../Utils/axiosInstance";
 import { Pagination } from "@mui/material";
 import InquiryFormDialog from "../../Components/InquiryFormDialog";
+
+const normalizeText = (value = "") =>
+  String(value).toLowerCase().trim().replace(/\s+/g, " ");
+const slugifyValue = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-");
+const DEFAULT_DOMESTIC_DESCRIPTION =
+  "Explore the beauty of India with our curated domestic tours";
 
 const Domestic = () => {
   const { destination } = useParams();
@@ -28,6 +40,10 @@ const Domestic = () => {
   const [page, setPage] = useState(1);
   const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
   const [selectedPackageTitle, setSelectedPackageTitle] = useState("");
+  const [domesticDescriptionsBySlug, setDomesticDescriptionsBySlug] = useState(
+    {}
+  );
+  const [domesticAllDescription, setDomesticAllDescription] = useState("");
 
   const {
     domestic: packages = [],
@@ -39,32 +55,76 @@ const Domestic = () => {
 
   const [selectedDestination, setSelectedDestination] = useState("All");
 
-  // ✅ Fetch packages (avoid unnecessary API calls)
+  // ✅ Fetch packages (fetch more when filtering by sector to show all matches)
   useEffect(() => {
-  if (packages.length === 0) {
-    dispatch(fetchDomesticPackages({ page, limit: 9 }));
-  }
-}, [dispatch, packages.length]);
+    const limit = destination ? 200 : 9;
+    dispatch(fetchDomesticPackages({ page, limit }));
+  }, [dispatch, page, destination]);
 
-  // ✅ Handle destination filter
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchDomesticDescriptions = async () => {
+      try {
+        const res = await destinationAxios.get("/?tourType=Domestic");
+        if (!isMounted) return;
+
+        const map = (Array.isArray(res.data) ? res.data : []).reduce(
+          (acc, item) => {
+            const sector = item?.sector?.trim();
+            if (!sector) return acc;
+            acc[slugifyValue(sector)] = item?.description?.trim() || "";
+            return acc;
+          },
+          {}
+        );
+
+        setDomesticDescriptionsBySlug(map);
+        const allDescriptionItem = (Array.isArray(res.data) ? res.data : []).find(
+          (item) => !item?.sector
+        );
+        setDomesticAllDescription(allDescriptionItem?.tourTypeDescription?.trim() || "");
+      } catch (error) {
+        if (isMounted) {
+          setDomesticDescriptionsBySlug({});
+          setDomesticAllDescription("");
+        }
+      }
+    };
+
+    fetchDomesticDescriptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // ✅ Handle destination/sector filter from route
+  // Reset page only when route changes, not when package data updates.
   useEffect(() => {
     if (destination && destination !== "All") {
-      const formattedDestination = destination
-        .replace(/-/g, " ")
-        .toLowerCase()
-        .trim();
+      const routeSlug = String(destination).toLowerCase().trim();
 
-      const matched = packages?.find(
-        (pkg) => pkg.title.toLowerCase().trim() === formattedDestination
+      const matchedBySector = packages?.find(
+        (pkg) => slugifyValue(pkg.sector) === routeSlug
       );
 
-      setSelectedDestination(matched ? matched.title : "All");
+      if (matchedBySector?.sector) {
+        setSelectedDestination(matchedBySector.sector);
+      } else {
+        const matchedByTitle = packages?.find(
+          (pkg) =>
+            slugifyValue(pkg.title) === routeSlug ||
+            normalizeText(pkg.title) === normalizeText(routeSlug.replace(/-/g, " "))
+        );
+        setSelectedDestination(matchedByTitle ? matchedByTitle.title : "All");
+      }
     } else {
       setSelectedDestination("All");
     }
 
     setPage(1);
-  }, [destination, packages]);
+  }, [destination]);
 
   // ✅ Filter packages
   const filteredPackages =
@@ -72,11 +132,16 @@ const Domestic = () => {
       ? packages
       : packages.filter(
           (pkg) =>
-            pkg.title.toLowerCase().trim() ===
-            selectedDestination.toLowerCase().trim()
+            slugifyValue(pkg.sector) === slugifyValue(selectedDestination) ||
+            normalizeText(pkg.title) === normalizeText(selectedDestination)
         );
 
   const currentPackages = filteredPackages || [];
+  const selectedDescription =
+    selectedDestination === "All"
+      ? domesticAllDescription || DEFAULT_DOMESTIC_DESCRIPTION
+      : domesticDescriptionsBySlug[slugifyValue(selectedDestination)] ||
+        DEFAULT_DOMESTIC_DESCRIPTION;
 
   // ✅ Navigate to details page (pass package data)
   const handleCardClick = (pkg) => {
@@ -198,7 +263,7 @@ const Domestic = () => {
             />
 
             <Typography variant="subtitle1" color="text.secondary">
-              Discover the best domestic travel packages
+              {selectedDescription}
             </Typography>
           </Box>
 
@@ -247,7 +312,7 @@ const Domestic = () => {
               </Grid>
 
               {/* Pagination */}
-              {totalPages > 1 && (
+              {selectedDestination === "All" && totalPages > 1 && (
                 <Box display="flex" justifyContent="center" mt={5}>
                  <Pagination
     count={totalPages}

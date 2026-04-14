@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
     Box,
     Button,
@@ -16,11 +16,12 @@ import {
     RadioGroup,
     FormControlLabel,
     Link,
+    Alert,
 } from "@mui/material";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { createVoucher } from "../../../../features/payment/paymentSlice";
 import axios from "../../../../utils/axios";
@@ -33,25 +34,63 @@ const paymentLink = "https://iconicyatra.com/payment";
 const PaymentsForm = () => {
     const dispatch = useDispatch();
     const { list: banks } = useSelector((state) => state.bank);
+    const [searchParams] = useSearchParams();
+    const quotationRefParam = searchParams.get("quotationRef")?.trim() || "";
+    const partyFromSearch = searchParams.get("party")?.trim() || "";
+    const [partyFromStorage, setPartyFromStorage] = useState("");
 
-    const [voucherType, setVoucherType] = useState("");
+    useEffect(() => {
+        if (!quotationRefParam) return;
+        if (partyFromSearch) {
+            setPartyFromStorage("");
+            return;
+        }
+        try {
+            const raw = sessionStorage.getItem("paymentFormPartyPrefill");
+            if (!raw) return;
+            const o = JSON.parse(raw);
+            if (
+                o?.quotationRef === quotationRefParam &&
+                String(o?.partyName || "").trim()
+            ) {
+                setPartyFromStorage(String(o.partyName).trim());
+                sessionStorage.removeItem("paymentFormPartyPrefill");
+            }
+        } catch {
+            /* ignore */
+        }
+    }, [quotationRefParam, partyFromSearch]);
+
+    const partyFromUrl = partyFromSearch || partyFromStorage;
+
+    /** Default to Receive so the form is visible immediately (users can switch to Payment / Dr). */
+    const [voucherType, setVoucherType] = useState("receive");
     const navigate = useNavigate(); // ✅ Corrected spelling
     const [previewImage, setPreviewImage] = useState(null);
     const [uploadFile, setUploadFile] = useState(null);
     const [companies, setCompanies] = useState([]);
 
-    const formik = useFormik({
-        initialValues: {
+    const formInitialValues = useMemo(
+        () => ({
             companyId: "",
-            date: "",
-            accountType: "",
-            partyName: "",
+            date: new Date().toISOString().split("T")[0],
+            accountType:
+                quotationRefParam && partyFromUrl ? "Client" : "",
+            partyName: partyFromUrl,
             paymentMode: "",
             reference: "",
-            particulars: "",
+            particulars: quotationRefParam
+                ? `Custom quotation ${quotationRefParam}`
+                : "",
             amount: "",
             paymentLinkUsed: false,
-        },
+        }),
+        [quotationRefParam, partyFromUrl]
+    );
+
+    const formik = useFormik({
+        enableReinitialize: true,
+        initialValues: formInitialValues,
         validationSchema: Yup.object({
             date: Yup.string().required("Date is required"),
             accountType: Yup.string().required("Select account type"),
@@ -79,14 +118,15 @@ const PaymentsForm = () => {
                     particulars: values.particulars,
                     amount: values.amount,
                     invoice: getNextInvoiceNumber(),
+                    ...(quotationRefParam ? { quotationRef: quotationRefParam } : {}),
                 };
 
                 await dispatch(createVoucher(payload)).unwrap();
 
                 toast.success("Voucher created successfully!");
-                navigate("/payments"); // ✅ Now using correct variable
+                navigate("/payments");
                 resetForm();
-                setVoucherType("");
+                setVoucherType("receive");
 
             } catch (err) {
                 console.error(err);
@@ -137,6 +177,14 @@ useEffect(() => {
                 bgcolor: "#f5f7fb",
             }}
         >
+            {quotationRefParam && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    Recording voucher for custom quotation{" "}
+                    <strong>{quotationRefParam}</strong>. Receive voucher = <strong>Cr</strong>
+                    ; Payment voucher = <strong>Dr</strong>. Pick the type below — the form opens
+                    automatically.
+                </Alert>
+            )}
             {/* Voucher Type Selection */}
             <Box sx={{ mb: 3, textAlign: "center" }}>
                 <Typography variant="h5" fontWeight="bold" color="primary" gutterBottom>
@@ -252,7 +300,10 @@ useEffect(() => {
                         </Grid>
 
                         <Grid size={{ xs: 12, md: 6 }}>
-                            <PartySelector formik={formik} />
+                            <PartySelector
+                                formik={formik}
+                                prefillPartyName={partyFromUrl}
+                            />
                         </Grid>
 
                         <Grid size={{ xs: 12, md: 6 }}>
@@ -260,7 +311,7 @@ useEffect(() => {
                                 fullWidth
                                 error={formik.touched.paymentMode && Boolean(formik.errors.paymentMode)}
                             >
-                                <InputLabel>Payment Mode</InputLabel>
+                                <InputLabel>Payment Bank</InputLabel>
                                <Select
     name="paymentMode"
     value={formik.values.paymentMode}

@@ -1,810 +1,1893 @@
-// QuotationPDFDialog.jsx
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    Box,
-    Typography,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Divider,
-    Alert,
-    Snackbar,
-    CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Snackbar,
+  Alert,
+  CircularProgress,
+  Divider,
+  Chip,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Link,
 } from "@mui/material";
 import {
-    PictureAsPdf as PictureAsPdfIcon,
-    Download,
-    Print,
-    Close,
+  Download,
+  Print,
+  Close,
+  LocalPhone,
+  Email,
+  LocationOn,
+  Person,
+  FlightTakeoff,
+  FlightLand,
+  Hotel,
+  Restaurant,
+  Payments,
+  CheckCircle,
+  Cancel,
+  MoneyOff,
+  Description,
 } from "@mui/icons-material";
+import axios from "../../../../../../utils/axios";
 
-const QuotationPDFDialog = ({ open, onClose, quotation }) => {
-    const printRef = useRef();
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
+const QuotationPDFDialog = ({
+  open,
+  onClose,
+  quotation,
+  pdfHeading = "CUSTOM QUOTATION",
+}) => {
+  const printRef = useRef();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [imageElements, setImageElements] = useState({});
+  const [renderComplete, setRenderComplete] = useState(false);
+  const [companyOptions, setCompanyOptions] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [globalPolicyDefaults, setGlobalPolicyDefaults] = useState({
+    inclusions: [],
+    exclusions: [],
+    paymentPolicy: "",
+    cancellationPolicy: "",
+    termsAndConditions: "",
+  });
 
-    // Company logo URL
-    const companyLogo = "https://iconicyatra.com/assets/logoiconic-CDBgNKCW.jpg";
+  // Helper function to safely get nested values
+  const getValue = (obj, path, defaultValue = "N/A") => {
+    if (!obj) return defaultValue;
+    const keys = path.split(".");
+    let result = obj;
+    for (const key of keys) {
+      if (result === undefined || result === null) return defaultValue;
+      result = result[key];
+    }
+    return result !== undefined && result !== null && result !== ""
+      ? result
+      : defaultValue;
+  };
+  const getRawValue = (obj, path) => {
+    if (!obj) return undefined;
+    const keys = path.split(".");
+    let result = obj;
+    for (const key of keys) {
+      if (result === undefined || result === null) return undefined;
+      result = result[key];
+    }
+    return result;
+  };
 
-    // Default quotation data structure
-    const defaultQuotation = {
-        date: "27/08/2025",
-        reference: "41",
-        customer: {
-            name: "Amit Jaiswal",
-            location: "Andhya Pradesh",
-            phone: "+91 7053900957",
-            email: "amit.jaiswal@example.com",
-        },
-        pickup: {
-            arrival: "Arrival: Lucknow (22/08/2025) at Airport, 3:35PM",
-            departure: "Departure: Delhi (06/09/2025) from Local Address, 6:36PM",
-        },
-        hotel: {
-            guests: "6 Adults",
-            rooms: "3 Bedroom",
-            mealPlan: "CP, AP, EP",
-            destination: "3N Borong, 2N Damthang",
-            itinerary: "This is only tentative schedule for sightseeing and travel...",
-        },
-        pricing: {
-            discount: "₹ 200",
-            gst: "₹ 140",
-            total: "₹ 3,340",
-            received: "₹ 1,500",
-            balance: "₹ 1,840"
-        },
-        policies: {
-            inclusions: [
-                "All transfers tours in a Private AC cab.",
-                "Parking, Toll charges, Fuel and Driver expenses.",
-                "Hotel Taxes.",
-                "Car AC off during hill stations.",
-            ],
-            exclusions: "1. Any Cost change...",
-            paymentPolicy: "50% amount to pay at confirmation, balance before 10 days.",
-            cancellationPolicy: "1. Before 15 days: 50%. 2. Within 7 days: 100%.",
-            terms: "1. This is only a Quote. Availability is checked only on confirmation...",
-        },
-        footer: {
-            contact: "Amit Jaiswal | +91 7053900957 (Noida)",
-            phone: "+91 7053900957",
-            email: "amit.jaiswal@example.com",
-            company: "Iconic Yatra",
-            address: "Office No 15, Bhawani Market Sec 27, Noida, Uttar Pradesh – 201301",
-            website: "https://www.iconicyatra.com",
-        },
-        hotelPricingData: [
-            {
-                destination: "Borong",
-                nights: "3 N",
-                standard: "Tempo Heritage Resort",
-                deluxe: "Tempo Heritage Resort",
-                superior: "Yovage The Aryan Regency",
-            },
-            {
-                destination: "Damthang",
-                nights: "2 N",
-                standard: "Tempo Heritage Resort",
-                deluxe: "Tempo Heritage Resort",
-                superior: "Yovage The Aryan Regency",
-            },
-            {
-                destination: "Quotation Cost",
-                nights: "-",
-                standard: "₹ 40,366",
-                deluxe: "₹ 440,829",
-                superior: "₹ 92,358",
-            },
-            {
-                destination: "IGST",
-                nights: "-",
-                standard: "₹ 2,018.3",
-                deluxe: "₹ 22,041.4",
-                superior: "₹ 4,617.9",
-            },
-            {
-                destination: "Total Quotation Cost",
-                nights: "5 N",
-                standard: "₹ 42,384",
-                deluxe: "₹ 462,870",
-                superior: "₹ 96,976",
-            },
-        ],
-        days: [
-            { id: 1, date: "11/09/2025", title: "About Day 1", description: "Arrival and check-in process" },
-        ],
-    };
+  // Helper to format currency
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return "₹ 0";
+    let numAmount = amount;
+    if (typeof amount === "string") {
+      const cleaned = amount.replace(/[^0-9.-]/g, "");
+      numAmount = parseFloat(cleaned);
+    }
+    if (isNaN(numAmount)) return "₹ 0";
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(numAmount);
+  };
 
-    // Use provided quotation or default data
-    const quotationData = quotation || defaultQuotation;
+  // Compress image to reduce size
+  const compressImage = (base64, maxWidth = 800, quality = 0.7) => {
+    return new Promise((resolve) => {
+      if (!base64) {
+        resolve(null);
+        return;
+      }
 
-    const handleDownloadPDF = async () => {
-        try {
-            setLoading(true);
-            setError("");
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
 
-            // Dynamically import the libraries
-            const [jsPDFModule, html2canvasModule] = await Promise.all([
-                import("jspdf"),
-                import("html2canvas")
-            ]);
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
 
-            const jsPDF = jsPDFModule.default;
-            const html2canvas = html2canvasModule.default;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
 
-            // Create a new PDF document
-            const pdf = new jsPDF("p", "mm", "a4");
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
+        const compressed = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressed);
+      };
+      img.onerror = () => {
+        console.error("Error compressing image");
+        resolve(base64);
+      };
+      img.src = base64;
+    });
+  };
 
-            // Get all page elements
-            const pages = printRef.current.querySelectorAll('.pdf-page');
+  // Convert remote image to data URL
+  const convertToBase64 = useCallback((url, compress = true) => {
+    return new Promise((resolve) => {
+      if (!url) {
+        resolve(null);
+        return;
+      }
 
-            for (let i = 0; i < pages.length; i++) {
-                const page = pages[i];
+      if (url.startsWith("data:image")) {
+        if (compress) {
+          compressImage(url, 800, 0.7).then(resolve);
+        } else {
+          resolve(url);
+        }
+        return;
+      }
 
-                // Show the current page and hide others
-                pages.forEach((p, index) => {
-                    p.style.display = index === i ? 'block' : 'none';
-                });
-
-                // Capture the page as canvas
-                const canvas = await html2canvas(page, {
-                    scale: 2,
-                    useCORS: true,
-                    logging: false,
-                    backgroundColor: '#ffffff',
-                    width: page.offsetWidth,
-                    height: page.offsetHeight
-                });
-
-                const imgData = canvas.toDataURL("image/png");
-                const imgWidth = pageWidth;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-                // Add new page for all pages except the first one
-                if (i > 0) {
-                    pdf.addPage();
-                }
-
-                // Add image to PDF
-                pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+      const finishWithCanvas = () => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        const timeoutId = setTimeout(() => {
+          console.warn("Image load timeout:", url);
+          resolve(null);
+        }, 12000);
+        img.onload = () => {
+          clearTimeout(timeoutId);
+          try {
+            const canvas = document.createElement("canvas");
+            let width = img.width;
+            let height = img.height;
+            const maxWidth = 800;
+            if (width > maxWidth) {
+              height = (height * maxWidth) / width;
+              width = maxWidth;
             }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            const base64 = canvas.toDataURL("image/jpeg", 0.7);
+            resolve(base64);
+          } catch {
+            resolve(null);
+          }
+        };
+        img.onerror = () => {
+          clearTimeout(timeoutId);
+          console.warn("Failed to load image (canvas path):", url);
+          resolve(null);
+        };
+        img.src = url;
+      };
 
-            // Show all pages again
-            pages.forEach(page => {
-                page.style.display = 'block';
-            });
+      fetch(url, { mode: "cors", credentials: "omit", cache: "force-cache" })
+        .then((res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          return res.blob();
+        })
+        .then(
+          (blob) =>
+            new Promise((res, rej) => {
+              const reader = new FileReader();
+              reader.onloadend = () => res(reader.result);
+              reader.onerror = rej;
+              reader.readAsDataURL(blob);
+            }),
+        )
+        .then((dataUrl) => {
+          if (
+            typeof dataUrl !== "string" ||
+            !dataUrl.startsWith("data:image")
+          ) {
+            finishWithCanvas();
+            return;
+          }
+          if (compress) {
+            compressImage(dataUrl, 800, 0.7).then(resolve);
+          } else {
+            resolve(dataUrl);
+          }
+        })
+        .catch(() => {
+          finishWithCanvas();
+        });
+    });
+  }, []);
 
-            // Save the PDF
-            pdf.save(`${quotationData.customer.name.replace(/\s+/g, '_')}_${quotationData.reference}.pdf`);
+  // Extract all data from the quotation prop
+  const quotationData = quotation || {};
+  const selectedCompany =
+    companyOptions.find((c) => c?._id === selectedCompanyId) || null;
 
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-            setError("Failed to generate PDF. Please try again.");
-        } finally {
-            setLoading(false);
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      if (!open) return;
+      try {
+        setLoadingCompanies(true);
+        const res = await axios.get("/company");
+        const list = Array.isArray(res?.data?.data) ? res.data.data : [];
+        setCompanyOptions(list);
+        if (!selectedCompanyId && list.length > 0) {
+          setSelectedCompanyId(list[0]._id);
         }
+      } catch (err) {
+        console.error("Failed to fetch companies for PDF preview:", err);
+        setCompanyOptions([]);
+      } finally {
+        setLoadingCompanies(false);
+      }
+    };
+    fetchCompanies();
+  }, [open]);
+
+  useEffect(() => {
+    const fetchGlobalPolicyDefaults = async () => {
+      if (!open) return;
+      try {
+        const res = await axios.get("/global-settings");
+        const data = res?.data?.data || res?.data || {};
+        setGlobalPolicyDefaults({
+          inclusions: Array.isArray(data?.inclusions) ? data.inclusions : [],
+          exclusions: Array.isArray(data?.exclusions) ? data.exclusions : [],
+          paymentPolicy:
+            typeof data?.paymentPolicy === "string" ? data.paymentPolicy : "",
+          cancellationPolicy:
+            typeof data?.cancellationPolicy === "string"
+              ? data.cancellationPolicy
+              : "",
+          termsAndConditions:
+            typeof data?.termsAndConditions === "string"
+              ? data.termsAndConditions
+              : "",
+        });
+      } catch (err) {
+        console.error("Failed to fetch global settings for PDF:", err);
+        setGlobalPolicyDefaults({
+          inclusions: [],
+          exclusions: [],
+          paymentPolicy: "",
+          cancellationPolicy: "",
+          termsAndConditions: "",
+        });
+      }
+    };
+    fetchGlobalPolicyDefaults();
+  }, [open]);
+
+  // Safely extract all needed data
+  const customerName = getValue(quotationData, "customer.name", "Guest");
+  const customerLocation = getValue(quotationData, "customer.location");
+  const customerPhone = getValue(quotationData, "customer.phone");
+  const customerEmail = getValue(quotationData, "customer.email");
+
+  const pickupArrival = getValue(quotationData, "pickup.arrival");
+  const pickupDeparture = getValue(quotationData, "pickup.departure");
+
+  const hotelGuests = getValue(quotationData, "hotel.guests");
+  const hotelRooms = getValue(quotationData, "hotel.rooms");
+  const hotelMealPlan = getValue(quotationData, "hotel.mealPlan");
+  const hotelType = getValue(quotationData, "hotel.hotelType");
+  const hotelDestination = getValue(quotationData, "hotel.destination");
+  const hotelItinerary = getValue(quotationData, "hotel.itinerary");
+
+  const quotationTitle = getValue(
+    quotationData,
+    "quotationTitle",
+    "Travel Quotation",
+  );
+  const destinationSummary = getValue(quotationData, "destinationSummary");
+  const reference = getValue(quotationData, "reference");
+  const date = getValue(quotationData, "date");
+
+  const pricingTotal = getRawValue(quotationData, "pricing.total");
+  const pricingDiscount = getValue(quotationData, "pricing.discount");
+  const pricingGst = getValue(quotationData, "pricing.gst");
+
+  const toNumber = (value) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" && !Number.isNaN(value)) return value;
+    const cleaned = String(value).replace(/[^0-9.-]/g, "");
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  const totalFromPricing = toNumber(pricingTotal);
+  const totalFromFooter = toNumber(getRawValue(quotationData, "footer.total"));
+  const hotelPricingRows = Array.isArray(
+    getRawValue(quotationData, "hotelPricingData"),
+  )
+    ? getRawValue(quotationData, "hotelPricingData")
+    : [];
+  const totalCostRow =
+    hotelPricingRows.find((row) =>
+      String(row?.destination || "")
+        .toLowerCase()
+        .includes("total quotation cost"),
+    ) ||
+    hotelPricingRows.find((row) =>
+      String(row?.destination || "")
+        .toLowerCase()
+        .includes("quotation cost"),
+    );
+  const totalFromHotelRow =
+    toNumber(totalCostRow?.standard) ||
+    toNumber(totalCostRow?.deluxe) ||
+    toNumber(totalCostRow?.superior);
+  const effectiveTotal =
+    totalFromHotelRow ?? totalFromPricing ?? totalFromFooter ?? 0;
+  const standardTotal = toNumber(totalCostRow?.standard);
+  const deluxeTotal = toNumber(totalCostRow?.deluxe);
+  const superiorTotal = toNumber(totalCostRow?.superior);
+
+  const logoUrl =
+    selectedCompany?.logo ||
+    getValue(quotationData, "logo") ||
+    getValue(quotationData, "footer.logo") ||
+    getValue(quotationData, "companyLogo") ||
+    null;
+
+  const footerCompany =
+    selectedCompany?.companyName ||
+    getValue(quotationData, "footer.company", "Iconic Yatra");
+  const footerAddress =
+    selectedCompany?.address || getValue(quotationData, "footer.address");
+  const footerPhone =
+    selectedCompany?.phone || getValue(quotationData, "footer.phone");
+  const footerEmail =
+    selectedCompany?.email || getValue(quotationData, "footer.email");
+  const footerWebsite =
+    selectedCompany?.companyWebsite ||
+    getValue(quotationData, "footer.website");
+  const footerContact =
+    selectedCompany?.authorizedSignatory?.name ||
+    getValue(quotationData, "footer.contact");
+  const footerContactDesignation =
+    selectedCompany?.authorizedSignatory?.designation || "";
+  const footerReceived = getValue(quotationData, "footer.received");
+
+  const fallbackInclusions = [
+    "Welcome Drink on Arrival.",
+    "Sanitised Private Vehicle AC for Sightseeing as per State Norms.",
+    "Hotel Category Standard Type or Similar.",
+    "Accommodation on Double Sharing Basis.",
+    "Daily Complementary Breakfast as per Hotel Menu.",
+    "Pick Up & Drop Facility From Airport/Railway Station.",
+    "All Sightseeing as per places given or state norms on Private Basis.",
+  ];
+
+  const fallbackCancellationPolicy = [
+    "Cancellation Policy:",
+    "• 30 days or more before departure: 25% of total tour cost",
+    "• 29 - 20 days before departure: 50% of total tour cost",
+    "• 19 - 10 days before departure: 75% of total tour cost",
+    "• Less than 10 days before departure: 100% of total tour cost",
+    "",
+    "Refund Policy:",
+    "• All refunds will be processed within 15-20 working days",
+    "• Refund will be credited to the same payment method used at the time of booking",
+    "• Bank charges, if any, will be deducted from the refund amount",
+    "• No refund for unused services (hotel, transport, sightseeing, etc.)",
+    "• In case of flight cancellations, airline refund policy will apply",
+    "",
+    "Note: The cancellation policy may vary during peak season (Dec-Jan), festivals, and long weekends.",
+  ];
+
+  const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
+  const policiesCancellationPolicy = getValue(
+    quotationData,
+    "policies.cancellationPolicy",
+    [],
+  );
+
+  const days = getValue(quotationData, "days", []);
+  const bannerImage = getValue(quotationData, "bannerImage", "");
+  const hotelPricingData = hotelPricingRows;
+  const isSummaryPricingRow = (row) => {
+    const label = String(row?.destination || "").toLowerCase();
+    return label.includes("quotation cost") || label.includes("igst");
+  };
+  const hasHotelNameValue = (value) => {
+    const text = String(value || "").trim();
+    if (!text || text === "-") return false;
+    if (text.startsWith("₹")) return false;
+    return true;
+  };
+  const nonSummaryRows = hotelPricingData.filter(
+    (row) => !isSummaryPricingRow(row),
+  );
+  const renderHotelCellValue = (row, key) => {
+    const value = row?.[key];
+    if (isSummaryPricingRow(row)) return value || "-";
+    return hasHotelNameValue(value) ? value : "";
+  };
+  const showStandardCol = nonSummaryRows.some((row) =>
+    hasHotelNameValue(row?.standard),
+  );
+  const showDeluxeCol = nonSummaryRows.some((row) =>
+    hasHotelNameValue(row?.deluxe),
+  );
+  const showSuperiorCol = nonSummaryRows.some((row) =>
+    hasHotelNameValue(row?.superior),
+  );
+  const visiblePackageColumns = [
+    showStandardCol,
+    showDeluxeCol,
+    showSuperiorCol,
+  ].filter(Boolean).length;
+
+  const inclusionArray = Array.isArray(policiesInclusions)
+    ? policiesInclusions
+    : typeof policiesInclusions === "string"
+      ? policiesInclusions.split("\n").filter((s) => s.trim())
+      : typeof policiesInclusions === "object"
+        ? Object.values(policiesInclusions)
+        : [];
+  const exclusionArray = Array.isArray(globalPolicyDefaults.exclusions)
+    ? globalPolicyDefaults.exclusions
+    : [];
+  const paymentPolicyArray =
+    typeof globalPolicyDefaults.paymentPolicy === "string"
+      ? globalPolicyDefaults.paymentPolicy.split("\n").filter((s) => s.trim())
+      : [];
+  const globalCancellationArray =
+    typeof globalPolicyDefaults.cancellationPolicy === "string"
+      ? globalPolicyDefaults.cancellationPolicy
+          .split("\n")
+          .filter((s) => s.trim())
+      : [];
+
+  const finalInclusionArray =
+    globalPolicyDefaults.inclusions?.length > 0
+      ? globalPolicyDefaults.inclusions
+      : fallbackInclusions;
+  const finalExclusionArray = exclusionArray.filter((item) =>
+    String(item || "").trim(),
+  );
+  const finalPaymentPolicyArray = paymentPolicyArray.filter((item) =>
+    String(item || "").trim(),
+  );
+
+  const omitRedundantCancellationBodyLine = (line) => {
+    const s = String(line || "").trim();
+    if (!s) return false;
+    if (/iconicyatra\.com\/cancellationandrefundpolicy/i.test(s)) return false;
+    if (
+      /must\s+visit\s+our\s+website\s+for\s+more\s+details\s+about\s+cancellation\s+policy/i.test(
+        s,
+      )
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  const finalCancellationArray = (
+    globalCancellationArray.length > 0
+      ? globalCancellationArray
+      : fallbackCancellationPolicy
+  ).filter(omitRedundantCancellationBodyLine);
+
+  const normalizeWebUrl = (value) => {
+    if (value === undefined || value === null) return "";
+    const s = String(value).trim();
+    if (!s || s === "N/A") return "";
+    if (/^https?:\/\//i.test(s)) return s;
+    return "";
+  };
+
+  // Get company website URL for Terms & Conditions
+  const companyWebsiteUrl =
+    normalizeWebUrl(selectedCompany?.companyWebsite) ||
+    normalizeWebUrl(footerWebsite) ||
+    "#";
+
+  const companyCancellationUrl = normalizeWebUrl(
+    selectedCompany?.cancellationPolicy,
+  );
+
+  // Pre-load all images as base64 with compression
+  useEffect(() => {
+    const loadAllImages = async () => {
+      if (!open) return;
+
+      setRenderComplete(false);
+      const loadedImages = {};
+
+      if (logoUrl && typeof logoUrl === "string" && logoUrl !== "null") {
+        const base64Logo = await convertToBase64(logoUrl, true);
+        if (base64Logo) {
+          loadedImages.logo = base64Logo;
+        }
+      }
+
+      if (bannerImage && typeof bannerImage === "string") {
+        const base64Banner = await convertToBase64(bannerImage, true);
+        if (base64Banner) loadedImages.banner = base64Banner;
+      }
+
+      for (let i = 0; i < days.length; i++) {
+        const day = days[i];
+        if (
+          day.image &&
+          day.image.preview &&
+          typeof day.image.preview === "string"
+        ) {
+          const base64DayImage = await convertToBase64(day.image.preview, true);
+          if (base64DayImage) loadedImages[`day_${i}`] = base64DayImage;
+        }
+      }
+
+      setImageElements(loadedImages);
+      setImagesLoaded(true);
+
+      setTimeout(() => {
+        setRenderComplete(true);
+      }, 500);
     };
 
-    const handlePrint = () => {
-        const content = printRef.current;
-        if (content) {
-            const printWindow = window.open('', '_blank');
-            const printContent = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>${quotationData.customer.name} - Quotation</title>
-            <style>
-              body { 
-                font-family: Arial, sans-serif; 
-                margin: 0;
-                padding: 20px;
-                line-height: 1.4;
-                font-size: 12px;
-                color: #000;
+    if (open) {
+      loadAllImages();
+    }
+  }, [open, logoUrl, bannerImage, days, convertToBase64]);
+
+  const handleDownloadPDF = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      if (!renderComplete) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      const html2canvas = (await import("html2canvas")).default;
+      const jsPDF = (await import("jspdf")).default;
+
+      const pageElements = printRef.current.querySelectorAll(".pdf-page");
+
+      if (pageElements.length === 0) {
+        throw new Error("No pages found");
+      }
+
+      const pdf = new jsPDF({
+        unit: "mm",
+        format: "a4",
+        orientation: "portrait",
+      });
+
+      const pageWidth = 210;
+      const pageHeight = 297;
+
+      for (let i = 0; i < pageElements.length; i++) {
+        const page = pageElements[i];
+
+        const tempContainer = document.createElement("div");
+        tempContainer.style.position = "absolute";
+        tempContainer.style.left = "-9999px";
+        tempContainer.style.top = "-9999px";
+        tempContainer.style.width = "800px";
+        tempContainer.style.backgroundColor = "#ffffff";
+        document.body.appendChild(tempContainer);
+
+        const clone = page.cloneNode(true);
+        tempContainer.appendChild(clone);
+
+        const images = clone.querySelectorAll("img");
+        for (const img of images) {
+          const alt = img.getAttribute("alt");
+          if (alt === "Company Logo" && imageElements.logo) {
+            img.src = imageElements.logo;
+          } else if (alt === "Banner" && imageElements.banner) {
+            img.src = imageElements.banner;
+          } else if (alt && alt.startsWith("Day ")) {
+            // Extract day number from alt text
+            const dayMatch = alt.match(/Day (\d+)/);
+            if (dayMatch) {
+              const dayIndex = parseInt(dayMatch[1]) - 1;
+              if (imageElements[`day_${dayIndex}`]) {
+                img.src = imageElements[`day_${dayIndex}`];
               }
-              .pdf-page { 
+            }
+          }
+        }
+
+        const linkRectToMm = (anchorEl) => {
+          if (!anchorEl) return null;
+          const rect = anchorEl.getBoundingClientRect();
+          const pageRect = page.getBoundingClientRect();
+          return {
+            x: (rect.left - pageRect.left) * 0.264583,
+            y: (rect.top - pageRect.top) * 0.264583,
+            width: rect.width * 0.264583,
+            height: rect.height * 0.264583,
+          };
+        };
+
+        const termsLinkEl =
+          i === pageElements.length - 1
+            ? clone.querySelector('a[data-pdf-link="terms"]')
+            : null;
+        const cancellationLinkEl =
+          i === pageElements.length - 1
+            ? clone.querySelector('a[data-pdf-link="cancellation"]')
+            : null;
+
+        const termsLinkPosition = linkRectToMm(termsLinkEl);
+        const cancellationLinkPosition = linkRectToMm(cancellationLinkEl);
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const canvas = await html2canvas(tempContainer, {
+          scale: 2,
+          backgroundColor: "#ffffff",
+          logging: false,
+          useCORS: false,
+          allowTaint: false,
+        });
+
+        document.body.removeChild(tempContainer);
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        if (i > 0) {
+          pdf.addPage();
+        }
+
+        pdf.addImage(
+          imgData,
+          "JPEG",
+          0,
+          0,
+          imgWidth,
+          imgHeight,
+          undefined,
+          "FAST",
+        );
+
+        if (i === pageElements.length - 1) {
+          if (termsLinkPosition) {
+            const termsUrl =
+              companyWebsiteUrl !== "#"
+                ? companyWebsiteUrl
+                : "https://www.iconicyatra.com";
+            pdf.link(
+              termsLinkPosition.x,
+              termsLinkPosition.y,
+              termsLinkPosition.width,
+              termsLinkPosition.height,
+              { url: termsUrl },
+            );
+          }
+          if (cancellationLinkPosition && companyCancellationUrl) {
+            pdf.link(
+              cancellationLinkPosition.x,
+              cancellationLinkPosition.y,
+              cancellationLinkPosition.width,
+              cancellationLinkPosition.height,
+              { url: companyCancellationUrl },
+            );
+          }
+        }
+      }
+
+      for (let i = 1; i <= pageElements.length; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text(
+          `Page ${i} of ${pageElements.length}`,
+          pageWidth - 30,
+          pageHeight - 10,
+        );
+      }
+
+      pdf.setProperties({
+        title: `${customerName}_Quotation_${reference || Date.now()}`,
+        subject: `Travel Quotation for ${customerName}`,
+        author: footerCompany,
+        creator: "Iconic Yatra Travel Management System",
+      });
+
+      pdf.save(
+        `${customerName.replace(/\s/g, "_")}_Quotation_${reference || Date.now()}.pdf`,
+      );
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      setError("PDF generation failed: " + (err.message || "Please try again"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+    const content = printRef.current.cloneNode(true);
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${customerName} - Travel Quotation</title>
+          <meta charset="UTF-8">
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: 'Segoe UI', 'Arial', sans-serif;
+              padding: 20px;
+              background: white;
+            }
+            @media print {
+              body {
+                padding: 0;
+              }
+              .pdf-page {
                 page-break-after: always;
-                margin-bottom: 20px;
-                padding: 20px;
+                break-after: page;
               }
-              .pdf-page:last-child { 
-                page-break-after: auto;
-              }
-              table { 
-                width: 100%; 
-                border-collapse: collapse; 
-                margin: 10px 0; 
-              }
-              th, td { 
-                border: 1px solid #000; 
-                padding: 6px; 
-                text-align: left; 
-                font-size: 11px;
-              }
-              th { 
-                background-color: #f0f0f0; 
-                font-weight: bold; 
-              }
-              ol, ul { 
-                margin: 5px 0; 
-                padding-left: 20px; 
-              }
-              li { 
-                margin-bottom: 3px; 
-              }
-              .section { 
-                margin-bottom: 15px; 
-              }
-              .section-title { 
-                font-weight: bold; 
-                margin-bottom: 8px; 
-              }
-              .header { 
-                display: flex; 
-                justify-content: space-between; 
-                align-items: flex-start; 
-                margin-bottom: 20px; 
-              }
-              .logo-container { 
-                width: 100px;  /* Reduced from 150px */
-                height: 40px;  /* Reduced from 60px */
-                display: flex; 
-                align-items: center; 
-                justify-content: center;
-              }
-              .logo-img {
-                max-width: 100%;
-                max-height: 100%;
-                object-fit: contain;
-              }
-              .company-info { 
-                text-align: right; 
-              }
-              @media print {
-                body { margin: 0; padding: 15px; }
-                .pdf-page { margin: 0; padding: 15px; }
-              }
-            </style>
-          </head>
-          <body>
-            ${content.innerHTML}
-          </body>
-        </html>
-      `;
+            }
+          </style>
+        </head>
+        <body>
+          ${content.innerHTML}
+          <script>
+            window.onload = () => {
+              window.print();
+              window.close();
+            };
+          <\/script>
+        </body>
+      </html>
+    `);
 
-            printWindow.document.write(printContent);
-            printWindow.document.close();
+    printWindow.document.close();
+  };
 
-            // Wait for content to load before printing
-            setTimeout(() => {
-                printWindow.print();
-                printWindow.close();
-            }, 500);
-        }
-    };
+  // Split days into chunks of 2 per page
+  const chunkSize = 2;
+  const dayChunks = [];
+  for (let i = 0; i < days.length; i += chunkSize) {
+    dayChunks.push(days.slice(i, i + chunkSize));
+  }
 
-    const handleCloseError = () => {
-        setError("");
-    };
-
-    // PDF Content Component
-    const PDFContent = () => (
-        <Box sx={{
-            backgroundColor: "#fff",
-            fontFamily: "Arial, sans-serif",
-            lineHeight: 1.4,
-            fontSize: '12px',
-            color: '#000'
-        }}>
-            {/* Page 1 */}
-            <Box className="pdf-page" sx={{
-                minHeight: '270mm',
-                padding: '20px',
-                boxSizing: 'border-box'
-            }}>
-                {/* Header with Logo and Company Info */}
-                <Box className="header">
-                    <Box className="logo-container">
-                        <img
-                            src={companyLogo}
-                            alt={`${quotationData.footer.company} Logo`}
-                            className="logo-img"
-                            onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                            }}
-                        />
-                        <Box
-                            className="logo-fallback"
-                            sx={{
-                                display: 'none',
-                                width: '100px',  // Reduced size
-                                height: '40px',  // Reduced size
-                                backgroundColor: '#f0f0f0',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '1px solid #ddd',
-                                fontSize: '10px'  // Smaller font for fallback
-                            }}
-                        >
-                            <Typography variant="body2" color="textSecondary">
-                                {quotationData.footer.company}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box className="company-info">
-                        <Typography variant="h6" fontWeight="bold">
-                            QUOTATION
-                        </Typography>
-                        <Typography variant="body2">
-                            Date: {quotationData.date}
-                        </Typography>
-                        <Typography variant="body2">
-                            Ref: {quotationData.reference}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Kind Attention
-                </Typography>
-                <Typography variant="body1" fontWeight="bold" gutterBottom>
-                    {quotationData.customer.name}
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                    {quotationData.customer.location}
-                </Typography>
-
-                <Box sx={{ mt: 3 }} className="section">
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        About Us
-                    </Typography>
-                    <Typography variant="body1" paragraph>
-                        {quotationData.footer.company} is the main online Tour operator Platform. We are tour packages specialist for Domestic and International both, offering a wide range of administrations that incorporate travel services need are the bundles given by our organisation in particular Domestic Tour Packages and International Tour Packages.
-                    </Typography>
-                </Box>
-
-                <Box sx={{ mt: 3 }} className="section">
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        Pickup/Drop Details
-                    </Typography>
-                    <Typography variant="body1">
-                        {quotationData.pickup.arrival}
-                    </Typography>
-                    <Typography variant="body1">
-                        {quotationData.pickup.departure}
-                    </Typography>
-                    <Typography variant="body1" fontWeight="bold" sx={{ mt: 1 }}>
-                        Destination: {quotationData.hotel.destination}
-                    </Typography>
-                    <Typography variant="body1" paragraph sx={{ mt: 1 }}>
-                        {quotationData.hotel.itinerary}
-                    </Typography>
-                </Box>
-
-                <Box sx={{ mt: 3 }} className="section">
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        Day Wise Itinerary
-                    </Typography>
-                    <Typography variant="body1" fontStyle="italic" paragraph>
-                        This is only tentative schedule for sightseeing and travel. Actual sightseeing may get affected due to weather, road conditions, local authority notices, shortage of timing, or off days.
-                    </Typography>
-
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        {quotationData.days.map((day, index) => (
-                            <Typography key={day.id} variant="body1">
-                                <strong>Day {index + 1} ({day.date}):</strong> {day.title} - {day.description}
-                            </Typography>
-                        ))}
-                    </Box>
-                </Box>
-            </Box>
-
-            {/* Page 2 - Package Details & Pricing */}
-            <Box className="pdf-page" sx={{
-                minHeight: '270mm',
-                padding: '20px',
-                boxSizing: 'border-box'
-            }}>
-                <Box className="header">
-                    <Box className="logo-container">
-                        <img
-                            src={companyLogo}
-                            alt={`${quotationData.footer.company} Logo`}
-                            className="logo-img"
-                            onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                            }}
-                        />
-                        <Box
-                            className="logo-fallback"
-                            sx={{
-                                display: 'none',
-                                width: '100px',  // Reduced size
-                                height: '40px',  // Reduced size
-                                backgroundColor: '#f0f0f0',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '1px solid #ddd',
-                                fontSize: '10px'  // Smaller font for fallback
-                            }}
-                        >
-                            <Typography variant="body2" color="textSecondary">
-                                {quotationData.footer.company}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box className="company-info">
-                        <Typography variant="h6" fontWeight="bold">
-                            QUOTATION
-                        </Typography>
-                        <Typography variant="body2">
-                            Date: {quotationData.date}
-                        </Typography>
-                        <Typography variant="body2">
-                            Ref: {quotationData.reference}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Package Details
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                    No of Guest: {quotationData.hotel.guests}
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                    No of Rooms: {quotationData.hotel.rooms}
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                    Meal Plan: {quotationData.hotel.mealPlan}
-                </Typography>
-
-                {/* Hotel Pricing Table */}
-                <TableContainer component={Paper} sx={{ mt: 2, mb: 2, boxShadow: 'none' }}>
-                    <Table size="small" sx={{ border: '1px solid #000' }}>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Destination</TableCell>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Nights</TableCell>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Standard</TableCell>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Deluxe</TableCell>
-                                <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', fontSize: '11px' }}>Superior</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {quotationData.hotelPricingData.map((row, index) => (
-                                <TableRow key={index}>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.destination}
-                                    </TableCell>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.nights}
-                                    </TableCell>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.standard}
-                                    </TableCell>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.deluxe}
-                                    </TableCell>
-                                    <TableCell sx={{ border: '1px solid #000', fontSize: '11px', fontWeight: index >= quotationData.hotelPricingData.length - 2 ? 'bold' : 'normal' }}>
-                                        {row.superior}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-
-                {/* Pricing Summary */}
-                <Box sx={{ p: 2, backgroundColor: '#f9f9f9', borderRadius: 1, border: '1px solid #ddd' }}>
-                    <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                        Pricing Summary
-                    </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2">Discount:</Typography>
-                        <Typography variant="body2">{quotationData.pricing.discount}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2">GST:</Typography>
-                        <Typography variant="body2">{quotationData.pricing.gst}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                        <Typography variant="body1" fontWeight="bold">Total:</Typography>
-                        <Typography variant="body1" fontWeight="bold">{quotationData.pricing.total}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                        <Typography variant="body2">Received:</Typography>
-                        <Typography variant="body2">{quotationData.pricing.received}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2">Balance:</Typography>
-                        <Typography variant="body2">{quotationData.pricing.balance}</Typography>
-                    </Box>
-                </Box>
-            </Box>
-
-            {/* Page 3 - Policies */}
-            <Box className="pdf-page" sx={{
-                minHeight: '270mm',
-                padding: '20px',
-                boxSizing: 'border-box'
-            }}>
-                <Box className="header">
-                    <Box className="logo-container">
-                        <img
-                            src={companyLogo}
-                            alt={`${quotationData.footer.company} Logo`}
-                            className="logo-img"
-                            onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                            }}
-                        />
-                        <Box
-                            className="logo-fallback"
-                            sx={{
-                                display: 'none',
-                                width: '100px',  // Reduced size
-                                height: '40px',  // Reduced size
-                                backgroundColor: '#f0f0f0',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '1px solid #ddd',
-                                fontSize: '10px'  // Smaller font for fallback
-                            }}
-                        >
-                            <Typography variant="body2" color="textSecondary">
-                                {quotationData.footer.company}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box className="company-info">
-                        <Typography variant="h6" fontWeight="bold">
-                            QUOTATION
-                        </Typography>
-                        <Typography variant="body2">
-                            Date: {quotationData.date}
-                        </Typography>
-                        <Typography variant="body2">
-                            Ref: {quotationData.reference}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* Inclusion Policy */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Inclusion Policy
-                </Typography>
-                <Box component="ol" sx={{ pl: 2 }}>
-                    {quotationData.policies.inclusions.map((inclusion, index) => (
-                        <Typography key={index} variant="body1" component="li">
-                            {inclusion}
-                        </Typography>
-                    ))}
-                </Box>
-
-                <Box sx={{ borderTop: '1px solid #000', my: 2 }} />
-
-                {/* Exclusion Policy */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Exclusion Policy
-                </Typography>
-                <Typography variant="body1" paragraph>
-                    {quotationData.policies.exclusions}
-                </Typography>
-
-                <Box sx={{ borderTop: '1px solid #000', my: 2 }} />
-
-                {/* Payment Policy */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Payment Policy
-                </Typography>
-                <Typography variant="body1" paragraph>
-                    {quotationData.policies.paymentPolicy}
-                </Typography>
-
-                <Box sx={{ borderTop: '1px solid #000', my: 2 }} />
-
-                {/* Cancellation Policy */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Cancellation & Refund Policy
-                </Typography>
-                <Typography variant="body1" paragraph>
-                    {quotationData.policies.cancellationPolicy}
-                </Typography>
-            </Box>
-
-            {/* Page 4 - Terms & Footer */}
-            <Box className="pdf-page" sx={{
-                minHeight: '270mm',
-                padding: '20px',
-                boxSizing: 'border-box'
-            }}>
-                <Box className="header">
-                    <Box className="logo-container">
-                        <img
-                            src={companyLogo}
-                            alt={`${quotationData.footer.company} Logo`}
-                            className="logo-img"
-                            onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                            }}
-                        />
-                        <Box
-                            className="logo-fallback"
-                            sx={{
-                                display: 'none',
-                                width: '100px',  // Reduced size
-                                height: '40px',  // Reduced size
-                                backgroundColor: '#f0f0f0',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '1px solid #ddd',
-                                fontSize: '10px'  // Smaller font for fallback
-                            }}
-                        >
-                            <Typography variant="body2" color="textSecondary">
-                                {quotationData.footer.company}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box className="company-info">
-                        <Typography variant="h6" fontWeight="bold">
-                            QUOTATION
-                        </Typography>
-                        <Typography variant="body2">
-                            Date: {quotationData.date}
-                        </Typography>
-                        <Typography variant="body2">
-                            Ref: {quotationData.reference}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* Terms & Conditions */}
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    Terms & Conditions
-                </Typography>
-                <Typography variant="body1" paragraph>
-                    {quotationData.policies.terms}
-                </Typography>
-
-                <Box sx={{ borderTop: '1px solid #000', my: 2 }} />
-
-                {/* Footer */}
-                <Box sx={{ mt: 4 }} className="section" textAlign="center">
-                    <Typography variant="body1" fontWeight="bold" gutterBottom>
-                        Thanks & Regards,
-                    </Typography>
-                    <Typography variant="body1" fontWeight="bold" gutterBottom>
-                        {quotationData.footer.company}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                        {quotationData.footer.contact}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                        {quotationData.footer.address}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                        {quotationData.footer.website}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                        Phone: {quotationData.footer.phone} | Email: {quotationData.footer.email}
-                    </Typography>
-                    <Typography variant="body1" sx={{ mt: 2 }}>
-                        GST: 09EYCPK8832C1ZC
-                    </Typography>
-                </Box>
-            </Box>
-        </Box>
-    );
-
-    return (
-        <Dialog
-            open={open}
-            onClose={onClose}
-            maxWidth="lg"
-            fullWidth
-            PaperProps={{ sx: { minHeight: "80vh", width: "90vw" } }}
-        >
-            <DialogTitle>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="h6" component="div" fontWeight="bold">
-                        Preview PDF - {quotationData.customer.name}
-                    </Typography>
-                    <Box display="flex" gap={1}>
-                        <Button
-                            variant="outlined"
-                            color="primary"
-                            onClick={handlePrint}
-                            startIcon={<Print />}
-                            disabled={loading}
-                        >
-                            Print
-                        </Button>
-                        <Button
-                            variant="contained"
-                            color="error"
-                            onClick={handleDownloadPDF}
-                            startIcon={loading ? <CircularProgress size={20} /> : <Download />}
-                            disabled={loading}
-                        >
-                            {loading ? "Generating..." : "Download PDF"}
-                        </Button>
-                    </Box>
-                </Box>
-            </DialogTitle>
-            <DialogContent sx={{ p: 0, position: 'relative' }}>
-                {/* Error Snackbar */}
-                <Snackbar
-                    open={!!error}
-                    autoHideDuration={6000}
-                    onClose={handleCloseError}
-                    anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+  // Render individual day card with full content
+  const renderDayCard = (day, globalIndex) => (
+    <div
+      key={globalIndex}
+      style={{ marginBottom: "25px", pageBreakInside: "avoid" }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: "8px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          overflow: "hidden",
+        }}
+      >
+        {imageElements[`day_${globalIndex}`] && (
+          <img
+            src={imageElements[`day_${globalIndex}`]}
+            alt={`Day ${globalIndex + 1}`}
+            style={{
+              width: "100%",
+              height: "250px",
+              objectFit: "cover",
+            }}
+          />
+        )}
+        <div style={{ padding: "20px" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "12px",
+              flexWrap: "wrap",
+              gap: "8px",
+            }}
+          >
+            <div
+              style={{ fontWeight: "bold", color: "#667eea", fontSize: "18px" }}
+            >
+              Day {globalIndex + 1}: {day.title || `Day ${globalIndex + 1}`}
+            </div>
+            {(day.date || day.dayDate) &&
+              (day.date !== "N/A" || day.dayDate !== "N/A") && (
+                <span
+                  style={{
+                    background: "#667eea",
+                    color: "white",
+                    padding: "4px 12px",
+                    borderRadius: "20px",
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                  }}
                 >
-                    <Alert onClose={handleCloseError} severity="error" sx={{ width: '100%' }}>
-                        {error}
-                    </Alert>
-                </Snackbar>
+                  {day.dayDate || day.date}
+                </span>
+              )}
+          </div>
+          <div
+            style={{
+              fontSize: "14px",
+              lineHeight: "1.8",
+              marginTop: "10px",
+              whiteSpace: "pre-wrap",
+              color: "#333",
+            }}
+          >
+            {day.description || "No description available"}
+          </div>
+          {(day.meal || (day.hotel && day.hotel !== "N/A")) && (
+            <div
+              style={{
+                display: "flex",
+                gap: "20px",
+                marginTop: "15px",
+                paddingTop: "12px",
+                borderTop: "1px solid #e0e0e0",
+                flexWrap: "wrap",
+              }}
+            >
+              {day.meal && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    fontSize: "12px",
+                    color: "#555",
+                    background: "#f5f5f5",
+                    padding: "5px 12px",
+                    borderRadius: "20px",
+                  }}
+                >
+                  <span>🍽️</span> Meal: {day.meal}
+                </div>
+              )}
+              {day.hotel && day.hotel !== "N/A" && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    fontSize: "12px",
+                    color: "#555",
+                    background: "#f5f5f5",
+                    padding: "5px 12px",
+                    borderRadius: "20px",
+                  }}
+                >
+                  <span>🏨</span> Hotel: {day.hotel}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
-                {loading && (
-                    <Box
-                        display="flex"
-                        justifyContent="center"
-                        alignItems="center"
-                        height="100%"
-                        position="absolute"
-                        top={0}
-                        left={0}
-                        right={0}
-                        bottom={0}
-                        bgcolor="rgba(255,255,255,0.8)"
-                        zIndex={1}
+  // PAGE 1: Company Logo, Ref, Quotation Name, Banner, Customer Details, Pickup, Accommodation
+  const Page1 = () => (
+    <div
+      className="pdf-page"
+      style={{
+        padding: "25px",
+        position: "relative",
+        background: "#fff",
+        minHeight: "297mm",
+      }}
+    >
+      {/* Header with Logo */}
+      <div style={{ textAlign: "center", marginBottom: "25px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: "15px",
+          }}
+        >
+          {imageElements.logo ? (
+            <img
+              src={imageElements.logo}
+              alt="Company Logo"
+              style={{ height: "80px", width: "auto", objectFit: "contain" }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "80px",
+                height: "80px",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span
+                style={{ color: "white", fontWeight: "bold", fontSize: "32px" }}
+              >
+                {footerCompany.charAt(0)}
+              </span>
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: "12px", color: "#666", marginBottom: "10px" }}>
+          Travel. Explore. Experience.
+        </div>
+        <div>
+          <h3 style={{ margin: 0, color: "#667eea", fontSize: "20px" }}>
+            {pdfHeading}
+          </h3>
+          {reference && reference !== "N/A" && (
+            <div style={{ fontSize: "12px", marginTop: "8px", color: "#555" }}>
+              Ref No: {reference}
+            </div>
+          )}
+          {date && date !== "N/A" && (
+            <div style={{ fontSize: "12px", color: "#555" }}>Date: {date}</div>
+          )}
+        </div>
+      </div>
+
+      <Divider sx={{ my: 2 }} />
+
+      {/* Banner Image */}
+      {imageElements.banner && (
+        <div style={{ marginBottom: "25px" }}>
+          <img
+            src={imageElements.banner}
+            alt="Banner"
+            style={{
+              width: "100%",
+              height: "220px",
+              objectFit: "cover",
+              borderRadius: "12px",
+            }}
+          />
+          <div style={{ marginTop: "15px", textAlign: "center" }}>
+            <h2 style={{ margin: 0, color: "#667eea", fontSize: "22px" }}>
+              {quotationTitle}
+            </h2>
+            {destinationSummary && destinationSummary !== "N/A" && (
+              <div
+                style={{ fontSize: "13px", color: "#666", marginTop: "8px" }}
+              >
+                {destinationSummary}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Customer Details */}
+      <div
+        style={{
+          padding: "18px",
+          background: "linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%)",
+          borderRadius: "12px",
+          marginBottom: "20px",
+        }}
+      >
+        <div
+          style={{
+            fontWeight: "bold",
+            marginBottom: "12px",
+            fontSize: "16px",
+            color: "#667eea",
+          }}
+        >
+          👤 Customer Details
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "15px",
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: "bold", fontSize: "15px" }}>
+              {customerName}
+            </div>
+            {customerLocation && customerLocation !== "N/A" && (
+              <div
+                style={{ fontSize: "13px", color: "#666", marginTop: "5px" }}
+              >
+                📍 {customerLocation}
+              </div>
+            )}
+          </div>
+          <div>
+            {customerPhone && customerPhone !== "N/A" && (
+              <div style={{ fontSize: "13px", marginBottom: "5px" }}>
+                📞 {customerPhone}
+              </div>
+            )}
+            {customerEmail && customerEmail !== "N/A" && (
+              <div style={{ fontSize: "13px" }}>✉️ {customerEmail}</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Pickup and Accommodation */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "18px",
+          marginBottom: "20px",
+        }}
+      >
+        <div
+          style={{
+            padding: "18px",
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "bold",
+              marginBottom: "12px",
+              fontSize: "16px",
+              color: "#667eea",
+            }}
+          >
+            ✈️ Pickup Details
+          </div>
+          {pickupArrival && pickupArrival !== "N/A" ? (
+            <div style={{ fontSize: "14px", marginBottom: "8px" }}>
+              🛬 Arrival: {pickupArrival}
+            </div>
+          ) : (
+            <div style={{ fontSize: "14px", color: "#999" }}>Not specified</div>
+          )}
+          {pickupDeparture && pickupDeparture !== "N/A" ? (
+            <div style={{ fontSize: "14px" }}>
+              🛫 Departure: {pickupDeparture}
+            </div>
+          ) : (
+            <div style={{ fontSize: "14px", color: "#999" }}>
+              Departure not specified
+            </div>
+          )}
+        </div>
+        <div
+          style={{
+            padding: "18px",
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "bold",
+              marginBottom: "12px",
+              fontSize: "16px",
+              color: "#667eea",
+            }}
+          >
+            🏨 Accommodation
+          </div>
+          {hotelGuests && hotelGuests !== "N/A" && (
+            <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+              👥 Guests: {hotelGuests}
+            </div>
+          )}
+          {hotelRooms && hotelRooms !== "N/A" && (
+            <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+              🛏️ Rooms: {hotelRooms}
+            </div>
+          )}
+          {hotelType && hotelType !== "N/A" && (
+            <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+              ⭐ Hotel Type: {hotelType}
+            </div>
+          )}
+          {hotelMealPlan && hotelMealPlan !== "N/A" && (
+            <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+              🍽️ Meal Plan: {hotelMealPlan}
+            </div>
+          )}
+          {hotelDestination && hotelDestination !== "N/A" && (
+            <div style={{ fontSize: "14px" }}>
+              📍 Destination: {hotelDestination}
+            </div>
+          )}
+          {!hotelGuests && !hotelRooms && !hotelType && !hotelMealPlan && (
+            <div style={{ fontSize: "14px", color: "#999" }}>Not specified</div>
+          )}
+        </div>
+      </div>
+
+      {/* General Itinerary Note */}
+      {hotelItinerary && hotelItinerary !== "N/A" && (
+        <div
+          style={{
+            padding: "15px",
+            background: "#fff8e1",
+            borderRadius: "8px",
+            marginTop: "10px",
+            borderLeft: "4px solid #ffc107",
+          }}
+        >
+          <div
+            style={{ fontSize: "13px", color: "#856404", lineHeight: "1.6" }}
+          >
+            <strong>📝 Note:</strong> {hotelItinerary}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Itinerary Pages - 2 days per page with full content
+  const ItineraryPages = () => {
+    return dayChunks.map((chunk, pageIndex) => (
+      <div
+        key={`itinerary-page-${pageIndex}`}
+        className="pdf-page"
+        style={{ padding: "25px", background: "#fff", minHeight: "297mm" }}
+      >
+        <div
+          style={{
+            fontWeight: "bold",
+            fontSize: "22px",
+            marginBottom: "25px",
+            borderBottom: "3px solid #667eea",
+            paddingBottom: "12px",
+            color: "#333",
+          }}
+        >
+          📋 Detailed Itinerary
+        </div>
+        {chunk.map((day, dayIndex) =>
+          renderDayCard(day, pageIndex * chunkSize + dayIndex),
+        )}
+      </div>
+    ));
+  };
+
+  // Combined Page: Pricing + Payment Summary + Inclusion Policy
+  const CombinedPricingPage = () => (
+    <div
+      className="pdf-page"
+      style={{ padding: "25px", background: "#fff", minHeight: "297mm" }}
+    >
+      {/* Hotel & Package Pricing Section */}
+      {hotelPricingData && hotelPricingData.length > 0 && (
+        <div style={{ marginBottom: "35px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "20px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            🏨 Hotel & Package Pricing
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                background: "#fff",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                borderRadius: "8px",
+                overflow: "hidden",
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#667eea" }}>
+                  {hotelPricingData[0] &&
+                    Object.keys(hotelPricingData[0]).map(
+                      (header) =>
+                        (header === "destination" ||
+                          header === "nights" ||
+                          (header === "standard" && showStandardCol) ||
+                          (header === "deluxe" && showDeluxeCol) ||
+                          (header === "superior" && showSuperiorCol)) && (
+                          <th
+                            key={header}
+                            style={{
+                              color: "white",
+                              padding: "14px",
+                              textAlign: "left",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {header.replace(/([A-Z])/g, " $1").trim()}
+                          </th>
+                        ),
+                    )}
+                </tr>
+              </thead>
+              <tbody>
+                {hotelPricingData.map((row, idx) => (
+                  <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>
+                      {row?.destination || "-"}
+                    </td>
+                    <td style={{ padding: "12px" }}>{row?.nights || "-"}</td>
+                    {showStandardCol && (
+                      <td style={{ padding: "12px" }}>
+                        {renderHotelCellValue(row, "standard")}
+                      </td>
+                    )}
+                    {showDeluxeCol && (
+                      <td style={{ padding: "12px" }}>
+                        {renderHotelCellValue(row, "deluxe")}
+                      </td>
+                    )}
+                    {showSuperiorCol && (
+                      <td style={{ padding: "12px" }}>
+                        {renderHotelCellValue(row, "superior")}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Summary Section */}
+      <div style={{ marginBottom: "35px" }}>
+        <div
+          style={{
+            fontWeight: "bold",
+            fontSize: "20px",
+            marginBottom: "20px",
+            borderBottom: "3px solid #667eea",
+            paddingBottom: "10px",
+            color: "#333",
+          }}
+        >
+          💰 Payment Summary
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              background: "#fff",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              borderRadius: "8px",
+              overflow: "hidden",
+            }}
+          >
+            <thead>
+              <tr style={{ background: "#667eea" }}>
+                <th
+                  style={{
+                    color: "white",
+                    padding: "14px",
+                    textAlign: "left",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Particulars
+                </th>
+                <th
+                  style={{
+                    color: "white",
+                    padding: "14px",
+                    textAlign: "right",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Amount (₹)
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {visiblePackageColumns > 1 ? (
+                <>
+                  {showStandardCol && standardTotal > 0 && (
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>
+                        Total Package Cost (Standard)
+                      </td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(standardTotal)}
+                      </td>
+                    </tr>
+                  )}
+                  {showDeluxeCol && deluxeTotal > 0 && (
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>
+                        Total Package Cost (Deluxe)
+                      </td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(deluxeTotal)}
+                      </td>
+                    </tr>
+                  )}
+                  {showSuperiorCol && superiorTotal > 0 && (
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>
+                        Total Package Cost (Superior)
+                      </td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(superiorTotal)}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ) : (
+                effectiveTotal > 0 && (
+                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>Total Package Cost</td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>
+                      {formatCurrency(effectiveTotal)}
+                    </td>
+                  </tr>
+                )
+              )}
+              {visiblePackageColumns <= 1 &&
+                pricingDiscount &&
+                pricingDiscount !== "N/A" &&
+                pricingDiscount !== "₹ 0" &&
+                pricingDiscount !== 0 && (
+                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>Discount</td>
+                    <td
+                      style={{
+                        padding: "12px",
+                        textAlign: "right",
+                        color: "#2e7d32",
+                      }}
                     >
-                        <Box textAlign="center">
-                            <CircularProgress size={40} />
-                            <Typography variant="body2" sx={{ mt: 1 }}>
-                                Generating PDF...
-                            </Typography>
-                        </Box>
-                    </Box>
+                      -{formatCurrency(pricingDiscount)}
+                    </td>
+                  </tr>
                 )}
+              {visiblePackageColumns <= 1 &&
+                pricingGst &&
+                pricingGst !== "N/A" &&
+                pricingGst !== "₹ 0" &&
+                pricingGst !== 0 && (
+                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>GST</td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>
+                      {formatCurrency(pricingGst)}
+                    </td>
+                  </tr>
+                )}
+              {visiblePackageColumns <= 1 && (
+                <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
+                  <td style={{ padding: "14px", fontSize: "16px" }}>
+                    Grand Total
+                  </td>
+                  <td
+                    style={{
+                      padding: "14px",
+                      textAlign: "right",
+                      fontSize: "16px",
+                      fontWeight: "bold",
+                      color: "#667eea",
+                    }}
+                  >
+                    {formatCurrency(effectiveTotal)}
+                  </td>
+                </tr>
+              )}
+              {footerReceived &&
+                footerReceived !== "N/A" &&
+                footerReceived !== "₹ 0" &&
+                footerReceived !== 0 && (
+                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>Amount Received</td>
+                    <td
+                      style={{
+                        padding: "12px",
+                        textAlign: "right",
+                        color: "#2e7d32",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {formatCurrency(footerReceived)}
+                    </td>
+                  </tr>
+                )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-                <Box sx={{ height: "70vh", width: "100%", overflow: 'auto' }} ref={printRef}>
-                    <PDFContent />
-                </Box>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose} startIcon={<Close />}>
-                    Close
-                </Button>
-            </DialogActions>
-        </Dialog>
-    );
+      {/* Inclusion Policy Section */}
+      {finalInclusionArray.length > 0 && (
+        <div>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "20px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            ✅ Inclusion Policy
+          </div>
+          <div
+            style={{
+              padding: "18px",
+              background: "#e8f5e9",
+              borderRadius: "12px",
+              borderLeft: "4px solid #2e7d32",
+            }}
+          >
+            {finalInclusionArray.map(
+              (item, idx) =>
+                item &&
+                item !== "" && (
+                  <div
+                    key={idx}
+                    style={{
+                      fontSize: "13px",
+                      marginLeft: "20px",
+                      marginBottom: "8px",
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    • {item}
+                  </div>
+                ),
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // PAGE 3: Exclusion and Payment Policy
+  const PoliciesPage = () => (
+    <div
+      className="pdf-page"
+      style={{ padding: "25px", background: "#fff", minHeight: "297mm" }}
+    >
+      {/* Exclusion Policy */}
+      {finalExclusionArray.length > 0 && (
+        <div style={{ marginBottom: "35px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "20px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            ❌ Exclusion Policy
+          </div>
+          <div
+            style={{
+              padding: "18px",
+              background: "#ffebee",
+              borderRadius: "12px",
+              borderLeft: "4px solid #c62828",
+            }}
+          >
+            {finalExclusionArray.map(
+              (item, idx) =>
+                item &&
+                item !== "" && (
+                  <div
+                    key={idx}
+                    style={{
+                      fontSize: "13px",
+                      marginLeft: "20px",
+                      marginBottom: "8px",
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    • {item}
+                  </div>
+                ),
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Payment Policy */}
+      {finalPaymentPolicyArray.length > 0 && (
+        <div style={{ marginBottom: "35px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "20px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            💳 Payment Policy
+          </div>
+          <div
+            style={{
+              padding: "18px",
+              background: "#e3f2fd",
+              borderRadius: "12px",
+              borderLeft: "4px solid #1565c0",
+            }}
+          >
+            {finalPaymentPolicyArray.map(
+              (item, idx) =>
+                item &&
+                item !== "" && (
+                  <div
+                    key={idx}
+                    style={{
+                      fontSize: "13px",
+                      marginLeft: "20px",
+                      marginBottom: "8px",
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    • {item}
+                  </div>
+                ),
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // LAST PAGE: Cancellation & Refund Policy, Terms & Conditions (with link only), and Footer
+  const LastPage = () => (
+    <div
+      className="pdf-page"
+      style={{
+        padding: "25px",
+        background: "#fff",
+        minHeight: "297mm",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Cancellation & Refund Policy - Full Policy */}
+      {(finalCancellationArray.length > 0 || companyCancellationUrl) && (
+        <div
+          style={{
+            padding: "18px",
+            marginBottom: "25px",
+            background: "#fff3e0",
+            borderRadius: "12px",
+            borderLeft: "4px solid #e65100",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "bold",
+              color: "#e65100",
+              marginBottom: "12px",
+              fontSize: "16px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <MoneyOff /> 🔄 Cancellation & Refund Policy
+          </div>
+          {companyCancellationUrl && (
+            <div
+              style={{
+                fontSize: "13px",
+                marginBottom: "14px",
+                textAlign: "center",
+                lineHeight: "1.6",
+              }}
+            >
+              Full cancellation & refund policy:{" "}
+              <a
+                data-pdf-link="cancellation"
+                href={companyCancellationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: "#1565c0",
+                  textDecoration: "underline",
+                  fontWeight: "bold",
+                  wordBreak: "break-all",
+                }}
+              >
+                {companyCancellationUrl}
+              </a>
+            </div>
+          )}
+          {finalCancellationArray.map(
+            (item, idx) =>
+              item &&
+              item !== "" && (
+                <div
+                  key={idx}
+                  style={{
+                    fontSize: "13px",
+                    marginLeft: item.startsWith("•") ? "20px" : "0px",
+                    marginBottom: "6px",
+                    lineHeight: "1.6",
+                    fontWeight: item.includes("Policy:") ? "bold" : "normal",
+                    marginTop: item.includes("Policy:") ? "8px" : "0px",
+                  }}
+                >
+                  {item}
+                </div>
+              ),
+          )}
+        </div>
+      )}
+
+      {/* Terms & Conditions - Simple version with link only */}
+      <div
+        style={{
+          padding: "18px",
+          marginBottom: "30px",
+          background: "#fafafa",
+          borderRadius: "12px",
+          border: "1px solid #e0e0e0",
+        }}
+      >
+        <div
+          style={{
+            fontWeight: "bold",
+            color: "#424242",
+            marginBottom: "12px",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <Description /> Terms & Conditions
+        </div>
+        <div
+          style={{
+            fontSize: "14px",
+            color: "#555",
+            lineHeight: "1.6",
+            textAlign: "center",
+            padding: "10px",
+          }}
+        >
+          As per company website{" "}
+          <a
+            data-pdf-link="terms"
+            href={companyWebsiteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: "#667eea",
+              textDecoration: "underline",
+              fontWeight: "bold",
+            }}
+          >
+            {companyWebsiteUrl !== "#"
+              ? companyWebsiteUrl
+              : "www.iconicyatra.com"}
+          </a>
+        </div>
+      </div>
+
+      {/* Footer - On the same page after Terms & Conditions */}
+      <div style={{ marginTop: "30px", textAlign: "center" }}>
+        {imageElements.logo && (
+          <img
+            src={imageElements.logo}
+            alt="Company Logo"
+            style={{ height: "50px", width: "auto", marginBottom: "12px" }}
+          />
+        )}
+        {footerAddress && footerAddress !== "N/A" && (
+          <div style={{ fontSize: "12px", marginBottom: "6px", color: "#666" }}>
+            📍 {footerAddress}
+          </div>
+        )}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: "20px",
+            flexWrap: "wrap",
+            marginBottom: "12px",
+            fontSize: "12px",
+            color: "#666",
+          }}
+        >
+          {footerPhone && footerPhone !== "N/A" && <div>📞 {footerPhone}</div>}
+          {footerEmail && footerEmail !== "N/A" && <div>✉️ {footerEmail}</div>}
+          {footerWebsite && footerWebsite !== "N/A" && (
+            <div>🌐 {footerWebsite}</div>
+          )}
+        </div>
+        {footerContact && footerContact !== "N/A" && (
+          <div style={{ fontSize: "12px", marginTop: "8px", color: "#666" }}>
+            👤 Contact Person: {footerContact}
+            {footerContactDesignation ? ` (${footerContactDesignation})` : ""}
+          </div>
+        )}
+        <div style={{ fontSize: "10px", color: "#999", marginTop: "15px" }}>
+          This is a computer generated quotation. No signature required.
+        </div>
+        <div style={{ fontSize: "10px", color: "#999", marginTop: "5px" }}>
+          © {new Date().getFullYear()} {footerCompany}. All rights reserved.
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          <div style={{ fontWeight: "bold", fontSize: "18px" }}>
+            📄 Quotation Preview - {customerName}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel>Company</InputLabel>
+              <Select
+                value={selectedCompanyId}
+                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                disabled={loadingCompanies}
+              >
+                {companyOptions.map((c) => (
+                  <MenuItem key={c._id} value={c._id}>
+                    {c.companyName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              onClick={handlePrint}
+              startIcon={<Print />}
+              variant="outlined"
+              disabled={!renderComplete}
+            >
+              Print
+            </Button>
+            <Button
+              onClick={handleDownloadPDF}
+              startIcon={
+                loading ? <CircularProgress size={20} /> : <Download />
+              }
+              variant="contained"
+              disabled={loading || !renderComplete}
+              sx={{
+                background: "#667eea",
+                "&:hover": { background: "#5a67d8" },
+              }}
+            >
+              {loading ? "Generating PDF..." : "Download PDF"}
+            </Button>
+            <Button onClick={onClose} startIcon={<Close />} color="inherit">
+              Close
+            </Button>
+          </div>
+        </div>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Snackbar
+          open={!!error}
+          autoHideDuration={6000}
+          onClose={() => setError("")}
+          anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        >
+          <Alert severity="error" onClose={() => setError("")}>
+            {error}
+          </Alert>
+        </Snackbar>
+
+        {(!imagesLoaded || !renderComplete) && open && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "30px",
+              minHeight: "400px",
+            }}
+          >
+            <CircularProgress size={40} />
+            <Typography sx={{ mt: 2 }}>
+              Loading all content and images...
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+              Please wait while we prepare your quotation
+            </Typography>
+          </div>
+        )}
+
+        <div
+          ref={printRef}
+          style={{
+            maxHeight: "70vh",
+            overflowY: "auto",
+            background: "#fff",
+            display: imagesLoaded && renderComplete ? "block" : "none",
+          }}
+        >
+          <Page1 />
+          {days.length > 0 && <ItineraryPages />}
+          <CombinedPricingPage />
+          <PoliciesPage />
+          <LastPage />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 };
 
 export default QuotationPDFDialog;

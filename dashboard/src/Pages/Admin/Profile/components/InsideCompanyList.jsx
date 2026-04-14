@@ -10,7 +10,7 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  IconButton
+  IconButton,
 } from "@mui/material";
 
 import AddIcon from "@mui/icons-material/Add";
@@ -20,12 +20,14 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
-import { fetchCompanies, deleteCompany } from "../../../../features/company/InsideCompany";
+import {
+  fetchCompanies,
+  deleteCompany,
+} from "../../../../features/company/InsideCompany";
 
 import { toast } from "react-toastify";
 
 const InsideCompanyList = () => {
-
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
@@ -37,38 +39,35 @@ const InsideCompanyList = () => {
     dispatch(fetchCompanies());
   }, [dispatch]);
 
-  const filteredCompanies = companies?.filter((c) =>
-    c.companyName?.toLowerCase().includes(search.toLowerCase()) ||
-    c.email?.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.toLowerCase().includes(search.toLowerCase())
+  const filteredCompanies = companies?.filter(
+    (c) =>
+      c.companyName?.toLowerCase().includes(search.toLowerCase()) ||
+      c.email?.toLowerCase().includes(search.toLowerCase()) ||
+      c.phone?.toLowerCase().includes(search.toLowerCase()),
   );
 
   /* ================= DELETE ================= */
 
   const handleDelete = async (id) => {
-
-    const confirmDelete = window.confirm("Are you sure you want to delete this company?");
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this company?",
+    );
 
     if (!confirmDelete) return;
 
     try {
-
       await dispatch(deleteCompany(id)).unwrap();
 
       toast.success("Company deleted successfully");
 
       dispatch(fetchCompanies());
-
     } catch (error) {
-
       toast.error(error || "Delete failed");
-
     }
   };
 
   return (
     <Paper sx={{ p: 4 }}>
-
       {/* Header */}
 
       <Box
@@ -76,17 +75,15 @@ const InsideCompanyList = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          mb: 3
+          mb: 3,
         }}
       >
         <Box>
-
           <Typography variant="h5">Inside Companies</Typography>
 
           <Typography variant="body2" color="text.secondary">
             {companies?.length || 0} companies
           </Typography>
-
         </Box>
 
         <Button
@@ -96,7 +93,6 @@ const InsideCompanyList = () => {
         >
           Add Company
         </Button>
-
       </Box>
 
       {/* Search */}
@@ -112,30 +108,21 @@ const InsideCompanyList = () => {
       {/* Table */}
 
       <Table>
-
         <TableHead>
-
           <TableRow>
-
             <TableCell>Sr No.</TableCell>
             <TableCell>Company Name</TableCell>
             <TableCell>Phone Number</TableCell>
             <TableCell>Email</TableCell>
-            <TableCell>Status</TableCell>
+            <TableCell>Address</TableCell>
             <TableCell>Actions</TableCell>
-
           </TableRow>
-
         </TableHead>
 
         <TableBody>
-
           {filteredCompanies?.length > 0 ? (
-
             filteredCompanies.map((company, index) => (
-
               <TableRow key={company._id}>
-
                 <TableCell>{index + 1}</TableCell>
 
                 <TableCell>{company.companyName}</TableCell>
@@ -144,12 +131,9 @@ const InsideCompanyList = () => {
 
                 <TableCell>{company.email}</TableCell>
 
-                <TableCell>
-                  {company.status ? "Active" : "Inactive"}
-                </TableCell>
+                <TableCell>{company.address}</TableCell>
 
                 <TableCell>
-
                   {/* EDIT */}
 
                   <IconButton
@@ -169,39 +153,22 @@ const InsideCompanyList = () => {
                   >
                     <DeleteIcon />
                   </IconButton>
-
                 </TableCell>
-
               </TableRow>
-
             ))
-
           ) : (
-
             <TableRow>
-
               <TableCell colSpan={6} align="center">
-
                 <Typography sx={{ py: 4 }}>
-
                   No Inside Companies Found
-
                   <br />
-
                   Click the button below to add your first inside company
-
                 </Typography>
-
               </TableCell>
-
             </TableRow>
-
           )}
-
         </TableBody>
-
       </Table>
-
     </Paper>
   );
 };

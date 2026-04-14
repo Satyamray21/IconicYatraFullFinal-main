@@ -25,6 +25,10 @@ export const packagesAxios = axios.create({
     baseURL: `${BASE_URL}/api/v1/packages`,
     headers: { "Content-Type": "application/json" },
 });
+export const destinationAxios = axios.create({
+    baseURL: `${BASE_URL}/api/v1/destinations`,
+    headers: { "Content-Type": "application/json" },
+});
 export const companyUIAxios = axios.create({
     baseURL: `${BASE_URL}/api/v1/companyUI`,
     headers: { "Content-Type": "application/json" },
@@ -65,3 +69,4 @@ axiosInstance.interceptors.request.use(attachToken);
 paymentAxios.interceptors.request.use(attachToken);
 inquiryAxios.interceptors.request.use(attachToken);
 packagesAxios.interceptors.request.use(attachToken);
+destinationAxios.interceptors.request.use(attachToken);

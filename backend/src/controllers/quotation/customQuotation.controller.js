@@ -4,432 +4,894 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../../utils/cloudinary.js";
 import mongoose from "mongoose";
+import nodemailer from "nodemailer";
+import Company from "../../models/company.model.js";
+import Bank from "../../models/bankDetails.js";
+import GlobalSettings from "../../models/globalSettings.model.js";
+import {
+  buildCustomQuotationNormalEmail,
+  buildCustomQuotationBookingEmail,
+  packageTotals,
+} from "../../utils/customQuotationMailerTemplates.js";
+import ReceivedVoucher from "../../models/payment.model.js";
 
 // Counter Schema and Model - defined in the same file
 const counterSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    sequence: {
-        type: Number,
-        default: 0
-    }
+  name: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  sequence: {
+    type: Number,
+    default: 0,
+  },
 });
 
-const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
+const Counter =
+  mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
 // Helper to generate quotationId with counter
 const generateQuotationId = async () => {
+  try {
+    const counter = await Counter.findOneAndUpdate(
+      { name: "customQuotation" },
+      { $inc: { sequence: 1 } },
+      { upsert: true, new: true, runValidators: true },
+    );
+
+    const sequenceNumber = counter.sequence;
+    return `ICYR_CQ_${sequenceNumber.toString().padStart(4, "0")}`;
+  } catch (error) {
+    console.error("Error generating quotation ID with counter:", error);
+
+    // Fallback: get the highest existing quotationId
     try {
-        const counter = await Counter.findOneAndUpdate(
-            { name: "customQuotation" },
-            { $inc: { sequence: 1 } },
-            { upsert: true, new: true, runValidators: true }
-        );
+      const lastQuotation = await CustomQuotation.findOne().sort({
+        createdAt: -1,
+      });
 
-        const sequenceNumber = counter.sequence;
-        return `ICYR_CQ_${sequenceNumber.toString().padStart(4, "0")}`;
-    } catch (error) {
-        console.error("Error generating quotation ID with counter:", error);
+      if (!lastQuotation || !lastQuotation.quotationId) {
+        return "ICYR_CQ_0001";
+      }
 
-        // Fallback: get the highest existing quotationId
-        try {
-            const lastQuotation = await CustomQuotation.findOne().sort({ createdAt: -1 });
+      const lastIdNum = parseInt(lastQuotation.quotationId.split("_")[2], 10);
+      const newIdNum = lastIdNum + 1;
 
-            if (!lastQuotation || !lastQuotation.quotationId) {
-                return "ICYR_CQ_0001";
-            }
-
-            const lastIdNum = parseInt(lastQuotation.quotationId.split("_")[2], 10);
-            const newIdNum = lastIdNum + 1;
-
-            return `ICYR_CQ_${newIdNum.toString().padStart(4, "0")}`;
-        } catch (fallbackError) {
-            console.error("Fallback also failed:", fallbackError);
-            // Ultimate fallback - timestamp based
-            const timestamp = Date.now().toString().slice(-4);
-            return `ICYR_CQ_${timestamp}`;
-        }
+      return `ICYR_CQ_${newIdNum.toString().padStart(4, "0")}`;
+    } catch (fallbackError) {
+      console.error("Fallback also failed:", fallbackError);
+      // Ultimate fallback - timestamp based
+      const timestamp = Date.now().toString().slice(-4);
+      return `ICYR_CQ_${timestamp}`;
     }
+  }
 };
 
 // Create Quotation (Step 1) with retry logic for extra safety
 export const createCustomQuotation = asyncHandler(async (req, res) => {
-    let retries = 0;
-    const maxRetries = 3;
+  let retries = 0;
+  const maxRetries = 3;
 
-    while (retries < maxRetries) {
-        try {
-            const quotationId = await generateQuotationId();
+  while (retries < maxRetries) {
+    try {
+      const quotationId = await generateQuotationId();
 
-            const quotation = await CustomQuotation.create({
-                ...req.body,
-                quotationId,
-            });
+      const quotation = await CustomQuotation.create({
+        ...req.body,
+        quotationId,
+      });
 
-            return res
-                .status(201)
-                .json(new ApiResponse(201, quotation, "Quotation created successfully"));
+      return res
+        .status(201)
+        .json(
+          new ApiResponse(201, quotation, "Quotation created successfully"),
+        );
+    } catch (error) {
+      if (
+        error.code === 11000 &&
+        error.keyPattern &&
+        error.keyPattern.quotationId
+      ) {
+        // Duplicate key error, retry with new ID
+        retries++;
+        console.warn(
+          `Duplicate quotationId detected, retry ${retries}/${maxRetries}`,
+        );
 
-        } catch (error) {
-            if (error.code === 11000 && error.keyPattern && error.keyPattern.quotationId) {
-                // Duplicate key error, retry with new ID
-                retries++;
-                console.warn(`Duplicate quotationId detected, retry ${retries}/${maxRetries}`);
-
-                if (retries === maxRetries) {
-                    throw new ApiError(500, "Failed to create quotation after multiple attempts. Please try again.");
-                }
-                // Wait before retrying (exponential backoff)
-                await new Promise(resolve => setTimeout(resolve, 100 * retries));
-            } else {
-                // Some other error, throw it
-                throw error;
-            }
+        if (retries === maxRetries) {
+          throw new ApiError(
+            500,
+            "Failed to create quotation after multiple attempts. Please try again.",
+          );
         }
+        // Wait before retrying (exponential backoff)
+        await new Promise((resolve) => setTimeout(resolve, 100 * retries));
+      } else {
+        // Some other error, throw it
+        throw error;
+      }
     }
+  }
 });
 
 // Get All Quotations
 export const getAllCustomQuotations = asyncHandler(async (req, res) => {
-    const quotations = await CustomQuotation.find();
+  const quotations = await CustomQuotation.find();
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, quotations, "Quotations fetched successfully"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, quotations, "Quotations fetched successfully"));
 });
 
 // Get Single Quotation by quotationId
 export const getCustomQuotationById = asyncHandler(async (req, res) => {
-    const { quotationId } = req.params;
+  const { quotationId } = req.params;
 
-    const quotation = await CustomQuotation.findOne({ quotationId });
-    if (!quotation) {
-        throw new ApiError(404, "Quotation not found");
-    }
+  const quotation = await CustomQuotation.findOne({ quotationId });
+  if (!quotation) {
+    throw new ApiError(404, "Quotation not found");
+  }
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, quotation, "Quotation fetched successfully"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, quotation, "Quotation fetched successfully"));
 });
 
-// Update Full Quotation
+// Update Full Quotation (Mongo _id)
 export const updateCustomQuotation = asyncHandler(async (req, res) => {
-    const { id } = req.params;
+  const { id } = req.params;
 
-    const updatedQuotation = await CustomQuotation.findByIdAndUpdate(
-        id,
-        { $set: req.body },
-        { new: true, runValidators: true }
+  const updatedQuotation = await CustomQuotation.findByIdAndUpdate(
+    id,
+    { $set: req.body },
+    { new: true, runValidators: true },
+  );
+
+  if (!updatedQuotation) {
+    throw new ApiError(404, "Quotation not found");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, updatedQuotation, "Quotation updated successfully"),
+    );
+});
+
+/** Partial update by business quotationId (e.g. ICYR_CQ_0001) — used from finalize / admin UI */
+export const updateCustomQuotationByQuotationId = asyncHandler(
+  async (req, res) => {
+    const { quotationId } = req.params;
+
+    const updatedQuotation = await CustomQuotation.findOneAndUpdate(
+      { quotationId },
+      { $set: req.body },
+      { new: true, runValidators: true },
     );
 
     if (!updatedQuotation) {
-        throw new ApiError(404, "Quotation not found");
+      throw new ApiError(404, "Quotation not found");
     }
 
     return res
-        .status(200)
-        .json(new ApiResponse(200, updatedQuotation, "Quotation updated successfully"));
-});
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          updatedQuotation,
+          "Quotation updated successfully",
+        ),
+      );
+  },
+);
 
 // Step-wise Update
 // Step-wise Update
 export const updateQuotationStep = asyncHandler(async (req, res) => {
-    console.log("🔄 ========== UPDATE STEP REQUEST START ==========");
+  console.log("🔄 ========== UPDATE STEP REQUEST START ==========");
 
-    let quotationId, stepNumber, stepData;
-    const files = req.files || {};
+  let quotationId, stepNumber, stepData;
+  const files = req.files || {};
 
-    console.log("📦 Request body keys:", Object.keys(req.body));
-    console.log("📸 Files received:", Object.keys(files));
+  console.log("📦 Request body keys:", Object.keys(req.body));
+  console.log("📸 Files received:", Object.keys(files));
 
-    // Parse FormData correctly
-    if (req.body.quotationId && req.body.stepNumber && req.body.stepData) {
-        quotationId = req.body.quotationId;
-        stepNumber = parseInt(req.body.stepNumber, 10);
-        stepData =
-            typeof req.body.stepData === "string"
-                ? JSON.parse(req.body.stepData)
-                : req.body.stepData;
-    } else {
-        ({ quotationId, stepNumber, stepData } = req.body);
+  // Parse FormData correctly
+  if (req.body.quotationId && req.body.stepNumber && req.body.stepData) {
+    quotationId = req.body.quotationId;
+    stepNumber = parseInt(req.body.stepNumber, 10);
+    stepData =
+      typeof req.body.stepData === "string"
+        ? JSON.parse(req.body.stepData)
+        : req.body.stepData;
+  } else {
+    ({ quotationId, stepNumber, stepData } = req.body);
+  }
+
+  if (!quotationId) throw new ApiError(400, "Quotation ID is required");
+  if (!stepNumber || isNaN(stepNumber))
+    throw new ApiError(400, "Valid step number is required");
+
+  console.log("🔍 Searching for quotation:", quotationId);
+  const quotation = await CustomQuotation.findOne({ quotationId });
+  if (!quotation)
+    throw new ApiError(404, `Quotation not found: ${quotationId}`);
+
+  console.log("✅ Found Quotation:", quotation.quotationId);
+  console.log("📝 Processing Step:", stepNumber);
+
+  try {
+    // ✅ STEP 3 - Tour Details (with Banner Image)
+    if (stepNumber === 3) {
+      console.log("🖼 Step 3 - Updating Tour Details + Banner Image");
+
+      let bannerUrl = quotation.tourDetails?.bannerImage || null;
+
+      // Upload new banner if provided
+      if (files.bannerImage?.[0]) {
+        const uploaded = await uploadOnCloudinary(files.bannerImage[0].path);
+        if (uploaded?.url) bannerUrl = uploaded.url;
+      }
+
+      // 🔥 Update ONLY Step 3 fields
+      const fieldsToUpdate = {
+        arrivalCity: stepData.arrivalCity,
+        departureCity: stepData.departureCity,
+        arrivalDate: stepData.arrivalDate,
+        departureDate: stepData.departureDate,
+        quotationTitle: stepData.quotationTitle,
+        notes: stepData.notes,
+        transport: stepData.transport,
+        validFrom: stepData.validFrom,
+        validTill: stepData.validTill,
+        bannerImage: bannerUrl,
+      };
+
+      // 🔥 Update only provided keys
+      Object.keys(fieldsToUpdate).forEach((key) => {
+        if (fieldsToUpdate[key] !== undefined) {
+          quotation.tourDetails[key] = fieldsToUpdate[key];
+        }
+      });
+
+      console.log("✅ Step 3 updated without overwriting nested objects");
     }
 
-    if (!quotationId) throw new ApiError(400, "Quotation ID is required");
-    if (!stepNumber || isNaN(stepNumber))
-        throw new ApiError(400, "Valid step number is required");
+    // ✅ STEP 4 - Itinerary with Multiple Images
+    else if (stepNumber === 4) {
+      console.log("🗓 Step 4 - Updating Itinerary Days + Images");
 
-    console.log("🔍 Searching for quotation:", quotationId);
-    const quotation = await CustomQuotation.findOne({ quotationId });
-    if (!quotation) throw new ApiError(404, `Quotation not found: ${quotationId}`);
+      const processedItinerary = [...(stepData.itinerary || [])];
 
-    console.log("✅ Found Quotation:", quotation.quotationId);
-    console.log("📝 Processing Step:", stepNumber);
+      // FIX: Collect all itineraryImages files correctly
+      const itineraryFiles = Array.isArray(files.itineraryImages)
+        ? files.itineraryImages
+        : Object.values(files).filter((f) => f.fieldname === "itineraryImages");
 
-    try {
-        // ✅ STEP 3 - Tour Details (with Banner Image)
-        if (stepNumber === 3) {
-            console.log("🖼 Step 3 - Updating Tour Details + Banner Image");
+      console.log("📸 Total itineraryImages received:", itineraryFiles.length);
 
-            let bannerUrl = quotation.tourDetails?.bannerImage || null;
+      const isNoopItineraryFile = (f) =>
+        !f ||
+        !f.size ||
+        (f.originalname && String(f.originalname).includes("itinerary-noop"));
 
-            // Upload new banner if provided
-            if (files.bannerImage?.[0]) {
-                const uploaded = await uploadOnCloudinary(files.bannerImage[0].path);
-                if (uploaded?.url) bannerUrl = uploaded.url;
-            }
+      for (let i = 0; i < processedItinerary.length; i++) {
+        const file = itineraryFiles[i];
 
-            // 🔥 Update ONLY Step 3 fields
-            const fieldsToUpdate = {
-                arrivalCity: stepData.arrivalCity,
-                departureCity: stepData.departureCity,
-                arrivalDate: stepData.arrivalDate,
-                departureDate: stepData.departureDate,
-                quotationTitle: stepData.quotationTitle,
-                notes: stepData.notes,
-                transport: stepData.transport,
-                validFrom: stepData.validFrom,
-                validTill: stepData.validTill,
-                bannerImage: bannerUrl
+        if (isNoopItineraryFile(file)) {
+          continue;
+        }
+
+        console.log(`☁️ Uploading image for day ${i + 1}:`, file.originalname);
+        const uploaded = await uploadOnCloudinary(file.path);
+
+        if (uploaded?.url) {
+          processedItinerary[i].image = uploaded.url;
+        }
+      }
+
+      quotation.tourDetails.itinerary = processedItinerary;
+    }
+
+    // ✅ STEP 1, 2, 5, 6 - Standard updates
+    else if ([1, 2, 5, 6].includes(stepNumber)) {
+      switch (stepNumber) {
+        case 1:
+          quotation.clientDetails = stepData;
+          break;
+
+        case 2:
+          quotation.pickupDrop = stepData;
+          break;
+
+        case 5:
+          console.log("🚗 STEP 5 RECEIVED DATA:", stepData);
+
+          quotation.tourDetails.vehicleDetails = {
+            basicsDetails: {
+              ...(quotation.tourDetails.vehicleDetails?.basicsDetails || {}),
+              clientName: stepData.basicsDetails?.clientName,
+              vehicleType: stepData.basicsDetails?.vehicleType,
+              tripType: stepData.basicsDetails?.tripType,
+              noOfDays: stepData.basicsDetails?.noOfDays,
+              perDayCost: stepData.basicsDetails?.perDayCost,
+            },
+
+            costDetails: {
+              ...(quotation.tourDetails.vehicleDetails?.costDetails || {}),
+              totalCost: stepData.costDetails?.totalCost,
+              perDayCost: stepData.costDetails?.perDayCost,
+              ratePerKm: stepData.costDetails?.ratePerKm,
+              kmPerDay: stepData.costDetails?.kmPerDay,
+              driverAllowance: stepData.costDetails?.driverAllowance,
+              tollParking: stepData.costDetails?.tollParking,
+            },
+
+            pickupDropDetails: {
+              ...(quotation.tourDetails.vehicleDetails?.pickupDropDetails ||
+                {}),
+              pickupDate: stepData.pickupDropDetails?.pickupDate,
+              pickupTime: stepData.pickupDropDetails?.pickupTime,
+              pickupLocation: stepData.pickupDropDetails?.pickupLocation,
+              dropDate: stepData.pickupDropDetails?.dropDate,
+              dropTime: stepData.pickupDropDetails?.dropTime,
+              dropLocation: stepData.pickupDropDetails?.dropLocation,
+            },
+          };
+          break;
+
+        case 6:
+          console.log("🧾 Step 6 - Final Quotation Merge");
+
+          if (stepData.clientDetails)
+            quotation.clientDetails = {
+              ...quotation.clientDetails,
+              ...stepData.clientDetails,
             };
 
-            // 🔥 Update only provided keys
-            Object.keys(fieldsToUpdate).forEach(key => {
-                if (fieldsToUpdate[key] !== undefined) {
-                    quotation.tourDetails[key] = fieldsToUpdate[key];
-                }
+          if (stepData.pickupDrop && Array.isArray(stepData.pickupDrop))
+            quotation.pickupDrop = stepData.pickupDrop;
+
+          if (stepData.tourDetails) {
+            // Normalize incoming keys (some clients may send keys with trailing spaces).
+            const incomingTourDetails = Object.entries(
+              stepData.tourDetails || {},
+            ).reduce((acc, [k, v]) => {
+              acc[String(k).trim()] = v;
+              return acc;
+            }, {});
+
+            // Also sanitize already-saved malformed keys on existing documents
+            // (e.g. "vendorDetails " from previous bad writes).
+            const currentTourDetailsRaw =
+              typeof quotation.tourDetails?.toObject === "function"
+                ? quotation.tourDetails.toObject()
+                : { ...(quotation.tourDetails || {}) };
+            const currentTourDetails = {};
+            Object.entries(currentTourDetailsRaw || {}).forEach(([k, v]) => {
+              const trimmed = String(k).trim();
+              // Skip malformed vendorDetails variants; we'll rebuild from clean source below.
+              if (trimmed === "vendorDetails" && k !== "vendorDetails") {
+                return;
+              }
+              currentTourDetails[trimmed] = v;
             });
 
-            console.log("✅ Step 3 updated without overwriting nested objects");
-        }
-
-
-
-        // ✅ STEP 4 - Itinerary with Multiple Images
-        else if (stepNumber === 4) {
-            console.log("🗓 Step 4 - Updating Itinerary Days + Images");
-
-            const processedItinerary = [...(stepData.itinerary || [])];
-
-            // FIX: Collect all itineraryImages files correctly
-            const itineraryFiles = Array.isArray(files.itineraryImages)
-                ? files.itineraryImages
-                : Object.values(files).filter((f) => f.fieldname === "itineraryImages");
-
-            console.log("📸 Total itineraryImages received:", itineraryFiles.length);
-
-            for (let i = 0; i < processedItinerary.length; i++) {
-                const file = itineraryFiles[i];
-
-                if (file) {
-                    console.log(`☁️ Uploading image for day ${i + 1}:`, file.originalname);
-                    const uploaded = await uploadOnCloudinary(file.path);
-
-                    if (uploaded?.url) {
-                        processedItinerary[i].image = uploaded.url;
-                    }
-                } else {
-                    if (!processedItinerary[i].image) {
-                        processedItinerary[i].image = null;
-                    }
-                }
+            // Prevent Mongoose cast errors when vendorDetails comes as undefined/non-object.
+            const rawVendorDetails =
+              incomingTourDetails.vendorDetails ??
+              incomingTourDetails["vendorDetails "];
+            if (
+              rawVendorDetails === undefined ||
+              rawVendorDetails === null ||
+              rawVendorDetails === "undefined" ||
+              rawVendorDetails === "null" ||
+              typeof rawVendorDetails !== "object" ||
+              Array.isArray(rawVendorDetails)
+            ) {
+              delete incomingTourDetails.vendorDetails;
+              delete incomingTourDetails["vendorDetails "];
+            } else {
+              incomingTourDetails.vendorDetails = {
+                vendorType: rawVendorDetails.vendorType || undefined,
+                hotelVendorName: rawVendorDetails.hotelVendorName || undefined,
+                vehicleVendorName:
+                  rawVendorDetails.vehicleVendorName || undefined,
+              };
+              delete incomingTourDetails["vendorDetails "];
             }
 
-            quotation.tourDetails.itinerary = processedItinerary;
-        }
-
-
-        // ✅ STEP 1, 2, 5, 6 - Standard updates
-        else if ([1, 2, 5, 6].includes(stepNumber)) {
-            switch (stepNumber) {
-                case 1:
-                    quotation.clientDetails = stepData;
-                    break;
-
-                case 2:
-                    quotation.pickupDrop = stepData;
-                    break;
-
-                case 5:
-                    console.log("🚗 STEP 5 RECEIVED DATA:", stepData);
-
-                    // StepData comes as nested objects exactly matching schema
-                    quotation.tourDetails.vehicleDetails = {
-                        basicsDetails: {
-                            clientName: stepData.basicsDetails?.clientName,
-                            vehicleType: stepData.basicsDetails?.vehicleType,
-                            tripType: stepData.basicsDetails?.tripType,
-                            noOfDays: stepData.basicsDetails?.noOfDays,
-                            perDayCost: stepData.basicsDetails?.perDayCost,
-                        },
-
-                        costDetails: {
-                            totalCost: stepData.costDetails?.totalCost,
-                        },
-
-                        pickupDropDetails: {
-                            pickupDate: stepData.pickupDropDetails?.pickupDate,
-                            pickupTime: stepData.pickupDropDetails?.pickupTime,
-                            pickupLocation: stepData.pickupDropDetails?.pickupLocation,
-                            dropDate: stepData.pickupDropDetails?.dropDate,
-                            dropTime: stepData.pickupDropDetails?.dropTime,
-                            dropLocation: stepData.pickupDropDetails?.dropLocation,
-                        },
-                    };
-                    break;
-
-                case 6:
-                    console.log("🧾 Step 6 - Final Quotation Merge");
-
-                    if (stepData.clientDetails)
-                        quotation.clientDetails = {
-                            ...quotation.clientDetails,
-                            ...stepData.clientDetails,
-                        };
-
-                    if (stepData.pickupDrop && Array.isArray(stepData.pickupDrop))
-                        quotation.pickupDrop = stepData.pickupDrop;
-
-                    if (stepData.tourDetails) {
-                        quotation.tourDetails = {
-                            ...quotation.tourDetails,
-                            ...stepData.tourDetails,
-                        };
-
-                        if (stepData.tourDetails.quotationDetails) {
-                            quotation.tourDetails.quotationDetails = {
-                                ...quotation.tourDetails.quotationDetails,
-                                ...stepData.tourDetails.quotationDetails,
-                            };
-
-                            // ✅ Handle packageCalculations merge specifically
-                            if (stepData.tourDetails.quotationDetails.packageCalculations) {
-                                quotation.tourDetails.quotationDetails.packageCalculations = {
-                                    // Keep existing package calculations if they exist
-                                    ...quotation.tourDetails.quotationDetails.packageCalculations,
-                                    // Merge with new package calculations
-                                    ...stepData.tourDetails.quotationDetails.packageCalculations,
-
-                                    // Ensure all package types are properly merged
-                                    standard: {
-                                        ...(quotation.tourDetails.quotationDetails.packageCalculations?.standard || {}),
-                                        ...(stepData.tourDetails.quotationDetails.packageCalculations?.standard || {})
-                                    },
-                                    deluxe: {
-                                        ...(quotation.tourDetails.quotationDetails.packageCalculations?.deluxe || {}),
-                                        ...(stepData.tourDetails.quotationDetails.packageCalculations?.deluxe || {})
-                                    },
-                                    superior: {
-                                        ...(quotation.tourDetails.quotationDetails.packageCalculations?.superior || {}),
-                                        ...(stepData.tourDetails.quotationDetails.packageCalculations?.superior || {})
-                                    }
-                                };
-                            }
-                        }
-                    }
-
-                    if (stepData.vehicleDetails)
-                        quotation.tourDetails.vehicleDetails = {
-                            ...quotation.tourDetails.vehicleDetails,
-                            ...stepData.vehicleDetails,
-                        };
-
-                    break;
+            const mergedTourDetails = {
+              ...currentTourDetails,
+              ...incomingTourDetails,
+            };
+            const mergedVendor = mergedTourDetails.vendorDetails;
+            if (
+              mergedVendor === undefined ||
+              mergedVendor === null ||
+              mergedVendor === "undefined" ||
+              mergedVendor === "null" ||
+              typeof mergedVendor !== "object" ||
+              Array.isArray(mergedVendor)
+            ) {
+              delete mergedTourDetails.vendorDetails;
             }
-        }
-        // ✅ Handle invalid step numbers
-        else {
-            throw new ApiError(400, `Invalid step number: ${stepNumber}`);
-        }
 
-        await quotation.save();
-        console.log("✅ Step", stepNumber, "updated successfully!");
+            quotation.tourDetails = mergedTourDetails;
 
-        return res
-            .status(200)
-            .json(new ApiResponse(200, quotation, `Step ${stepNumber} updated successfully`));
-    } catch (error) {
-        console.error("💥 Error during quotation update:", error);
-        throw error;
+            if (incomingTourDetails.quotationDetails) {
+              quotation.tourDetails.quotationDetails = {
+                ...quotation.tourDetails.quotationDetails,
+                ...incomingTourDetails.quotationDetails,
+              };
+
+              // ✅ Handle packageCalculations merge specifically
+              if (incomingTourDetails.quotationDetails.packageCalculations) {
+                quotation.tourDetails.quotationDetails.packageCalculations = {
+                  // Keep existing package calculations if they exist
+                  ...quotation.tourDetails.quotationDetails.packageCalculations,
+                  // Merge with new package calculations
+                  ...incomingTourDetails.quotationDetails.packageCalculations,
+
+                  // Ensure all package types are properly merged
+                  standard: {
+                    ...(quotation.tourDetails.quotationDetails
+                      .packageCalculations?.standard || {}),
+                    ...(incomingTourDetails.quotationDetails.packageCalculations
+                      ?.standard || {}),
+                  },
+                  deluxe: {
+                    ...(quotation.tourDetails.quotationDetails
+                      .packageCalculations?.deluxe || {}),
+                    ...(incomingTourDetails.quotationDetails.packageCalculations
+                      ?.deluxe || {}),
+                  },
+                  superior: {
+                    ...(quotation.tourDetails.quotationDetails
+                      .packageCalculations?.superior || {}),
+                    ...(incomingTourDetails.quotationDetails.packageCalculations
+                      ?.superior || {}),
+                  },
+                };
+              }
+            }
+          }
+
+          if (stepData.vehicleDetails)
+            quotation.tourDetails.vehicleDetails = {
+              ...quotation.tourDetails.vehicleDetails,
+              ...stepData.vehicleDetails,
+            };
+
+          break;
+      }
     }
+    // ✅ Handle invalid step numbers
+    else {
+      throw new ApiError(400, `Invalid step number: ${stepNumber}`);
+    }
+
+    await quotation.save();
+    console.log("✅ Step", stepNumber, "updated successfully!");
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          quotation,
+          `Step ${stepNumber} updated successfully`,
+        ),
+      );
+  } catch (error) {
+    console.error("💥 Error during quotation update:", error);
+    throw error;
+  }
 });
+
+const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
+
+const resolveCompanyForEmail = async ({ companyId, companyName }) => {
+  if (companyId) {
+    const byId = await Company.findById(companyId).lean();
+    if (byId) return byId;
+  }
+  if (companyName) {
+    const byName = await Company.findOne({
+      companyName: { $regex: `^${String(companyName).trim()}$`, $options: "i" },
+    }).lean();
+    if (byName) return byName;
+  }
+  return null;
+};
+
+const resolveMailAuth = (senderAccount) => {
+  const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
+
+  const user = useSecondary
+    ? process.env.EMAIL_USER2
+    : process.env.EMAIL_USER;
+
+  const pass = useSecondary
+    ? process.env.EMAIL_PASS2
+    : process.env.EMAIL_PASS;
+
+  return { user, pass };
+};
+
+
+/** Receive vouchers only — matches dashboard `summarizeVoucherAmounts` (Cr / Receive Voucher). */
+const sumReceivedFromClient = (vouchers) => {
+  let receivedFromClient = 0;
+  for (const v of vouchers || []) {
+    const n = Number(v?.amount) || 0;
+    const isReceive =
+      v?.drCr === "Cr" || v?.paymentType === "Receive Voucher";
+    if (isReceive) receivedFromClient += n;
+  }
+  return receivedFromClient;
+};
+
+/**
+ * Fills booking-mail payment lines when the client does not pass customText.booking amounts.
+ * Uses vouchers with quotationRef === quotation.quotationId and package total from packageTotals.
+ */
+const loadBookingPaymentDefaults = async (quotation) => {
+  const quotationId = quotation?.quotationId;
+  if (!quotationId) return {};
+
+  const vouchers = await ReceivedVoucher.find({
+    quotationRef: quotationId,
+  }).lean();
+  const receivedAmount = sumReceivedFromClient(vouchers);
+  const { total } = packageTotals(quotation);
+  const dueAmount = Math.max(0, total - receivedAmount);
+
+  return { receivedAmount, dueAmount };
+};
+
+const mergeBookingEmailPayload = async (quotation, meta, bookingCustom = {}) => {
+  const defaults = await loadBookingPaymentDefaults(quotation);
+  return {
+    ...meta,
+    ...defaults,
+    ...bookingCustom,
+  };
+};
+
+const readBookingOverridesFromRequest = (reqBody = {}) => {
+  const customText = reqBody?.customText || {};
+  const booking = customText?.booking || {};
+  // Accept fallback keys from older/newer frontend payload shapes.
+  const topLevel = {
+    nextPayableAmount: reqBody?.nextPayableAmount,
+    dueDate: reqBody?.dueDate || reqBody?.paymentDueDate,
+    receivedAmount: reqBody?.receivedAmount,
+    dueAmount: reqBody?.dueAmount,
+  };
+  return {
+    ...(customText?.nextPayableAmount !== undefined
+      ? { nextPayableAmount: customText.nextPayableAmount }
+      : {}),
+    ...(customText?.dueDate !== undefined ? { dueDate: customText.dueDate } : {}),
+    ...(customText?.paymentDueDate !== undefined
+      ? { dueDate: customText.paymentDueDate }
+      : {}),
+    ...(customText?.receivedAmount !== undefined
+      ? { receivedAmount: customText.receivedAmount }
+      : {}),
+    ...(customText?.dueAmount !== undefined ? { dueAmount: customText.dueAmount } : {}),
+    ...(topLevel.nextPayableAmount !== undefined
+      ? { nextPayableAmount: topLevel.nextPayableAmount }
+      : {}),
+    ...(topLevel.dueDate !== undefined ? { dueDate: topLevel.dueDate } : {}),
+    ...(topLevel.receivedAmount !== undefined
+      ? { receivedAmount: topLevel.receivedAmount }
+      : {}),
+    ...(topLevel.dueAmount !== undefined ? { dueAmount: topLevel.dueAmount } : {}),
+    ...booking,
+  };
+};
+
+const loadEmailMeta = async (company) => {
+  const globalSettings = await GlobalSettings.findOne().lean();
+  const accountHolder = company?.companyName;
+  const bankDetails = accountHolder
+    ? await Bank.find({
+        accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
+      }).lean()
+    : [];
+
+  return {
+    companyName: company?.companyName || "Iconic Travel",
+    companyWebsite: company?.companyWebsite || "",
+    globalInclusions: globalSettings?.inclusions || [],
+    globalExclusions: globalSettings?.exclusions || [],
+    globalCancellationPolicy: globalSettings?.cancellationPolicy || "",
+    globalPaymentPolicy: globalSettings?.paymentPolicy || "",
+    globalTermsAndConditions: globalSettings?.termsAndConditions || "",
+    companyTermsConditions: company?.termsConditions || "",
+    bankDetails,
+  };
+};
+
+export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
+  const { quotationId } = req.params;
+  const { finalizedPackage } = req.body || {};
+
+  if (!FINAL_PACKAGES.includes(finalizedPackage)) {
+    throw new ApiError(
+      400,
+      "finalizedPackage must be Standard, Deluxe, or Superior",
+    );
+  }
+
+  const quotation = await CustomQuotation.findOne({ quotationId });
+  if (!quotation) {
+    throw new ApiError(404, "Quotation not found");
+  }
+
+  quotation.finalizeStatus = "finalized";
+  quotation.finalizedPackage = finalizedPackage;
+  quotation.finalizedAt = new Date();
+  await quotation.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, quotation, "Quotation finalized successfully"));
+});
+
+// Build email preview from custom quotation data
+export const previewCustomQuotationMail = asyncHandler(async (req, res) => {
+  const { quotationId } = req.params;
+  const quotation = await CustomQuotation.findOne({ quotationId }).lean();
+  if (!quotation) throw new ApiError(404, "Quotation not found");
+
+  const customText = req.body?.customText || {};
+  const bookingOverrides = readBookingOverridesFromRequest(req.body || {});
+  const selectedCompany = await resolveCompanyForEmail({
+    companyId: req.body?.companyId,
+    companyName: req.body?.companyName,
+  });
+  const meta = await loadEmailMeta(selectedCompany);
+  const normal = buildCustomQuotationNormalEmail(
+    quotation,
+    customText.normal || {},
+    meta,
+  );
+  const bookingPayload = await mergeBookingEmailPayload(
+    quotation,
+    meta,
+    bookingOverrides,
+  );
+  const booking = buildCustomQuotationBookingEmail(quotation, bookingPayload);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        quotationId,
+        normal: {
+          subject: `Quotation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`,
+          body: normal,
+        },
+        booking: {
+          subject: `Booking Confirmation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`,
+          body: booking,
+        },
+      },
+      "Custom quotation email preview generated",
+    ),
+  );
+});
+
+// Send custom quotation email using backend templates
+export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
+  const { quotationId } = req.params;
+  const {
+    to,
+    cc,
+    type = "normal",
+    subject,
+    bodyHtml,
+    customText = {},
+    senderAccount,
+    companyId,
+    companyName,
+  } = req.body || {};
+
+  if (!to || (Array.isArray(to) && to.length === 0)) {
+    throw new ApiError(400, "Receiver email is required");
+  }
+
+  const quotation = await CustomQuotation.findOne({ quotationId }).lean();
+  if (!quotation) throw new ApiError(404, "Quotation not found");
+
+  const selectedCompany = await resolveCompanyForEmail({ companyId, companyName });
+  const meta = await loadEmailMeta(selectedCompany);
+
+  const generatedBody =
+    type === "booking"
+      ? buildCustomQuotationBookingEmail(
+          quotation,
+          await mergeBookingEmailPayload(
+            quotation,
+            meta,
+            readBookingOverridesFromRequest(req.body || {}),
+          ),
+        )
+      : buildCustomQuotationNormalEmail(
+          quotation,
+          customText.normal || {},
+          meta,
+        );
+  const body =
+    type === "booking"
+      ? generatedBody
+      : String(bodyHtml || "").trim() || generatedBody;
+
+  const finalSubject =
+    subject ||
+    (type === "booking"
+      ? `Booking Confirmation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`
+      : `Quotation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`);
+
+  const auth = resolveMailAuth(senderAccount);
+  if (!auth.user || !auth.pass) {
+    throw new ApiError(
+      500,
+      "Sender email credentials are not configured for selected account",
+    );
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: auth.user,
+      pass: auth.pass,
+    },
+  });
+
+  try {
+    await transporter.sendMail({
+      from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+      to,
+      cc: cc && cc.length ? cc : undefined,
+      replyTo: selectedCompany?.email || auth.user,
+      subject: finalSubject,
+      html: body,
+      text: body.replace(/<[^>]*>/g, ""), // fallback
+    });
+  } catch (error) {
+    console.error("Mail Error:", error);
+    throw new ApiError(500, "Failed to send email");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        quotationId,
+        type,
+        senderAccount: senderAccount || "gmail1",
+        company: selectedCompany?.companyName || null,
+      },
+      "Mail sent successfully",
+    )
+  );
+});
+
 
 // Delete Quotation
 export const deleteCustomQuotation = asyncHandler(async (req, res) => {
-    const { id } = req.params;
+  const { id } = req.params;
 
-    const deletedQuotation = await CustomQuotation.findByIdAndDelete(id);
-    if (!deletedQuotation) {
-        throw new ApiError(404, "Quotation not found");
-    }
+  const deletedQuotation = await CustomQuotation.findByIdAndDelete(id);
+  if (!deletedQuotation) {
+    throw new ApiError(404, "Quotation not found");
+  }
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, deletedQuotation, "Quotation deleted successfully"));
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, deletedQuotation, "Quotation deleted successfully"),
+    );
 });
 
 // Optional: Reset counter (for testing purposes)
 export const resetQuotationCounter = asyncHandler(async (req, res) => {
-    await Counter.findOneAndUpdate(
-        { name: "customQuotation" },
-        { sequence: 0 },
-        { upsert: true }
-    );
+  await Counter.findOneAndUpdate(
+    { name: "customQuotation" },
+    { sequence: 0 },
+    { upsert: true },
+  );
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, null, "Quotation counter reset successfully"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Quotation counter reset successfully"));
 });
 
-// ✅ NEW: Update Package Calculations specifically
+// Update package calculations + optional company margin / discount (finalize costing edit)
 export const updatePackageCalculations = asyncHandler(async (req, res) => {
-    const { quotationId } = req.params;
-    const { packageCalculations } = req.body;
+  const { quotationId } = req.params;
+  const { packageCalculations, companyMargin, discount, taxes } = req.body;
 
-    console.log("🧮 Updating package calculations for:", quotationId);
-    console.log("📊 Package data:", packageCalculations);
+  const hasPkg =
+    packageCalculations &&
+    typeof packageCalculations === "object" &&
+    Object.keys(packageCalculations).length > 0;
+  const hasMargin = companyMargin && typeof companyMargin === "object";
+  const hasDiscount = discount !== undefined && discount !== null;
+  const hasTaxes = taxes && typeof taxes === "object";
 
-    if (!packageCalculations) {
-        throw new ApiError(400, "Package calculations data is required");
-    }
+  if (!hasPkg && !hasMargin && !hasDiscount && !hasTaxes) {
+    throw new ApiError(
+      400,
+      "Provide packageCalculations, companyMargin, discount, and/or taxes",
+    );
+  }
 
-    const quotation = await CustomQuotation.findOne({ quotationId });
-    if (!quotation) {
-        throw new ApiError(404, "Quotation not found");
-    }
+  const quotation = await CustomQuotation.findOne({ quotationId });
+  if (!quotation) {
+    throw new ApiError(404, "Quotation not found");
+  }
 
-    // Initialize quotationDetails if it doesn't exist
-    if (!quotation.tourDetails.quotationDetails) {
-        quotation.tourDetails.quotationDetails = {};
-    }
+  if (!quotation.tourDetails.quotationDetails) {
+    quotation.tourDetails.quotationDetails = {};
+  }
 
-    // Update package calculations
+  if (hasPkg) {
     quotation.tourDetails.quotationDetails.packageCalculations = {
-        // Keep existing calculations
-        ...quotation.tourDetails.quotationDetails.packageCalculations,
-        // Merge new calculations
-        ...packageCalculations,
-
-        // Ensure all package types are properly merged
-        standard: {
-            ...(quotation.tourDetails.quotationDetails.packageCalculations?.standard || {}),
-            ...(packageCalculations.standard || {})
-        },
-        deluxe: {
-            ...(quotation.tourDetails.quotationDetails.packageCalculations?.deluxe || {}),
-            ...(packageCalculations.deluxe || {})
-        },
-        superior: {
-            ...(quotation.tourDetails.quotationDetails.packageCalculations?.superior || {}),
-            ...(packageCalculations.superior || {})
-        }
+      ...quotation.tourDetails.quotationDetails.packageCalculations,
+      ...packageCalculations,
+      standard: {
+        ...(quotation.tourDetails.quotationDetails.packageCalculations
+          ?.standard || {}),
+        ...(packageCalculations.standard || {}),
+      },
+      deluxe: {
+        ...(quotation.tourDetails.quotationDetails.packageCalculations
+          ?.deluxe || {}),
+        ...(packageCalculations.deluxe || {}),
+      },
+      superior: {
+        ...(quotation.tourDetails.quotationDetails.packageCalculations
+          ?.superior || {}),
+        ...(packageCalculations.superior || {}),
+      },
     };
+  }
 
-    await quotation.save();
+  if (hasMargin) {
+    quotation.tourDetails.quotationDetails.companyMargin = {
+      ...(quotation.tourDetails.quotationDetails.companyMargin || {}),
+      ...companyMargin,
+    };
+  }
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, quotation, "Package calculations updated successfully"));
+  if (hasDiscount) {
+    quotation.tourDetails.quotationDetails.discount = Number(discount) || 0;
+  }
+
+  if (hasTaxes) {
+    quotation.tourDetails.quotationDetails.taxes = {
+      ...(quotation.tourDetails.quotationDetails.taxes || {}),
+      ...taxes,
+    };
+  }
+
+  await quotation.save();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        quotation,
+        "Package calculations updated successfully",
+      ),
+    );
 });

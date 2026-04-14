@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Button, Typography, Paper } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
     createCustomQuotation,
@@ -20,6 +21,7 @@ import CustomQuotationStep6 from "./customquotationStep6";
 
 const CustomQuotationMain = () => {
     const dispatch = useDispatch();
+    const navigate = useNavigate();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [selectedLead, setSelectedLead] = useState(null);
@@ -327,6 +329,7 @@ const CustomQuotationMain = () => {
             await saveStep(6, finalData);
             localStorage.removeItem("currentQuotationId");
             toast.success("Custom Quotation saved successfully!");
+            navigate("/quotation", { replace: true });
         } catch (err) {
             console.error("Final submit failed:", err);
         }

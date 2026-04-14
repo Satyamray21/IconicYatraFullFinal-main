@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Grid,
@@ -18,6 +18,10 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { LocalizationProvider, DateTimePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
+import { useDispatch, useSelector } from "react-redux";
+import { getAllLeads } from "../../features/leads/leadSlice";
+import { fetchPackages } from "../../features/package/packageSlice";
+import { getInvoices } from "../../features/invoice/invoiceSlice";
 
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
@@ -54,9 +58,21 @@ const StatCard = ({ title, value, details, gradient }) => (
 
 
 const CalendarDashboard = () => {
+  const dispatch = useDispatch();
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [scheduler, setScheduler] = useState("Scheduler");
   const [openModal, setOpenModal] = useState(false);
+  const today = dayjs().startOf("day");
+
+  const leads = useSelector((state) => state.leads?.list || []);
+  const packages = useSelector((state) => state.packages?.items || []);
+  const invoices = useSelector((state) => state.invoice?.invoices || []);
+
+  useEffect(() => {
+    dispatch(getAllLeads());
+    dispatch(fetchPackages({ page: 1, limit: 1000 }));
+    dispatch(getInvoices());
+  }, [dispatch]);
 
   const year = selectedDate.year();
   const month = selectedDate.month();
@@ -66,6 +82,122 @@ const CalendarDashboard = () => {
   const calendarDays = [];
   for (let i = 0; i < firstDayOfMonth; i++) calendarDays.push(null);
   for (let day = 1; day <= daysInMonth; day++) calendarDays.push(day);
+
+  const leadStats = useMemo(() => {
+    const total = leads.length;
+    const active = leads.filter(
+      (lead) => String(lead?.status || "").toLowerCase() === "active"
+    ).length;
+    const confirmed = leads.filter(
+      (lead) => String(lead?.status || "").toLowerCase() === "confirmed"
+    ).length;
+    const cancelled = leads.filter(
+      (lead) => String(lead?.status || "").toLowerCase() === "cancelled"
+    ).length;
+
+    return { total, active, confirmed, cancelled };
+  }, [leads]);
+
+  const normalizedLeadArrivals = useMemo(() => {
+    return (leads || [])
+      .map((lead) => {
+        const arrivalRaw =
+          lead?.tourDetails?.pickupDrop?.arrivalDate ||
+          lead?.tourDetails?.arrivalDate ||
+          null;
+        const arrivalDate = arrivalRaw ? dayjs(arrivalRaw).startOf("day") : null;
+        if (!arrivalDate || !arrivalDate.isValid()) return null;
+        return {
+          id: lead?._id || lead?.leadId,
+          leadId: lead?.leadId || "",
+          name: lead?.personalDetails?.fullName || "Lead",
+          destination:
+            lead?.tourDetails?.tourDestination ||
+            lead?.tourDetails?.destination ||
+            "",
+          arrivalDate,
+        };
+      })
+      .filter(Boolean);
+  }, [leads]);
+
+  const normalizedTours = useMemo(() => {
+    return (packages || []).map((pkg) => {
+      const startRaw = pkg?.validFrom || pkg?.arrivalDate || null;
+      const endRaw = pkg?.validTill || pkg?.departureDate || null;
+      const startDate = startRaw ? dayjs(startRaw).startOf("day") : null;
+      const endDate = endRaw ? dayjs(endRaw).startOf("day") : null;
+      const statusText = String(pkg?.status || "").toLowerCase();
+      const isConfirmed = statusText === "confirmed" || statusText === "active";
+
+      let lifecycle = "active";
+      if (startDate && startDate.isAfter(today)) lifecycle = "upcoming";
+      if (endDate && endDate.isBefore(today)) lifecycle = "completed";
+      if (statusText === "completed") lifecycle = "completed";
+
+      return {
+        id: pkg?._id,
+        title: pkg?.title || pkg?.packageId || "Tour",
+        country: pkg?.destinationCountry || "",
+        sector: pkg?.sector || "",
+        startDate,
+        endDate,
+        isConfirmed,
+        lifecycle,
+      };
+    });
+  }, [packages, today]);
+
+  const tourStats = useMemo(() => {
+    const confirmedTours = normalizedTours.filter((tour) => tour.isConfirmed);
+    return {
+      total: confirmedTours.length,
+      active: confirmedTours.filter((tour) => tour.lifecycle === "active").length,
+      upcoming: confirmedTours.filter((tour) => tour.lifecycle === "upcoming").length,
+      completed: confirmedTours.filter((tour) => tour.lifecycle === "completed").length,
+    };
+  }, [normalizedTours]);
+
+  const invoiceStats = useMemo(() => {
+    const totalAmount = (invoices || []).reduce(
+      (sum, inv) => sum + Number(inv?.totalAmount || 0),
+      0
+    );
+    return {
+      total: invoices?.length || 0,
+      revenue: totalAmount,
+    };
+  }, [invoices]);
+
+  const toursByDate = useMemo(() => {
+    const map = {};
+    normalizedTours
+      .filter((tour) => tour.isConfirmed && tour.startDate && tour.endDate)
+      .forEach((tour) => {
+        let cursor = tour.startDate;
+        while (cursor.isBefore(tour.endDate) || cursor.isSame(tour.endDate, "day")) {
+          const key = cursor.format("YYYY-MM-DD");
+          if (!map[key]) map[key] = [];
+          map[key].push(tour);
+          cursor = cursor.add(1, "day");
+        }
+      });
+    return map;
+  }, [normalizedTours]);
+
+  const leadsByDate = useMemo(() => {
+    const map = {};
+    normalizedLeadArrivals.forEach((lead) => {
+      const key = lead.arrivalDate.format("YYYY-MM-DD");
+      if (!map[key]) map[key] = [];
+      map[key].push(lead);
+    });
+    return map;
+  }, [normalizedLeadArrivals]);
+
+  const selectedDateKey = selectedDate.format("YYYY-MM-DD");
+  const selectedDateTours = toursByDate[selectedDateKey] || [];
+  const selectedDateLeads = leadsByDate[selectedDateKey] || [];
 
   const handlePrevMonth = () =>
     setSelectedDate(selectedDate.subtract(1, "month"));
@@ -104,9 +236,13 @@ const CalendarDashboard = () => {
           <Grid size={{ xs: 12, sm: 6, md: 3 }} >
             <StatCard
               title="Lead's Req"
-              value={0}
+              value={leadStats.total}
               gradient="linear-gradient(135deg, #ff6a00, #ee0979)"
-              details={["Active: 0", "Confirmed: 0", "Cancelled: 0"]}
+              details={[
+                `Active: ${leadStats.active}`,
+                `Confirmed: ${leadStats.confirmed}`,
+                `Cancelled: ${leadStats.cancelled}`,
+              ]}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -120,17 +256,21 @@ const CalendarDashboard = () => {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <StatCard
               title="Tour"
-              value={0}
+              value={tourStats.total}
               gradient="linear-gradient(135deg, #1e3c72, #2a5298)"
-              details={["Active: 0", "Upcoming: 0", "Completed: 0"]}
+              details={[
+                `Active: ${tourStats.active}`,
+                `Upcoming: ${tourStats.upcoming}`,
+                `Completed: ${tourStats.completed}`,
+              ]}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <StatCard
               title="Invoice"
-              value={0}
+              value={invoiceStats.total}
               gradient="linear-gradient(135deg, #0c4c66ff, #031a42ff)"
-              details={["Revenue: ₹0"]}
+              details={[`Revenue: ₹${Math.round(invoiceStats.revenue).toLocaleString()}`]}
             />
           </Grid>
         </Grid>
@@ -200,15 +340,82 @@ const CalendarDashboard = () => {
               mt={5}
               bgcolor="#fff"
               borderRadius={2}
-              height={200}
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
+              minHeight={200}
               boxShadow={2}
+              p={2}
             >
-              <Typography variant="h6" color="text.secondary">
-                No Appointments
-              </Typography>
+              {selectedDateTours.length > 0 || selectedDateLeads.length > 0 ? (
+                <Box width="100%">
+                  <Typography variant="subtitle1" fontWeight="bold" mb={1.5}>
+                    Schedule on {selectedDate.format("DD MMM YYYY")}
+                  </Typography>
+                  {selectedDateLeads.length > 0 && (
+                    <>
+                      <Typography variant="body2" fontWeight={700} mb={1}>
+                        Lead Arrivals ({selectedDateLeads.length})
+                      </Typography>
+                      {selectedDateLeads.map((lead) => (
+                        <Box
+                          key={`${lead.id}-${lead.leadId}`}
+                          sx={{
+                            p: 1,
+                            mb: 1,
+                            borderRadius: 1,
+                            backgroundColor: "#fff3e0",
+                            borderLeft: "4px solid #ef6c00",
+                          }}
+                        >
+                          <Typography variant="body2" fontWeight={600}>
+                            {lead.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {lead.leadId ? `${lead.leadId} • ` : ""}
+                            {lead.destination || "No destination"}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </>
+                  )}
+                  {selectedDateTours.length > 0 && (
+                    <>
+                      <Typography variant="body2" fontWeight={700} mb={1} mt={1.5}>
+                        Tours ({selectedDateTours.length})
+                      </Typography>
+                      {selectedDateTours.map((tour) => (
+                        <Box
+                          key={`${tour.id}-${tour.title}`}
+                          sx={{
+                            p: 1,
+                            mb: 1,
+                            borderRadius: 1,
+                            backgroundColor: "#e3f2fd",
+                            borderLeft: "4px solid #1976d2",
+                          }}
+                        >
+                          <Typography variant="body2" fontWeight={600}>
+                            {tour.title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {tour.country || tour.sector}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </>
+                  )}
+                </Box>
+              ) : (
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  height="100%"
+                  width="100%"
+                >
+                  <Typography variant="h6" color="text.secondary">
+                    No Tours On Selected Date
+                  </Typography>
+                </Box>
+              )}
             </Box>
           </Grid>
 
@@ -280,6 +487,10 @@ const CalendarDashboard = () => {
                 {calendarDays.map((day, idx) => (
                   <Box
                     key={idx}
+                    onClick={() => {
+                      if (!day) return;
+                      setSelectedDate(selectedDate.date(day));
+                    }}
                     sx={{
                       border: "1px solid #e0e0e0",
                       borderRadius: 1,
@@ -293,9 +504,45 @@ const CalendarDashboard = () => {
                       fontWeight:
                         day === selectedDate.date() ? "bold" : "normal",
                       fontSize: 13,
+                      cursor: day ? "pointer" : "default",
+                      position: "relative",
                     }}
                   >
                     {day || ""}
+                    {day &&
+                    ((toursByDate[dayjs(new Date(year, month, day)).format("YYYY-MM-DD")]
+                      ?.length || 0) > 0 ||
+                      (leadsByDate[dayjs(new Date(year, month, day)).format("YYYY-MM-DD")]
+                        ?.length || 0) > 0) ? (
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          bottom: 5,
+                          left: "46%",
+                          transform: "translateX(-50%)",
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          backgroundColor: "#ff5722",
+                        }}
+                      />
+                    ) : null}
+                    {day &&
+                    (leadsByDate[dayjs(new Date(year, month, day)).format("YYYY-MM-DD")]
+                      ?.length || 0) > 0 ? (
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          bottom: 5,
+                          left: "56%",
+                          transform: "translateX(-50%)",
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          backgroundColor: "#ef6c00",
+                        }}
+                      />
+                    ) : null}
                   </Box>
                 ))}
               </Box>
