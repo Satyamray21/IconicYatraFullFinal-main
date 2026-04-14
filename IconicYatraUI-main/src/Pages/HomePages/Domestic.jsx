@@ -36,12 +36,13 @@ const Domestic = () => {
   const { destination } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-
+  const [currency, setCurrency] = useState("INR");
+  const [rates, setRates] = useState({});
   const [page, setPage] = useState(1);
   const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
   const [selectedPackageTitle, setSelectedPackageTitle] = useState("");
   const [domesticDescriptionsBySlug, setDomesticDescriptionsBySlug] = useState(
-    {}
+    {},
   );
   const [domesticAllDescription, setDomesticAllDescription] = useState("");
 
@@ -76,14 +77,16 @@ const Domestic = () => {
             acc[slugifyValue(sector)] = item?.description?.trim() || "";
             return acc;
           },
-          {}
+          {},
         );
 
         setDomesticDescriptionsBySlug(map);
-        const allDescriptionItem = (Array.isArray(res.data) ? res.data : []).find(
-          (item) => !item?.sector
+        const allDescriptionItem = (
+          Array.isArray(res.data) ? res.data : []
+        ).find((item) => !item?.sector);
+        setDomesticAllDescription(
+          allDescriptionItem?.tourTypeDescription?.trim() || "",
         );
-        setDomesticAllDescription(allDescriptionItem?.tourTypeDescription?.trim() || "");
       } catch (error) {
         if (isMounted) {
           setDomesticDescriptionsBySlug({});
@@ -106,7 +109,7 @@ const Domestic = () => {
       const routeSlug = String(destination).toLowerCase().trim();
 
       const matchedBySector = packages?.find(
-        (pkg) => slugifyValue(pkg.sector) === routeSlug
+        (pkg) => slugifyValue(pkg.sector) === routeSlug,
       );
 
       if (matchedBySector?.sector) {
@@ -115,7 +118,8 @@ const Domestic = () => {
         const matchedByTitle = packages?.find(
           (pkg) =>
             slugifyValue(pkg.title) === routeSlug ||
-            normalizeText(pkg.title) === normalizeText(routeSlug.replace(/-/g, " "))
+            normalizeText(pkg.title) ===
+              normalizeText(routeSlug.replace(/-/g, " ")),
         );
         setSelectedDestination(matchedByTitle ? matchedByTitle.title : "All");
       }
@@ -125,7 +129,19 @@ const Domestic = () => {
 
     setPage(1);
   }, [destination]);
+  useEffect(() => {
+    const fetchRates = async () => {
+      try {
+        const res = await fetch("https://open.er-api.com/v6/latest/INR");
+        const data = await res.json();
+        setRates(data.rates || {});
+      } catch (err) {
+        console.error("Currency fetch error", err);
+      }
+    };
 
+    fetchRates();
+  }, []);
   // ✅ Filter packages
   const filteredPackages =
     selectedDestination === "All"
@@ -133,7 +149,7 @@ const Domestic = () => {
       : packages.filter(
           (pkg) =>
             slugifyValue(pkg.sector) === slugifyValue(selectedDestination) ||
-            normalizeText(pkg.title) === normalizeText(selectedDestination)
+            normalizeText(pkg.title) === normalizeText(selectedDestination),
         );
 
   const currentPackages = filteredPackages || [];
@@ -167,7 +183,7 @@ const Domestic = () => {
     if (!firstDestination?.hotels?.length) return null;
 
     const standardHotel = firstDestination.hotels.find(
-      (hotel) => hotel.category === "standard"
+      (hotel) => hotel.category === "standard",
     );
 
     if (standardHotel && standardHotel.pricePerPerson > 0) {
@@ -176,10 +192,35 @@ const Domestic = () => {
 
     return null;
   };
+  const convertPrice = (price) => {
+    if (!price) return null;
 
+    // INR → selected currency
+    if (currency === "INR") return price;
+
+    const rate = rates[currency];
+    if (!rate) return price;
+
+    let converted = price * rate;
+
+    // ✅ increase by 25 if not INR
+    converted += 25;
+
+    return converted;
+  };
   const formatPrice = (price) => {
     if (!price) return "Price on request";
-    return `₹${price.toLocaleString()}`;
+
+    const converted = convertPrice(price);
+
+    const symbols = {
+      INR: "₹",
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+    };
+
+    return `${symbols[currency] || currency} ${Math.round(converted).toLocaleString()}`;
   };
 
   const getPriceDisplay = (pkg) => {
@@ -203,6 +244,18 @@ const Domestic = () => {
     <>
       <Box sx={{ backgroundColor: "#f4f6f8", minHeight: "100vh", py: 6 }}>
         <Container maxWidth="lg">
+          <Box display="flex" justifyContent="flex-end" mb={3}>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              style={{ padding: "8px", borderRadius: "5px" }}
+            >
+              <option value="INR">INR</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+            </select>
+          </Box>
           {/* Breadcrumbs */}
           <Paper
             elevation={2}
@@ -214,7 +267,12 @@ const Domestic = () => {
             }}
           >
             <Breadcrumbs aria-label="breadcrumb">
-              <MUILink underline="hover" color="inherit" component={Link} to="/">
+              <MUILink
+                underline="hover"
+                color="inherit"
+                component={Link}
+                to="/"
+              >
                 Home
               </MUILink>
 
@@ -295,8 +353,8 @@ const Domestic = () => {
                           ? pkg.bannerImage.startsWith("http")
                             ? pkg.bannerImage
                             : pkg.bannerImage.startsWith("/upload/")
-                            ? `${BASE_URL}${pkg.bannerImage}`
-                            : `${BASE_URL}/upload/${pkg.bannerImage}`
+                              ? `${BASE_URL}${pkg.bannerImage}`
+                              : `${BASE_URL}/upload/${pkg.bannerImage}`
                           : "https://via.placeholder.com/300x200?text=No+Image"
                       }
                       title={pkg.title || "No Title"}
@@ -314,18 +372,19 @@ const Domestic = () => {
               {/* Pagination */}
               {selectedDestination === "All" && totalPages > 1 && (
                 <Box display="flex" justifyContent="center" mt={5}>
-                 <Pagination
-    count={totalPages}
-    page={page}
-    onChange={(e, value) => {
-      setPage(value);
-      dispatch(fetchDomesticPackages({ page: value, limit: 9 }));
-      window.scrollTo(0, 0);
-    }}
-    color="primary"
-    size="large"
-  />
-
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(e, value) => {
+                      setPage(value);
+                      dispatch(
+                        fetchDomesticPackages({ page: value, limit: 9 }),
+                      );
+                      window.scrollTo(0, 0);
+                    }}
+                    color="primary"
+                    size="large"
+                  />
                 </Box>
               )}
             </>
