@@ -433,6 +433,11 @@ const loadEmailMetaQuick = async (company) => {
       }).lean()
     : [];
 
+  const pickHttp = (v) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return /^https?:\/\//i.test(s) ? s : "";
+  };
+
   return {
     companyName: company?.companyName || "Iconic Travel",
     companyWebsite: company?.companyWebsite || "",
@@ -442,6 +447,7 @@ const loadEmailMetaQuick = async (company) => {
     globalPaymentPolicy: globalSettings?.paymentPolicy || "",
     globalTermsAndConditions: globalSettings?.termsAndConditions || "",
     companyTermsConditions: company?.termsConditions || "",
+    companyCancellationPolicyUrl: pickHttp(company?.cancellationPolicy),
     bankDetails,
   };
 };
