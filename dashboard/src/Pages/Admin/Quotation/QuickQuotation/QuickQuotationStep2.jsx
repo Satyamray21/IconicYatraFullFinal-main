@@ -11,6 +11,13 @@ import { Formik, Form } from "formik";
 import { useDispatch, useSelector } from "react-redux";
 import { getAllLeads } from "../../../../features/leads/leadSlice";
 
+const formatPickupDropLine = (city, location) => {
+    const c = (city || "").trim();
+    const l = (location || "").trim();
+    if (c && l) return `${c} - ${l}`;
+    return c || l || "";
+};
+
 const StepClientDetails = ({ onNext }) => {
     const dispatch = useDispatch();
     const { list: leads, status } = useSelector((state) => state.leads);
@@ -31,6 +38,8 @@ const StepClientDetails = ({ onNext }) => {
                 message: "",
                 tourType: "",
                 sector: "",
+                pickupPoint: "",
+                dropPoint: "",
             }}
             validate={(values) => {
                 const errors = {};
@@ -98,6 +107,21 @@ const StepClientDetails = ({ onNext }) => {
                                         const tourDestination = selectedClient.tourDetails?.tourDestination;
                                         if (tourDestination) {
                                             setFieldValue("message", `Interested in ${tourDestination} tour package`);
+                                        }
+
+                                        const pd = selectedClient.tourDetails?.pickupDrop;
+                                        if (pd) {
+                                            setFieldValue(
+                                                "pickupPoint",
+                                                formatPickupDropLine(pd.arrivalCity, pd.arrivalLocation)
+                                            );
+                                            setFieldValue(
+                                                "dropPoint",
+                                                formatPickupDropLine(pd.departureCity, pd.departureLocation)
+                                            );
+                                        } else {
+                                            setFieldValue("pickupPoint", "");
+                                            setFieldValue("dropPoint", "");
                                         }
                                     }
                                 }}
