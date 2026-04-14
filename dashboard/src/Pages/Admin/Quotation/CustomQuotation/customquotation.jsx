@@ -42,9 +42,7 @@ const CustomQuotation = ({ onNext }) => {
   // ✅ FIXED: Load ALL client names
   const clientOptions = [
     ...new Set(
-      leadList
-        .map((lead) => lead?.personalDetails?.fullName)
-        .filter(Boolean)
+      leadList.map((lead) => lead?.personalDetails?.fullName).filter(Boolean),
     ),
   ];
 
@@ -53,7 +51,8 @@ const CustomQuotation = ({ onNext }) => {
     ...new Set(
       leadList
         .filter(
-          (lead) => lead?.personalDetails?.fullName === formik.values.clientName
+          (lead) =>
+            lead?.personalDetails?.fullName === formik.values.clientName,
         )
         .flatMap((lead) => {
           const destinations = lead?.tourDetails?.tourDestination;
@@ -64,7 +63,7 @@ const CustomQuotation = ({ onNext }) => {
           if (state) return [state];
           return [];
         })
-        .filter(Boolean)
+        .filter(Boolean),
     ),
   ];
 
@@ -91,7 +90,7 @@ const CustomQuotation = ({ onNext }) => {
 
       <form onSubmit={formik.handleSubmit}>
         <Grid container spacing={2}>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
               Tour Type
             </Typography>
@@ -115,7 +114,7 @@ const CustomQuotation = ({ onNext }) => {
           </Grid>
 
           {/* Client Name Dropdown */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <TextField
               fullWidth
               select
@@ -126,12 +125,9 @@ const CustomQuotation = ({ onNext }) => {
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
               error={
-                formik.touched.clientName &&
-                Boolean(formik.errors.clientName)
+                formik.touched.clientName && Boolean(formik.errors.clientName)
               }
-              helperText={
-                formik.touched.clientName && formik.errors.clientName
-              }
+              helperText={formik.touched.clientName && formik.errors.clientName}
             >
               {clientOptions.length > 0 ? (
                 clientOptions.map((name) => (
@@ -146,7 +142,7 @@ const CustomQuotation = ({ onNext }) => {
           </Grid>
 
           {/* Sector Dropdown */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <TextField
               fullWidth
               select
@@ -172,7 +168,7 @@ const CustomQuotation = ({ onNext }) => {
           </Grid>
 
           {/* Submit Button */}
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Box textAlign="center" sx={{ mt: 3 }}>
               <Button
                 type="submit"
