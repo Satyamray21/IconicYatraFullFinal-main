@@ -167,8 +167,9 @@ export const getQuickQuotationById = async (req, res) => {
     if (!mongoId)
       return res.status(404).json({ message: "Quotation not found" });
 
-    const quotation = await QuickQuotation.findById(mongoId)
-      .populate("packageId", "packageName price duration");
+    const quotation = await QuickQuotation.findById(mongoId).populate(
+      "packageId",
+    );
 
     if (!quotation)
       return res.status(404).json({ message: "Quotation not found" });

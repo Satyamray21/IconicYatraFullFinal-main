@@ -486,34 +486,175 @@ const formatDate = (dateString) => {
     return date.toLocaleDateString("en-IN");
 };
 
+/** Merge snapshot with populated package so hotel rows work when snapshot omits destinationNights. */
+function mergeQuickPackageForDisplay(apiData) {
+    const snap =
+        apiData?.packageSnapshot && typeof apiData.packageSnapshot === "object"
+            ? apiData.packageSnapshot
+            : {};
+    const pid =
+        apiData?.packageId &&
+        typeof apiData.packageId === "object" &&
+        !Array.isArray(apiData.packageId)
+            ? apiData.packageId
+            : {};
+    return {
+        ...pid,
+        ...snap,
+        destinationNights:
+            Array.isArray(snap.destinationNights) && snap.destinationNights.length
+                ? snap.destinationNights
+                : pid.destinationNights,
+        stayLocations:
+            Array.isArray(snap.stayLocations) && snap.stayLocations.length
+                ? snap.stayLocations
+                : pid.stayLocations,
+    };
+}
+
+/** e.g. "2N Gangtok, 2N Pelling, 2N Darjeeling" from destinationNights or stayLocations */
+function buildQuickDestinationLine(pkg) {
+    if (!pkg || typeof pkg !== "object") return "";
+    const disp = String(pkg.displayDestination || "").trim();
+    if (disp) return disp;
+    const dn = pkg.destinationNights;
+    if (Array.isArray(dn) && dn.length) {
+        const parts = dn
+            .map((d) => {
+                const n = Number(d.nights) || 0;
+                const city = String(d.destination || "").trim();
+                return city ? `${n}N ${city}` : "";
+            })
+            .filter(Boolean);
+        if (parts.length) return parts.join(", ");
+    }
+    const sl = pkg.stayLocations;
+    if (Array.isArray(sl) && sl.length) {
+        const parts = sl
+            .map((l) => {
+                const n = Number(l.nights) || 0;
+                const city = String(l.city || "").trim();
+                return city ? `${n}N ${city}` : "";
+            })
+            .filter(Boolean);
+        if (parts.length) return parts.join(", ");
+    }
+    return (
+        String(pkg.sector || "").trim() ||
+        String(pkg.destinationCountry || "").trim() ||
+        ""
+    );
+}
+
+function titleCaseWords(s) {
+    return String(s || "")
+        .trim()
+        .split(/\s+/)
+        .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
+        .join(" ");
+}
+
+function formatQuickMealPlan(pkg) {
+    const qd = pkg?.quotationDetails || {};
+    const fromQd =
+        typeof qd.mealPlan === "string"
+            ? qd.mealPlan.trim()
+            : qd.mealPlan && typeof qd.mealPlan === "object"
+              ? String(qd.mealPlan.planType || "").trim()
+              : "";
+    const raw = fromQd || String(pkg?.mealPlan?.planType || "").trim();
+    if (!raw) return "—";
+    if (/plan\b/i.test(raw)) return raw;
+    return `${raw} Plan`;
+}
+
+function formatQuickRooms(pkg) {
+    const r = pkg?.quotationDetails?.rooms;
+    const n =
+        r?.numberOfRooms != null && r.numberOfRooms !== ""
+            ? r.numberOfRooms
+            : 1;
+    const sharingRaw = String(r?.sharingType || "Double sharing").trim() || "Double sharing";
+    return `${n} (${titleCaseWords(sharingRaw)})`;
+}
+
+/** Matches requested copy: "2 Guests (2 Adults, 0 Children ,0 Kids , 0 Infants)" */
+function formatQuickGuestsLine(adults, children, kids, infants) {
+    const a = Number(adults) || 0;
+    const c = Number(children) || 0;
+    const k = Number(kids) || 0;
+    const inf = Number(infants) || 0;
+    const total = a + c + k + inf;
+    return `${total} Guests (${a} Adults, ${c} Children ,${k} Kids , ${inf} Infants)`;
+}
+
+function inclusionPolicyTextBlob(pkg, policy) {
+    const pol = policy && typeof policy === "object" ? policy : {};
+    const pkgPol = pkg?.policy && typeof pkg.policy === "object" ? pkg.policy : {};
+    const chunks = [
+        ...(Array.isArray(pol.inclusionPolicy) ? pol.inclusionPolicy : []),
+        ...(Array.isArray(pkgPol.inclusionPolicy) ? pkgPol.inclusionPolicy : []),
+    ];
+    return chunks.map((x) => String(x || "").toLowerCase()).join(" ");
+}
+
+/** When quotation has no hotelType, infer e.g. "3 star" from standard wording in inclusions. */
+function inferQuickHotelType(pkg, policy) {
+    const explicit = String(
+        pkg?.quotationDetails?.hotelType ||
+            pkg?.hotelType ||
+            pkg?.packageDetails?.hotelType ||
+            ""
+    ).trim();
+    if (explicit) return explicit;
+    const blob = inclusionPolicyTextBlob(pkg, policy);
+    if (!blob) return "—";
+    if (/\b5\s*[\s-]?\s*star\b|\bfive\s*star\b|5\s*★/.test(blob)) return "5 star";
+    if (/\b4\s*[\s-]?\s*star\b|\bfour\s*star\b|4\s*★/.test(blob)) return "4 star";
+    if (/\b3\s*[\s-]?\s*star\b|\bthree\s*star\b|3\s*★/.test(blob)) return "3 star";
+    if (
+        /hotel\s+category\s+standard|standard\s+type\s+or\s+similar|standard\s+category/.test(
+            blob
+        )
+    ) {
+        return "3 star";
+    }
+    if (/hotel\s+category\s+deluxe|deluxe\s+type/.test(blob)) return "4 star";
+    if (/superior|luxury\s+hotel/.test(blob)) return "5 star";
+    return "—";
+}
+
 function transformQuickApiToDisplay(apiData, company) {
     if (!apiData) return null;
-    const pkg = apiData.packageSnapshot || apiData.packageId || {};
+    const pkg = mergeQuickPackageForDisplay(apiData);
     const policy = apiData.policy || {};
+    const qd = pkg.quotationDetails || {};
     const adults = Number(apiData.adults) || 0;
     const children = Number(apiData.children) || 0;
-    const kids = Number(apiData.kids) || 0;
-    const infants = Number(apiData.infants) || 0;
+    const kids = Number(apiData.kids) || Number(qd.kids) || 0;
+    const infants = Number(apiData.infants) || Number(qd.infants) || 0;
     const totalGuests = adults + children + kids + infants;
     const totalCost = Number(apiData.totalCost) || 0;
-    const destLine =
-        pkg.displayDestination ||
-        pkg.sector ||
-        pkg.destinationCountry ||
-        (Array.isArray(pkg.stayLocations)
-            ? pkg.stayLocations.map((l) => `${l.nights || 0}N ${l.city || ""}`).join(", ")
-            : "") ||
-        "—";
+    const destLine = buildQuickDestinationLine(pkg) || "—";
 
     const pickHotel = (nightBlock, cat) => {
         const c = String(cat).toLowerCase();
-        const h = (nightBlock?.hotels || []).find(
-            (x) =>
-                String(x.category).toLowerCase() === c &&
-                x.hotelName &&
-                !/^TBD$/i.test(String(x.hotelName).trim())
-        );
-        return h?.hotelName || "—";
+        const hotelNameOf = (x) =>
+            (x &&
+                (x.hotelName || x.name || x.hotel || "").trim()) ||
+            "";
+        const h = (nightBlock?.hotels || []).find((x) => {
+            const nm = hotelNameOf(x);
+            return (
+                String(x.category || "")
+                    .toLowerCase()
+                    .trim() === c &&
+                nm &&
+                !/^TBD$/i.test(nm)
+            );
+        });
+        const nm = hotelNameOf(h);
+        return nm || "—";
     };
 
     let hotelPricingData = [];
@@ -590,15 +731,10 @@ function transformQuickApiToDisplay(apiData, company) {
         quotationTitle: pkg.displayTitle || pkg.title || "",
         destinationSummary: destLine,
         hotel: {
-            guests: `${totalGuests} (${adults} Adults, ${children} Children${kids ? `, ${kids} Kids` : ""}${infants ? `, ${infants} Infants` : ""})`,
-            rooms: (() => {
-                const r = pkg.quotationDetails?.rooms;
-                if (!r) return "—";
-                const n = r.numberOfRooms ?? "—";
-                const sh = r.sharingType || "";
-                return `${n}${sh ? ` · ${sh}` : ""}`;
-            })(),
-            mealPlan: pkg.quotationDetails?.mealPlan || pkg.mealPlan?.planType || "—",
+            guests: formatQuickGuestsLine(adults, children, kids, infants),
+            rooms: formatQuickRooms(pkg),
+            mealPlan: formatQuickMealPlan(pkg),
+            hotelType: inferQuickHotelType(pkg, policy),
             destination: destLine,
             itinerary:
                 apiData.message ||
@@ -722,6 +858,7 @@ const QuickFinalize = () => {
             guests: "",
             rooms: "",
             mealPlan: "",
+            hotelType: "",
             destination: "",
             itinerary: "",
         },
@@ -1924,7 +2061,7 @@ const QuickFinalize = () => {
         email: `✉️ ${quotation.customer?.email}`,
         payment: `Received: ${quotation.footer.received}\n Balance: ${quotation.footer.balance}`,
         quotation: `Total Quotation Cost: ${quotation.pricing.total}`,
-        guest: `No. of Guests: ${quotation.hotel.guests}`,
+        guest: `Guests: ${quotation.hotel.guests}`,
     };
 
     const infoChips = [
@@ -1935,7 +2072,9 @@ const QuickFinalize = () => {
         { k: "guest", icon: <Person /> },
     ];
 
-    const snap = currentQuotation?.packageSnapshot || {};
+    const snap = currentQuotation
+        ? mergeQuickPackageForDisplay(currentQuotation)
+        : {};
     const qdSnap = snap.quotationDetails || {};
     const vehicleSnap = snap.vehicleDetails;
 
@@ -1993,7 +2132,7 @@ const QuickFinalize = () => {
         },
         {
             icon: <Group sx={{ fontSize: 16, mr: 0.5 }} />,
-            text: `No of Guest: ${quotation.hotel.guests}`,
+            text: `Guests: ${quotation.hotel.guests}`,
             editable: true,
             editGuestCounts: true,
         },
@@ -2169,15 +2308,91 @@ const QuickFinalize = () => {
                                                 </Box>
                                             ) : a.title === "Hotel Details" ? (
                                                 <Box>
+                                                    <Box
+                                                        sx={{
+                                                            display: "flex",
+                                                            flexDirection: "column",
+                                                            gap: 0.75,
+                                                            mb: 2,
+                                                        }}
+                                                    >
+                                                        <Typography variant="body2">
+                                                            <Box component="span" fontWeight={600}>
+                                                                Guests:{" "}
+                                                            </Box>
+                                                            {quotation.hotel.guests}
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            <Box component="span" fontWeight={600}>
+                                                                Rooms:{" "}
+                                                            </Box>
+                                                            {quotation.hotel.rooms}
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            <Box component="span" fontWeight={600}>
+                                                                Hotel Type:{" "}
+                                                            </Box>
+                                                            {quotation.hotel.hotelType}
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            <Box component="span" fontWeight={600}>
+                                                                Meal Plan:{" "}
+                                                            </Box>
+                                                            {quotation.hotel.mealPlan}
+                                                        </Typography>
+                                                        <Typography variant="body2">
+                                                            <Box component="span" fontWeight={600}>
+                                                                Destination:{" "}
+                                                            </Box>
+                                                            {quotation.hotel.destination}
+                                                        </Typography>
+                                                    </Box>
+                                                    <Divider sx={{ mb: 1.5 }} />
+                                                    <Typography
+                                                        variant="caption"
+                                                        color="text.secondary"
+                                                        display="block"
+                                                        sx={{ mb: 1 }}
+                                                    >
+                                                        Hotels by destination
+                                                    </Typography>
                                                     {(snap.destinationNights || []).length === 0 ? (
                                                         <Typography variant="body2">
                                                             No destination nights on snapshot.
                                                         </Typography>
                                                     ) : (
                                                         (snap.destinationNights || []).map((d, idx) => (
-                                                            <Typography key={idx} variant="body2">
-                                                                {d.destination} — {d.nights}N
-                                                            </Typography>
+                                                            <Box key={idx} sx={{ mb: 1.5 }}>
+                                                                <Typography variant="body2" fontWeight="600">
+                                                                    {d.destination} — {d.nights}N
+                                                                </Typography>
+                                                                {(d.hotels || [])
+                                                                    .filter((h) => {
+                                                                        const nm = String(
+                                                                            h.hotelName || h.name || ""
+                                                                        ).trim();
+                                                                        return nm && !/^TBD$/i.test(nm);
+                                                                    })
+                                                                    .map((h) => {
+                                                                        const cat = String(
+                                                                            h.category || ""
+                                                                        ).trim();
+                                                                        const label = cat
+                                                                            ? `${cat.charAt(0).toUpperCase()}${cat.slice(1)}`
+                                                                            : "Hotel";
+                                                                        return (
+                                                                            <Typography
+                                                                                key={`${idx}-${label}-${h.hotelName || h.name}`}
+                                                                                variant="body2"
+                                                                                color="text.secondary"
+                                                                                sx={{ pl: 1 }}
+                                                                            >
+                                                                                {label}:{" "}
+                                                                                {h.hotelName || h.name || "—"}
+                                                                            </Typography>
+                                                                        );
+                                                                    })}
+                                                            </Box>
                                                         ))
                                                     )}
                                                 </Box>
@@ -2599,15 +2814,42 @@ const QuickFinalize = () => {
                                         Quotation Details
                                     </Typography>
                                 </Box>
-                                <Box>
-                                    <Typography variant="body2" sx={{ flex: 1, mr: 2 }}>
-                                        No of Guest : {quotation.hotel.guests}
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: 0.75,
+                                    }}
+                                >
+                                    <Typography variant="body2">
+                                        <Box component="span" fontWeight={600}>
+                                            Guests:{" "}
+                                        </Box>
+                                        {quotation.hotel.guests}
                                     </Typography>
-                                    <Typography variant="body2" sx={{ flex: 1, mr: 2 }}>
-                                        No of Rooms : {quotation.hotel.rooms}
+                                    <Typography variant="body2">
+                                        <Box component="span" fontWeight={600}>
+                                            Rooms:{" "}
+                                        </Box>
+                                        {quotation.hotel.rooms}
                                     </Typography>
-                                    <Typography variant="body2" sx={{ flex: 1, mr: 2 }}>
-                                        Meal Plan : {quotation.hotel.mealPlan}
+                                    <Typography variant="body2">
+                                        <Box component="span" fontWeight={600}>
+                                            Hotel Type:{" "}
+                                        </Box>
+                                        {quotation.hotel.hotelType || "—"}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                        <Box component="span" fontWeight={600}>
+                                            Meal Plan:{" "}
+                                        </Box>
+                                        {quotation.hotel.mealPlan}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                        <Box component="span" fontWeight={600}>
+                                            Destination:{" "}
+                                        </Box>
+                                        {quotation.hotel.destination}
                                     </Typography>
                                 </Box>
                             </Box>
