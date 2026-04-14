@@ -602,6 +602,10 @@ const loadEmailMeta = async (company) => {
         accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
       }).lean()
     : [];
+  const pickHttp = (v) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return /^https?:\/\//i.test(s) ? s : "";
+  };
 
   return {
     companyName: company?.companyName || "Iconic Travel",
@@ -612,6 +616,8 @@ const loadEmailMeta = async (company) => {
     globalPaymentPolicy: globalSettings?.paymentPolicy || "",
     globalTermsAndConditions: globalSettings?.termsAndConditions || "",
     companyTermsConditions: company?.termsConditions || "",
+    companyCancellationPolicyUrl: pickHttp(company?.cancellationPolicy),
+    companyPaymentLink: pickHttp(company?.paymentLink),
     bankDetails,
   };
 };

@@ -158,12 +158,29 @@ const companyPaymentLinkLine = (url) => {
   </p>`;
 };
 
-const bankHtmlSection = (bankDetails = []) => {
-  if (!Array.isArray(bankDetails) || bankDetails.length === 0) return "";
+const termsAndConditionsLine = (value) => {
+  const t = safe(value, "");
+  if (!t) return "";
+  if (!isHttpUrlString(t)) {
+    return `<p style="margin-bottom:10px;">${t}</p>`;
+  }
+  return `<p style="margin-bottom:10px;">
+    <b>As per company terms and conditions - </b>
+    <a href="${t}" target="_blank" rel="noopener noreferrer" style="color:#1976d2; font-weight:bold; word-break:break-all;">
+      View Terms & Conditions
+    </a>
+  </p>`;
+};
+
+const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
+  const hasBanks = Array.isArray(bankDetails) && bankDetails.length > 0;
+  const paymentLinkHtml = companyPaymentLinkLine(paymentLink);
+  if (!hasBanks && !paymentLinkHtml) return "";
   return `
         <br/>
         <p style="color:#d32f2f; font-weight:bold;">NET BANKING PAYMENT DETAILS:</p>
-        ${bankDetails
+        ${paymentLinkHtml}
+        ${(bankDetails || [])
           .map(
             (b, i) => `
                     <div style="margin-bottom:8px;">
@@ -225,7 +242,10 @@ export const buildCustomQuotationNormalEmail = (
   const vehicle = td?.vehicleDetails || {};
   const pd = vehicle?.pickupDropDetails || {};
   const destinations = qd?.destinations || [];
-  const termsandCondition = safe(options?.companyTermsConditions);
+  const termsandCondition = safe(
+    options?.companyTermsConditions,
+    safe(options?.globalTermsAndConditions),
+  );
   const duration = nightsAndDays(destinations);
   const totals = packageTotals(quotation);
   const key = pkgKey(quotation);
@@ -353,12 +373,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 
         <br/>
          <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
-        <p>
-      <b>As per company terms and conditions - </b>
-    <a href="${termsandCondition}" target="_blank" style="color:#1976d2; font-weight:bold;">
-        View Terms & Conditions
-    </a>
-</p>
+        ${termsAndConditionsLine(termsandCondition)}
 <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
         ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
@@ -367,7 +382,6 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         <br/>
 
         <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
-        ${companyPaymentLinkLine(paymentLink)}
         <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
@@ -375,7 +389,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
        
 
 
-        ${bankHtmlSection(bankDetails)}
+        ${bankHtmlSection(bankDetails, paymentLink)}
         <p>
     <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
     <span style="color:#2e7d32;">
@@ -407,7 +421,10 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
   const vehicle = td?.vehicleDetails || {};
   const pd = vehicle?.pickupDropDetails || {};
   const destinations = qd?.destinations || [];
-  const termsandCondition = safe(customText?.companyTermsConditions);
+  const termsandCondition = safe(
+    customText?.companyTermsConditions,
+    safe(customText?.globalTermsAndConditions),
+  );
   const guests = guestSummary(qd);
   const duration = nightsAndDays(destinations);
   const companyName = safe(customText.companyName, "Iconic Travel");
@@ -510,21 +527,15 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
-        <p>
-            <b>As per company terms and conditions - </b>
-            <a href="${termsandCondition}" target="_blank" style="color:#1976d2; font-weight:bold;">
-                View Terms & Conditions
-            </a>
-        </p>
+        ${termsAndConditionsLine(termsandCondition)}
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
         ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
        
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
-        ${companyPaymentLinkLine(paymentLink)}
         <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
-        ${bankHtmlSection(bankDetails)}
+        ${bankHtmlSection(bankDetails, paymentLink)}
         <p>
             <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
             <span style="color:#2e7d32;">
@@ -659,10 +670,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
             children: toNum(quick.children),
             kids: toNum(quick.kids),
             infants: toNum(quick.infants),
-            mealPlan: safe(
-              qdSnap.mealPlan || pkg.mealPlan?.planType,
-              "CP",
-            ),
+            mealPlan: safe(qdSnap.mealPlan || pkg.mealPlan?.planType, "CP"),
             rooms:
               qdSnap.rooms && typeof qdSnap.rooms === "object"
                 ? qdSnap.rooms
