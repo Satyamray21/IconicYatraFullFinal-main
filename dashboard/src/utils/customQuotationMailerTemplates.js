@@ -1,3 +1,5 @@
+import { sumBillableAdditionalServices } from "./quotationAdditionalServices.js";
+
 const INR = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
@@ -56,7 +58,10 @@ const selectedFinalTotal = (quotation = {}) => {
   const qd = quotation?.tourDetails?.quotationDetails || {};
   const calc = qd.packageCalculations || {};
   const key = selectedPackageKey(quotation);
-  return toNum(calc?.[key]?.finalTotal);
+  return (
+    toNum(calc?.[key]?.finalTotal) +
+    sumBillableAdditionalServices(qd.additionalServices)
+  );
 };
 
 const selectedTaxPercent = (quotation = {}) =>

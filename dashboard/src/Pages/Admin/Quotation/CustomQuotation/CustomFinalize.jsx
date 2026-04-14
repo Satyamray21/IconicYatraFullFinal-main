@@ -85,6 +85,11 @@ import { saveCustomQuotationItinerary } from "../../../../utils/syncCustomQuotat
 import FinalizeVehicleDialog from "./Dialog/FinalizeVehicleDialog";
 import FinalizeHotelsPricingDialog from "./Dialog/FinalizeHotelsPricingDialog";
 import axios from "../../../../utils/axios";
+import {
+    sumBillableAdditionalServices,
+    mapApiAdditionalServicesToState,
+    serializeAdditionalServicesForApi,
+} from "../../../../utils/quotationAdditionalServices";
 
 function setQuotationValueByPath(prev, path, value) {
     const parts = path.split(".");
@@ -762,6 +767,21 @@ useEffect(() => {
         }
     }, [selectedQuotation?.finalizeStatus]);
 
+    useEffect(() => {
+        if (!selectedQuotation) return;
+        setServices(
+            mapApiAdditionalServicesToState(
+                selectedQuotation?.tourDetails?.quotationDetails
+                    ?.additionalServices
+            )
+        );
+    }, [selectedQuotation]);
+
+    const billableServicesSum = React.useMemo(
+        () => sumBillableAdditionalServices(services),
+        [services]
+    );
+
     const packageTotalForFooter = React.useMemo(() => {
         const pkg = selectedQuotation?.finalizedPackage;
         const calc =
@@ -770,8 +790,52 @@ useEffect(() => {
         if (!pkg || !calc) return null;
         const key = pkg.toLowerCase();
         const t = calc[key]?.finalTotal;
-        return typeof t === "number" ? t : null;
-    }, [selectedQuotation]);
+        if (typeof t !== "number" || Number.isNaN(t)) return null;
+        return t + billableServicesSum;
+    }, [selectedQuotation, billableServicesSum]);
+
+    const quotationForPdf = React.useMemo(() => {
+        const persistedSum = sumBillableAdditionalServices(
+            selectedQuotation?.tourDetails?.quotationDetails
+                ?.additionalServices
+        );
+        const draftDelta = billableServicesSum - persistedSum;
+        const base = { ...quotation };
+        if (!draftDelta) return base;
+        const hpd = [...(base.hotelPricingData || [])];
+        const bumpCell = (cell) => {
+            if (!cell || cell === "-") return cell;
+            const n = Number(String(cell).replace(/[^0-9.-]/g, ""));
+            if (!Number.isFinite(n)) return cell;
+            return `₹ ${Math.round(n + draftDelta).toLocaleString("en-IN")}`;
+        };
+        const bumpRow = (row) => ({
+            ...row,
+            standard: bumpCell(row.standard),
+            deluxe: bumpCell(row.deluxe),
+            superior: bumpCell(row.superior),
+        });
+        const nextHpd = hpd.map((row) =>
+            row.destination === "Quotation Cost" ||
+            row.destination === "Total Quotation Cost"
+                ? bumpRow(row)
+                : row
+        );
+        const prevTotalStr = base.pricing?.total || "";
+        const prevNum = Number(String(prevTotalStr).replace(/[^0-9.-]/g, ""));
+        const nextTotal =
+            Number.isFinite(prevNum) && prevTotalStr
+                ? `₹ ${Math.round(prevNum + draftDelta).toLocaleString("en-IN")}`
+                : base.pricing?.total;
+        return {
+            ...base,
+            hotelPricingData: nextHpd,
+            pricing: {
+                ...base.pricing,
+                total: nextTotal || base.pricing?.total,
+            },
+        };
+    }, [quotation, billableServicesSum, selectedQuotation]);
 
     const finalizedVendors = React.useMemo(() => {
         const savedNames = [
@@ -815,6 +879,9 @@ useEffect(() => {
         const { quotationDetails, arrivalCity, departureCity, arrivalDate, departureDate, itinerary, policies, vehicleDetails } = tourDetails;
 
         const pkgCalc = quotationDetails?.packageCalculations;
+        const additionalServicesSum = sumBillableAdditionalServices(
+            quotationDetails?.additionalServices
+        );
         const readPackageFinalTotal = (key) => {
             if (!key || !pkgCalc) return null;
             const v = pkgCalc[key]?.finalTotal;
@@ -842,6 +909,8 @@ useEffect(() => {
         if (quotationCostNumber == null) {
             quotationCostNumber = sumDestinationTotalCost;
         }
+        quotationCostNumber =
+            (Number(quotationCostNumber) || 0) + additionalServicesSum;
 
         // Calculate total guests
         const totalGuests = quotationDetails.adults + quotationDetails.children + quotationDetails.kids + quotationDetails.infants;
@@ -873,9 +942,15 @@ useEffect(() => {
                 0
             );
 
-            const standardFinal = Number(pkgCalc?.standard?.finalTotal || 0);
-            const deluxeFinal = Number(pkgCalc?.deluxe?.finalTotal || 0);
-            const superiorFinal = Number(pkgCalc?.superior?.finalTotal || 0);
+            const standardFinal =
+                Number(pkgCalc?.standard?.finalTotal || 0) +
+                additionalServicesSum;
+            const deluxeFinal =
+                Number(pkgCalc?.deluxe?.finalTotal || 0) +
+                additionalServicesSum;
+            const superiorFinal =
+                Number(pkgCalc?.superior?.finalTotal || 0) +
+                additionalServicesSum;
 
             hotelPricingData.push(
                 {
@@ -1341,7 +1416,7 @@ useEffect(() => {
     const handleAddServiceClose = () => {
         setOpenAddService(false);
         setCurrentService({
-            included: "yes",
+            included: "no",
             particulars: "",
             amount: "",
             taxType: "",
@@ -1751,9 +1826,10 @@ useEffect(() => {
     const handleAddService = () => {
         if (
             !currentService.particulars ||
-            (currentService.included === "no" && !currentService.amount)
+            (currentService.included === "yes" &&
+                (!currentService.amount || !currentService.taxType))
         ) {
-            alert("Please fill in all required fields");
+            alert("Please fill in all required fields (amount and tax when included)");
             return;
         }
 
@@ -1763,7 +1839,7 @@ useEffect(() => {
         const taxRate = selectedTax ? selectedTax.rate : 0;
 
         const amount =
-            currentService.included === "yes" ? 0 : parseFloat(currentService.amount);
+            currentService.included === "yes" ? parseFloat(currentService.amount) : 0;
         const taxAmount = amount * (taxRate / 100) || 0;
 
         const newService = {
@@ -1778,7 +1854,7 @@ useEffect(() => {
 
         setServices((prev) => [...prev, newService]);
         setCurrentService({
-            included: "yes",
+            included: "no",
             particulars: "",
             amount: "",
             taxType: "",
@@ -1787,7 +1863,7 @@ useEffect(() => {
 
     const handleClearService = () => {
         setCurrentService({
-            included: "yes",
+            included: "no",
             particulars: "",
             amount: "",
             taxType: "",
@@ -1798,8 +1874,42 @@ useEffect(() => {
         setServices((prev) => prev.filter((service) => service.id !== id));
     };
 
-    const handleSaveServices = () => {
-        console.log("Services saved:", services);
+    const handleSaveServices = async () => {
+        if (!id) {
+            setSnackbar({
+                open: true,
+                message: "Cannot save services: no quotation id",
+                severity: "error",
+            });
+            return;
+        }
+        try {
+            await dispatch(
+                updateCustomQuotation({
+                    quotationId: id,
+                    formData: {
+                        "tourDetails.quotationDetails.additionalServices":
+                            serializeAdditionalServicesForApi(services),
+                    },
+                })
+            ).unwrap();
+            await dispatch(getCustomQuotationById(id)).unwrap();
+            await refreshQuotationFromApi();
+            setSnackbar({
+                open: true,
+                message: "Services saved",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message:
+                    typeof e === "string"
+                        ? e
+                        : e?.message || "Failed to save services",
+                severity: "error",
+            });
+        }
         handleAddServiceClose();
     };
 
@@ -2357,7 +2467,10 @@ useEffect(() => {
                                                                         <strong>After Discount:</strong> ₹{selectedQuotation.tourDetails.quotationDetails.packageCalculations.standard?.afterDiscount?.toLocaleString() || '0'}
                                                                     </Typography>
                                                                     <Typography variant="body2">
-                                                                        <strong>Final Total:</strong> ₹{selectedQuotation.tourDetails.quotationDetails.packageCalculations.standard?.finalTotal?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '0'}
+                                                                        <strong>Final Total:</strong> ₹{(
+                                                                            (Number(selectedQuotation.tourDetails.quotationDetails.packageCalculations.standard?.finalTotal) || 0) +
+                                                                            billableServicesSum
+                                                                        ).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                                                     </Typography>
                                                                 </Box>
 
@@ -2384,7 +2497,10 @@ useEffect(() => {
                                                                         <strong>After Discount:</strong> ₹{selectedQuotation.tourDetails.quotationDetails.packageCalculations.deluxe?.afterDiscount?.toLocaleString() || '0'}
                                                                     </Typography>
                                                                     <Typography variant="body2">
-                                                                        <strong>Final Total:</strong> ₹{selectedQuotation.tourDetails.quotationDetails.packageCalculations.deluxe?.finalTotal?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '0'}
+                                                                        <strong>Final Total:</strong> ₹{(
+                                                                            (Number(selectedQuotation.tourDetails.quotationDetails.packageCalculations.deluxe?.finalTotal) || 0) +
+                                                                            billableServicesSum
+                                                                        ).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                                                     </Typography>
                                                                 </Box>
 
@@ -2943,13 +3059,22 @@ useEffect(() => {
                                                     Final Total (Incl. GST)
                                                 </TableCell>
                                                 <TableCell sx={{ fontWeight: 'bold', fontSize: '1rem', color: 'success.main' }}>
-                                                    ₹{selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations?.standard?.finalTotal?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '0'}
+                                                    ₹{(
+                                                        (Number(selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations?.standard?.finalTotal) || 0) +
+                                                        billableServicesSum
+                                                    ).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                                 </TableCell>
                                                 <TableCell sx={{ fontWeight: 'bold', fontSize: '1rem', color: 'success.main' }}>
-                                                    ₹{selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations?.deluxe?.finalTotal?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '0'}
+                                                    ₹{(
+                                                        (Number(selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations?.deluxe?.finalTotal) || 0) +
+                                                        billableServicesSum
+                                                    ).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                                 </TableCell>
                                                 <TableCell sx={{ fontWeight: 'bold', fontSize: '1rem', color: 'success.main' }}>
-                                                    ₹{selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations?.superior?.finalTotal?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '0'}
+                                                    ₹{(
+                                                        (Number(selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations?.superior?.finalTotal) || 0) +
+                                                        billableServicesSum
+                                                    ).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                                 </TableCell>
                                             </TableRow>
                                         </TableBody>
@@ -3143,6 +3268,7 @@ useEffect(() => {
                 open={openFinalize}
                 onClose={handleFinalizeClose}
                 onConfirm={handleConfirm}
+                additionalServicesSum={billableServicesSum}
             />
             <HotelVendorDialog
                 open={openBankDialog}
@@ -3273,7 +3399,7 @@ useEffect(() => {
                 <QuotationPDFDialog
                     open={openPdfDialog}
                     onClose={handleClosePdfDialog}
-                    quotation={quotation}
+                    quotation={quotationForPdf}
                 />
             )}
 

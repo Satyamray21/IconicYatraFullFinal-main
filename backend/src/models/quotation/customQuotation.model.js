@@ -107,6 +107,22 @@ const customQuotationSchema = new mongoose.Schema(
                     deluxe: packageCalculationSchema,
                     superior: packageCalculationSchema,
                 },
+                /** Add-on services from finalize (not merged into packageCalculations.finalTotal) */
+                additionalServices: [
+                    {
+                        included: {
+                            type: String,
+                            enum: ["yes", "no"],
+                            default: "no",
+                        },
+                        particulars: { type: String, default: "" },
+                        amount: { type: Number, default: 0 },
+                        taxRate: { type: Number, default: 0 },
+                        taxAmount: { type: Number, default: 0 },
+                        totalAmount: { type: Number, default: 0 },
+                        taxLabel: { type: String, default: "" },
+                    },
+                ],
                 signatureDetails: {
                     regardsText: { type: String, default: "Best Regards" },
                     signedBy: { type: String },
