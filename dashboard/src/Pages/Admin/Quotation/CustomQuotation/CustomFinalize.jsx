@@ -783,12 +783,14 @@ useEffect(() => {
     );
 
     const packageTotalForFooter = React.useMemo(() => {
-        const pkg = selectedQuotation?.finalizedPackage;
         const calc =
             selectedQuotation?.tourDetails?.quotationDetails
                 ?.packageCalculations;
-        if (!pkg || !calc) return null;
-        const key = pkg.toLowerCase();
+        if (!calc) return null;
+        const pkg = String(selectedQuotation?.finalizedPackage || "").toLowerCase();
+        const key = ["standard", "deluxe", "superior"].includes(pkg)
+            ? pkg
+            : "standard";
         const t = calc[key]?.finalTotal;
         if (typeof t !== "number" || Number.isNaN(t)) return null;
         return t + billableServicesSum;
@@ -1111,9 +1113,9 @@ useEffect(() => {
         }
     };
 
-    const refreshQuotationFromApi = async () => {
-        if (!id) return;
-        const refreshed = await dispatch(getCustomQuotationById(id)).unwrap();
+    const refreshQuotationFromApi = async (quotationRef = id) => {
+        if (!quotationRef) return;
+        const refreshed = await dispatch(getCustomQuotationById(quotationRef)).unwrap();
         const t = transformApiData(refreshed);
         if (t) {
             setQuotation(t);
@@ -1875,7 +1877,8 @@ useEffect(() => {
     };
 
     const handleSaveServices = async () => {
-        if (!id) {
+        const quotationRef = id || selectedQuotation?.quotationId;
+        if (!quotationRef) {
             setSnackbar({
                 open: true,
                 message: "Cannot save services: no quotation id",
@@ -1886,15 +1889,14 @@ useEffect(() => {
         try {
             await dispatch(
                 updateCustomQuotation({
-                    quotationId: id,
+                    quotationId: quotationRef,
                     formData: {
                         "tourDetails.quotationDetails.additionalServices":
                             serializeAdditionalServicesForApi(services),
                     },
                 })
             ).unwrap();
-            await dispatch(getCustomQuotationById(id)).unwrap();
-            await refreshQuotationFromApi();
+            await refreshQuotationFromApi(quotationRef);
             setSnackbar({
                 open: true,
                 message: "Services saved",
@@ -2142,7 +2144,11 @@ useEffect(() => {
         call: `📞 ${quotation.footer.phone}`,
         email: `✉️ ${quotation.footer.email}`,
         payment: `Received from client: ${quotation.footer.received}\n Balance due: ${quotation.footer.balance}`,
-        quotation: `Total Quotation Cost: ${quotation.pricing.total}`,
+        quotation: `Total Quotation Cost: ${
+            packageTotalForFooter != null
+                ? `₹ ${Math.round(packageTotalForFooter).toLocaleString("en-IN")}`
+                : quotation.pricing.total
+        }`,
         guest: `No. of Guests: ${quotation.hotel.guests}`,
     };
 
