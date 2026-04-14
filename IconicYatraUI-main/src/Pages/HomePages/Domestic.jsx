@@ -100,6 +100,7 @@ const Domestic = () => {
   }, []);
 
   // ✅ Handle destination/sector filter from route
+  // Reset page only when route changes, not when package data updates.
   useEffect(() => {
     if (destination && destination !== "All") {
       const routeSlug = String(destination).toLowerCase().trim();
@@ -123,7 +124,7 @@ const Domestic = () => {
     }
 
     setPage(1);
-  }, [destination, packages]);
+  }, [destination]);
 
   // ✅ Filter packages
   const filteredPackages =
