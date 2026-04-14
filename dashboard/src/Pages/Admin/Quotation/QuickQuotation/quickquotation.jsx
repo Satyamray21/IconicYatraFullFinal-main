@@ -200,7 +200,13 @@ const QuickQuotationForm = () => {
       case 0:
         return <StepClientDetails onNext={handleNext} />;
       case 1:
-        return <StepPackageDetails onNext={handleNext} onBack={handleBack} />;
+        return (
+          <StepPackageDetails
+            onNext={handleNext}
+            onBack={handleBack}
+            clientDetails={formData.clientDetails}
+          />
+        );
       case 2:
         return <StepPolicy onNext={handleNext} onBack={handleBack} />;
       case 3:

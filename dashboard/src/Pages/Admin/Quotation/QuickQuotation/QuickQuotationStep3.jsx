@@ -21,7 +21,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchPackages } from "../../../../features/package/packageSlice";
 import { getLeadOptions, addLeadOption, deleteLeadOption } from "../../../../features/leads/leadSlice";
 
-const StepPackageDetails = ({ onNext, onBack }) => {
+const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
     const dispatch = useDispatch();
     const { items: packages, loading } = useSelector((state) => state.packages);
     const { options } = useSelector((state) => state.leads);
@@ -34,8 +34,8 @@ const StepPackageDetails = ({ onNext, onBack }) => {
     const [addMore, setAddMore] = useState("");
 
     useEffect(() => {
-        // Fetch all packages when component mounts
-        dispatch(fetchPackages());
+        // Fetch packages (API default limit is 10; backend max is 100 per page)
+        dispatch(fetchPackages({ page: 1, limit: 100 }));
         dispatch(getLeadOptions());
     }, [dispatch]);
 
@@ -159,7 +159,7 @@ const StepPackageDetails = ({ onNext, onBack }) => {
 
             // If adding a new package, refresh packages list
             if (backendField === "package") {
-                await dispatch(fetchPackages());
+                await dispatch(fetchPackages({ page: 1, limit: 100 }));
             }
 
             handleCloseDialog();
@@ -242,16 +242,15 @@ const StepPackageDetails = ({ onNext, onBack }) => {
         }
     };
 
-    // Handle delete option
-    const handleDeleteOption = async (option, fieldName) => {
+    // Handle delete option (setFieldValue + selected value passed from Formik render)
+    const handleDeleteOption = async (option, selectedPackage, setFieldValue) => {
         if (option.isLeadOption && option.optionData) {
             if (window.confirm(`Delete "${option.label}"?`)) {
                 try {
                     await dispatch(deleteLeadOption(option.optionData._id)).unwrap();
                     await dispatch(getLeadOptions()).unwrap();
 
-                    // If deleted option was selected, clear the selection
-                    if (values.selectedPackage === option.label) {
+                    if (selectedPackage === option.label) {
                         setFieldValue("selectedPackage", "");
                     }
                 } catch (error) {
@@ -277,8 +276,8 @@ const StepPackageDetails = ({ onNext, onBack }) => {
                 // Additional fields
                 numberOfPax: "",
                 roomType: "",
-                pickupPoint: "",
-                dropPoint: "",
+                pickupPoint: clientDetails.pickupPoint || "",
+                dropPoint: clientDetails.dropPoint || "",
                 arrivalCity: "",
                 departureCity: "",
                 destinationCountry: "",
@@ -415,7 +414,7 @@ const StepPackageDetails = ({ onNext, onBack }) => {
                                                     color="error"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        handleDeleteOption(option, "package");
+                                                        handleDeleteOption(option, values.selectedPackage, setFieldValue);
                                                     }}
                                                 >
                                                     <Delete fontSize="small" />

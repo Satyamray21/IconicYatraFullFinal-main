@@ -1494,20 +1494,26 @@ const QuotationPDFDialog = ({
     </div>
   );
 
-  // PAGE 3: Exclusion and Payment Policy
-  const PoliciesPage = () => (
+  // SINGLE PAGE: Exclusion, Payment, Cancellation & Refund, Terms & Conditions, and Footer
+  const PoliciesAndFooterPage = () => (
     <div
       className="pdf-page"
-      style={{ padding: "25px", background: "#fff", minHeight: "297mm" }}
+      style={{
+        padding: "25px",
+        background: "#fff",
+        minHeight: "297mm",
+        display: "flex",
+        flexDirection: "column",
+      }}
     >
       {/* Exclusion Policy */}
       {finalExclusionArray.length > 0 && (
-        <div style={{ marginBottom: "35px" }}>
+        <div style={{ marginBottom: "25px" }}>
           <div
             style={{
               fontWeight: "bold",
               fontSize: "20px",
-              marginBottom: "20px",
+              marginBottom: "15px",
               borderBottom: "3px solid #667eea",
               paddingBottom: "10px",
               color: "#333",
@@ -1517,7 +1523,7 @@ const QuotationPDFDialog = ({
           </div>
           <div
             style={{
-              padding: "18px",
+              padding: "15px",
               background: "#ffebee",
               borderRadius: "12px",
               borderLeft: "4px solid #c62828",
@@ -1532,7 +1538,7 @@ const QuotationPDFDialog = ({
                     style={{
                       fontSize: "13px",
                       marginLeft: "20px",
-                      marginBottom: "8px",
+                      marginBottom: "6px",
                       lineHeight: "1.5",
                     }}
                   >
@@ -1546,12 +1552,12 @@ const QuotationPDFDialog = ({
 
       {/* Payment Policy */}
       {finalPaymentPolicyArray.length > 0 && (
-        <div style={{ marginBottom: "35px" }}>
+        <div style={{ marginBottom: "25px" }}>
           <div
             style={{
               fontWeight: "bold",
               fontSize: "20px",
-              marginBottom: "20px",
+              marginBottom: "15px",
               borderBottom: "3px solid #667eea",
               paddingBottom: "10px",
               color: "#333",
@@ -1561,7 +1567,7 @@ const QuotationPDFDialog = ({
           </div>
           <div
             style={{
-              padding: "18px",
+              padding: "15px",
               background: "#e3f2fd",
               borderRadius: "12px",
               borderLeft: "4px solid #1565c0",
@@ -1576,7 +1582,7 @@ const QuotationPDFDialog = ({
                     style={{
                       fontSize: "13px",
                       marginLeft: "20px",
-                      marginBottom: "8px",
+                      marginBottom: "6px",
                       lineHeight: "1.5",
                     }}
                   >
@@ -1587,155 +1593,146 @@ const QuotationPDFDialog = ({
           </div>
         </div>
       )}
-    </div>
-  );
 
-  // LAST PAGE: Cancellation & Refund Policy, Terms & Conditions (with link only), and Footer
-  const LastPage = () => (
-    <div
-      className="pdf-page"
-      style={{
-        padding: "25px",
-        background: "#fff",
-        minHeight: "297mm",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Cancellation & Refund Policy - Full Policy */}
+      {/* Cancellation & Refund Policy */}
       {(finalCancellationArray.length > 0 || companyCancellationUrl) && (
+        <div style={{ marginBottom: "25px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "15px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            <MoneyOff sx={{ mr: 1 }} /> Cancellation & Refund Policy
+          </div>
+          <div
+            style={{
+              padding: "15px",
+              background: "#fff3e0",
+              borderRadius: "12px",
+              borderLeft: "4px solid #e65100",
+            }}
+          >
+            {companyCancellationUrl && (
+              <div
+                style={{
+                  fontSize: "13px",
+                  marginBottom: "12px",
+                  textAlign: "center",
+                  lineHeight: "1.6",
+                  padding: "8px",
+                  background: "#fff",
+                  borderRadius: "8px",
+                }}
+              >
+                Full cancellation & refund policy:{" "}
+                <a
+                  data-pdf-link="cancellation"
+                  href={companyCancellationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "#1565c0",
+                    textDecoration: "underline",
+                    fontWeight: "bold",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {companyCancellationUrl}
+                </a>
+              </div>
+            )}
+            {finalCancellationArray.map(
+              (item, idx) =>
+                item &&
+                item !== "" && (
+                  <div
+                    key={idx}
+                    style={{
+                      fontSize: "13px",
+                      marginLeft: item.startsWith("•") ? "20px" : "0px",
+                      marginBottom: "6px",
+                      lineHeight: "1.6",
+                      fontWeight: item.includes("Policy:") ? "bold" : "normal",
+                      marginTop: item.includes("Policy:") ? "8px" : "0px",
+                    }}
+                  >
+                    {item}
+                  </div>
+                ),
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Terms & Conditions */}
+      <div style={{ marginBottom: "15px" }}>
         <div
           style={{
-            padding: "18px",
-            marginBottom: "25px",
-            background: "#fff3e0",
+            fontWeight: "bold",
+            fontSize: "20px",
+            marginBottom: "12px",
+            borderBottom: "3px solid #667eea",
+            paddingBottom: "8px",
+            color: "#333",
+          }}
+        >
+          <Description sx={{ mr: 1 }} /> Terms & Conditions
+        </div>
+        <div
+          style={{
+            padding: "12px",
+            background: "#fafafa",
             borderRadius: "12px",
-            borderLeft: "4px solid #e65100",
+            border: "1px solid #e0e0e0",
+            textAlign: "center",
           }}
         >
           <div
             style={{
-              fontWeight: "bold",
-              color: "#e65100",
-              marginBottom: "12px",
-              fontSize: "16px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
+              fontSize: "14px",
+              color: "#555",
+              lineHeight: "1.5",
+              padding: "8px",
             }}
           >
-            <MoneyOff /> 🔄 Cancellation & Refund Policy
-          </div>
-          {companyCancellationUrl && (
-            <div
+            As per company website{" "}
+            <a
+              data-pdf-link="terms"
+              href={companyWebsiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
-                fontSize: "13px",
-                marginBottom: "14px",
-                textAlign: "center",
-                lineHeight: "1.6",
+                color: "#667eea",
+                textDecoration: "underline",
+                fontWeight: "bold",
               }}
             >
-              Full cancellation & refund policy:{" "}
-              <a
-                data-pdf-link="cancellation"
-                href={companyCancellationUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: "#1565c0",
-                  textDecoration: "underline",
-                  fontWeight: "bold",
-                  wordBreak: "break-all",
-                }}
-              >
-                {companyCancellationUrl}
-              </a>
-            </div>
-          )}
-          {finalCancellationArray.map(
-            (item, idx) =>
-              item &&
-              item !== "" && (
-                <div
-                  key={idx}
-                  style={{
-                    fontSize: "13px",
-                    marginLeft: item.startsWith("•") ? "20px" : "0px",
-                    marginBottom: "6px",
-                    lineHeight: "1.6",
-                    fontWeight: item.includes("Policy:") ? "bold" : "normal",
-                    marginTop: item.includes("Policy:") ? "8px" : "0px",
-                  }}
-                >
-                  {item}
-                </div>
-              ),
-          )}
-        </div>
-      )}
-
-      {/* Terms & Conditions - Simple version with link only */}
-      <div
-        style={{
-          padding: "18px",
-          marginBottom: "30px",
-          background: "#fafafa",
-          borderRadius: "12px",
-          border: "1px solid #e0e0e0",
-        }}
-      >
-        <div
-          style={{
-            fontWeight: "bold",
-            color: "#424242",
-            marginBottom: "12px",
-            fontSize: "16px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
-          <Description /> Terms & Conditions
-        </div>
-        <div
-          style={{
-            fontSize: "14px",
-            color: "#555",
-            lineHeight: "1.6",
-            textAlign: "center",
-            padding: "10px",
-          }}
-        >
-          As per company website{" "}
-          <a
-            data-pdf-link="terms"
-            href={companyWebsiteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              color: "#667eea",
-              textDecoration: "underline",
-              fontWeight: "bold",
-            }}
-          >
-            {companyWebsiteUrl !== "#"
-              ? companyWebsiteUrl
-              : "www.iconicyatra.com"}
-          </a>
+              {companyWebsiteUrl !== "#"
+                ? companyWebsiteUrl
+                : "www.iconicyatra.com"}
+            </a>
+          </div>
         </div>
       </div>
 
-      {/* Footer - On the same page after Terms & Conditions */}
-      <div style={{ marginTop: "30px", textAlign: "center" }}>
+      {/* Footer Section */}
+      <div
+        style={{ marginTop: "35px", textAlign: "center", paddingTop: "0px" }}
+      >
         {imageElements.logo && (
           <img
             src={imageElements.logo}
             alt="Company Logo"
-            style={{ height: "50px", width: "auto", marginBottom: "12px" }}
+            style={{ height: "45px", width: "auto", marginBottom: "8px" }}
           />
         )}
         {footerAddress && footerAddress !== "N/A" && (
-          <div style={{ fontSize: "12px", marginBottom: "6px", color: "#666" }}>
+          <div style={{ fontSize: "11px", marginBottom: "4px", color: "#666" }}>
             📍 {footerAddress}
           </div>
         )}
@@ -1743,10 +1740,10 @@ const QuotationPDFDialog = ({
           style={{
             display: "flex",
             justifyContent: "center",
-            gap: "20px",
+            gap: "15px",
             flexWrap: "wrap",
-            marginBottom: "12px",
-            fontSize: "12px",
+            marginBottom: "8px",
+            fontSize: "11px",
             color: "#666",
           }}
         >
@@ -1757,15 +1754,15 @@ const QuotationPDFDialog = ({
           )}
         </div>
         {footerContact && footerContact !== "N/A" && (
-          <div style={{ fontSize: "12px", marginTop: "8px", color: "#666" }}>
+          <div style={{ fontSize: "11px", marginTop: "6px", color: "#666" }}>
             👤 Contact Person: {footerContact}
             {footerContactDesignation ? ` (${footerContactDesignation})` : ""}
           </div>
         )}
-        <div style={{ fontSize: "10px", color: "#999", marginTop: "15px" }}>
+        <div style={{ fontSize: "9px", color: "#999", marginTop: "10px" }}>
           This is a computer generated quotation. No signature required.
         </div>
-        <div style={{ fontSize: "10px", color: "#999", marginTop: "5px" }}>
+        <div style={{ fontSize: "9px", color: "#999", marginTop: "3px" }}>
           © {new Date().getFullYear()} {footerCompany}. All rights reserved.
         </div>
       </div>
@@ -1882,8 +1879,7 @@ const QuotationPDFDialog = ({
           <Page1 />
           {days.length > 0 && <ItineraryPages />}
           <CombinedPricingPage />
-          <PoliciesPage />
-          <LastPage />
+          <PoliciesAndFooterPage />
         </div>
       </DialogContent>
     </Dialog>
