@@ -14,6 +14,11 @@ import {
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
+const getDestinationLabel = (tourType, item) =>
+  tourType === "Domestic"
+    ? String(item?.sector || "").trim()
+    : String(item?.country || "").trim();
+
 const DestinationMasterForm = () => {
   const [tourType, setTourType] = useState("");
   const [availableDestinations, setAvailableDestinations] = useState([]);
@@ -56,8 +61,9 @@ const DestinationMasterForm = () => {
 
       setAvailableDestinations(res.data.available || []);
       setUsedDestinations(res.data.used || []);
+      const allRows = [...(res.data?.used || []), ...(res.data?.available || [])];
       setTourTypeDescription(
-        (res.data?.used || []).find((item) =>
+        allRows.find((item) =>
           tourType === "Domestic" ? !item?.sector : !item?.country,
         )?.tourTypeDescription || "",
       );
@@ -127,6 +133,26 @@ const DestinationMasterForm = () => {
     }
   };
 
+  const mergedDestinations = React.useMemo(() => {
+    const list = [...usedDestinations, ...availableDestinations];
+    const byLabel = new Map();
+    list.forEach((item) => {
+      const label = getDestinationLabel(tourType, item);
+      if (!label) return;
+      const key = label.toLowerCase();
+      if (!byLabel.has(key)) {
+        byLabel.set(key, item);
+        return;
+      }
+      const existing = byLabel.get(key);
+      // Prefer row that already has description so edits are visible immediately
+      const existingHasDesc = !!String(existing?.description || "").trim();
+      const nextHasDesc = !!String(item?.description || "").trim();
+      if (!existingHasDesc && nextHasDesc) byLabel.set(key, item);
+    });
+    return Array.from(byLabel.values());
+  }, [usedDestinations, availableDestinations, tourType]);
+
   return (
     <Box p={3}>
       <ToastContainer position="top-right" autoClose={2000} />
@@ -174,23 +200,17 @@ const DestinationMasterForm = () => {
       )}
 
       {/* ---------------- USED DESTINATIONS ---------------- */}
-      {usedDestinations.filter((item) =>
-        tourType === "Domestic" ? !!item?.sector : !!item?.country,
-      ).length > 0 && (
+      {mergedDestinations.length > 0 && (
         <>
           <Typography variant="h6" mb={2}>
             Manage Descriptions
           </Typography>
 
-          {usedDestinations
-            .filter((item) =>
-              tourType === "Domestic" ? !!item?.sector : !!item?.country,
-            )
-            .map((item) => (
+          {mergedDestinations.map((item) => (
               <Card key={item._id} sx={{ mb: 2 }}>
                 <CardContent>
                   <Typography fontWeight="bold" mb={1}>
-                    {tourType === "Domestic" ? item.sector : item.country}
+                    {getDestinationLabel(tourType, item)}
                   </Typography>
 
                   <TextField
@@ -219,10 +239,9 @@ const DestinationMasterForm = () => {
       )}
 
       {/* EMPTY STATE */}
-      {tourType &&
-        usedDestinations.filter((item) =>
-          tourType === "Domestic" ? !!item?.sector : !!item?.country,
-        ).length === 0 && <Typography>No destinations found</Typography>}
+      {tourType && mergedDestinations.length === 0 && (
+        <Typography>No destinations found</Typography>
+      )}
     </Box>
   );
 };

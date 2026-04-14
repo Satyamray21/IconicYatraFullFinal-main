@@ -46,36 +46,85 @@ export const getDestinations = async (req, res) => {
 export const getAvailableDestinations = async (req, res) => {
   try {
     const { tourType } = req.query;
-
-    // 1. All destinations
-    const allDestinations = await DestinationMaster.find({ tourType });
-
-    // 2. Used in packages
-    const packages = await Package.find({ tourType });
-
-    let usedList = [];
-
-    if (tourType === "Domestic") {
-      usedList = packages.map(p => p.sector?.toLowerCase().trim());
-    } else {
-      usedList = packages.map(p => p.destinationCountry?.toLowerCase().trim());
+    if (!["Domestic", "International"].includes(tourType)) {
+      return res.status(400).json({ message: "tourType is required" });
     }
 
-    // 3. Available (NOT used)
+    // 1) Package values currently in use
+    const packages = await Package.find({ tourType });
+    const packageValuesRaw =
+      tourType === "Domestic"
+        ? packages.map((p) => p.sector)
+        : packages.map((p) => p.destinationCountry);
+    const packageValues = Array.from(
+      new Set(
+        packageValuesRaw
+          .map((v) => String(v || "").trim())
+          .filter(Boolean),
+      ),
+    );
+
+    // 2) Ensure every used package value exists in DestinationMaster (auto-sync)
+    const allDestinationsBefore = await DestinationMaster.find({ tourType });
+    const existingKeys = new Set(
+      allDestinationsBefore.map((d) =>
+        String(
+          tourType === "Domestic" ? d.sector : d.country,
+        )
+          .toLowerCase()
+          .trim(),
+      ),
+    );
+
+    const rowsToCreate = packageValues.filter(
+      (name) => !existingKeys.has(name.toLowerCase()),
+    );
+    if (rowsToCreate.length) {
+      await DestinationMaster.insertMany(
+        rowsToCreate.map((name) =>
+          tourType === "Domestic"
+            ? {
+                tourType: "Domestic",
+                sector: name,
+                country: "",
+                description: "",
+                tourTypeDescription: "",
+              }
+            : {
+                tourType: "International",
+                sector: "",
+                country: name,
+                description: "",
+                tourTypeDescription: "",
+              },
+        ),
+        { ordered: false },
+      ).catch(() => {
+        // Ignore duplicate races; final read below is source of truth.
+      });
+    }
+
+    // 3) Re-read after sync
+    const allDestinations = await DestinationMaster.find({ tourType });
+    const usedList = new Set(
+      packageValues.map((v) => v.toLowerCase().trim()),
+    );
+
+    // 4) Available (NOT used in packages)
     const available = allDestinations.filter(d => {
       if (tourType === "Domestic") {
-        return !usedList.includes(d.sector?.toLowerCase().trim());
+        return !usedList.has(d.sector?.toLowerCase().trim());
       } else {
-        return !usedList.includes(d.country?.toLowerCase().trim());
+        return !usedList.has(d.country?.toLowerCase().trim());
       }
     });
 
-    // 4. Used list (for UI if needed)
+    // 5) Used list
     const used = allDestinations.filter(d => {
       if (tourType === "Domestic") {
-        return usedList.includes(d.sector?.toLowerCase().trim());
+        return usedList.has(d.sector?.toLowerCase().trim());
       } else {
-        return usedList.includes(d.country?.toLowerCase().trim());
+        return usedList.has(d.country?.toLowerCase().trim());
       }
     });
 
