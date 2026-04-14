@@ -146,6 +146,15 @@ const cancellationPolicyUrlLine = (url) => {
   </p>`;
 };
 
+const companyPaymentLinkLine = (url) => {
+  const u = safe(url, "");
+  if (!isHttpUrlString(u)) return "";
+  return `<p style="margin-bottom:10px;">
+    <b>Payment link: </b>
+    <a href="${u}" target="_blank" rel="noopener noreferrer" style="color:#1976d2; font-weight:bold; word-break:break-all;">${u}</a>
+  </p>`;
+};
+
 const bankHtmlSection = (bankDetails = []) => {
   if (!Array.isArray(bankDetails) || bankDetails.length === 0) return "";
   return `
@@ -237,6 +246,7 @@ export const buildCustomQuotationNormalEmail = (
   );
   const bankDetails = options?.bankDetails || [];
   const cancellationPolicyUrl = safe(options?.companyCancellationPolicyUrl, "");
+  const paymentLink = safe(options?.companyPaymentLink, "");
 
   return `
     <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
@@ -349,11 +359,12 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
         ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
-        <br/>
+        
 
         <br/>
 
         <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+        ${companyPaymentLinkLine(paymentLink)}
         <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
@@ -438,6 +449,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
     customText?.companyCancellationPolicyUrl,
     "",
   );
+  const paymentLink = safe(customText?.companyPaymentLink, "");
 
   return `
     <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
@@ -504,10 +516,10 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
         ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
-        <p>${policyLines(cancellationCombined).replace(/\n/g, "<br/>")}</p>
-        <br/>
+       
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+        ${companyPaymentLinkLine(paymentLink)}
         <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
         ${bankHtmlSection(bankDetails)}
         <p>

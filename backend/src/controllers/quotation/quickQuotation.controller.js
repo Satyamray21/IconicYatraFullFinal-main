@@ -448,6 +448,7 @@ const loadEmailMetaQuick = async (company) => {
     globalTermsAndConditions: globalSettings?.termsAndConditions || "",
     companyTermsConditions: company?.termsConditions || "",
     companyCancellationPolicyUrl: pickHttp(company?.cancellationPolicy),
+    companyPaymentLink: pickHttp(company?.paymentLink),
     bankDetails,
   };
 };
