@@ -437,7 +437,7 @@ const InvoiceView = () => {
                                     company.authorizedSignatory?.signatureImage
                                 }
                                 alt="Digital Signature"
-                                style={{ height: "50px", width: "150px" }}
+                                style={{ height: "100px", width: "100px" }}
                             />
                             <Typography fontWeight={600} fontSize={12}>
                                 Authorized Signatory

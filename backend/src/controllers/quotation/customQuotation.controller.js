@@ -5,10 +5,15 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../../utils/cloudinary.js";
 import mongoose from "mongoose";
 import nodemailer from "nodemailer";
+import Company from "../../models/company.model.js";
+import Bank from "../../models/bankDetails.js";
+import GlobalSettings from "../../models/globalSettings.model.js";
 import {
   buildCustomQuotationNormalEmail,
   buildCustomQuotationBookingEmail,
+  packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
+import ReceivedVoucher from "../../models/payment.model.js";
 
 // Counter Schema and Model - defined in the same file
 const counterSchema = new mongoose.Schema({
@@ -487,6 +492,130 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
 
 const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
 
+const resolveCompanyForEmail = async ({ companyId, companyName }) => {
+  if (companyId) {
+    const byId = await Company.findById(companyId).lean();
+    if (byId) return byId;
+  }
+  if (companyName) {
+    const byName = await Company.findOne({
+      companyName: { $regex: `^${String(companyName).trim()}$`, $options: "i" },
+    }).lean();
+    if (byName) return byName;
+  }
+  return null;
+};
+
+const resolveMailAuth = (senderAccount) => {
+  const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
+
+  const user = useSecondary
+    ? process.env.EMAIL_USER2
+    : process.env.EMAIL_USER;
+
+  const pass = useSecondary
+    ? process.env.EMAIL_PASS2
+    : process.env.EMAIL_PASS;
+
+  return { user, pass };
+};
+
+
+/** Receive vouchers only — matches dashboard `summarizeVoucherAmounts` (Cr / Receive Voucher). */
+const sumReceivedFromClient = (vouchers) => {
+  let receivedFromClient = 0;
+  for (const v of vouchers || []) {
+    const n = Number(v?.amount) || 0;
+    const isReceive =
+      v?.drCr === "Cr" || v?.paymentType === "Receive Voucher";
+    if (isReceive) receivedFromClient += n;
+  }
+  return receivedFromClient;
+};
+
+/**
+ * Fills booking-mail payment lines when the client does not pass customText.booking amounts.
+ * Uses vouchers with quotationRef === quotation.quotationId and package total from packageTotals.
+ */
+const loadBookingPaymentDefaults = async (quotation) => {
+  const quotationId = quotation?.quotationId;
+  if (!quotationId) return {};
+
+  const vouchers = await ReceivedVoucher.find({
+    quotationRef: quotationId,
+  }).lean();
+  const receivedAmount = sumReceivedFromClient(vouchers);
+  const { total } = packageTotals(quotation);
+  const dueAmount = Math.max(0, total - receivedAmount);
+
+  return { receivedAmount, dueAmount };
+};
+
+const mergeBookingEmailPayload = async (quotation, meta, bookingCustom = {}) => {
+  const defaults = await loadBookingPaymentDefaults(quotation);
+  return {
+    ...meta,
+    ...defaults,
+    ...bookingCustom,
+  };
+};
+
+const readBookingOverridesFromRequest = (reqBody = {}) => {
+  const customText = reqBody?.customText || {};
+  const booking = customText?.booking || {};
+  // Accept fallback keys from older/newer frontend payload shapes.
+  const topLevel = {
+    nextPayableAmount: reqBody?.nextPayableAmount,
+    dueDate: reqBody?.dueDate || reqBody?.paymentDueDate,
+    receivedAmount: reqBody?.receivedAmount,
+    dueAmount: reqBody?.dueAmount,
+  };
+  return {
+    ...(customText?.nextPayableAmount !== undefined
+      ? { nextPayableAmount: customText.nextPayableAmount }
+      : {}),
+    ...(customText?.dueDate !== undefined ? { dueDate: customText.dueDate } : {}),
+    ...(customText?.paymentDueDate !== undefined
+      ? { dueDate: customText.paymentDueDate }
+      : {}),
+    ...(customText?.receivedAmount !== undefined
+      ? { receivedAmount: customText.receivedAmount }
+      : {}),
+    ...(customText?.dueAmount !== undefined ? { dueAmount: customText.dueAmount } : {}),
+    ...(topLevel.nextPayableAmount !== undefined
+      ? { nextPayableAmount: topLevel.nextPayableAmount }
+      : {}),
+    ...(topLevel.dueDate !== undefined ? { dueDate: topLevel.dueDate } : {}),
+    ...(topLevel.receivedAmount !== undefined
+      ? { receivedAmount: topLevel.receivedAmount }
+      : {}),
+    ...(topLevel.dueAmount !== undefined ? { dueAmount: topLevel.dueAmount } : {}),
+    ...booking,
+  };
+};
+
+const loadEmailMeta = async (company) => {
+  const globalSettings = await GlobalSettings.findOne().lean();
+  const accountHolder = company?.companyName;
+  const bankDetails = accountHolder
+    ? await Bank.find({
+        accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
+      }).lean()
+    : [];
+
+  return {
+    companyName: company?.companyName || "Iconic Travel",
+    companyWebsite: company?.companyWebsite || "",
+    globalInclusions: globalSettings?.inclusions || [],
+    globalExclusions: globalSettings?.exclusions || [],
+    globalCancellationPolicy: globalSettings?.cancellationPolicy || "",
+    globalPaymentPolicy: globalSettings?.paymentPolicy || "",
+    globalTermsAndConditions: globalSettings?.termsAndConditions || "",
+    companyTermsConditions: company?.termsConditions || "",
+    bankDetails,
+  };
+};
+
 export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
   const { finalizedPackage } = req.body || {};
@@ -520,14 +649,23 @@ export const previewCustomQuotationMail = asyncHandler(async (req, res) => {
   if (!quotation) throw new ApiError(404, "Quotation not found");
 
   const customText = req.body?.customText || {};
+  const bookingOverrides = readBookingOverridesFromRequest(req.body || {});
+  const selectedCompany = await resolveCompanyForEmail({
+    companyId: req.body?.companyId,
+    companyName: req.body?.companyName,
+  });
+  const meta = await loadEmailMeta(selectedCompany);
   const normal = buildCustomQuotationNormalEmail(
     quotation,
     customText.normal || {},
+    meta,
   );
-  const booking = buildCustomQuotationBookingEmail(
+  const bookingPayload = await mergeBookingEmailPayload(
     quotation,
-    customText.booking || {},
+    meta,
+    bookingOverrides,
   );
+  const booking = buildCustomQuotationBookingEmail(quotation, bookingPayload);
 
   return res.status(200).json(
     new ApiResponse(
@@ -551,7 +689,17 @@ export const previewCustomQuotationMail = asyncHandler(async (req, res) => {
 // Send custom quotation email using backend templates
 export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
-  const { to, cc, type = "normal", subject, customText = {} } = req.body || {};
+  const {
+    to,
+    cc,
+    type = "normal",
+    subject,
+    bodyHtml,
+    customText = {},
+    senderAccount,
+    companyId,
+    companyName,
+  } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
     throw new ApiError(400, "Receiver email is required");
@@ -560,10 +708,28 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   const quotation = await CustomQuotation.findOne({ quotationId }).lean();
   if (!quotation) throw new ApiError(404, "Quotation not found");
 
+  const selectedCompany = await resolveCompanyForEmail({ companyId, companyName });
+  const meta = await loadEmailMeta(selectedCompany);
+
+  const generatedBody =
+    type === "booking"
+      ? buildCustomQuotationBookingEmail(
+          quotation,
+          await mergeBookingEmailPayload(
+            quotation,
+            meta,
+            readBookingOverridesFromRequest(req.body || {}),
+          ),
+        )
+      : buildCustomQuotationNormalEmail(
+          quotation,
+          customText.normal || {},
+          meta,
+        );
   const body =
     type === "booking"
-      ? buildCustomQuotationBookingEmail(quotation, customText.booking || {})
-      : buildCustomQuotationNormalEmail(quotation, customText.normal || {});
+      ? generatedBody
+      : String(bodyHtml || "").trim() || generatedBody;
 
   const finalSubject =
     subject ||
@@ -571,22 +737,30 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
       ? `Booking Confirmation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`
       : `Quotation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`);
 
+  const auth = resolveMailAuth(senderAccount);
+  if (!auth.user || !auth.pass) {
+    throw new ApiError(
+      500,
+      "Sender email credentials are not configured for selected account",
+    );
+  }
+
   const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 587,
     secure: false,
     auth: {
-      user: process.env.gmail,
-      pass: process.env.app_pass || process.env.EMAIL_PASS,
+      user: auth.user,
+      pass: auth.pass,
     },
   });
 
   try {
     await transporter.sendMail({
-      from: `"Iconic Travel" <${process.env.gmail}>`,
+      from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
       to,
       cc: cc && cc.length ? cc : undefined,
-      replyTo: process.env.gmail,
+      replyTo: selectedCompany?.email || auth.user,
       subject: finalSubject,
       html: body,
       text: body.replace(/<[^>]*>/g, ""), // fallback
@@ -597,7 +771,16 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   }
 
   return res.status(200).json(
-    new ApiResponse(200, { quotationId, type }, "Mail sent successfully")
+    new ApiResponse(
+      200,
+      {
+        quotationId,
+        type,
+        senderAccount: senderAccount || "gmail1",
+        company: selectedCompany?.companyName || null,
+      },
+      "Mail sent successfully",
+    )
   );
 });
 

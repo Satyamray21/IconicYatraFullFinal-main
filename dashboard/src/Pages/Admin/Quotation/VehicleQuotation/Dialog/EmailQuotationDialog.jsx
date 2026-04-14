@@ -8,6 +8,9 @@ import {
   TextField,
   Grid,
   MenuItem,
+  Paper,
+  Typography,
+  Box,
 } from "@mui/material";
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
@@ -15,19 +18,22 @@ import * as Yup from "yup";
 const EmailQuotationDialog = ({
   open,
   onClose,
-  onSend,
+  onSend = () => {},
+  onCompanyChange,
   initialValuesOverride,
   templateBodies,
+  companyOptions = [],
 }) => {
   const validationSchema = Yup.object({
     to: Yup.string().email("Invalid email").required("Required"),
     cc: Yup.string().email("Invalid email").nullable(),
-    recipientName: Yup.string().required("Required"),
-    salutation: Yup.string().required("Required"),
     subject: Yup.string().required("Required"),
-    greetLine: Yup.string().required("Required"),
     message: Yup.string().required("Required"),
-    signature: Yup.string().required("Required"),
+    companyId:
+      companyOptions.length > 0
+        ? Yup.string().required("Select company")
+        : Yup.string().nullable(),
+    senderAccount: Yup.string().required("Select sender email"),
   });
 
   const baseInitialValues = {
@@ -40,6 +46,10 @@ const EmailQuotationDialog = ({
     message: "",
     signature: "",
     mailType: "normal",
+    senderAccount: "gmail1",
+    companyId: "",
+    nextPayableAmount: "",
+    paymentDueDate: "",
   };
   const initialValues = { ...baseInitialValues, ...(initialValuesOverride || {}) };
 
@@ -58,6 +68,29 @@ const EmailQuotationDialog = ({
         onSubmit={handleSubmit}
       >
         {({ errors, touched, values, setFieldValue }) => (
+          (() => {
+            const appendToMessage = (snippet) => {
+              const current = values.message || "";
+              const separator = current && !current.endsWith("\n") ? "\n" : "";
+              setFieldValue("message", `${current}${separator}${snippet}`);
+            };
+            const addPaymentReminderBlock = () => {
+              const amount = String(values.nextPayableAmount || "").trim() || "2400";
+              const dueDate = String(values.paymentDueDate || "").trim() || "DD/MM/YYYY";
+              appendToMessage(
+                `<p style="color:#d32f2f; font-weight:bold;"><b>Next Payable Amount:</b> INR ${amount}</p>`
+              );
+              appendToMessage(
+                `<p><b>Payment Due Date:</b> ${dueDate}</p>`
+              );
+              appendToMessage(
+                `<p style="color:#d32f2f; font-weight:bold;">Please clear your all dues as per the payment policy.</p>`
+              );
+              appendToMessage(
+                `<p style="color:#2e7d32; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>`
+              );
+            };
+            return (
           <Form>
             <DialogContent dividers>
               <Grid container spacing={2}>
@@ -81,6 +114,47 @@ const EmailQuotationDialog = ({
                     </TextField>
                   </Grid>
                 )}
+                <Grid size={{xs:12, sm:6}}>
+                  <TextField
+                    select
+                    fullWidth
+                    name="companyId"
+                    label="Company"
+                    value={values.companyId || ""}
+                    onChange={async (e) => {
+                      const companyId = e.target.value;
+                      setFieldValue("companyId", companyId);
+                      if (typeof onCompanyChange === "function") {
+                        const nextType = values.mailType || "normal";
+                        const tpl = await onCompanyChange(companyId, nextType);
+                        if (tpl?.subject !== undefined) setFieldValue("subject", tpl.subject);
+                        if (tpl?.message !== undefined) setFieldValue("message", tpl.message);
+                      }
+                    }}
+                    error={touched.companyId && Boolean(errors.companyId)}
+                    helperText={touched.companyId && errors.companyId}
+                  >
+                    {companyOptions.map((company) => (
+                      <MenuItem key={company._id} value={company._id}>
+                        {company.companyName}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid size={{xs:12, sm:6}}>
+                  <Field
+                    as={TextField}
+                    select
+                    fullWidth
+                    name="senderAccount"
+                    label="Send From"
+                    error={touched.senderAccount && Boolean(errors.senderAccount)}
+                    helperText={touched.senderAccount && errors.senderAccount}
+                  >
+                    <MenuItem value="gmail1">Gmail 1</MenuItem>
+                    <MenuItem value="gmail2">Gmail 2</MenuItem>
+                  </Field>
+                </Grid>
                 <Grid size={{xs:12, sm:6}}>
                   <Field
                     as={TextField}
@@ -107,8 +181,6 @@ const EmailQuotationDialog = ({
                     name="recipientName"
                     label="Recipient Name"
                     fullWidth
-                    error={touched.recipientName && Boolean(errors.recipientName)}
-                    helperText={touched.recipientName && errors.recipientName}
                   />
                 </Grid>
                 <Grid size={{xs:12, sm:6}}>
@@ -117,8 +189,6 @@ const EmailQuotationDialog = ({
                     name="salutation"
                     label="Salutation"
                     fullWidth
-                    error={touched.salutation && Boolean(errors.salutation)}
-                    helperText={touched.salutation && errors.salutation}
                   />
                 </Grid>
                 <Grid size={{xs:12}}>
@@ -137,21 +207,90 @@ const EmailQuotationDialog = ({
                     name="greetLine"
                     label="Greet Line"
                     fullWidth
-                    error={touched.greetLine && Boolean(errors.greetLine)}
-                    helperText={touched.greetLine && errors.greetLine}
                   />
                 </Grid>
                 <Grid size={{xs:12}}>
-                  <Field
-                    as={TextField}
-                    name="message"
-                    label="Message"
-                    multiline
-                    minRows={4}
+                  {(values.mailType || "normal") === "booking" && (
+                    <Grid container spacing={2} sx={{ mb: 1 }}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <TextField
+                          fullWidth
+                          name="nextPayableAmount"
+                          label="Next Payable Amount (INR)"
+                          value={values.nextPayableAmount || ""}
+                          onChange={(e) =>
+                            setFieldValue("nextPayableAmount", e.target.value)
+                          }
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <TextField
+                          fullWidth
+                          name="paymentDueDate"
+                          label="Payment Due Date"
+                          placeholder="DD/MM/YYYY"
+                          value={values.paymentDueDate || ""}
+                          onChange={(e) =>
+                            setFieldValue("paymentDueDate", e.target.value)
+                          }
+                        />
+                      </Grid>
+                    </Grid>
+                  )}
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Email Body (Editable HTML)
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() =>
+                        appendToMessage(
+                          '<h3 style="color:#d32f2f; font-weight:bold;">YOUR HEADING</h3>'
+                        )
+                      }
+                    >
+                      Add Red Heading
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => appendToMessage("<p>Write your line here...</p>")}
+                    >
+                      Add Line
+                    </Button>
+                    {(values.mailType || "normal") === "booking" && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={addPaymentReminderBlock}
+                      >
+                        Add Payment Reminder Block
+                      </Button>
+                    )}
+                  </Box>
+                  <TextField
                     fullWidth
+                    name="message"
+                    label="Message HTML"
+                    multiline
+                    minRows={8}
+                    value={values.message || ""}
+                    onChange={(e) => setFieldValue("message", e.target.value)}
                     error={touched.message && Boolean(errors.message)}
                     helperText={touched.message && errors.message}
                   />
+                </Grid>
+                <Grid size={{xs:12}}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Live Preview
+                  </Typography>
+                  <Paper variant="outlined" sx={{ p: 2, maxHeight: 280, overflow: "auto" }}>
+                    <Box
+                      sx={{ "& p": { m: 0, mb: 1 } }}
+                      dangerouslySetInnerHTML={{ __html: values.message || "<p>No preview</p>" }}
+                    />
+                  </Paper>
                 </Grid>
                 <Grid size={{xs:12}}>
                   <Field
@@ -159,8 +298,6 @@ const EmailQuotationDialog = ({
                     name="signature"
                     label="Signature"
                     fullWidth
-                    error={touched.signature && Boolean(errors.signature)}
-                    helperText={touched.signature && errors.signature}
                   />
                 </Grid>
               </Grid>
@@ -174,6 +311,8 @@ const EmailQuotationDialog = ({
               </Button>
             </DialogActions>
           </Form>
+            );
+          })()
         )}
       </Formik>
     </Dialog>
