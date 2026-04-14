@@ -33,7 +33,6 @@ import {
   LocalPhone,
   Email,
   LocationOn,
-  Language,
   Person,
   FlightTakeoff,
   FlightLand,
@@ -47,9 +46,13 @@ import {
 } from "@mui/icons-material";
 import axios from "../../../../../../utils/axios";
 
-const QuotationPDFDialog = ({ open, onClose, quotation }) => {
+const QuotationPDFDialog = ({
+  open,
+  onClose,
+  quotation,
+  pdfHeading = "CUSTOM QUOTATION",
+}) => {
   const printRef = useRef();
-  const contentRef = useRef();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [imagesLoaded, setImagesLoaded] = useState(false);
@@ -63,6 +66,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
     exclusions: [],
     paymentPolicy: "",
     cancellationPolicy: "",
+    termsAndConditions: "",
   });
 
   // Helper function to safely get nested values
@@ -141,7 +145,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
     });
   };
 
-  // Convert remote image to data URL (fetch first — works better with Cloudinary + html2canvas)
+  // Convert remote image to data URL
   const convertToBase64 = useCallback((url, compress = true) => {
     return new Promise((resolve) => {
       if (!url) {
@@ -209,7 +213,10 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             }),
         )
         .then((dataUrl) => {
-          if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image")) {
+          if (
+            typeof dataUrl !== "string" ||
+            !dataUrl.startsWith("data:image")
+          ) {
             finishWithCanvas();
             return;
           }
@@ -266,6 +273,10 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             typeof data?.cancellationPolicy === "string"
               ? data.cancellationPolicy
               : "",
+          termsAndConditions:
+            typeof data?.termsAndConditions === "string"
+              ? data.termsAndConditions
+              : "",
         });
       } catch (err) {
         console.error("Failed to fetch global settings for PDF:", err);
@@ -274,6 +285,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           exclusions: [],
           paymentPolicy: "",
           cancellationPolicy: "",
+          termsAndConditions: "",
         });
       }
     };
@@ -340,14 +352,12 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
     toNumber(totalCostRow?.standard) ||
     toNumber(totalCostRow?.deluxe) ||
     toNumber(totalCostRow?.superior);
-  // Prefer pricing table totals because quotation.pricing.total can be stale in some flows.
   const effectiveTotal =
     totalFromHotelRow ?? totalFromPricing ?? totalFromFooter ?? 0;
   const standardTotal = toNumber(totalCostRow?.standard);
   const deluxeTotal = toNumber(totalCostRow?.deluxe);
   const superiorTotal = toNumber(totalCostRow?.superior);
 
-  // Priority: selected company logo first, then quotation data logos
   const logoUrl =
     selectedCompany?.logo ||
     getValue(quotationData, "logo") ||
@@ -373,7 +383,6 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
   const footerContactDesignation =
     selectedCompany?.authorizedSignatory?.designation || "";
   const footerReceived = getValue(quotationData, "footer.received");
-  const footerBalance = getValue(quotationData, "footer.balance");
 
   const fallbackInclusions = [
     "Welcome Drink on Arrival.",
@@ -382,8 +391,26 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
     "Accommodation on Double Sharing Basis.",
     "Daily Complementary Breakfast as per Hotel Menu.",
     "Pick Up & Drop Facility From Airport/Railway Station.",
-    "All Sightseeing as per places given or state norms on Priavte Basis.",
+    "All Sightseeing as per places given or state norms on Private Basis.",
   ];
+
+  const fallbackCancellationPolicy = [
+    "Cancellation Policy:",
+    "• 30 days or more before departure: 25% of total tour cost",
+    "• 29 - 20 days before departure: 50% of total tour cost",
+    "• 19 - 10 days before departure: 75% of total tour cost",
+    "• Less than 10 days before departure: 100% of total tour cost",
+    "",
+    "Refund Policy:",
+    "• All refunds will be processed within 15-20 working days",
+    "• Refund will be credited to the same payment method used at the time of booking",
+    "• Bank charges, if any, will be deducted from the refund amount",
+    "• No refund for unused services (hotel, transport, sightseeing, etc.)",
+    "• In case of flight cancellations, airline refund policy will apply",
+    "",
+    "Note: The cancellation policy may vary during peak season (Dec-Jan), festivals, and long weekends.",
+  ];
+
   const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
   const policiesCancellationPolicy = getValue(
     quotationData,
@@ -427,20 +454,12 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
     showSuperiorCol,
   ].filter(Boolean).length;
 
-  // Convert policies to array if they're strings
   const inclusionArray = Array.isArray(policiesInclusions)
     ? policiesInclusions
     : typeof policiesInclusions === "string"
       ? policiesInclusions.split("\n").filter((s) => s.trim())
       : typeof policiesInclusions === "object"
         ? Object.values(policiesInclusions)
-        : [];
-  const cancellationArray = Array.isArray(policiesCancellationPolicy)
-    ? policiesCancellationPolicy
-    : typeof policiesCancellationPolicy === "string"
-      ? policiesCancellationPolicy.split("\n").filter((s) => s.trim())
-      : typeof policiesCancellationPolicy === "object"
-        ? Object.values(policiesCancellationPolicy)
         : [];
   const exclusionArray = Array.isArray(globalPolicyDefaults.exclusions)
     ? globalPolicyDefaults.exclusions
@@ -455,6 +474,7 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           .split("\n")
           .filter((s) => s.trim())
       : [];
+
   const finalInclusionArray =
     globalPolicyDefaults.inclusions?.length > 0
       ? globalPolicyDefaults.inclusions
@@ -465,7 +485,10 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
   const finalPaymentPolicyArray = paymentPolicyArray.filter((item) =>
     String(item || "").trim(),
   );
-  const finalCancellationArray = globalCancellationArray;
+  const finalCancellationArray =
+    globalCancellationArray.length > 0
+      ? globalCancellationArray
+      : fallbackCancellationPolicy;
 
   const normalizeWebUrl = (value) => {
     if (value === undefined || value === null) return "";
@@ -474,14 +497,12 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
     if (/^https?:\/\//i.test(s)) return s;
     return "";
   };
-  const companyWebsiteHref =
+
+  // Get company website URL for Terms & Conditions
+  const companyWebsiteUrl =
     normalizeWebUrl(selectedCompany?.companyWebsite) ||
-    normalizeWebUrl(footerWebsite);
-  const paymentPolicyHref =
-    normalizeWebUrl(selectedCompany?.paymentLink) || companyWebsiteHref;
-  const termsConditionsHref =
-    normalizeWebUrl(selectedCompany?.termsConditions) || companyWebsiteHref;
-  const exclusionsPolicyHref = companyWebsiteHref;
+    normalizeWebUrl(footerWebsite) ||
+    "#";
 
   // Pre-load all images as base64 with compression
   useEffect(() => {
@@ -491,28 +512,18 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       setRenderComplete(false);
       const loadedImages = {};
 
-      console.log("Loading logo from URL:", logoUrl);
-
-      // Load logo with compression (includes local logo if no other is provided)
       if (logoUrl && typeof logoUrl === "string" && logoUrl !== "null") {
         const base64Logo = await convertToBase64(logoUrl, true);
         if (base64Logo) {
           loadedImages.logo = base64Logo;
-          console.log("Logo loaded successfully, length:", base64Logo.length);
-        } else {
-          console.warn("Failed to load logo");
         }
-      } else {
-        console.warn("No logo URL provided");
       }
 
-      // Load banner with compression
       if (bannerImage && typeof bannerImage === "string") {
         const base64Banner = await convertToBase64(bannerImage, true);
         if (base64Banner) loadedImages.banner = base64Banner;
       }
 
-      // Load day images with compression
       for (let i = 0; i < days.length; i++) {
         const day = days[i];
         if (
@@ -528,7 +539,6 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       setImageElements(loadedImages);
       setImagesLoaded(true);
 
-      // Wait for DOM to update with images
       setTimeout(() => {
         setRenderComplete(true);
       }, 500);
@@ -544,171 +554,144 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
       setLoading(true);
       setError("");
 
-      // Wait for render to complete
       if (!renderComplete) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
       }
 
-      // Dynamically import required libraries
       const html2canvas = (await import("html2canvas")).default;
       const jsPDF = (await import("jspdf")).default;
 
-      const element = printRef.current;
-      if (!element) {
-        throw new Error("PDF content not found");
+      const pageElements = printRef.current.querySelectorAll(".pdf-page");
+
+      if (pageElements.length === 0) {
+        throw new Error("No pages found");
       }
 
-      // Store original styles
-      const originalStyle = {
-        overflow: element.style.overflow,
-        height: element.style.height,
-        maxHeight: element.style.maxHeight,
-      };
-
-      // Temporarily modify styles to capture full content
-      element.style.overflow = "visible";
-      element.style.height = "auto";
-      element.style.maxHeight = "none";
-
-      // Re-embed logo as data URL so the capture always includes it (CORS-safe for canvas)
-      if (logoUrl && typeof logoUrl === "string") {
-        const freshLogo = await convertToBase64(logoUrl, true);
-        if (freshLogo) {
-          element.querySelectorAll('img[alt="Company Logo"]').forEach((img) => {
-            img.removeAttribute("crossorigin");
-            img.src = freshLogo;
-          });
-          await new Promise((r) => setTimeout(r, 400));
-        }
-      }
-
-      // Additional wait for any dynamic content
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
-      // Capture the entire content with optimized settings
-      const canvas = await html2canvas(element, {
-        scale: 2, // Increased for better quality
-        backgroundColor: "#ffffff",
-        logging: false,
-        useCORS: true,
-        allowTaint: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight,
-        onclone: async (clonedDoc) => {
-          const style = clonedDoc.createElement("style");
-          style.textContent = `
-            * {
-              box-sizing: border-box;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            .pdf-page {
-              page-break-after: always;
-              break-after: page;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-            }
-            img {
-              max-width: 100%;
-              height: auto;
-            }
-          `;
-          clonedDoc.head.appendChild(style);
-
-          const images = clonedDoc.querySelectorAll("img");
-          await Promise.all(
-            Array.from(images).map(async (img) => {
-              const src = img.getAttribute("src") || img.src || "";
-              if (src && /^https?:\/\//i.test(src)) {
-                const inlined = await convertToBase64(src, true);
-                if (inlined) {
-                  img.removeAttribute("crossorigin");
-                  img.src = inlined;
-                }
-              }
-              if (img.complete && img.naturalHeight !== 0) return;
-              await new Promise((resolve) => {
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-                setTimeout(resolve, 3000);
-              });
-            }),
-          );
-        },
+      const pdf = new jsPDF({
+        unit: "mm",
+        format: "a4",
+        orientation: "portrait",
       });
 
-      // Restore original styles
-      element.style.overflow = originalStyle.overflow;
-      element.style.height = originalStyle.height;
-      element.style.maxHeight = originalStyle.maxHeight;
+      const pageWidth = 210;
+      const pageHeight = 297;
 
-      // Convert canvas to JPEG with compression for smaller PDF size
-      const imgData = canvas.toDataURL("image/jpeg", 0.9);
+      for (let i = 0; i < pageElements.length; i++) {
+        const page = pageElements[i];
 
-      // PDF dimensions
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const tempContainer = document.createElement("div");
+        tempContainer.style.position = "absolute";
+        tempContainer.style.left = "-9999px";
+        tempContainer.style.top = "-9999px";
+        tempContainer.style.width = "800px";
+        tempContainer.style.backgroundColor = "#ffffff";
+        document.body.appendChild(tempContainer);
 
-      const pdf = new jsPDF("p", "mm", "a4");
+        const clone = page.cloneNode(true);
+        tempContainer.appendChild(clone);
 
-      // Add first page with compressed image
-      let heightLeft = imgHeight;
-      let position = 0;
-      let pageNum = 1;
+        const images = clone.querySelectorAll("img");
+        for (const img of images) {
+          const alt = img.getAttribute("alt");
+          if (alt === "Company Logo" && imageElements.logo) {
+            img.src = imageElements.logo;
+          } else if (alt === "Banner" && imageElements.banner) {
+            img.src = imageElements.banner;
+          } else if (alt && alt.startsWith("Day ")) {
+            // Extract day number from alt text
+            const dayMatch = alt.match(/Day (\d+)/);
+            if (dayMatch) {
+              const dayIndex = parseInt(dayMatch[1]) - 1;
+              if (imageElements[`day_${dayIndex}`]) {
+                img.src = imageElements[`day_${dayIndex}`];
+              }
+            }
+          }
+        }
 
-      pdf.addImage(
-        imgData,
-        "JPEG",
-        0,
-        position,
-        imgWidth,
-        imgHeight,
-        undefined,
-        "FAST",
-      );
-      heightLeft -= pageHeight;
+        // Find the Terms & Conditions link element in the clone
+        const linkElement = clone.querySelector('a[href*="http"]');
+        let linkPosition = null;
 
-      // Add subsequent pages if content overflows
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
+        if (linkElement && i === pageElements.length - 1) {
+          // Get the position of the link element relative to the page
+          const rect = linkElement.getBoundingClientRect();
+          const pageRect = page.getBoundingClientRect();
+
+          linkPosition = {
+            x: (rect.left - pageRect.left) * 0.264583, // Convert px to mm
+            y: (rect.top - pageRect.top) * 0.264583,
+            width: rect.width * 0.264583,
+            height: rect.height * 0.264583,
+          };
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const canvas = await html2canvas(tempContainer, {
+          scale: 2,
+          backgroundColor: "#ffffff",
+          logging: false,
+          useCORS: false,
+          allowTaint: false,
+        });
+
+        document.body.removeChild(tempContainer);
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        if (i > 0) {
+          pdf.addPage();
+        }
+
         pdf.addImage(
           imgData,
           "JPEG",
           0,
-          position,
+          0,
           imgWidth,
           imgHeight,
           undefined,
           "FAST",
         );
-        heightLeft -= pageHeight;
-        pageNum++;
+
+        // Add clickable link for Terms & Conditions on the last page
+        if (linkPosition && i === pageElements.length - 1) {
+          const linkUrl =
+            companyWebsiteUrl !== "#"
+              ? companyWebsiteUrl
+              : "https://www.iconicyatra.com";
+
+          pdf.link(
+            linkPosition.x,
+            linkPosition.y,
+            linkPosition.width,
+            linkPosition.height,
+            { url: linkUrl },
+          );
+        }
       }
 
-      // Add PDF metadata
+      for (let i = 1; i <= pageElements.length; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text(
+          `Page ${i} of ${pageElements.length}`,
+          pageWidth - 30,
+          pageHeight - 10,
+        );
+      }
+
       pdf.setProperties({
         title: `${customerName}_Quotation_${reference || Date.now()}`,
         subject: `Travel Quotation for ${customerName}`,
         author: footerCompany,
         creator: "Iconic Yatra Travel Management System",
-        keywords: "travel, quotation, itinerary, package",
       });
 
-      // Add page numbers if multiple pages
-      if (pageNum > 1) {
-        for (let i = 1; i <= pageNum; i++) {
-          pdf.setPage(i);
-          pdf.setFontSize(8);
-          pdf.setTextColor(150, 150, 150);
-          pdf.text(`Page ${i} of ${pageNum}`, imgWidth - 30, pageHeight - 10);
-        }
-      }
-
-      // Save the PDF
       pdf.save(
         `${customerName.replace(/\s/g, "_")}_Quotation_${reference || Date.now()}.pdf`,
       );
@@ -723,16 +706,6 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     const content = printRef.current.cloneNode(true);
-
-    // Add print-specific styles
-    const styles = document.querySelector("style")?.innerHTML || "";
-    const materialStyles = Array.from(
-      document.querySelectorAll('link[rel="stylesheet"]'),
-    )
-      .map((link) => link.href)
-      .filter((href) => href.includes("mui") || href.includes("material"))
-      .map((href) => `<link rel="stylesheet" href="${href}">`)
-      .join("");
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -759,14 +732,8 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
                 page-break-after: always;
                 break-after: page;
               }
-              .no-break {
-                break-inside: avoid;
-                page-break-inside: avoid;
-              }
             }
-            ${styles}
           </style>
-          ${materialStyles}
         </head>
         <body>
           ${content.innerHTML}
@@ -783,518 +750,595 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
     printWindow.document.close();
   };
 
-  // PDF Content Component - Renders EVERYTHING
-  const PDFContent = () => (
-    <Box
-      ref={contentRef}
-      sx={{
-        fontFamily: "'Segoe UI', 'Arial', sans-serif",
-        background: "#fff",
-        width: "100%",
-        position: "relative",
-      }}
+  // Split days into chunks of 2 per page
+  const chunkSize = 2;
+  const dayChunks = [];
+  for (let i = 0; i < days.length; i += chunkSize) {
+    dayChunks.push(days.slice(i, i + chunkSize));
+  }
+
+  // Render individual day card with full content
+  const renderDayCard = (day, globalIndex) => (
+    <div
+      key={globalIndex}
+      style={{ marginBottom: "25px", pageBreakInside: "avoid" }}
     >
-      {/* PAGE 1 - Header, Customer Info, Itinerary */}
-      <Box className="pdf-page" sx={{ p: 3, pageBreakAfter: "always" }}>
-        {/* Header Section with Centered Logo */}
-        <Box sx={{ textAlign: "center", mb: 3 }}>
-          {/* Logo Centered - Now using local logo from folder */}
-          <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
-            {imageElements.logo ? (
-              <img
-                src={imageElements.logo}
-                alt="Company Logo"
-                style={{
-                  height: "80px",
-                  width: "auto",
-                  objectFit: "contain",
-                  display: "block",
-                }}
-                crossOrigin="anonymous"
-                onError={(e) => {
-                  console.error("Logo failed to display in PDF");
-                  e.target.style.display = "none";
-                }}
-              />
-            ) : (
-              <Box
-                sx={{
-                  width: "80px",
-                  height: "80px",
-                  background:
-                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto",
-                }}
-              >
-                <Typography
-                  variant="h4"
-                  sx={{ color: "white", fontWeight: "bold" }}
-                >
-                  {footerCompany.charAt(0)}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-            Travel. Explore. Experience.
-          </Typography>
-
-          {/* Quotation Title and Reference */}
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="h6" fontWeight="bold" color="primary">
-              CUSTOM QUOTATION
-            </Typography>
-            {reference && reference !== "N/A" && (
-              <Typography variant="caption" display="block">
-                Ref No: {reference}
-              </Typography>
-            )}
-            {date && date !== "N/A" && (
-              <Typography variant="caption" display="block">
-                Date: {date}
-              </Typography>
-            )}
-          </Box>
-        </Box>
-
-        <Divider sx={{ mb: 3 }} />
-
-        {/* Banner Image Section */}
-        {imageElements.banner ? (
-          <Box sx={{ position: "relative", mb: 3 }}>
-            <img
-              src={imageElements.banner}
-              alt="Banner"
-              style={{
-                width: "100%",
-                height: "200px",
-                objectFit: "cover",
-                borderRadius: "12px",
-              }}
-              crossOrigin="anonymous"
-            />
-            <Box
-              sx={{
-                position: "absolute",
-                bottom: 0,
-                left: 0,
-                right: 0,
-                background:
-                  "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
-                color: "white",
-                p: 2,
-                borderRadius: "0 0 12px 12px",
-              }}
-            >
-              <Typography variant="h5" fontWeight="bold">
-                {quotationTitle}
-              </Typography>
-              {destinationSummary && destinationSummary !== "N/A" && (
-                <Typography variant="body2">{destinationSummary}</Typography>
-              )}
-            </Box>
-          </Box>
-        ) : (
-          <Box
-            sx={{
-              mb: 3,
-              textAlign: "center",
-              py: 3,
-              bgcolor: "#f5f5f5",
-              borderRadius: 2,
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: "8px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          overflow: "hidden",
+        }}
+      >
+        {imageElements[`day_${globalIndex}`] && (
+          <img
+            src={imageElements[`day_${globalIndex}`]}
+            alt={`Day ${globalIndex + 1}`}
+            style={{
+              width: "100%",
+              height: "250px",
+              objectFit: "cover",
+            }}
+          />
+        )}
+        <div style={{ padding: "20px" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "12px",
+              flexWrap: "wrap",
+              gap: "8px",
             }}
           >
-            <Typography variant="h4" fontWeight="bold" color="primary">
-              {quotationTitle}
-            </Typography>
-            {destinationSummary && destinationSummary !== "N/A" && (
-              <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                {destinationSummary}
-              </Typography>
-            )}
-          </Box>
-        )}
-
-        {/* Customer Information Card */}
-        <Paper elevation={2} sx={{ p: 2, mb: 3, background: "#f8f9ff" }}>
-          <Typography
-            variant="subtitle1"
-            fontWeight="bold"
-            sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+            <div
+              style={{ fontWeight: "bold", color: "#667eea", fontSize: "18px" }}
+            >
+              Day {globalIndex + 1}: {day.title || `Day ${globalIndex + 1}`}
+            </div>
+            {(day.date || day.dayDate) &&
+              (day.date !== "N/A" || day.dayDate !== "N/A") && (
+                <span
+                  style={{
+                    background: "#667eea",
+                    color: "white",
+                    padding: "4px 12px",
+                    borderRadius: "20px",
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {day.dayDate || day.date}
+                </span>
+              )}
+          </div>
+          <div
+            style={{
+              fontSize: "14px",
+              lineHeight: "1.8",
+              marginTop: "10px",
+              whiteSpace: "pre-wrap",
+              color: "#333",
+            }}
           >
-            <Person fontSize="small" color="primary" /> Customer Details
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <Typography fontWeight="bold" variant="body1">
-                {customerName}
-              </Typography>
-              {customerLocation && customerLocation !== "N/A" && (
-                <Box
-                  sx={{
+            {day.description || "No description available"}
+          </div>
+          {(day.meal || (day.hotel && day.hotel !== "N/A")) && (
+            <div
+              style={{
+                display: "flex",
+                gap: "20px",
+                marginTop: "15px",
+                paddingTop: "12px",
+                borderTop: "1px solid #e0e0e0",
+                flexWrap: "wrap",
+              }}
+            >
+              {day.meal && (
+                <div
+                  style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 0.5,
-                    mt: 0.5,
+                    gap: "6px",
+                    fontSize: "12px",
+                    color: "#555",
+                    background: "#f5f5f5",
+                    padding: "5px 12px",
+                    borderRadius: "20px",
                   }}
                 >
-                  <LocationOn
-                    fontSize="small"
-                    sx={{ fontSize: 12, color: "#666" }}
-                  />
-                  <Typography variant="body2">{customerLocation}</Typography>
-                </Box>
+                  <span>🍽️</span> Meal: {day.meal}
+                </div>
               )}
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              {customerPhone && customerPhone !== "N/A" && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <LocalPhone
-                    fontSize="small"
-                    sx={{ fontSize: 12, color: "#666" }}
-                  />
-                  <Typography variant="body2">{customerPhone}</Typography>
-                </Box>
-              )}
-              {customerEmail && customerEmail !== "N/A" && (
-                <Box
-                  sx={{
+              {day.hotel && day.hotel !== "N/A" && (
+                <div
+                  style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 0.5,
-                    mt: 0.5,
+                    gap: "6px",
+                    fontSize: "12px",
+                    color: "#555",
+                    background: "#f5f5f5",
+                    padding: "5px 12px",
+                    borderRadius: "20px",
                   }}
                 >
-                  <Email
-                    fontSize="small"
-                    sx={{ fontSize: 12, color: "#666" }}
-                  />
-                  <Typography variant="body2">{customerEmail}</Typography>
-                </Box>
+                  <span>🏨</span> Hotel: {day.hotel}
+                </div>
               )}
-            </Grid>
-          </Grid>
-        </Paper>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
-        {/* Travel & Hotel Details */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6}>
-            <Paper elevation={1} sx={{ p: 2 }}>
-              <Box
-                sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+  // PAGE 1: Company Logo, Ref, Quotation Name, Banner, Customer Details, Pickup, Accommodation
+  const Page1 = () => (
+    <div
+      className="pdf-page"
+      style={{
+        padding: "25px",
+        position: "relative",
+        background: "#fff",
+        minHeight: "297mm",
+      }}
+    >
+      {/* Header with Logo */}
+      <div style={{ textAlign: "center", marginBottom: "25px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: "15px",
+          }}
+        >
+          {imageElements.logo ? (
+            <img
+              src={imageElements.logo}
+              alt="Company Logo"
+              style={{ height: "80px", width: "auto", objectFit: "contain" }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "80px",
+                height: "80px",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span
+                style={{ color: "white", fontWeight: "bold", fontSize: "32px" }}
               >
-                <FlightTakeoff fontSize="small" color="primary" />
-                <Typography fontWeight="bold">Pickup Details</Typography>
-              </Box>
-              {pickupArrival && pickupArrival !== "N/A" ? (
-                <Typography variant="body2">
-                  Arrival: {pickupArrival}
-                </Typography>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  Not specified
-                </Typography>
-              )}
-              {pickupDeparture && pickupDeparture !== "N/A" ? (
-                <Box
-                  sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}
-                >
-                  <FlightLand fontSize="small" color="primary" />
-                  <Typography variant="body2">
-                    Departure: {pickupDeparture}
-                  </Typography>
-                </Box>
-              ) : (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 1 }}
-                >
-                  Departure not specified
-                </Typography>
-              )}
-            </Paper>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Paper elevation={1} sx={{ p: 2 }}>
-              <Box
-                sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
-              >
-                <Hotel fontSize="small" color="primary" />
-                <Typography fontWeight="bold">Accommodation</Typography>
-              </Box>
-              {hotelGuests && hotelGuests !== "N/A" && (
-                <Typography variant="body2">
-                  👥 Guests: {hotelGuests}
-                </Typography>
-              )}
-              {hotelRooms && hotelRooms !== "N/A" && (
-                <Typography variant="body2">🛏️ Rooms: {hotelRooms}</Typography>
-              )}
-              {hotelType && hotelType !== "N/A" && (
-                <Typography variant="body2">
-                  ⭐ Hotel Type: {hotelType}
-                </Typography>
-              )}
-              {hotelMealPlan && hotelMealPlan !== "N/A" && (
-                <Typography variant="body2">
-                  🍽️ Meal Plan: {hotelMealPlan}
-                </Typography>
-              )}
-              {hotelDestination && hotelDestination !== "N/A" && (
-                <Typography variant="body2">
-                  📍 Destination: {hotelDestination}
-                </Typography>
-              )}
-              {!hotelGuests && !hotelRooms && !hotelType && !hotelMealPlan && (
-                <Typography variant="body2" color="text.secondary">
-                  Not specified
-                </Typography>
-              )}
-            </Paper>
-          </Grid>
-        </Grid>
+                {footerCompany.charAt(0)}
+              </span>
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: "12px", color: "#666", marginBottom: "10px" }}>
+          Travel. Explore. Experience.
+        </div>
+        <div>
+          <h3 style={{ margin: 0, color: "#667eea", fontSize: "20px" }}>
+            {pdfHeading}
+          </h3>
+          {reference && reference !== "N/A" && (
+            <div style={{ fontSize: "12px", marginTop: "8px", color: "#555" }}>
+              Ref No: {reference}
+            </div>
+          )}
+          {date && date !== "N/A" && (
+            <div style={{ fontSize: "12px", color: "#555" }}>Date: {date}</div>
+          )}
+        </div>
+      </div>
 
-        {/* Itinerary Section Title */}
-        <Typography
-          variant="h6"
-          fontWeight="bold"
-          sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+      <Divider sx={{ my: 2 }} />
+
+      {/* Banner Image */}
+      {imageElements.banner && (
+        <div style={{ marginBottom: "25px" }}>
+          <img
+            src={imageElements.banner}
+            alt="Banner"
+            style={{
+              width: "100%",
+              height: "220px",
+              objectFit: "cover",
+              borderRadius: "12px",
+            }}
+          />
+          <div style={{ marginTop: "15px", textAlign: "center" }}>
+            <h2 style={{ margin: 0, color: "#667eea", fontSize: "22px" }}>
+              {quotationTitle}
+            </h2>
+            {destinationSummary && destinationSummary !== "N/A" && (
+              <div
+                style={{ fontSize: "13px", color: "#666", marginTop: "8px" }}
+              >
+                {destinationSummary}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Customer Details */}
+      <div
+        style={{
+          padding: "18px",
+          background: "linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%)",
+          borderRadius: "12px",
+          marginBottom: "20px",
+        }}
+      >
+        <div
+          style={{
+            fontWeight: "bold",
+            marginBottom: "12px",
+            fontSize: "16px",
+            color: "#667eea",
+          }}
+        >
+          👤 Customer Details
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "15px",
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: "bold", fontSize: "15px" }}>
+              {customerName}
+            </div>
+            {customerLocation && customerLocation !== "N/A" && (
+              <div
+                style={{ fontSize: "13px", color: "#666", marginTop: "5px" }}
+              >
+                📍 {customerLocation}
+              </div>
+            )}
+          </div>
+          <div>
+            {customerPhone && customerPhone !== "N/A" && (
+              <div style={{ fontSize: "13px", marginBottom: "5px" }}>
+                📞 {customerPhone}
+              </div>
+            )}
+            {customerEmail && customerEmail !== "N/A" && (
+              <div style={{ fontSize: "13px" }}>✉️ {customerEmail}</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Pickup and Accommodation */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "18px",
+          marginBottom: "20px",
+        }}
+      >
+        <div
+          style={{
+            padding: "18px",
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "bold",
+              marginBottom: "12px",
+              fontSize: "16px",
+              color: "#667eea",
+            }}
+          >
+            ✈️ Pickup Details
+          </div>
+          {pickupArrival && pickupArrival !== "N/A" ? (
+            <div style={{ fontSize: "14px", marginBottom: "8px" }}>
+              🛬 Arrival: {pickupArrival}
+            </div>
+          ) : (
+            <div style={{ fontSize: "14px", color: "#999" }}>Not specified</div>
+          )}
+          {pickupDeparture && pickupDeparture !== "N/A" ? (
+            <div style={{ fontSize: "14px" }}>
+              🛫 Departure: {pickupDeparture}
+            </div>
+          ) : (
+            <div style={{ fontSize: "14px", color: "#999" }}>
+              Departure not specified
+            </div>
+          )}
+        </div>
+        <div
+          style={{
+            padding: "18px",
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "bold",
+              marginBottom: "12px",
+              fontSize: "16px",
+              color: "#667eea",
+            }}
+          >
+            🏨 Accommodation
+          </div>
+          {hotelGuests && hotelGuests !== "N/A" && (
+            <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+              👥 Guests: {hotelGuests}
+            </div>
+          )}
+          {hotelRooms && hotelRooms !== "N/A" && (
+            <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+              🛏️ Rooms: {hotelRooms}
+            </div>
+          )}
+          {hotelType && hotelType !== "N/A" && (
+            <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+              ⭐ Hotel Type: {hotelType}
+            </div>
+          )}
+          {hotelMealPlan && hotelMealPlan !== "N/A" && (
+            <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+              🍽️ Meal Plan: {hotelMealPlan}
+            </div>
+          )}
+          {hotelDestination && hotelDestination !== "N/A" && (
+            <div style={{ fontSize: "14px" }}>
+              📍 Destination: {hotelDestination}
+            </div>
+          )}
+          {!hotelGuests && !hotelRooms && !hotelType && !hotelMealPlan && (
+            <div style={{ fontSize: "14px", color: "#999" }}>Not specified</div>
+          )}
+        </div>
+      </div>
+
+      {/* General Itinerary Note */}
+      {hotelItinerary && hotelItinerary !== "N/A" && (
+        <div
+          style={{
+            padding: "15px",
+            background: "#fff8e1",
+            borderRadius: "8px",
+            marginTop: "10px",
+            borderLeft: "4px solid #ffc107",
+          }}
+        >
+          <div
+            style={{ fontSize: "13px", color: "#856404", lineHeight: "1.6" }}
+          >
+            <strong>📝 Note:</strong> {hotelItinerary}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Itinerary Pages - 2 days per page with full content
+  const ItineraryPages = () => {
+    return dayChunks.map((chunk, pageIndex) => (
+      <div
+        key={`itinerary-page-${pageIndex}`}
+        className="pdf-page"
+        style={{ padding: "25px", background: "#fff", minHeight: "297mm" }}
+      >
+        <div
+          style={{
+            fontWeight: "bold",
+            fontSize: "22px",
+            marginBottom: "25px",
+            borderBottom: "3px solid #667eea",
+            paddingBottom: "12px",
+            color: "#333",
+          }}
         >
           📋 Detailed Itinerary
-        </Typography>
-
-        {/* General Itinerary */}
-        {hotelItinerary && hotelItinerary !== "N/A" && (
-          <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              {hotelItinerary}
-            </Typography>
-          </Paper>
+        </div>
+        {chunk.map((day, dayIndex) =>
+          renderDayCard(day, pageIndex * chunkSize + dayIndex),
         )}
+      </div>
+    ));
+  };
 
-        {/* Day-wise Itinerary */}
-        {days && days.length > 0 ? (
-          days.map((day, i) => (
-            <Paper key={i} elevation={1} sx={{ mb: 2, overflow: "hidden" }}>
-              {imageElements[`day_${i}`] && (
-                <img
-                  src={imageElements[`day_${i}`]}
-                  alt={day.title || `Day ${i + 1}`}
-                  style={{
-                    width: "100%",
-                    height: "200px",
-                    objectFit: "cover",
-                  }}
-                  crossOrigin="anonymous"
-                />
-              )}
-              <Box sx={{ p: 2 }}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    mb: 1,
-                    flexWrap: "wrap",
-                    gap: 1,
-                  }}
-                >
-                  <Typography
-                    fontWeight="bold"
-                    variant="subtitle1"
-                    color="primary"
-                  >
-                    Day {i + 1}: {day.title || `Day ${i + 1}`}
-                  </Typography>
-                  {(day.date || day.dayDate) &&
-                    (day.date !== "N/A" || day.dayDate !== "N/A") && (
-                      <Chip
-                        label={day.dayDate || day.date}
-                        size="small"
-                        sx={{ fontSize: "10px" }}
-                      />
-                    )}
-                </Box>
-                <Typography
-                  variant="body2"
-                  paragraph
-                  sx={{ mt: 1, whiteSpace: "pre-wrap" }}
-                >
-                  {day.description || "No description available"}
-                </Typography>
-                {(day.meal || (day.hotel && day.hotel !== "N/A")) && (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 2,
-                      mt: 1,
-                      pt: 1,
-                      borderTop: "1px solid #f0f0f0",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {day.meal && (
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-                      >
-                        <Restaurant
-                          fontSize="small"
-                          sx={{ fontSize: 14, color: "#666" }}
-                        />
-                        <Typography variant="caption">
-                          Meal: {day.meal}
-                        </Typography>
-                      </Box>
-                    )}
-                    {day.hotel && day.hotel !== "N/A" && (
-                      <Typography variant="caption" color="text.secondary">
-                        🏨 Hotel: {day.hotel}
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-              </Box>
-            </Paper>
-          ))
-        ) : (
-          <Paper sx={{ p: 2, textAlign: "center" }}>
-            <Typography color="text.secondary">
-              No itinerary details available
-            </Typography>
-          </Paper>
-        )}
-      </Box>
-
-      {/* PAGE 2 - Pricing and Payment Summary */}
-      <Box className="pdf-page" sx={{ p: 3, pageBreakAfter: "always" }}>
-        {/* Hotel Pricing Table */}
-        {hotelPricingData && hotelPricingData.length > 0 && (
-          <>
-            <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
-              🏨 Hotel & Package Pricing
-            </Typography>
-            <TableContainer
-              component={Paper}
-              elevation={2}
-              sx={{ mb: 3, overflowX: "auto" }}
+  // Combined Page: Pricing + Payment Summary + Inclusion Policy
+  const CombinedPricingPage = () => (
+    <div
+      className="pdf-page"
+      style={{ padding: "25px", background: "#fff", minHeight: "297mm" }}
+    >
+      {/* Hotel & Package Pricing Section */}
+      {hotelPricingData && hotelPricingData.length > 0 && (
+        <div style={{ marginBottom: "35px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "20px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            🏨 Hotel & Package Pricing
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                background: "#fff",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                borderRadius: "8px",
+                overflow: "hidden",
+              }}
             >
-              <Table sx={{ minWidth: 650 }}>
-                <TableHead sx={{ background: "#667eea" }}>
-                  <TableRow>
-                    {hotelPricingData[0] &&
-                      Object.keys(hotelPricingData[0]).map(
-                        (header) =>
-                          (header === "destination" ||
-                            header === "nights" ||
-                            (header === "standard" && showStandardCol) ||
-                            (header === "deluxe" && showDeluxeCol) ||
-                            (header === "superior" && showSuperiorCol)) && (
-                            <TableCell
-                              key={header}
-                              sx={{
-                                color: "white",
-                                fontWeight: "bold",
-                                textTransform: "capitalize",
-                              }}
-                            >
-                              {header.replace(/([A-Z])/g, " $1").trim()}
-                            </TableCell>
-                          ),
-                      )}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {hotelPricingData.map((row, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{row?.destination || "-"}</TableCell>
-                      <TableCell>{row?.nights || "-"}</TableCell>
-                      {showStandardCol && (
-                        <TableCell>
-                          {renderHotelCellValue(row, "standard")}
-                        </TableCell>
-                      )}
-                      {showDeluxeCol && (
-                        <TableCell>
-                          {renderHotelCellValue(row, "deluxe")}
-                        </TableCell>
-                      )}
-                      {showSuperiorCol && (
-                        <TableCell>
-                          {renderHotelCellValue(row, "superior")}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </>
-        )}
+              <thead>
+                <tr style={{ background: "#667eea" }}>
+                  {hotelPricingData[0] &&
+                    Object.keys(hotelPricingData[0]).map(
+                      (header) =>
+                        (header === "destination" ||
+                          header === "nights" ||
+                          (header === "standard" && showStandardCol) ||
+                          (header === "deluxe" && showDeluxeCol) ||
+                          (header === "superior" && showSuperiorCol)) && (
+                          <th
+                            key={header}
+                            style={{
+                              color: "white",
+                              padding: "14px",
+                              textAlign: "left",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {header.replace(/([A-Z])/g, " $1").trim()}
+                          </th>
+                        ),
+                    )}
+                </tr>
+              </thead>
+              <tbody>
+                {hotelPricingData.map((row, idx) => (
+                  <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>
+                      {row?.destination || "-"}
+                    </td>
+                    <td style={{ padding: "12px" }}>{row?.nights || "-"}</td>
+                    {showStandardCol && (
+                      <td style={{ padding: "12px" }}>
+                        {renderHotelCellValue(row, "standard")}
+                      </td>
+                    )}
+                    {showDeluxeCol && (
+                      <td style={{ padding: "12px" }}>
+                        {renderHotelCellValue(row, "deluxe")}
+                      </td>
+                    )}
+                    {showSuperiorCol && (
+                      <td style={{ padding: "12px" }}>
+                        {renderHotelCellValue(row, "superior")}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
-        {/* Payment Summary */}
-        <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
+      {/* Payment Summary Section */}
+      <div style={{ marginBottom: "35px" }}>
+        <div
+          style={{
+            fontWeight: "bold",
+            fontSize: "20px",
+            marginBottom: "20px",
+            borderBottom: "3px solid #667eea",
+            paddingBottom: "10px",
+            color: "#333",
+          }}
+        >
           💰 Payment Summary
-        </Typography>
-
-        <TableContainer component={Paper} elevation={2} sx={{ mb: 3 }}>
-          <Table>
-            <TableHead sx={{ background: "#667eea" }}>
-              <TableRow>
-                <TableCell
-                  sx={{ color: "white", fontWeight: "bold", fontSize: "14px" }}
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              background: "#fff",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              borderRadius: "8px",
+              overflow: "hidden",
+            }}
+          >
+            <thead>
+              <tr style={{ background: "#667eea" }}>
+                <th
+                  style={{
+                    color: "white",
+                    padding: "14px",
+                    textAlign: "left",
+                    fontWeight: "bold",
+                  }}
                 >
                   Particulars
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{ color: "white", fontWeight: "bold", fontSize: "14px" }}
+                </th>
+                <th
+                  style={{
+                    color: "white",
+                    padding: "14px",
+                    textAlign: "right",
+                    fontWeight: "bold",
+                  }}
                 >
                   Amount (₹)
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
               {visiblePackageColumns > 1 ? (
                 <>
                   {showStandardCol && standardTotal > 0 && (
-                    <TableRow>
-                      <TableCell>Total Package Cost (Standard)</TableCell>
-                      <TableCell align="right">
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>
+                        Total Package Cost (Standard)
+                      </td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(standardTotal)}
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   )}
                   {showDeluxeCol && deluxeTotal > 0 && (
-                    <TableRow>
-                      <TableCell>Total Package Cost (Deluxe)</TableCell>
-                      <TableCell align="right">
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>
+                        Total Package Cost (Deluxe)
+                      </td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(deluxeTotal)}
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   )}
                   {showSuperiorCol && superiorTotal > 0 && (
-                    <TableRow>
-                      <TableCell>Total Package Cost (Superior)</TableCell>
-                      <TableCell align="right">
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>
+                        Total Package Cost (Superior)
+                      </td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(superiorTotal)}
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   )}
                 </>
               ) : (
                 effectiveTotal > 0 && (
-                  <TableRow>
-                    <TableCell>Total Package Cost</TableCell>
-                    <TableCell align="right">
+                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>Total Package Cost</td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>
                       {formatCurrency(effectiveTotal)}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 )
               )}
               {visiblePackageColumns <= 1 &&
@@ -1302,328 +1346,396 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
                 pricingDiscount !== "N/A" &&
                 pricingDiscount !== "₹ 0" &&
                 pricingDiscount !== 0 && (
-                  <TableRow>
-                    <TableCell>Discount</TableCell>
-                    <TableCell align="right" sx={{ color: "#2e7d32" }}>
+                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>Discount</td>
+                    <td
+                      style={{
+                        padding: "12px",
+                        textAlign: "right",
+                        color: "#2e7d32",
+                      }}
+                    >
                       -{formatCurrency(pricingDiscount)}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 )}
               {visiblePackageColumns <= 1 &&
                 pricingGst &&
                 pricingGst !== "N/A" &&
                 pricingGst !== "₹ 0" &&
                 pricingGst !== 0 && (
-                  <TableRow>
-                    <TableCell>GST</TableCell>
-                    <TableCell align="right">
+                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>GST</td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>
                       {formatCurrency(pricingGst)}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 )}
               {visiblePackageColumns <= 1 && (
-                <TableRow sx={{ background: "#f5f5f5" }}>
-                  <TableCell sx={{ fontWeight: "bold", fontSize: "16px" }}>
+                <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
+                  <td style={{ padding: "14px", fontSize: "16px" }}>
                     Grand Total
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontWeight: "bold", fontSize: "16px" }}
+                  </td>
+                  <td
+                    style={{
+                      padding: "14px",
+                      textAlign: "right",
+                      fontSize: "16px",
+                      fontWeight: "bold",
+                      color: "#667eea",
+                    }}
                   >
                     {formatCurrency(effectiveTotal)}
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               )}
               {footerReceived &&
                 footerReceived !== "N/A" &&
                 footerReceived !== "₹ 0" &&
                 footerReceived !== 0 && (
-                  <TableRow>
-                    <TableCell>Amount Received</TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ color: "#2e7d32", fontWeight: "bold" }}
+                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                    <td style={{ padding: "12px" }}>Amount Received</td>
+                    <td
+                      style={{
+                        padding: "12px",
+                        textAlign: "right",
+                        color: "#2e7d32",
+                        fontWeight: "bold",
+                      }}
                     >
                       {formatCurrency(footerReceived)}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-        {/* Additional Notes if any */}
-        {(pricingDiscount === "₹ 0" || pricingDiscount === 0) && (
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ mt: 2, display: "block" }}
+      {/* Inclusion Policy Section */}
+      {finalInclusionArray.length > 0 && (
+        <div>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "20px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
           >
-            * No discount applied to this quotation
-          </Typography>
-        )}
-      </Box>
+            ✅ Inclusion Policy
+          </div>
+          <div
+            style={{
+              padding: "18px",
+              background: "#e8f5e9",
+              borderRadius: "12px",
+              borderLeft: "4px solid #2e7d32",
+            }}
+          >
+            {finalInclusionArray.map(
+              (item, idx) =>
+                item &&
+                item !== "" && (
+                  <div
+                    key={idx}
+                    style={{
+                      fontSize: "13px",
+                      marginLeft: "20px",
+                      marginBottom: "8px",
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    • {item}
+                  </div>
+                ),
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
-      {/* PAGE 3 - All Policies and Terms */}
-      <Box className="pdf-page" sx={{ p: 3 }}>
-        {/* Inclusion Policy */}
-        {finalInclusionArray.length > 0 && (
-            <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e8f5e9" }}>
-              <Typography
-                fontWeight="bold"
-                sx={{
-                  color: "#2e7d32",
-                  mb: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                }}
-              >
-                <CheckCircle fontSize="small" /> ✅ Inclusion Policy
-              </Typography>
-              {finalInclusionArray.map(
-                (item, idx) =>
-                  item &&
-                  item !== "" && (
-                    <Typography
-                      key={idx}
-                      variant="body2"
-                      sx={{ mb: 0.5, ml: 2 }}
-                    >
-                      • {item}
-                    </Typography>
-                  ),
-              )}
-            </Paper>
-          )}
-
-        {/* Exclusion Policy */}
-        {finalExclusionArray.length > 0 && (
-          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#ffebee" }}>
-            <Typography
-              fontWeight="bold"
-              sx={{
-                color: "#c62828",
-                mb: 1,
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-              }}
-            >
-              <Cancel fontSize="small" /> ❌ Exclusion Policy
-            </Typography>
+  // PAGE 3: Exclusion and Payment Policy
+  const PoliciesPage = () => (
+    <div
+      className="pdf-page"
+      style={{ padding: "25px", background: "#fff", minHeight: "297mm" }}
+    >
+      {/* Exclusion Policy */}
+      {finalExclusionArray.length > 0 && (
+        <div style={{ marginBottom: "35px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "20px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            ❌ Exclusion Policy
+          </div>
+          <div
+            style={{
+              padding: "18px",
+              background: "#ffebee",
+              borderRadius: "12px",
+              borderLeft: "4px solid #c62828",
+            }}
+          >
             {finalExclusionArray.map(
               (item, idx) =>
                 item &&
                 item !== "" && (
-                  <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
+                  <div
+                    key={idx}
+                    style={{
+                      fontSize: "13px",
+                      marginLeft: "20px",
+                      marginBottom: "8px",
+                      lineHeight: "1.5",
+                    }}
+                  >
                     • {item}
-                  </Typography>
+                  </div>
                 ),
             )}
-          </Paper>
-        )}
+          </div>
+        </div>
+      )}
 
-        {/* Payment Policy */}
-        {finalPaymentPolicyArray.length > 0 && (
-          <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#e3f2fd" }}>
-            <Typography
-              fontWeight="bold"
-              sx={{
-                color: "#1565c0",
-                mb: 1,
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-              }}
-            >
-              <Payments fontSize="small" /> 💳 Payment Policy
-            </Typography>
+      {/* Payment Policy */}
+      {finalPaymentPolicyArray.length > 0 && (
+        <div style={{ marginBottom: "35px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "20px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            💳 Payment Policy
+          </div>
+          <div
+            style={{
+              padding: "18px",
+              background: "#e3f2fd",
+              borderRadius: "12px",
+              borderLeft: "4px solid #1565c0",
+            }}
+          >
             {finalPaymentPolicyArray.map(
               (item, idx) =>
                 item &&
                 item !== "" && (
-                  <Typography key={idx} variant="body2" sx={{ mb: 0.5, ml: 2 }}>
+                  <div
+                    key={idx}
+                    style={{
+                      fontSize: "13px",
+                      marginLeft: "20px",
+                      marginBottom: "8px",
+                      lineHeight: "1.5",
+                    }}
+                  >
                     • {item}
-                  </Typography>
+                  </div>
                 ),
             )}
-          </Paper>
-        )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
-        {/* Cancellation & Refund Policy */}
-        {finalCancellationArray.length > 0 &&
-          finalCancellationArray.some((item) => item && item !== "") && (
-            <Paper elevation={2} sx={{ p: 2, mb: 2, background: "#fff3e0" }}>
-              <Typography
-                fontWeight="bold"
-                sx={{
-                  color: "#e65100",
-                  mb: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                }}
-              >
-                <MoneyOff fontSize="small" /> 🔄 Cancellation & Refund Policy
-              </Typography>
-              {finalCancellationArray.map(
-                (item, idx) =>
-                  item &&
-                  item !== "" && (
-                    <Typography
-                      key={idx}
-                      variant="body2"
-                      sx={{ mb: 0.5, ml: 2 }}
-                    >
-                      • {item}
-                    </Typography>
-                  ),
-              )}
-            </Paper>
-          )}
-
-        {/* Terms & Conditions — link from company */}
-        <Paper elevation={2} sx={{ p: 2, mb: 3, background: "#f5f5f5" }}>
-          <Typography
-            fontWeight="bold"
-            sx={{
-              color: "#424242",
-              mb: 1,
+  // LAST PAGE: Cancellation & Refund Policy, Terms & Conditions (with link only), and Footer
+  const LastPage = () => (
+    <div
+      className="pdf-page"
+      style={{
+        padding: "25px",
+        background: "#fff",
+        minHeight: "297mm",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Cancellation & Refund Policy - Full Policy */}
+      {finalCancellationArray.length > 0 && (
+        <div
+          style={{
+            padding: "18px",
+            marginBottom: "25px",
+            background: "#fff3e0",
+            borderRadius: "12px",
+            borderLeft: "4px solid #e65100",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "bold",
+              color: "#e65100",
+              marginBottom: "12px",
+              fontSize: "16px",
               display: "flex",
               alignItems: "center",
-              gap: 1,
+              gap: "8px",
             }}
           >
-            <Description fontSize="small" /> Terms &amp; Conditions
-          </Typography>
-          <Typography variant="body2" sx={{ ml: 0 }}>
-            As per company website
-            {termsConditionsHref ? (
-              <>
-                {": "}
-                <Link
-                  href={termsConditionsHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  underline="always"
+            <MoneyOff /> 🔄 Cancellation & Refund Policy
+          </div>
+          {finalCancellationArray.map(
+            (item, idx) =>
+              item &&
+              item !== "" && (
+                <div
+                  key={idx}
+                  style={{
+                    fontSize: "13px",
+                    marginLeft: item.startsWith("•") ? "20px" : "0px",
+                    marginBottom: "6px",
+                    lineHeight: "1.6",
+                    fontWeight: item.includes("Policy:") ? "bold" : "normal",
+                    marginTop: item.includes("Policy:") ? "8px" : "0px",
+                  }}
                 >
-                  {termsConditionsHref}
-                </Link>
-              </>
-            ) : (
-              "."
-            )}
-          </Typography>
-        </Paper>
+                  {item}
+                </div>
+              ),
+          )}
+        </div>
+      )}
 
-        {/* Footer Section */}
-        <Divider sx={{ my: 2 }} />
-        <Box textAlign="center">
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: 2,
-              mb: 1,
-              flexWrap: "wrap",
+      {/* Terms & Conditions - Simple version with link only */}
+      <div
+        style={{
+          padding: "18px",
+          marginBottom: "30px",
+          background: "#fafafa",
+          borderRadius: "12px",
+          border: "1px solid #e0e0e0",
+        }}
+      >
+        <div
+          style={{
+            fontWeight: "bold",
+            color: "#424242",
+            marginBottom: "12px",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <Description /> Terms & Conditions
+        </div>
+        <div
+          style={{
+            fontSize: "14px",
+            color: "#555",
+            lineHeight: "1.6",
+            textAlign: "center",
+            padding: "10px",
+          }}
+        >
+          As per company website{" "}
+          <a
+            href={companyWebsiteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: "#667eea",
+              textDecoration: "underline",
+              fontWeight: "bold",
             }}
           >
-            {imageElements.logo && (
-              <img
-                src={imageElements.logo}
-                alt="Company Logo"
-                style={{ height: "40px", width: "auto", objectFit: "contain" }}
-                crossOrigin="anonymous"
-              />
-            )}
-          </Box>
-          {footerAddress && footerAddress !== "N/A" && (
-            <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
-              📍 {footerAddress}
-            </Typography>
+            {companyWebsiteUrl !== "#"
+              ? companyWebsiteUrl
+              : "www.iconicyatra.com"}
+          </a>
+        </div>
+      </div>
+
+      {/* Footer - On the same page after Terms & Conditions */}
+      <div style={{ marginTop: "30px", textAlign: "center" }}>
+        {imageElements.logo && (
+          <img
+            src={imageElements.logo}
+            alt="Company Logo"
+            style={{ height: "50px", width: "auto", marginBottom: "12px" }}
+          />
+        )}
+        {footerAddress && footerAddress !== "N/A" && (
+          <div style={{ fontSize: "12px", marginBottom: "6px", color: "#666" }}>
+            📍 {footerAddress}
+          </div>
+        )}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: "20px",
+            flexWrap: "wrap",
+            marginBottom: "12px",
+            fontSize: "12px",
+            color: "#666",
+          }}
+        >
+          {footerPhone && footerPhone !== "N/A" && <div>📞 {footerPhone}</div>}
+          {footerEmail && footerEmail !== "N/A" && <div>✉️ {footerEmail}</div>}
+          {footerWebsite && footerWebsite !== "N/A" && (
+            <div>🌐 {footerWebsite}</div>
           )}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 2,
-              flexWrap: "wrap",
-              mb: 1,
-            }}
-          >
-            {footerPhone && footerPhone !== "N/A" && (
-              <Typography
-                variant="caption"
-                sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-              >
-                📞 {footerPhone}
-              </Typography>
-            )}
-            {footerEmail && footerEmail !== "N/A" && (
-              <Typography
-                variant="caption"
-                sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-              >
-                ✉️ {footerEmail}
-              </Typography>
-            )}
-            {footerWebsite && footerWebsite !== "N/A" && (
-              <Typography
-                variant="caption"
-                sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-              >
-                🌐 {footerWebsite}
-              </Typography>
-            )}
-          </Box>
-          {footerContact && footerContact !== "N/A" && (
-            <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-              👤 Contact Person: {footerContact}
-              {footerContactDesignation ? ` (${footerContactDesignation})` : ""}
-            </Typography>
-          )}
-          <Typography
-            variant="caption"
-            display="block"
-            sx={{ mt: 2, color: "#999", fontSize: "10px" }}
-          >
-            This is a computer generated quotation. No signature required.
-          </Typography>
-          <Typography
-            variant="caption"
-            display="block"
-            sx={{ color: "#999", fontSize: "9px", mt: 0.5 }}
-          >
-            © {new Date().getFullYear()} {footerCompany}. All rights reserved.
-          </Typography>
-        </Box>
-      </Box>
-    </Box>
+        </div>
+        {footerContact && footerContact !== "N/A" && (
+          <div style={{ fontSize: "12px", marginTop: "8px", color: "#666" }}>
+            👤 Contact Person: {footerContact}
+            {footerContactDesignation ? ` (${footerContactDesignation})` : ""}
+          </div>
+        )}
+        <div style={{ fontSize: "10px", color: "#999", marginTop: "15px" }}>
+          This is a computer generated quotation. No signature required.
+        </div>
+        <div style={{ fontSize: "10px", color: "#999", marginTop: "5px" }}>
+          © {new Date().getFullYear()} {footerCompany}. All rights reserved.
+        </div>
+      </div>
+    </div>
   );
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        <Box
-          display="flex"
-          justifyContent="space-between"
-          alignItems="center"
-          flexWrap="wrap"
-          gap={2}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
         >
-          <Typography variant="h6" fontWeight="bold">
+          <div style={{ fontWeight: "bold", fontSize: "18px" }}>
             📄 Quotation Preview - {customerName}
-          </Typography>
-
-          <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
             <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel id="pdf-company-select-label">Company</InputLabel>
+              <InputLabel>Company</InputLabel>
               <Select
-                labelId="pdf-company-select-label"
                 value={selectedCompanyId}
-                label="Company"
                 onChange={(e) => setSelectedCompanyId(e.target.value)}
                 disabled={loadingCompanies}
               >
@@ -1656,10 +1768,12 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
             >
               {loading ? "Generating PDF..." : "Download PDF"}
             </Button>
-          </Box>
-        </Box>
+            <Button onClick={onClose} startIcon={<Close />} color="inherit">
+              Close
+            </Button>
+          </div>
+        </div>
       </DialogTitle>
-
       <DialogContent dividers>
         <Snackbar
           open={!!error}
@@ -1667,61 +1781,48 @@ const QuotationPDFDialog = ({ open, onClose, quotation }) => {
           onClose={() => setError("")}
           anchorOrigin={{ vertical: "top", horizontal: "center" }}
         >
-          <Alert
-            severity="error"
-            onClose={() => setError("")}
-            sx={{ width: "100%" }}
-          >
+          <Alert severity="error" onClose={() => setError("")}>
             {error}
           </Alert>
         </Snackbar>
 
         {(!imagesLoaded || !renderComplete) && open && (
-          <Box
-            display="flex"
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-            py={4}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "30px",
+              minHeight: "400px",
+            }}
           >
             <CircularProgress size={40} />
-            <Typography variant="body1" sx={{ mt: 2 }}>
+            <Typography sx={{ mt: 2 }}>
               Loading all content and images...
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
               Please wait while we prepare your quotation
             </Typography>
-          </Box>
+          </div>
         )}
 
-        <Box
+        <div
           ref={printRef}
-          sx={{
+          style={{
             maxHeight: "70vh",
             overflowY: "auto",
-            bgcolor: "#fff",
+            background: "#fff",
             display: imagesLoaded && renderComplete ? "block" : "none",
-            "&::-webkit-scrollbar": { width: "8px" },
-            "&::-webkit-scrollbar-track": {
-              background: "#f1f1f1",
-              borderRadius: "4px",
-            },
-            "&::-webkit-scrollbar-thumb": {
-              background: "#888",
-              borderRadius: "4px",
-            },
-            "&::-webkit-scrollbar-thumb:hover": { background: "#555" },
           }}
         >
-          <PDFContent />
-        </Box>
+          <Page1 />
+          {days.length > 0 && <ItineraryPages />}
+          <CombinedPricingPage />
+          <PoliciesPage />
+          <LastPage />
+        </div>
       </DialogContent>
-
-      <DialogActions>
-        <Button onClick={onClose} startIcon={<Close />} color="inherit">
-          Close
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 };

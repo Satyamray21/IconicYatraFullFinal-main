@@ -946,6 +946,13 @@ const QuickFinalize = () => {
     const [days, setDays] = useState([
         { id: 1, date: "11/09/2025", title: "About Day 1", image: null },
     ]);
+
+    /** Keep PDF preview aligned with the itinerary editor (`days` may update before `quotation` is refreshed). */
+    const quotationForPdf = useMemo(
+        () => ({ ...quotation, days }),
+        [quotation, days]
+    );
+
     const [accountType, setAccountType] = useState("company");
     const [accountName, setAccountName] = useState("Iconic Yatra");
     const [accountNumber, setAccountNumber] = useState("");
@@ -3266,7 +3273,8 @@ const QuickFinalize = () => {
                 <QuotationPDFDialog
                     open={openPdfDialog}
                     onClose={handleClosePdfDialog}
-                    quotation={quotation}
+                    quotation={quotationForPdf}
+                    pdfHeading="QUICK QUOTATION"
                 />
             )}
 
