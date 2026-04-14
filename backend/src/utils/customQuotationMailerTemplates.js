@@ -124,6 +124,13 @@ const toPolicyArray = (value) => {
 
 const mergePolicies = (...items) => [...new Set(items.flat().filter(Boolean))];
 
+/** Prefer quotation policies when set; avoids repeating the same HTML as global defaults (common for quick quotations). */
+const quotationPoliciesOrGlobal = (quotationValue, globalValue) => {
+  const q = toPolicyArray(quotationValue);
+  if (q.length > 0) return mergePolicies(q);
+  return mergePolicies(toPolicyArray(globalValue));
+};
+
 const bankHtmlSection = (bankDetails = []) => {
   if (!Array.isArray(bankDetails) || bankDetails.length === 0) return "";
   return `
@@ -200,21 +207,21 @@ export const buildCustomQuotationNormalEmail = (
   const termsCombined = mergePolicies(
     toPolicyArray(options?.companyTermsConditions),
   );
-  const paymentCombined = mergePolicies(
-    toPolicyArray(td?.policies?.paymentPolicy),
-    toPolicyArray(options?.globalPaymentPolicy),
+  const paymentCombined = quotationPoliciesOrGlobal(
+    td?.policies?.paymentPolicy,
+    options?.globalPaymentPolicy,
   );
-  const inclusionCombined = mergePolicies(
-    toPolicyArray(td?.policies?.inclusionPolicy),
-    toPolicyArray(options?.globalInclusions),
+  const inclusionCombined = quotationPoliciesOrGlobal(
+    td?.policies?.inclusionPolicy,
+    options?.globalInclusions,
   );
-  const exclusionCombined = mergePolicies(
-    toPolicyArray(td?.policies?.exclusionPolicy),
-    toPolicyArray(options?.globalExclusions),
+  const exclusionCombined = quotationPoliciesOrGlobal(
+    td?.policies?.exclusionPolicy,
+    options?.globalExclusions,
   );
-  const cancellationCombined = mergePolicies(
-    toPolicyArray(td?.policies?.cancellationPolicy),
-    toPolicyArray(options?.globalCancellationPolicy),
+  const cancellationCombined = quotationPoliciesOrGlobal(
+    td?.policies?.cancellationPolicy,
+    options?.globalCancellationPolicy,
   );
   const bankDetails = options?.bankDetails || [];
 
@@ -399,21 +406,21 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
     safe(customText.paymentDueDate),
   );
   const bankDetails = customText?.bankDetails || [];
-  const paymentCombined = mergePolicies(
-    toPolicyArray(td?.policies?.paymentPolicy),
-    toPolicyArray(customText.globalPaymentPolicy),
+  const paymentCombined = quotationPoliciesOrGlobal(
+    td?.policies?.paymentPolicy,
+    customText.globalPaymentPolicy,
   );
-  const inclusionCombined = mergePolicies(
-    toPolicyArray(td?.policies?.inclusionPolicy),
-    toPolicyArray(customText.globalInclusions),
+  const inclusionCombined = quotationPoliciesOrGlobal(
+    td?.policies?.inclusionPolicy,
+    customText.globalInclusions,
   );
-  const exclusionCombined = mergePolicies(
-    toPolicyArray(td?.policies?.exclusionPolicy),
-    toPolicyArray(customText.globalExclusions),
+  const exclusionCombined = quotationPoliciesOrGlobal(
+    td?.policies?.exclusionPolicy,
+    customText.globalExclusions,
   );
-  const cancellationCombined = mergePolicies(
-    toPolicyArray(td?.policies?.cancellationPolicy),
-    toPolicyArray(customText.globalCancellationPolicy),
+  const cancellationCombined = quotationPoliciesOrGlobal(
+    td?.policies?.cancellationPolicy,
+    customText.globalCancellationPolicy,
   );
 
   return `
@@ -519,7 +526,28 @@ const hotelsForCategoryNight = (nightBlock, cat) => {
  * (hotels from destinationNights, itinerary from package days, totals from totalCost).
  */
 export function adaptQuickQuotationForCustomMailer(quick = {}) {
-  const pkg = quick.packageSnapshot || {};
+  const snap =
+    quick.packageSnapshot && typeof quick.packageSnapshot === "object"
+      ? quick.packageSnapshot
+      : {};
+  const pid =
+    quick.packageId &&
+    typeof quick.packageId === "object" &&
+    !Array.isArray(quick.packageId)
+      ? quick.packageId
+      : {};
+  const pkg = {
+    ...pid,
+    ...snap,
+    destinationNights:
+      Array.isArray(snap.destinationNights) && snap.destinationNights.length
+        ? snap.destinationNights
+        : pid.destinationNights,
+    stayLocations:
+      Array.isArray(snap.stayLocations) && snap.stayLocations.length
+        ? snap.stayLocations
+        : pid.stayLocations,
+  };
   const policy = quick.policy || pkg.policy || {};
   const total = toNum(quick.totalCost);
   const approxBeforeTax =
