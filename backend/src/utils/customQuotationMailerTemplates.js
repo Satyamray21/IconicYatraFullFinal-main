@@ -131,6 +131,21 @@ const quotationPoliciesOrGlobal = (quotationValue, globalValue) => {
   return mergePolicies(toPolicyArray(globalValue));
 };
 
+const isHttpUrlString = (v) => {
+  const s = safe(v, "");
+  return s.length > 0 && /^https?:\/\//i.test(s);
+};
+
+/** Shown directly under the CANCELLATION POLICY heading when company stores an http(s) URL. */
+const cancellationPolicyUrlLine = (url) => {
+  const u = safe(url, "");
+  if (!isHttpUrlString(u)) return "";
+  return `<p style="margin-bottom:10px;">
+    <b>As per company cancellation policy -</b><br/>
+    <a href="${u}" target="_blank" rel="noopener noreferrer" style="color:#1976d2; font-weight:bold; word-break:break-all;">${u}</a>
+  </p>`;
+};
+
 const bankHtmlSection = (bankDetails = []) => {
   if (!Array.isArray(bankDetails) || bankDetails.length === 0) return "";
   return `
@@ -204,9 +219,6 @@ export const buildCustomQuotationNormalEmail = (
   const key = pkgKey(quotation);
   const companyName = safe(options?.companyName, "Iconic Travel");
   const companyWebsite = safe(options?.companyWebsite);
-  const termsCombined = mergePolicies(
-    toPolicyArray(options?.companyTermsConditions),
-  );
   const paymentCombined = quotationPoliciesOrGlobal(
     td?.policies?.paymentPolicy,
     options?.globalPaymentPolicy,
@@ -224,6 +236,7 @@ export const buildCustomQuotationNormalEmail = (
     options?.globalCancellationPolicy,
   );
   const bankDetails = options?.bankDetails || [];
+  const cancellationPolicyUrl = safe(options?.companyCancellationPolicyUrl, "");
 
   return `
     <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
@@ -302,12 +315,9 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 
         <br/>
 
-        <br/>
-
-        <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
-        <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p>
-
-        <br/>
+       
+       <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
+        <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p><br/>
 
         <p style="color:#d32f2f; font-weight:bold;">
     DAY WISE ITINERARY
@@ -319,13 +329,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 
 
         <br/>
-         <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
-        <p>
-    <b>As per company website - </b>
-    <a href="${termsandCondition}" target="_blank" style="color:#1976d2; font-weight:bold;">
-        View Terms & Conditions
-    </a>
-</p>
+        
         <p style="color:#d32f2f; font-weight:bold;" ><b>INCLUSIONS:</b></p>
         <p>${policyLines(inclusionCombined).replace(/\n/g, "<br/>")}</p>
 
@@ -335,9 +339,17 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
-
+         <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+        <p>
+      <b>As per company terms and conditions - </b>
+    <a href="${termsandCondition}" target="_blank" style="color:#1976d2; font-weight:bold;">
+        View Terms & Conditions
+    </a>
+</p>
+<br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
-        <p>${policyLines(cancellationCombined).replace(/\n/g, "<br/>")}</p>
+        ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
+        <br/>
 
         <br/>
 
@@ -422,6 +434,10 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
     td?.policies?.cancellationPolicy,
     customText.globalCancellationPolicy,
   );
+  const cancellationPolicyUrl = safe(
+    customText?.companyCancellationPolicyUrl,
+    "",
+  );
 
   return `
     <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
@@ -471,21 +487,25 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p style="color:#d32f2f; font-weight:bold;">DAY WISE ITINERARY</p>
         <div>${itineraryLines(td?.itinerary)}</div>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
-        <p>
-            <b>As per company website - </b>
-            <a href="${termsandCondition}" target="_blank" style="color:#1976d2; font-weight:bold;">
-                View Terms & Conditions
-            </a>
-        </p>
+        
         <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
         <p>${policyLines(inclusionCombined).replace(/\n/g, "<br/>")}</p>
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
         <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
         <br/>
+        <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+        <p>
+            <b>As per company terms and conditions - </b>
+            <a href="${termsandCondition}" target="_blank" style="color:#1976d2; font-weight:bold;">
+                View Terms & Conditions
+            </a>
+        </p>
+        <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
+        ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
         <p>${policyLines(cancellationCombined).replace(/\n/g, "<br/>")}</p>
+        <br/>
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
         <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
@@ -560,8 +580,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
       const deluxeHotels = hotelsForCategoryNight(d, "deluxe");
       const superiorHotels = hotelsForCategoryNight(d, "superior");
       const firstAny = (d.hotels || []).find(
-        (h) =>
-          h.hotelName && !/^TBD$/i.test(String(h.hotelName).trim()),
+        (h) => h.hotelName && !/^TBD$/i.test(String(h.hotelName).trim()),
       );
       if (!standardHotels.length && firstAny) {
         standardHotels = [String(firstAny.hotelName).trim()];
