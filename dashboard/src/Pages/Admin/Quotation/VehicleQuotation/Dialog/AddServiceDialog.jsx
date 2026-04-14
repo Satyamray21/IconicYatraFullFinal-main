@@ -81,10 +81,10 @@ const AddServiceDialog = ({
               value={currentService.amount}
               onChange={(e) => onServiceChange("amount", e.target.value)}
               margin="normal"
-              disabled={currentService.included === "yes"}
+              disabled={currentService.included === "no"}
               placeholder={
-                currentService.included === "yes"
-                  ? "Included in quotation"
+                currentService.included === "no"
+                  ? "Not included in quotation"
                   : ""
               }
             />
@@ -129,16 +129,14 @@ const AddServiceDialog = ({
                         </TableCell>
                         <TableCell>{service.particulars}</TableCell>
                         <TableCell align="right">
-                          {service.included === "yes"
-                            ? "Included"
-                            : `₹${service.amount}`}
+                          {service.included === "no" ? "Excluded" : `₹${service.amount}`}
                         </TableCell>
                         <TableCell align="right">
                           {service.taxLabel}
                         </TableCell>
                         <TableCell align="right">
-                          {service.included === "yes"
-                            ? "Included"
+                          {service.included === "no"
+                            ? "Excluded"
                             : `₹${service.totalAmount.toFixed(2)}`}
                         </TableCell>
                         <TableCell>

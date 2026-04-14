@@ -27,6 +27,8 @@ const FinalizeDialog = ({
     onConfirm,
     packageOptionsOverride,
     preselectedPackageLabel,
+    /** Billable add-on services (amount + line tax) to add to each package total in the dialog */
+    additionalServicesSum = 0,
 }) => {
     const [selectedOption, setSelectedOption] = useState("");
 
@@ -36,13 +38,21 @@ const FinalizeDialog = ({
 
     // SAFELY extract pricing
 
-    const standardCost =
-        selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations
-            ?.standard?.finalTotal ?? "N/A";
+    const adj = Number(additionalServicesSum) || 0;
+    const adjustPkg = (v) => {
+        if (typeof v !== "number" || Number.isNaN(v)) return "N/A";
+        return v + adj;
+    };
 
-    const deluxeCost =
+    const standardCost = adjustPkg(
         selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations
-            ?.deluxe?.finalTotal ?? "N/A";
+            ?.standard?.finalTotal
+    );
+
+    const deluxeCost = adjustPkg(
+        selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations
+            ?.deluxe?.finalTotal
+    );
 
     // Extract hotel names
     const standardHotel =
@@ -57,29 +67,42 @@ const FinalizeDialog = ({
         selectedQuotation?.tourDetails?.quotationDetails?.destinations?.[0]
             ?.superiorHotels?.[0] ?? "N/A";
 
-    const superiorCost =
+    const superiorCost = adjustPkg(
         selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations
-            ?.superior?.finalTotal ?? "N/A";
+            ?.superior?.finalTotal
+    );
+
+    const fmtRupee = (v) =>
+        typeof v === "number" && Number.isFinite(v)
+            ? `₹ ${v.toLocaleString("en-IN")}`
+            : "—";
 
     const quotationOptionsFromRedux = useMemo(
         () => [
             {
                 label: "Standard",
                 hotel: standardHotel,
-                cost: `₹ ${standardCost}`,
+                cost: fmtRupee(standardCost),
             },
             {
                 label: "Deluxe",
                 hotel: deluxeHotel,
-                cost: `₹ ${deluxeCost}`,
+                cost: fmtRupee(deluxeCost),
             },
             {
                 label: "Superior",
                 hotel: superiorHotel,
-                cost: `₹ ${superiorCost}`,
+                cost: fmtRupee(superiorCost),
             },
         ],
-        [standardCost, deluxeCost, superiorCost, standardHotel, deluxeHotel, superiorHotel]
+        [
+            standardCost,
+            deluxeCost,
+            superiorCost,
+            standardHotel,
+            deluxeHotel,
+            superiorHotel,
+        ]
     );
 
     const quotationOptions =

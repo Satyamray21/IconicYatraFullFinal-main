@@ -148,6 +148,9 @@ export function quickToHotelsFormData(quick) {
                 applyGST: true,
             },
             packageCalculations: qdExisting.packageCalculations,
+            additionalServices: Array.isArray(qdExisting.additionalServices)
+                ? qdExisting.additionalServices
+                : [],
             signatureDetails: qdExisting.signatureDetails || {
                 regardsText: "Best Regards",
                 signedBy: "",
@@ -172,6 +175,10 @@ export function quickToCostingQuotation(quick) {
 
 export function finalizeHotelsFormDataToQuickUpdate(quick, finalData) {
     const prev = quick?.packageSnapshot || {};
+    const prevQd0 =
+        prev.quotationDetails && typeof prev.quotationDetails === "object"
+            ? prev.quotationDetails
+            : {};
     const qd = finalData?.tourDetails?.quotationDetails || {};
     const cities = finalData?.pickupDrop || [];
     const destinationNights = (qd.destinations || []).map((dest, i) => ({
@@ -199,10 +206,13 @@ export function finalizeHotelsFormDataToQuickUpdate(quick, finalData) {
         ],
     }));
 
-    const stdFinal = Number(
-        qd.packageCalculations?.standard?.finalTotal
-    );
-    const totalCost = Number.isFinite(stdFinal) ? stdFinal : Number(quick?.totalCost) || 0;
+    const stdFinal = Number(qd.packageCalculations?.standard?.finalTotal);
+    const totalCost = Number.isFinite(stdFinal)
+        ? stdFinal
+        : Number(quick?.totalCost) || 0;
+    const svcRows = Array.isArray(qd.additionalServices)
+        ? qd.additionalServices
+        : prevQd0.additionalServices;
 
     return {
         adults: Number(qd.adults) || 0,
@@ -219,7 +229,10 @@ export function finalizeHotelsFormDataToQuickUpdate(quick, finalData) {
                 planType: qd.mealPlan || prev.mealPlan?.planType || "CP",
             },
             destinationNights,
-            quotationDetails: qd,
+            quotationDetails: {
+                ...qd,
+                additionalServices: Array.isArray(svcRows) ? svcRows : [],
+            },
         },
     };
 }
@@ -245,9 +258,7 @@ export function costingBodyToQuickUpdate(quick, body) {
         prev.quotationDetails && typeof prev.quotationDetails === "object"
             ? prev.quotationDetails
             : {};
-    const stdFinal = Number(
-        body?.packageCalculations?.standard?.finalTotal
-    );
+    const stdFinal = Number(body?.packageCalculations?.standard?.finalTotal);
     const totalCost = Number.isFinite(stdFinal)
         ? stdFinal
         : Number(quick?.totalCost) || 0;
@@ -262,6 +273,9 @@ export function costingBodyToQuickUpdate(quick, body) {
                 discount: body.discount,
                 taxes: body.taxes,
                 packageCalculations: body.packageCalculations,
+                additionalServices: Array.isArray(prevQd.additionalServices)
+                    ? prevQd.additionalServices
+                    : [],
             },
         },
     };

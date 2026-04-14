@@ -90,6 +90,11 @@ import AddServiceDialog from "../VehicleQuotation/Dialog/AddServiceDialog";
 import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
+import {
+    effectiveQuickPayableTotal,
+    mapApiAdditionalServicesToState,
+    serializeAdditionalServicesForApi,
+} from "../../../../utils/quotationAdditionalServices";
 
 function setQuotationValueByPath(prev, path, value) {
     const parts = path.split(".");
@@ -634,7 +639,10 @@ function transformQuickApiToDisplay(apiData, company) {
     const kids = Number(apiData.kids) || Number(qd.kids) || 0;
     const infants = Number(apiData.infants) || Number(qd.infants) || 0;
     const totalGuests = adults + children + kids + infants;
-    const totalCost = Number(apiData.totalCost) || 0;
+    const totalCost = effectiveQuickPayableTotal(
+        apiData,
+        apiData?.packageSnapshot?.quotationDetails?.additionalServices || []
+    );
     const destLine = buildQuickDestinationLine(pkg) || "—";
 
     const pickHotel = (nightBlock, cat) => {
@@ -948,10 +956,27 @@ const QuickFinalize = () => {
     ]);
 
     /** Keep PDF preview aligned with the itinerary editor (`days` may update before `quotation` is refreshed). */
-    const quotationForPdf = useMemo(
-        () => ({ ...quotation, days }),
-        [quotation, days]
-    );
+    const quotationForPdf = useMemo(() => {
+        const payable = effectiveQuickPayableTotal(currentQuotation, services);
+        const base = { ...quotation, days };
+        if (!Number.isFinite(payable) || payable <= 0) return base;
+        const hpd = [...(base.hotelPricingData || [])];
+        const idx = hpd.findIndex((r) => r.destination === "Total package cost");
+        if (idx !== -1) {
+            hpd[idx] = {
+                ...hpd[idx],
+                standard: `₹ ${Math.round(payable).toLocaleString("en-IN")}`,
+            };
+        }
+        return {
+            ...base,
+            pricing: {
+                ...base.pricing,
+                total: `₹ ${Math.round(payable).toLocaleString("en-IN")}`,
+            },
+            hotelPricingData: hpd,
+        };
+    }, [quotation, days, currentQuotation, services]);
 
     const [accountType, setAccountType] = useState("company");
     const [accountName, setAccountName] = useState("Iconic Yatra");
@@ -1213,13 +1238,29 @@ const QuickFinalize = () => {
     }, [currentQuotation, company]);
 
     useEffect(() => {
+        if (!currentQuotation) return;
+        setServices(
+            mapApiAdditionalServicesToState(
+                currentQuotation?.packageSnapshot?.quotationDetails
+                    ?.additionalServices
+            )
+        );
+    }, [
+        currentQuotation?._id,
+        JSON.stringify(
+            currentQuotation?.packageSnapshot?.quotationDetails
+                ?.additionalServices || []
+        ),
+    ]);
+
+    useEffect(() => {
         loadPaymentHistory();
     }, [loadPaymentHistory]);
 
     const packageTotalForFooter = useMemo(() => {
-        const n = Number(currentQuotation?.totalCost);
+        const n = effectiveQuickPayableTotal(currentQuotation, services);
         return Number.isFinite(n) ? n : null;
-    }, [currentQuotation]);
+    }, [currentQuotation, services]);
     const finalizedVendors = React.useMemo(() => {
             const savedNames = [
                 quotation?.finalizedVendorDetails?.hotelVendorName,
@@ -1256,7 +1297,7 @@ const QuickFinalize = () => {
     const finalizePackageOptions = useMemo(() => {
         const pkg = currentQuotation?.packageSnapshot || currentQuotation?.packageId || {};
         const title = pkg.packageName || pkg.title || "Package";
-        const total = Number(currentQuotation?.totalCost) || 0;
+        const total = effectiveQuickPayableTotal(currentQuotation, services) || 0;
         return [
             {
                 label: QUICK_PACKAGE_LABEL,
@@ -1267,10 +1308,10 @@ const QuickFinalize = () => {
                         : "—",
             },
         ];
-    }, [currentQuotation]);
+    }, [currentQuotation, services]);
 
     const generateInvoiceData = () => {
-        const total = Number(currentQuotation?.totalCost) || 0;
+        const total = effectiveQuickPayableTotal(currentQuotation, services) || 0;
         const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
         const balance = Math.max(0, total - receivedFromClient);
         return {
@@ -1516,7 +1557,7 @@ const QuickFinalize = () => {
     const handleAddServiceClose = () => {
         setOpenAddService(false);
         setCurrentService({
-            included: "yes",
+            included: "no",
             particulars: "",
             amount: "",
             taxType: "",
@@ -1774,9 +1815,10 @@ const QuickFinalize = () => {
     const handleAddService = () => {
         if (
             !currentService.particulars ||
-            (currentService.included === "no" && !currentService.amount)
+            (currentService.included === "yes" &&
+                (!currentService.amount || !currentService.taxType))
         ) {
-            alert("Please fill in all required fields");
+            alert("Please fill in all required fields (amount and tax when included)");
             return;
         }
 
@@ -1786,7 +1828,7 @@ const QuickFinalize = () => {
         const taxRate = selectedTax ? selectedTax.rate : 0;
 
         const amount =
-            currentService.included === "yes" ? 0 : parseFloat(currentService.amount);
+            currentService.included === "yes" ? parseFloat(currentService.amount) : 0;
         const taxAmount = amount * (taxRate / 100) || 0;
 
         const newService = {
@@ -1801,7 +1843,7 @@ const QuickFinalize = () => {
 
         setServices((prev) => [...prev, newService]);
         setCurrentService({
-            included: "yes",
+            included: "no",
             particulars: "",
             amount: "",
             taxType: "",
@@ -1810,7 +1852,7 @@ const QuickFinalize = () => {
 
     const handleClearService = () => {
         setCurrentService({
-            included: "yes",
+            included: "no",
             particulars: "",
             amount: "",
             taxType: "",
@@ -1821,8 +1863,38 @@ const QuickFinalize = () => {
         setServices((prev) => prev.filter((service) => service.id !== id));
     };
 
-    const handleSaveServices = () => {
-        console.log("Services saved:", services);
+    const handleSaveServices = async () => {
+        if (!apiEntityId || !currentQuotation) {
+            alert("Quotation not loaded");
+            return;
+        }
+        const payload = serializeAdditionalServicesForApi(services);
+        try {
+            await dispatch(
+                updateQuickQuotation({
+                    id: apiEntityId,
+                    formData: {
+                        packageSnapshot: {
+                            quotationDetails: {
+                                additionalServices: payload,
+                            },
+                        },
+                    },
+                })
+            ).unwrap();
+            await dispatch(fetchQuickQuotationById(id)).unwrap();
+            setSnackbar({
+                open: true,
+                message: "Services saved",
+                severity: "success",
+            });
+        } catch (e) {
+            setSnackbar({
+                open: true,
+                message: String(e?.message || e || "Failed to save services"),
+                severity: "error",
+            });
+        }
         handleAddServiceClose();
     };
 

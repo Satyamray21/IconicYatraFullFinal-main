@@ -1,3 +1,5 @@
+import { sumBillableAdditionalServices } from "./quotationAdditionalServices.js";
+
 const INR = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
 
 const toNum = (v) => {
@@ -40,11 +42,12 @@ const pkgKey = (q = {}) => {
 
 export const packageTotals = (q = {}) => {
   const qd = q?.tourDetails?.quotationDetails || {};
-  const quotationTitle = q?.tourDetails?.quotationTitle || {};
   const calc = qd.packageCalculations || {};
   const key = pkgKey(q);
 
-  const total = toNum(calc?.[key]?.finalTotal);
+  const packageFinal = toNum(calc?.[key]?.finalTotal);
+  const extras = sumBillableAdditionalServices(qd.additionalServices);
+  const total = packageFinal + extras;
   const beforeTax = toNum(calc?.[key]?.afterDiscount);
   const taxPercent = toNum(qd?.taxes?.taxPercent);
 
@@ -585,6 +588,17 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   const approxBeforeTax =
     total > 0 ? Math.round((total / 1.05) * 100) / 100 : 0;
 
+  const qdSnap =
+    snap.quotationDetails && typeof snap.quotationDetails === "object"
+      ? snap.quotationDetails
+      : {};
+  const calcSnap = qdSnap.packageCalculations || {};
+  const stdSnap = Number(calcSnap.standard?.finalTotal);
+  const hasDetailedPricing =
+    Number.isFinite(stdSnap) ||
+    Number.isFinite(Number(calcSnap.deluxe?.finalTotal)) ||
+    Number.isFinite(Number(calcSnap.superior?.finalTotal));
+
   let destinations = [];
   if (Array.isArray(pkg.destinationNights) && pkg.destinationNights.length) {
     destinations = pkg.destinationNights.map((d) => {
@@ -639,24 +653,54 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
         termsAndConditions: toPolicyArray(policy.termsAndConditions),
       },
       itinerary,
-      quotationDetails: {
-        adults: toNum(quick.adults),
-        children: toNum(quick.children),
-        kids: toNum(quick.kids),
-        infants: toNum(quick.infants),
-        mealPlan: safe(pkg.mealPlan?.planType, "CP"),
-        rooms: { numberOfRooms: 1, sharingType: "Double sharing" },
-        destinations,
-        packageCalculations: {
-          standard: {
-            finalTotal: total,
-            afterDiscount: approxBeforeTax,
+      quotationDetails: hasDetailedPricing
+        ? {
+            adults: toNum(quick.adults),
+            children: toNum(quick.children),
+            kids: toNum(quick.kids),
+            infants: toNum(quick.infants),
+            mealPlan: safe(
+              qdSnap.mealPlan || pkg.mealPlan?.planType,
+              "CP",
+            ),
+            rooms:
+              qdSnap.rooms && typeof qdSnap.rooms === "object"
+                ? qdSnap.rooms
+                : { numberOfRooms: 1, sharingType: "Double sharing" },
+            destinations:
+              Array.isArray(qdSnap.destinations) && qdSnap.destinations.length
+                ? qdSnap.destinations
+                : destinations,
+            companyMargin: qdSnap.companyMargin,
+            discount: qdSnap.discount,
+            taxes:
+              qdSnap.taxes && typeof qdSnap.taxes === "object"
+                ? qdSnap.taxes
+                : { taxPercent: 5, applyGST: true, gstOn: "Full" },
+            packageCalculations: calcSnap,
+            additionalServices: Array.isArray(qdSnap.additionalServices)
+              ? qdSnap.additionalServices
+              : [],
+          }
+        : {
+            adults: toNum(quick.adults),
+            children: toNum(quick.children),
+            kids: toNum(quick.kids),
+            infants: toNum(quick.infants),
+            mealPlan: safe(pkg.mealPlan?.planType, "CP"),
+            rooms: { numberOfRooms: 1, sharingType: "Double sharing" },
+            destinations,
+            packageCalculations: {
+              standard: {
+                finalTotal: total,
+                afterDiscount: approxBeforeTax,
+              },
+              deluxe: { finalTotal: 0, afterDiscount: 0 },
+              superior: { finalTotal: 0, afterDiscount: 0 },
+            },
+            taxes: { taxPercent: 5, applyGST: true, gstOn: "package" },
+            additionalServices: [],
           },
-          deluxe: { finalTotal: 0, afterDiscount: 0 },
-          superior: { finalTotal: 0, afterDiscount: 0 },
-        },
-        taxes: { taxPercent: 5, applyGST: true, gstOn: "package" },
-      },
       vehicleDetails: {
         basicsDetails: {
           vehicleType: safe(
