@@ -114,6 +114,20 @@ const policyLines = (arr = []) =>
     .filter(Boolean)
     .join("\n");
 
+/** No http(s) URLs or <a> tags in PAYMENT POLICY email body (clients should not get clickable payment links there). */
+const sanitizePaymentPolicyLine = (text) => {
+  let t = safe(text, "");
+  if (!t) return "";
+  t = t.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, "");
+  t = t.replace(/https?:\/\/[^\s<>"')\]]+/gi, "");
+  return t.replace(/\s{2,}/g, " ").trim();
+};
+
+const paymentPolicyLinesForEmail = (arr = []) =>
+  (arr || [])
+    .map((x) => sanitizePaymentPolicyLine(x))
+    .filter(Boolean);
+
 const toPolicyArray = (value) => {
   if (Array.isArray(value)) return value.map((x) => safe(x)).filter(Boolean);
   if (typeof value === "string") {
@@ -382,7 +396,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         <br/>
 
         <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
-        <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
+        <p>${policyLines(paymentPolicyLinesForEmail(paymentCombined)).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
@@ -534,7 +548,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
        
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
-        <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
+        <p>${policyLines(paymentPolicyLinesForEmail(paymentCombined)).replace(/\n/g, "<br/>")}</p>
         ${bankHtmlSection(bankDetails, paymentLink)}
         <p>
             <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
