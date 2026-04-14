@@ -485,10 +485,26 @@ const QuotationPDFDialog = ({
   const finalPaymentPolicyArray = paymentPolicyArray.filter((item) =>
     String(item || "").trim(),
   );
-  const finalCancellationArray =
+
+  const omitRedundantCancellationBodyLine = (line) => {
+    const s = String(line || "").trim();
+    if (!s) return false;
+    if (/iconicyatra\.com\/cancellationandrefundpolicy/i.test(s)) return false;
+    if (
+      /must\s+visit\s+our\s+website\s+for\s+more\s+details\s+about\s+cancellation\s+policy/i.test(
+        s,
+      )
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  const finalCancellationArray = (
     globalCancellationArray.length > 0
       ? globalCancellationArray
-      : fallbackCancellationPolicy;
+      : fallbackCancellationPolicy
+  ).filter(omitRedundantCancellationBodyLine);
 
   const normalizeWebUrl = (value) => {
     if (value === undefined || value === null) return "";
@@ -503,6 +519,10 @@ const QuotationPDFDialog = ({
     normalizeWebUrl(selectedCompany?.companyWebsite) ||
     normalizeWebUrl(footerWebsite) ||
     "#";
+
+  const companyCancellationUrl = normalizeWebUrl(
+    selectedCompany?.cancellationPolicy,
+  );
 
   // Pre-load all images as base64 with compression
   useEffect(() => {
@@ -609,22 +629,29 @@ const QuotationPDFDialog = ({
           }
         }
 
-        // Find the Terms & Conditions link element in the clone
-        const linkElement = clone.querySelector('a[href*="http"]');
-        let linkPosition = null;
-
-        if (linkElement && i === pageElements.length - 1) {
-          // Get the position of the link element relative to the page
-          const rect = linkElement.getBoundingClientRect();
+        const linkRectToMm = (anchorEl) => {
+          if (!anchorEl) return null;
+          const rect = anchorEl.getBoundingClientRect();
           const pageRect = page.getBoundingClientRect();
-
-          linkPosition = {
-            x: (rect.left - pageRect.left) * 0.264583, // Convert px to mm
+          return {
+            x: (rect.left - pageRect.left) * 0.264583,
             y: (rect.top - pageRect.top) * 0.264583,
             width: rect.width * 0.264583,
             height: rect.height * 0.264583,
           };
-        }
+        };
+
+        const termsLinkEl =
+          i === pageElements.length - 1
+            ? clone.querySelector('a[data-pdf-link="terms"]')
+            : null;
+        const cancellationLinkEl =
+          i === pageElements.length - 1
+            ? clone.querySelector('a[data-pdf-link="cancellation"]')
+            : null;
+
+        const termsLinkPosition = linkRectToMm(termsLinkEl);
+        const cancellationLinkPosition = linkRectToMm(cancellationLinkEl);
 
         await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -657,20 +684,29 @@ const QuotationPDFDialog = ({
           "FAST",
         );
 
-        // Add clickable link for Terms & Conditions on the last page
-        if (linkPosition && i === pageElements.length - 1) {
-          const linkUrl =
-            companyWebsiteUrl !== "#"
-              ? companyWebsiteUrl
-              : "https://www.iconicyatra.com";
-
-          pdf.link(
-            linkPosition.x,
-            linkPosition.y,
-            linkPosition.width,
-            linkPosition.height,
-            { url: linkUrl },
-          );
+        if (i === pageElements.length - 1) {
+          if (termsLinkPosition) {
+            const termsUrl =
+              companyWebsiteUrl !== "#"
+                ? companyWebsiteUrl
+                : "https://www.iconicyatra.com";
+            pdf.link(
+              termsLinkPosition.x,
+              termsLinkPosition.y,
+              termsLinkPosition.width,
+              termsLinkPosition.height,
+              { url: termsUrl },
+            );
+          }
+          if (cancellationLinkPosition && companyCancellationUrl) {
+            pdf.link(
+              cancellationLinkPosition.x,
+              cancellationLinkPosition.y,
+              cancellationLinkPosition.width,
+              cancellationLinkPosition.height,
+              { url: companyCancellationUrl },
+            );
+          }
         }
       }
 
@@ -1567,7 +1603,7 @@ const QuotationPDFDialog = ({
       }}
     >
       {/* Cancellation & Refund Policy - Full Policy */}
-      {finalCancellationArray.length > 0 && (
+      {(finalCancellationArray.length > 0 || companyCancellationUrl) && (
         <div
           style={{
             padding: "18px",
@@ -1590,6 +1626,32 @@ const QuotationPDFDialog = ({
           >
             <MoneyOff /> 🔄 Cancellation & Refund Policy
           </div>
+          {companyCancellationUrl && (
+            <div
+              style={{
+                fontSize: "13px",
+                marginBottom: "14px",
+                textAlign: "center",
+                lineHeight: "1.6",
+              }}
+            >
+              Full cancellation & refund policy:{" "}
+              <a
+                data-pdf-link="cancellation"
+                href={companyCancellationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: "#1565c0",
+                  textDecoration: "underline",
+                  fontWeight: "bold",
+                  wordBreak: "break-all",
+                }}
+              >
+                {companyCancellationUrl}
+              </a>
+            </div>
+          )}
           {finalCancellationArray.map(
             (item, idx) =>
               item &&
@@ -1646,6 +1708,7 @@ const QuotationPDFDialog = ({
         >
           As per company website{" "}
           <a
+            data-pdf-link="terms"
             href={companyWebsiteUrl}
             target="_blank"
             rel="noopener noreferrer"
