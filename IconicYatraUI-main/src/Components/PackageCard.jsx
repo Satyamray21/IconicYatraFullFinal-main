@@ -1,5 +1,5 @@
-import React from 'react';
-import PropTypes from 'prop-types';
+import React from "react";
+import PropTypes from "prop-types";
 import {
   Card,
   CardActionArea,
@@ -9,12 +9,12 @@ import {
   Button,
   Box,
   Chip,
-  Skeleton
-} from '@mui/material';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+  Skeleton,
+} from "@mui/material";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 
 const PackageCard = ({
   image,
@@ -25,12 +25,12 @@ const PackageCard = ({
   onClick,
   onQueryClick,
   loading = false,
-  elevation = 10
+  elevation = 10,
 }) => {
   // Handle image error
   const handleImageError = (e) => {
-    e.target.src = '/images/placeholder-image.jpg'; // Fallback image
-    e.target.alt = 'Image not available';
+    e.target.src = "/images/placeholder-image.jpg"; // Fallback image
+    e.target.alt = "Image not available";
   };
 
   if (loading) {
@@ -49,7 +49,7 @@ const PackageCard = ({
     <Card sx={{ width: 308, borderRadius: 2, boxShadow: elevation }}>
       <CardActionArea
         onClick={onClick}
-        sx={{ position: 'relative' }}
+        sx={{ position: "relative" }}
         disabled={!onClick}
       >
         {/* Image with fallback */}
@@ -60,22 +60,22 @@ const PackageCard = ({
           alt={title}
           onError={handleImageError}
           sx={{
-            objectFit: 'cover',
-            backgroundColor: '#f5f5f5'
+            objectFit: "cover",
+            backgroundColor: "#f5f5f5",
           }}
         />
 
         {/* Duration Chip */}
         {duration && (
-          <Box sx={{ position: 'absolute', top: 8, left: 8 }}>
+          <Box sx={{ position: "absolute", top: 8, left: 8 }}>
             <Chip
               icon={<AccessTimeIcon />}
               label={duration}
               size="small"
               sx={{
-                backgroundColor: 'rgba(0,0,0,0.7)',
-                color: 'white',
-                fontWeight: 'bold'
+                backgroundColor: "rgba(0,0,0,0.7)",
+                color: "white",
+                fontWeight: "bold",
               }}
             />
           </Box>
@@ -83,33 +83,32 @@ const PackageCard = ({
 
         {/* Price Chip */}
         {price && (
-          <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
+          <Box sx={{ position: "absolute", top: 8, right: 8 }}>
             <Chip
-              icon={<AttachMoneyIcon />}
               label={price}
               size="small"
               sx={{
-                backgroundColor: 'rgba(0,0,0,0.7)',
-                color: 'white',
-                fontWeight: 'bold'
+                backgroundColor: "rgba(0,0,0,0.7)",
+                color: "white",
+                fontWeight: "bold",
               }}
             />
           </Box>
         )}
 
         {/* Send Query button */}
-        <Box sx={{ position: 'absolute', bottom: 8, right: 8 }}>
+        <Box sx={{ position: "absolute", bottom: 8, right: 8 }}>
           <Button
             variant="contained"
             size="small"
             sx={{
-              textTransform: 'none',
-              backgroundColor: 'primary.main',
-              '&:hover': {
-                backgroundColor: 'primary.dark',
-                transform: 'scale(1.05)'
+              textTransform: "none",
+              backgroundColor: "primary.main",
+              "&:hover": {
+                backgroundColor: "primary.dark",
+                transform: "scale(1.05)",
               },
-              transition: 'all 0.2s'
+              transition: "all 0.2s",
             }}
             onClick={(e) => {
               e.stopPropagation();
@@ -124,16 +123,16 @@ const PackageCard = ({
         {!image && (
           <Box
             sx={{
-              position: 'absolute',
+              position: "absolute",
               top: 0,
               left: 0,
               right: 0,
               bottom: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(0,0,0,0.1)',
-              color: 'text.secondary'
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(0,0,0,0.1)",
+              color: "text.secondary",
             }}
           >
             <ErrorOutlineIcon fontSize="large" />
@@ -141,37 +140,44 @@ const PackageCard = ({
         )}
       </CardActionArea>
 
-      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1, minHeight: 120 }}>
+      <CardContent
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 1,
+          minHeight: 120,
+        }}
+      >
         {/* Title */}
         <Typography
           variant="h6"
           fontWeight="bold"
           color="#000"
           sx={{
-            display: '-webkit-box',
+            display: "-webkit-box",
             WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            minHeight: '64px'
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            minHeight: "64px",
           }}
         >
-          {title || 'Package Name Not Available'}
+          {title || "Package Name Not Available"}
         </Typography>
 
         {/* Location */}
         {location && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <LocationOnIcon fontSize="small" color="action" />
             <Typography
               variant="body2"
               color="text.secondary"
               sx={{
-                display: '-webkit-box',
+                display: "-webkit-box",
                 WebkitLineClamp: 1,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               {location}
@@ -203,9 +209,9 @@ PackageCard.propTypes = {
 };
 
 PackageCard.defaultProps = {
-  image: '/images/placeholder-image.jpg',
-  title: 'Package Title',
-  onQueryClick: () => console.log('Query button clicked'),
+  image: "/images/placeholder-image.jpg",
+  title: "Package Title",
+  onQueryClick: () => console.log("Query button clicked"),
   loading: false,
   elevation: 10,
 };
