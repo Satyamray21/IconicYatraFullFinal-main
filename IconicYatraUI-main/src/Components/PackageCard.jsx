@@ -13,7 +13,6 @@ import {
 } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 
 const PackageCard = ({
@@ -22,11 +21,34 @@ const PackageCard = ({
   location,
   duration,
   price,
+  finalStandardCost,
+  destinationNights,
   onClick,
   onQueryClick,
   loading = false,
   elevation = 10,
 }) => {
+  const computedStandardTotalFromDestinations = Array.isArray(destinationNights)
+    ? destinationNights.reduce((total, destination) => {
+        const nights = Number(destination?.nights) || 0;
+        const standardHotel = (destination?.hotels || []).find(
+          (hotel) => hotel?.category === "standard"
+        );
+        const standardRate = Number(standardHotel?.pricePerPerson) || 0;
+        return total + (nights * standardRate);
+      }, 0)
+    : 0;
+
+  const resolvedPriceLabel = (() => {
+    if (Number(finalStandardCost) > 0) {
+      return `₹${Number(finalStandardCost).toLocaleString()}`;
+    }
+    if (computedStandardTotalFromDestinations > 0) {
+      return `₹${computedStandardTotalFromDestinations.toLocaleString()}`;
+    }
+    return price;
+  })();
+
   // Handle image error
   const handleImageError = (e) => {
     e.target.src = "/images/placeholder-image.jpg"; // Fallback image
@@ -82,10 +104,10 @@ const PackageCard = ({
         )}
 
         {/* Price Chip */}
-        {price && (
+        {resolvedPriceLabel && (
           <Box sx={{ position: "absolute", top: 8, right: 8 }}>
             <Chip
-              label={price}
+              label={resolvedPriceLabel}
               size="small"
               sx={{
                 backgroundColor: "rgba(0,0,0,0.7)",
@@ -202,6 +224,18 @@ PackageCard.propTypes = {
   location: PropTypes.string,
   duration: PropTypes.string,
   price: PropTypes.string,
+  finalStandardCost: PropTypes.number,
+  destinationNights: PropTypes.arrayOf(
+    PropTypes.shape({
+      nights: PropTypes.number,
+      hotels: PropTypes.arrayOf(
+        PropTypes.shape({
+          category: PropTypes.string,
+          pricePerPerson: PropTypes.number,
+        })
+      ),
+    })
+  ),
   onClick: PropTypes.func,
   onQueryClick: PropTypes.func,
   loading: PropTypes.bool,

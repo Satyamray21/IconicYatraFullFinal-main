@@ -232,6 +232,8 @@ const Yatra = () => {
                     duration={formatDuration(pkg)}
                     // ✅ UPDATED: Price with new logic
                     price={getPriceDisplay(pkg)}
+                    finalStandardCost={pkg.finalStandardCost}
+                    destinationNights={pkg.destinationNights}
                     id={pkg._id}
                   />
                 </Box>

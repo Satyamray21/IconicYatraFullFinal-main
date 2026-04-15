@@ -323,6 +323,8 @@ const International = () => {
                     }`}
                     // UPDATED: Price display with new logic
                     price={getPriceDisplay(pkg)}
+                    finalStandardCost={pkg.finalStandardCost}
+                    destinationNights={pkg.destinationNights}
                     priceNote={pkg.priceNote || ""}
                     onClick={() => handleCardClick(pkg._id)}
                     onQueryClick={() => handleQueryClick(pkg)}

@@ -173,24 +173,28 @@ const Domestic = () => {
 
   // ✅ Price helpers
   const getStandardHotelPrice = (pkg) => {
+    if (pkg?.finalStandardCost && Number(pkg.finalStandardCost) > 0) {
+      return Number(pkg.finalStandardCost);
+    }
+
     if (pkg?.startingPrice) return pkg.startingPrice;
     if (pkg?.price) return pkg.price;
 
     if (!pkg.destinationNights?.length) return null;
 
-    const firstDestination = pkg.destinationNights[0];
-
-    if (!firstDestination?.hotels?.length) return null;
-
-    const standardHotel = firstDestination.hotels.find(
-      (hotel) => hotel.category === "standard",
+    const totalStandardCost = pkg.destinationNights.reduce(
+      (sum, destination) => {
+        const nights = Number(destination?.nights) || 0;
+        const standardHotel = (destination?.hotels || []).find(
+          (hotel) => hotel?.category === "standard",
+        );
+        const standardRate = Number(standardHotel?.pricePerPerson) || 0;
+        return sum + nights * standardRate;
+      },
+      0,
     );
 
-    if (standardHotel && standardHotel.pricePerPerson > 0) {
-      return standardHotel.pricePerPerson;
-    }
-
-    return null;
+    return totalStandardCost > 0 ? totalStandardCost : null;
   };
   const convertPrice = (price) => {
     if (!price) return null;
