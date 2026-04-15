@@ -216,6 +216,8 @@ const Holidays = () => {
                   duration={formatDuration(pkg)}
                   // ✅ UPDATED: Price display with new logic
                   price={getPriceDisplay(pkg)}
+                  finalStandardCost={pkg.finalStandardCost}
+                  destinationNights={pkg.destinationNights}
                   onClick={() => handlePackageClick(pkg._id)}
                   onQueryClick={() => handleQueryClick(pkg)}
                 />
