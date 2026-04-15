@@ -37,7 +37,7 @@ const StepClientDetails = ({ onNext }) => {
         children: "",
         message: "",
         tourType: "",
-        sector: "",
+        clientLocation: "",
         tourDestination: "",
         pickupPoint: "",
         dropPoint: "",
@@ -123,11 +123,8 @@ const StepClientDetails = ({ onNext }) => {
                       .filter(Boolean)
                       .join(", ");
                     setFieldValue(
-                      "sector",
-                      selectedClient.tourDetails?.tourDestination ||
-                        selectedClient.location?.city ||
-                        fullLocation ||
-                        "",
+                      "clientLocation",
+                      fullLocation || selectedClient.location?.city || "",
                     );
                     setFieldValue(
                       "tourDestination",
@@ -283,15 +280,15 @@ const StepClientDetails = ({ onNext }) => {
               </TextField>
             </Grid>
 
-            {/* Sector */}
+            {/* Client Location */}
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 fullWidth
-                label="Sector / City"
-                name="sector"
-                value={values.sector}
+                label="Client Location"
+                name="clientLocation"
+                value={values.clientLocation}
                 onChange={handleChange}
-                placeholder="e.g., Delhi, Mumbai, etc."
+                placeholder="e.g., Delhi, Uttar Pradesh, India"
               />
             </Grid>
 

@@ -7,6 +7,7 @@ const quickQuotationSchema = new mongoose.Schema(
         customerName: { type: String, required: true, trim: true },
         email: { type: String, required: true, trim: true },
         phone: { type: String, trim: true },
+        clientLocation: { type: String, trim: true, default: "" },
 
         packageId: {
             type: mongoose.Schema.Types.ObjectId,
