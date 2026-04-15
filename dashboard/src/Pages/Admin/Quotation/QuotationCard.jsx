@@ -145,6 +145,14 @@ const QuotationCard = () => {
   }, [quickError]);
 
   const handleDeleteClick = (quotationId, quotationType) => {
+    if (!quotationId) {
+      setSnackbar({
+        open: true,
+        message: "Unable to delete: quotation id missing.",
+        severity: "error"
+      });
+      return;
+    }
     setDeleteConfirm({
       open: true,
       quotationId,
@@ -419,8 +427,12 @@ const QuotationCard = () => {
             size="small"
             onClick={(e) => {
               e.stopPropagation();
+              const idToDelete =
+                params.row.type === "Quick"
+                  ? params.row.originalId
+                  : (params.row.originalId || params.row.id);
               handleDeleteClick(
-                params.row.originalId || params.row.id,
+                idToDelete,
                 params.row.type
               );
             }}

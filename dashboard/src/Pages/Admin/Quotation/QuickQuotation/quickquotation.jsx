@@ -8,20 +8,30 @@ import {
   Paper,
   Snackbar,
   Alert,
-  CircularProgress
+  CircularProgress,
 } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import StepClientDetails from "./QuickQuotationStep2";
 import StepPackageDetails from "./QuickQuotationStep3";
 import StepPolicy from "./QuickQuotationStep4";
 import StepPreview from "./QuickQuotationStep5";
-import { createQuickQuotation, clearStatus } from "../../../../features/quotation/quickQuotationSlice";
+import {
+  createQuickQuotation,
+  clearStatus,
+} from "../../../../features/quotation/quickQuotationSlice";
 
-const steps = ["Client Details", "Package Details", "Policy & Others", "Preview"];
+const steps = [
+  "Client Details",
+  "Package Details",
+  "Policy & Others",
+  "Preview",
+];
 
 const QuickQuotationForm = () => {
   const dispatch = useDispatch();
-  const { loading, error, successMessage } = useSelector((state) => state.quickQuotation);
+  const { loading, error, successMessage } = useSelector(
+    (state) => state.quickQuotation,
+  );
 
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState({
@@ -34,7 +44,7 @@ const QuickQuotationForm = () => {
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
-    severity: "success"
+    severity: "success",
   });
 
   // Show snackbar for success/error messages
@@ -43,7 +53,7 @@ const QuickQuotationForm = () => {
       setSnackbar({
         open: true,
         message: successMessage,
-        severity: "success"
+        severity: "success",
       });
       dispatch(clearStatus());
     }
@@ -51,7 +61,7 @@ const QuickQuotationForm = () => {
       setSnackbar({
         open: true,
         message: error,
-        severity: "error"
+        severity: "error",
       });
       dispatch(clearStatus());
     }
@@ -63,7 +73,7 @@ const QuickQuotationForm = () => {
     // Merge the new step data with existing form data
     const newData = {
       ...formData,
-      ...stepData
+      ...stepData,
     };
 
     setFormData(newData);
@@ -94,13 +104,25 @@ const QuickQuotationForm = () => {
         totalCost: Number(finalData.packageDetails?.totalCost) || 0,
         pickupPoint: finalData.packageDetails?.pickupPoint || "",
         dropPoint: finalData.packageDetails?.dropPoint || "",
-
+        arrivalDate: finalData.packageDetails?.arrivalDate || "",
+        departureDate: finalData.packageDetails?.departureDate || "",
+        numberOfPax: Number(finalData.packageDetails?.numberOfPax) || 0,
+        noOfRooms: Number(finalData.packageDetails?.noOfRooms) || 0,
+        transportationCost:
+          Number(finalData.packageDetails?.transportationCost) || 0,
+        hotelTotalCost: Number(finalData.packageDetails?.hotelTotalCost) || 0,
+        standardCost: Number(finalData.packageDetails?.standardCost) || 0,
+        deluxeCost: Number(finalData.packageDetails?.deluxeCost) || 0,
+        superiorCost: Number(finalData.packageDetails?.superiorCost) || 0,
+        mealPlan: finalData.packageDetails?.mealPlan || "",
 
         // Package Snapshot (unchanged)
         packageSnapshot: {
           tourType: finalData.packageDetails?.tourType || "",
           destinations: Array.isArray(finalData.packageDetails?.destinations)
-            ? finalData.packageDetails.destinations.filter(dest => dest && dest.trim() !== "")
+            ? finalData.packageDetails.destinations.filter(
+                (dest) => dest && dest.trim() !== "",
+              )
             : [],
           days: parseInt(finalData.packageDetails?.days) || 0,
           nights: parseInt(finalData.packageDetails?.nights) || 0,
@@ -108,26 +130,43 @@ const QuickQuotationForm = () => {
           transportMode: finalData.packageDetails?.transportMode || "",
           mealPlan: finalData.packageDetails?.mealPlan || "",
           activities: Array.isArray(finalData.packageDetails?.activities)
-            ? finalData.packageDetails.activities.filter(activity => activity && activity.trim() !== "")
+            ? finalData.packageDetails.activities.filter(
+                (activity) => activity && activity.trim() !== "",
+              )
             : [],
           itinerary: Array.isArray(finalData.packageDetails?.itinerary)
             ? finalData.packageDetails.itinerary
             : [],
           arrivalCity: finalData.packageDetails?.arrivalCity || "",
           departureCity: finalData.packageDetails?.departureCity || "",
-          destinationCountry: finalData.packageDetails?.destinationCountry || "",
+          destinationCountry:
+            finalData.packageDetails?.destinationCountry || "",
           numberOfPax: finalData.packageDetails?.numberOfPax || "",
           roomType: finalData.packageDetails?.roomType || "",
           pickupPoint: finalData.packageDetails?.pickupPoint || "",
           dropPoint: finalData.packageDetails?.dropPoint || "",
+          arrivalDate: finalData.packageDetails?.arrivalDate || "",
+          departureDate: finalData.packageDetails?.departureDate || "",
+          noOfRooms: Number(finalData.packageDetails?.noOfRooms) || 0,
+          transportationCost:
+            Number(finalData.packageDetails?.transportationCost) || 0,
+          hotelTotalCost: Number(finalData.packageDetails?.hotelTotalCost) || 0,
+          standardCost: Number(finalData.packageDetails?.standardCost) || 0,
+          deluxeCost: Number(finalData.packageDetails?.deluxeCost) || 0,
+          superiorCost: Number(finalData.packageDetails?.superiorCost) || 0,
+          totalCost: Number(finalData.packageDetails?.totalCost) || 0,
         },
 
         policy: {
           inclusionPolicy: Array.isArray(finalData.policies?.inclusions)
-            ? finalData.policies.inclusions.filter(item => item && item.trim() !== "")
+            ? finalData.policies.inclusions.filter(
+                (item) => item && item.trim() !== "",
+              )
             : [],
           exclusionPolicy: Array.isArray(finalData.policies?.exclusions)
-            ? finalData.policies.exclusions.filter(item => item && item.trim() !== "")
+            ? finalData.policies.exclusions.filter(
+                (item) => item && item.trim() !== "",
+              )
             : [],
           paymentPolicy: finalData.policies?.paymentPolicy?.trim()
             ? [finalData.policies.paymentPolicy.trim()]
@@ -143,18 +182,21 @@ const QuickQuotationForm = () => {
         status: "draft",
       };
 
-
       console.log("API Data being sent:", apiData);
 
       // Validate required fields
       const missingFields = [];
-      if (!apiData.customerName || apiData.customerName.trim() === "") missingFields.push("Customer Name");
-      if (!apiData.email || apiData.email.trim() === "") missingFields.push("Email");
-      if (!apiData.packageId || apiData.packageId.trim() === "") missingFields.push("Package Selection");
-      if (!apiData.adults || apiData.adults === 0) missingFields.push("Number of Adults");
+      if (!apiData.customerName || apiData.customerName.trim() === "")
+        missingFields.push("Customer Name");
+      if (!apiData.email || apiData.email.trim() === "")
+        missingFields.push("Email");
+      if (!apiData.packageId || apiData.packageId.trim() === "")
+        missingFields.push("Package Selection");
+      if (!apiData.adults || apiData.adults === 0)
+        missingFields.push("Number of Adults");
 
       if (missingFields.length > 0) {
-        alert(`Please fill in required fields:\n${missingFields.join('\n')}`);
+        alert(`Please fill in required fields:\n${missingFields.join("\n")}`);
         return;
       }
 
@@ -167,7 +209,7 @@ const QuickQuotationForm = () => {
       setSnackbar({
         open: true,
         message: "Quotation created successfully!",
-        severity: "success"
+        severity: "success",
       });
 
       // Reset form after successful submission
@@ -179,13 +221,12 @@ const QuickQuotationForm = () => {
           policies: {},
         });
       }, 2000);
-
     } catch (error) {
       console.error("Failed to create quotation:", error);
       setSnackbar({
         open: true,
         message: error || "Failed to create quotation",
-        severity: "error"
+        severity: "error",
       });
     }
   };
@@ -225,14 +266,16 @@ const QuickQuotationForm = () => {
 
   return (
     <>
-      <Paper sx={{
-        p: 4,
-        maxWidth: 900,
-        mx: "auto",
-        mt: 4,
-        borderRadius: 3,
-        boxShadow: 4
-      }}>
+      <Paper
+        sx={{
+          p: 4,
+          maxWidth: 900,
+          mx: "auto",
+          mt: 4,
+          borderRadius: 3,
+          boxShadow: 4,
+        }}
+      >
         <Stepper activeStep={activeStep} alternativeLabel>
           {steps.map((label) => (
             <Step key={label}>
@@ -241,9 +284,7 @@ const QuickQuotationForm = () => {
           ))}
         </Stepper>
 
-        <Box mt={4}>
-          {getStepContent(activeStep)}
-        </Box>
+        <Box mt={4}>{getStepContent(activeStep)}</Box>
       </Paper>
 
       {/* Success/Error Snackbar */}
@@ -251,12 +292,12 @@ const QuickQuotationForm = () => {
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
-          sx={{ width: '100%' }}
+          sx={{ width: "100%" }}
         >
           {snackbar.message}
         </Alert>

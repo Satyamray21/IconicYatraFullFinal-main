@@ -514,6 +514,25 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString("en-IN");
 };
 
+const formatDateTime = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  const hh = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy} at ${hh}:${min}`;
+};
+
+const normalizePointLabel = (text) => {
+  const raw = String(text || "").trim();
+  if (!raw) return "—";
+  const parts = raw.split("-").map((x) => x.trim()).filter(Boolean);
+  return parts.length >= 2 ? parts[parts.length - 1] : raw;
+};
+
 /** Merge snapshot with populated package so hotel rows work when snapshot omits destinationNights. */
 function mergeQuickPackageForDisplay(apiData) {
   const snap =
@@ -667,6 +686,25 @@ function transformQuickApiToDisplay(apiData, company) {
     apiData,
     apiData?.packageSnapshot?.quotationDetails?.additionalServices || [],
   );
+  const pricingSource = pkg?.quotationDetails || {};
+  const transportationCost = Number(
+    pricingSource.transportationCost ??
+      pkg.transportationCost ??
+      pkg.transportationTotalCost ??
+      0,
+  );
+  const hotelTotalCost = Number(
+    pricingSource.hotelTotalCost ?? pkg.hotelTotalCost ?? 0,
+  );
+  const standardTotalCost = Number(
+    pricingSource.standardCost ?? pkg.finalStandardCost ?? pkg.totalCost ?? 0,
+  );
+  const deluxeTotalCost = Number(
+    pricingSource.deluxeCost ?? pkg.finalDeluxeCost ?? 0,
+  );
+  const superiorTotalCost = Number(
+    pricingSource.superiorCost ?? pkg.finalSuperiorCost ?? 0,
+  );
   const destLine = buildQuickDestinationLine(pkg) || "—";
 
   const pickHotel = (nightBlock, cat) => {
@@ -705,9 +743,45 @@ function transformQuickApiToDisplay(apiData, company) {
       superior: "—",
     }));
   }
+  if (transportationCost > 0) {
+    hotelPricingData.push({
+      destination: "Transportation cost",
+      nights: "-",
+      standard: `₹ ${Math.round(transportationCost).toLocaleString("en-IN")}`,
+      deluxe: `₹ ${Math.round(transportationCost).toLocaleString("en-IN")}`,
+      superior: `₹ ${Math.round(transportationCost).toLocaleString("en-IN")}`,
+    });
+  }
+  if (hotelTotalCost > 0) {
+    hotelPricingData.push({
+      destination: "Hotel total cost",
+      nights: "-",
+      standard: `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`,
+      deluxe: `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`,
+      superior: `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`,
+    });
+  }
+  if (standardTotalCost > 0 || deluxeTotalCost > 0 || superiorTotalCost > 0) {
+    hotelPricingData.push({
+      destination: "Final package totals",
+      nights: "-",
+      standard:
+        standardTotalCost > 0
+          ? `₹ ${Math.round(standardTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      deluxe:
+        deluxeTotalCost > 0
+          ? `₹ ${Math.round(deluxeTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      superior:
+        superiorTotalCost > 0
+          ? `₹ ${Math.round(superiorTotalCost).toLocaleString("en-IN")}`
+          : "—",
+    });
+  }
   if (totalCost > 0) {
     hotelPricingData.push({
-      destination: "Total package cost",
+      destination: "Total quotation cost",
       nights: "-",
       standard: `₹ ${Math.round(totalCost).toLocaleString("en-IN")}`,
       deluxe: "—",
@@ -751,10 +825,24 @@ function transformQuickApiToDisplay(apiData, company) {
       email: apiData.email || "",
     },
     pickup: {
-      arrival: apiData.pickupPoint
-        ? `Pickup: ${apiData.pickupPoint}`
-        : "Pickup: —",
-      departure: apiData.dropPoint ? `Drop: ${apiData.dropPoint}` : "Drop: —",
+      arrival: (() => {
+        const arrivalRawDate =
+          apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
+          apiData?.packageSnapshot?.arrivalDate ||
+          apiData?.createdAt;
+        const dt = formatDateTime(arrivalRawDate);
+        const point = normalizePointLabel(apiData.pickupPoint);
+        return dt ? `Arrival: ${point} (${dt})` : `Arrival: ${point}`;
+      })(),
+      departure: (() => {
+        const departureRawDate =
+          apiData?.packageSnapshot?.quotationDetails?.departureDate ||
+          apiData?.packageSnapshot?.departureDate ||
+          apiData?.createdAt;
+        const dt = formatDateTime(departureRawDate);
+        const point = normalizePointLabel(apiData.dropPoint);
+        return dt ? `Departure: ${point} (${dt})` : `Departure: ${point}`;
+      })(),
     },
     quotationTitle: pkg.displayTitle || pkg.title || "",
     destinationSummary: destLine,
@@ -777,6 +865,26 @@ function transformQuickApiToDisplay(apiData, company) {
     pricing: {
       discount: "—",
       gst: "—",
+      transportation:
+        transportationCost > 0
+          ? `₹ ${Math.round(transportationCost).toLocaleString("en-IN")}`
+          : "—",
+      hotel:
+        hotelTotalCost > 0
+          ? `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      standard:
+        standardTotalCost > 0
+          ? `₹ ${Math.round(standardTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      deluxe:
+        deluxeTotalCost > 0
+          ? `₹ ${Math.round(deluxeTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      superior:
+        superiorTotalCost > 0
+          ? `₹ ${Math.round(superiorTotalCost).toLocaleString("en-IN")}`
+          : "—",
       total:
         totalCost > 0
           ? `₹ ${Math.round(totalCost).toLocaleString("en-IN")}`
@@ -941,6 +1049,8 @@ const QuickFinalize = () => {
     booking: { subject: "", message: "" },
   });
   const [mailCompanies, setMailCompanies] = useState([]);
+  const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
+  const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
   const [policyInputs, setPolicyInputs] = useState({
     inclusionPolicy: "",
     exclusionPolicy: "",
@@ -1455,7 +1565,11 @@ const QuickFinalize = () => {
     }
     setOpenEmailDialog(true);
   };
-  const handleEmailClose = () => setOpenEmailDialog(false);
+  const handleEmailClose = () => {
+    setOpenEmailDialog(false);
+    setPdfAttachmentForMail(null);
+    setPreviewPdfModeForMail(false);
+  };
 
   const handleEmailSend = async (values) => {
     const to = String(values?.to || "").trim();
@@ -1513,6 +1627,13 @@ const QuickFinalize = () => {
                   },
                 }
               : undefined,
+          previewPdfMode:
+            !isBookingMail &&
+            !!pdfAttachmentForMail?.contentBase64 &&
+            previewPdfModeForMail,
+          ...(pdfAttachmentForMail?.contentBase64
+            ? { pdfAttachment: pdfAttachmentForMail }
+            : {}),
         },
       );
       setSnackbar({
@@ -1520,6 +1641,8 @@ const QuickFinalize = () => {
         message: "Email sent successfully",
         severity: "success",
       });
+      setPdfAttachmentForMail(null);
+      setPreviewPdfModeForMail(false);
     } catch (e) {
       setSnackbar({
         open: true,
@@ -2389,8 +2512,14 @@ const QuickFinalize = () => {
                             {vehicleSnap?.basicsDetails?.tripType || "—"}
                           </Typography>
                           <Typography variant="body2">
-                            <strong>Vehicle cost:</strong> ₹
-                            {vehicleSnap?.costDetails?.totalCost ?? "0"}
+                            <strong>Transportation cost:</strong> ₹
+                            {(
+                              qdSnap?.transportationCost ??
+                              snap?.transportationCost ??
+                              snap?.transportationTotalCost ??
+                              vehicleSnap?.costDetails?.totalCost ??
+                              0
+                            ).toLocaleString("en-IN")}
                           </Typography>
                           <Divider sx={{ my: 1 }} />
                           <Typography variant="body2">
@@ -3411,6 +3540,14 @@ const QuickFinalize = () => {
           onClose={handleClosePdfDialog}
           quotation={quotationForPdf}
           pdfHeading="QUICK QUOTATION"
+          onSendMail={(payload) => {
+            const attachment = payload?.pdfAttachment || payload || null;
+            setPdfAttachmentForMail(attachment);
+            setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
+            handleClosePdfDialog();
+            setEmailTemplateType("normal");
+            handleEmailOpen();
+          }}
         />
       )}
 

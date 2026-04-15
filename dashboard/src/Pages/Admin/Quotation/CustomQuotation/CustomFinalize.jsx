@@ -669,6 +669,8 @@ useEffect(() => {
         booking: { subject: "", message: "" },
     });
     const [mailCompanies, setMailCompanies] = useState([]);
+    const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
+    const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
     const [openBankDialog, setOpenBankDialog] = useState(false);
     const [flights, setFlights] = useState([]);
     const [openAddBankDialog, setOpenAddBankDialog] = useState(false);
@@ -1277,7 +1279,11 @@ useEffect(() => {
         }
         setOpenEmailDialog(true);
     };
-    const handleEmailClose = () => setOpenEmailDialog(false);
+    const handleEmailClose = () => {
+        setOpenEmailDialog(false);
+        setPdfAttachmentForMail(null);
+        setPreviewPdfModeForMail(false);
+    };
     const handleEmailSend = async (values) => {
         const to = String(values?.to || "").trim();
         const cc = String(values?.cc || "").trim();
@@ -1331,6 +1337,13 @@ useEffect(() => {
                             },
                         }
                         : undefined,
+                    previewPdfMode:
+                        !isBookingMail &&
+                        !!pdfAttachmentForMail?.contentBase64 &&
+                        previewPdfModeForMail,
+                    ...(pdfAttachmentForMail?.contentBase64
+                        ? { pdfAttachment: pdfAttachmentForMail }
+                        : {}),
                 }
             );
             setSnackbar({
@@ -1338,6 +1351,8 @@ useEffect(() => {
                 message: "Email sent successfully",
                 severity: "success",
             });
+            setPdfAttachmentForMail(null);
+            setPreviewPdfModeForMail(false);
         } catch (e) {
             setSnackbar({
                 open: true,
@@ -3406,6 +3421,14 @@ useEffect(() => {
                     open={openPdfDialog}
                     onClose={handleClosePdfDialog}
                     quotation={quotationForPdf}
+                    onSendMail={(payload) => {
+                        const attachment = payload?.pdfAttachment || payload || null;
+                        setPdfAttachmentForMail(attachment);
+                        setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
+                        handleClosePdfDialog();
+                        setEmailTemplateType("normal");
+                        handleEmailOpen();
+                    }}
                 />
             )}
 
