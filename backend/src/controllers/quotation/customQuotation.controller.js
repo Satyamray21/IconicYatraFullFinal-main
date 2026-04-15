@@ -510,12 +510,15 @@ const resolveMailAuth = (senderAccount) => {
   const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
 
   const user = useSecondary
-    ? process.env.EMAIL_USER2
-    : process.env.EMAIL_USER;
+    ? process.env.gmail2 || process.env.EMAIL_USER2 || process.env.gmail || process.env.EMAIL_USER
+    : process.env.gmail || process.env.EMAIL_USER;
 
   const pass = useSecondary
-    ? process.env.EMAIL_PASS2
-    : process.env.EMAIL_PASS;
+    ? process.env.app_pass2 ||
+      process.env.EMAIL_PASS2 ||
+      process.env.app_pass ||
+      process.env.EMAIL_PASS
+    : process.env.app_pass || process.env.EMAIL_PASS;
 
   return { user, pass };
 };
