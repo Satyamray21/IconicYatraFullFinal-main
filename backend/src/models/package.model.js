@@ -109,6 +109,76 @@ const PackageSchema = new mongoose.Schema(
       default: 1,
       min: 1
     },
+    numberOfRooms: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+    transportationCostPerDay: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    transportationDays: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    transportationTotalCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    hotelTotalCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    standardHotelTotalCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    deluxeHotelTotalCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    superiorHotelTotalCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    calculatedTotalCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    finalStandardCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    finalDeluxeCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    finalSuperiorCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    manualTotalCost: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    totalCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     isPopular: {
       type: Boolean,
       default: false,

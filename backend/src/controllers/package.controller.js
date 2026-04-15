@@ -113,6 +113,81 @@ function normalizeDestinationNights(destNights) {
     }));
 }
 
+function normalizePricing(data) {
+    const destinationNights = Array.isArray(data.destinationNights) ? data.destinationNights : [];
+    const numberOfRooms = Math.max(1, Number(data.numberOfRooms) || 1);
+    const transportationCostPerDay = Math.max(0, Number(data.transportationCostPerDay) || 0);
+    const transportationDays = Math.max(0, Number(data.transportationDays) || 0);
+
+    const categoryTotals = destinationNights.reduce((acc, dest) => {
+        const nights = Math.max(0, Number(dest?.nights) || 0);
+        const hotels = Array.isArray(dest?.hotels) ? dest.hotels : [];
+
+        const standardRate = Math.max(
+            0,
+            Number(hotels.find((hotel) => hotel?.category === "standard")?.pricePerPerson) || 0
+        );
+        const deluxeRate = Math.max(
+            0,
+            Number(hotels.find((hotel) => hotel?.category === "deluxe")?.pricePerPerson) || 0
+        );
+        const superiorRate = Math.max(
+            0,
+            Number(hotels.find((hotel) => hotel?.category === "superior")?.pricePerPerson) || 0
+        );
+
+        acc.standardHotelTotalCost += (nights * standardRate * numberOfRooms);
+        acc.deluxeHotelTotalCost += (nights * deluxeRate * numberOfRooms);
+        acc.superiorHotelTotalCost += (nights * superiorRate * numberOfRooms);
+
+        return acc;
+    }, {
+        standardHotelTotalCost: 0,
+        deluxeHotelTotalCost: 0,
+        superiorHotelTotalCost: 0,
+    });
+
+    const hotelTotalCost = destinationNights.reduce((destTotal, dest) => {
+        const nights = Math.max(0, Number(dest?.nights) || 0);
+        const hotelRatePerNight = (Array.isArray(dest?.hotels) ? dest.hotels : []).reduce(
+            (rateTotal, hotel) => rateTotal + Math.max(0, Number(hotel?.pricePerPerson) || 0),
+            0
+        );
+        return destTotal + (nights * hotelRatePerNight * numberOfRooms);
+    }, 0);
+
+    const transportationTotalCost = transportationCostPerDay * transportationDays;
+    const calculatedTotalCost = hotelTotalCost + transportationTotalCost;
+    const hasManualTotalCost =
+        data.manualTotalCost !== null &&
+        data.manualTotalCost !== undefined &&
+        data.manualTotalCost !== "";
+    const manualTotalCost = hasManualTotalCost
+        ? Math.max(0, Number(data.manualTotalCost) || 0)
+        : null;
+
+    const finalStandardCost = categoryTotals.standardHotelTotalCost + transportationTotalCost;
+    const finalDeluxeCost = categoryTotals.deluxeHotelTotalCost + transportationTotalCost;
+    const finalSuperiorCost = categoryTotals.superiorHotelTotalCost + transportationTotalCost;
+
+    data.numberOfRooms = numberOfRooms;
+    data.transportationCostPerDay = transportationCostPerDay;
+    data.transportationDays = transportationDays;
+    data.transportationTotalCost = transportationTotalCost;
+    data.hotelTotalCost = hotelTotalCost;
+    data.standardHotelTotalCost = categoryTotals.standardHotelTotalCost;
+    data.deluxeHotelTotalCost = categoryTotals.deluxeHotelTotalCost;
+    data.superiorHotelTotalCost = categoryTotals.superiorHotelTotalCost;
+    data.calculatedTotalCost = calculatedTotalCost;
+    data.finalStandardCost = finalStandardCost;
+    data.finalDeluxeCost = finalDeluxeCost;
+    data.finalSuperiorCost = finalSuperiorCost;
+    data.manualTotalCost = manualTotalCost;
+    data.totalCost = manualTotalCost !== null ? manualTotalCost : calculatedTotalCost;
+
+    return data;
+}
+
 // ✅ IMPROVED: Policy Normalization with validation
 function normalizePolicy(policy) {
     if (!policy || typeof policy !== 'object') {
@@ -309,6 +384,7 @@ export const createPackage = asyncHandler(async (req, res) => {
     data.mealPlan = normalizeMealPlan(data.mealPlan);
     data.destinationNights = normalizeDestinationNights(data.destinationNights);
     data.policy = normalizePolicy(data.policy);
+    normalizePricing(data);
 
     // -----------------------------------
     // ✅ DATE NORMALIZATION
@@ -416,6 +492,7 @@ export const updateStep1 = asyncHandler(async (req, res) => {
     data.mealPlan = normalizeMealPlan(data.mealPlan);
     data.destinationNights = normalizeDestinationNights(data.destinationNights);
     data.policy = normalizePolicy(data.policy);
+    normalizePricing(data);
 
     // Normalize dates and calculate status
     normalizeDates(data);
@@ -458,6 +535,13 @@ export const updateTourDetails = asyncHandler(async (req, res) => {
     if (!existing) {
         return res.status(404).json({ message: "Package not found" });
     }
+
+    if (data.destinationNights !== undefined) {
+        data.destinationNights = normalizeDestinationNights(data.destinationNights);
+    } else {
+        data.destinationNights = existing.destinationNights || [];
+    }
+    normalizePricing(data);
 
     // Recalculate status based on existing dates
     data.status = calculateStatus(existing.validFrom, existing.validTill);
