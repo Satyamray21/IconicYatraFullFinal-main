@@ -38,6 +38,7 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
   const clientDestination = String(
     clientTourDetails?.tourDestination ||
       clientDetails?.tourDestination ||
+      clientDetails?.clientLocation ||
       clientDetails?.sector ||
       "",
   )

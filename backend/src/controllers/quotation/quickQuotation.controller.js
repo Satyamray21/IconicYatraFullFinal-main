@@ -114,6 +114,7 @@ export const createQuickQuotation = async (req, res) => {
       customerName,
       email,
       phone,
+      clientLocation,
       packageId,
       adults,
       children,
@@ -149,6 +150,10 @@ export const createQuickQuotation = async (req, res) => {
       ...(packageSnapshotInput && typeof packageSnapshotInput === "object"
         ? packageSnapshotInput
         : {}),
+      clientLocation:
+        (clientLocation && String(clientLocation).trim()) ||
+        packageSnapshotInput?.clientLocation ||
+        "",
       quotationDetails: {
         ...(pkg?.quotationDetails && typeof pkg.quotationDetails === "object"
           ? pkg.quotationDetails
@@ -174,6 +179,7 @@ export const createQuickQuotation = async (req, res) => {
       customerName,
       email,
       phone,
+      clientLocation: String(clientLocation || "").trim(),
       packageId,
       adults,
       children,

@@ -93,6 +93,7 @@ const QuickQuotationForm = () => {
         customerName: finalData.clientDetails?.customerName?.trim() || "",
         email: finalData.clientDetails?.email?.trim() || "",
         phone: finalData.clientDetails?.phone?.trim() || "",
+        clientLocation: finalData.clientDetails?.clientLocation?.trim() || "",
         adults: parseInt(finalData.clientDetails?.adults) || 0,
         children: parseInt(finalData.clientDetails?.children) || 0,
         message: finalData.clientDetails?.message?.trim() || "",
@@ -118,6 +119,7 @@ const QuickQuotationForm = () => {
 
         // Package Snapshot (unchanged)
         packageSnapshot: {
+          clientLocation: finalData.clientDetails?.clientLocation?.trim() || "",
           tourType: finalData.packageDetails?.tourType || "",
           destinations: Array.isArray(finalData.packageDetails?.destinations)
             ? finalData.packageDetails.destinations.filter(
