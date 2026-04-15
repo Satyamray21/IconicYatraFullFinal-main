@@ -88,6 +88,10 @@ const PackageEditView = () => {
     validTill: null,
     days: [],
     perPerson: 1,
+    numberOfRooms: 1,
+    transportationCostPerDay: 0,
+    transportationDays: 0,
+    manualTotalCost: null,
     mealPlan: {
       planType: "",
       description: "",
@@ -228,6 +232,13 @@ const PackageEditView = () => {
           validTill: safeCurrent.validTill || null,
           days: initializedDays,
           perPerson: safeCurrent.perPerson || 1,
+          numberOfRooms: Number(safeCurrent.numberOfRooms) || 1,
+          transportationCostPerDay: Number(safeCurrent.transportationCostPerDay) || 0,
+          transportationDays: Number(safeCurrent.transportationDays) || (safeCurrent.days?.length || 0),
+          manualTotalCost:
+            safeCurrent.manualTotalCost === null || safeCurrent.manualTotalCost === undefined
+              ? null
+              : Number(safeCurrent.manualTotalCost),
           mealPlan: safeCurrent.mealPlan || { planType: "", description: "" },
           destinationNights: initializedDestinationNights,
           
@@ -654,7 +665,24 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
           dayImage: typeof day?.dayImage === "string" ? day.dayImage : "",
         })),
         
-    perPerson: perPersonValue, 
+        perPerson: perPersonValue,
+        numberOfRooms: Number(pkg.numberOfRooms) || 1,
+        transportationCostPerDay: Number(pkg.transportationCostPerDay) || 0,
+        transportationDays: Number(pkg.transportationDays) || 0,
+        transportationTotalCost,
+        hotelTotalCost,
+        standardHotelTotalCost,
+        deluxeHotelTotalCost,
+        superiorHotelTotalCost,
+        calculatedTotalCost,
+        finalStandardCost,
+        finalDeluxeCost,
+        finalSuperiorCost,
+        manualTotalCost:
+          pkg.manualTotalCost === null || pkg.manualTotalCost === undefined || pkg.manualTotalCost === ""
+            ? null
+            : Number(pkg.manualTotalCost),
+        totalCost: finalTotalCost,
         mealPlan: pkg.mealPlan || { planType: "", description: "" },
         destinationNights: validatedDestinationNights,
         
@@ -692,6 +720,46 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
   const getStayLocationsByState = () => {
     return groupedStayLocations || {};
   };
+
+  const rooms = Number(pkg.numberOfRooms) || 1;
+
+  const hotelTotalCost = (pkg.destinationNights || []).reduce((destTotal, dest) => {
+    const nights = Number(dest?.nights) || 0;
+    const hotelRatePerNight = (dest?.hotels || []).reduce(
+      (rateTotal, hotel) => rateTotal + (Number(hotel?.pricePerPerson) || 0),
+      0
+    );
+    return destTotal + (nights * hotelRatePerNight * rooms);
+  }, 0);
+
+  const { standardHotelTotalCost, deluxeHotelTotalCost, superiorHotelTotalCost } = (pkg.destinationNights || []).reduce(
+    (acc, dest) => {
+      const nights = Number(dest?.nights) || 0;
+      const hotels = dest?.hotels || [];
+      const standardRate = Number(hotels.find((hotel) => hotel?.category === "standard")?.pricePerPerson) || 0;
+      const deluxeRate = Number(hotels.find((hotel) => hotel?.category === "deluxe")?.pricePerPerson) || 0;
+      const superiorRate = Number(hotels.find((hotel) => hotel?.category === "superior")?.pricePerPerson) || 0;
+
+      acc.standardHotelTotalCost += (nights * standardRate * rooms);
+      acc.deluxeHotelTotalCost += (nights * deluxeRate * rooms);
+      acc.superiorHotelTotalCost += (nights * superiorRate * rooms);
+      return acc;
+    },
+    { standardHotelTotalCost: 0, deluxeHotelTotalCost: 0, superiorHotelTotalCost: 0 }
+  );
+
+  const transportationTotalCost =
+    (Number(pkg.transportationCostPerDay) || 0) * (Number(pkg.transportationDays) || 0);
+
+  const calculatedTotalCost = hotelTotalCost + transportationTotalCost;
+  const finalStandardCost = standardHotelTotalCost + transportationTotalCost;
+  const finalDeluxeCost = deluxeHotelTotalCost + transportationTotalCost;
+  const finalSuperiorCost = superiorHotelTotalCost + transportationTotalCost;
+
+  const finalTotalCost =
+    pkg.manualTotalCost === null || pkg.manualTotalCost === undefined || pkg.manualTotalCost === ""
+      ? calculatedTotalCost
+      : Number(pkg.manualTotalCost) || 0;
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -1148,6 +1216,20 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
 </Grid>
                 <Grid size={{xs:12, md:6}}>
                   <TextField
+                    fullWidth
+                    type="number"
+                    label="Number of Rooms"
+                    value={pkg.numberOfRooms || 1}
+                    onChange={(e) => {
+                      const value = e.target.value === "" ? 1 : Math.max(1, Number(e.target.value));
+                      setPkg({ ...pkg, numberOfRooms: value });
+                    }}
+                    inputProps={{ min: 1 }}
+                    helperText="Applied in all hotel category totals"
+                  />
+                </Grid>
+                <Grid size={{xs:12, md:6}}>
+                  <TextField
                     select
                     label="Meal Plan"
                     value={pkg.mealPlan?.planType || ""}
@@ -1421,6 +1503,66 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
     )}
   </TableBody>
 </Table>
+
+<Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+  🚐 Transportation & Total Cost
+</Typography>
+<Grid container spacing={2} sx={{ mb: 3 }}>
+  <Grid size={{xs:12, md:4}}>
+    <TextField
+      fullWidth
+      type="number"
+      label="Transportation Cost / Day"
+      value={Number(pkg.transportationCostPerDay) === 0 ? "" : pkg.transportationCostPerDay}
+      onChange={(e) =>
+        setPkg({ ...pkg, transportationCostPerDay: e.target.value === "" ? 0 : Number(e.target.value) })
+      }
+      inputProps={{ min: 0 }}
+    />
+  </Grid>
+  <Grid size={{xs:12, md:4}}>
+    <TextField
+      fullWidth
+      type="number"
+      label="Transportation Days"
+      value={Number(pkg.transportationDays) === 0 ? "" : pkg.transportationDays}
+      onChange={(e) =>
+        setPkg({ ...pkg, transportationDays: e.target.value === "" ? 0 : Number(e.target.value) })
+      }
+      inputProps={{ min: 0 }}
+      helperText="Usually itinerary days"
+    />
+  </Grid>
+  <Grid size={{xs:12, md:4}}>
+    <TextField
+      fullWidth
+      type="number"
+      label="Manual Final Total (Optional)"
+      value={pkg.manualTotalCost === null ? "" : pkg.manualTotalCost}
+      onChange={(e) =>
+        setPkg({ ...pkg, manualTotalCost: e.target.value === "" ? null : Number(e.target.value) })
+      }
+      inputProps={{ min: 0 }}
+      helperText="Leave empty to use calculated total"
+    />
+  </Grid>
+  <Grid size={{xs:12}}>
+    <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fafafa" }}>
+      <Typography variant="body2">
+        Hotel Total = sum of (destination nights x selected hotel rates): <strong>Rs. {hotelTotalCost}</strong>
+      </Typography>
+      <Typography variant="body2">
+        Final Standard Cost: <strong>Rs. {finalStandardCost}</strong>
+      </Typography>
+      <Typography variant="body2">
+        Final Deluxe Cost: <strong>Rs. {finalDeluxeCost}</strong>
+      </Typography>
+      <Typography variant="body2">
+        Final Superior Cost: <strong>Rs. {finalSuperiorCost}</strong>
+      </Typography>
+    </Paper>
+  </Grid>
+</Grid>
 
               {/* Status */}
               <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ mt: 3 }}>
