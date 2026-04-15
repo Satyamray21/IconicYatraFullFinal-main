@@ -114,6 +114,16 @@ const policyLines = (arr = []) =>
     .filter(Boolean)
     .join("\n");
 
+const includedAdditionalServiceLines = (additionalServices = []) => {
+  return (Array.isArray(additionalServices) ? additionalServices : [])
+    .filter((s) => String(s?.included || "").toLowerCase() === "yes")
+    .map((s) => {
+      const particulars = safe(s?.particulars, "Additional Service");
+      const totalAmount = toNum(s?.totalAmount || s?.amount);
+      return `${particulars}: INR ${INR.format(totalAmount)}`;
+    });
+};
+
 /** No http(s) URLs or <a> tags in PAYMENT POLICY email body (clients should not get clickable payment links there). */
 const sanitizePaymentPolicyLine = (text) => {
   let t = safe(text, "");
@@ -269,10 +279,17 @@ export const buildCustomQuotationNormalEmail = (
     td?.policies?.paymentPolicy,
     options?.globalPaymentPolicy,
   );
+  const additionalInclusionLines = includedAdditionalServiceLines(
+    qd?.additionalServices,
+  );
   const inclusionCombined = quotationPoliciesOrGlobal(
     td?.policies?.inclusionPolicy,
     options?.globalInclusions,
   );
+  const inclusionWithAdditional = [
+    ...inclusionCombined,
+    ...additionalInclusionLines,
+  ];
   const exclusionCombined = quotationPoliciesOrGlobal(
     td?.policies?.exclusionPolicy,
     options?.globalExclusions,
@@ -322,7 +339,6 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 <p style="color:#000; font-weight:bold;">
     SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only..
 </p>
-
         <p style="color:#d32f2f; font-weight:bold;">
         DETAILS OF TOUR PACKAGE:
         </p>
@@ -378,7 +394,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         <br/>
         
         <p style="color:#d32f2f; font-weight:bold;" ><b>INCLUSIONS:</b></p>
-        <p>${policyLines(inclusionCombined).replace(/\n/g, "<br/>")}</p>
+        <p>${policyLines(inclusionWithAdditional).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
@@ -411,7 +427,6 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         For more details, contact your Tour Expert.
     </span>
 </p>
-
         <br/>
 
         <p>
@@ -421,6 +436,53 @@ This is referenced in our discussion regarding your forthcoming Tour to the
             ).replace(/\n/g, "<br/>")}
         </p>
 
+    </div>
+    `;
+};
+
+export const buildCustomQuotationPdfPreviewEmail = (
+  quotation,
+  customText = {},
+  options = {},
+) => {
+  const td = quotation?.tourDetails || {};
+  const totals = packageTotals(quotation);
+  const companyName = safe(options?.companyName, "Iconic Travel");
+  const companyWebsite = safe(options?.companyWebsite);
+
+  return `
+    <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
+
+        <p style="color:red; font-weight:bold;">
+            ${safe(customText.greeting, "Dear Sir/Ma'am,")}
+        </p>
+
+        <p style="color:red; font-weight:bold;">
+    ${safe(customText.opening, `GREETING FROM ${companyName.toUpperCase()}!!!`)}
+</p>
+ <p>${safe(
+   customText.intro,
+   "As per discussed with you short while ago please see the below packages and let us know.",
+ )}</p>
+   <p style="color:#000;">
+    <b>Official Website Visit @</b> <br/>
+    <a href="${companyWebsite}" target="_blank" style="font-weight:bold; color:#1976d2; text-decoration:none;">
+        ${companyWebsite}
+    </a>
+    <p>
+This is referenced in our discussion regarding your forthcoming Tour to the 
+<span style="color:#d32f2f; font-weight:bold;">
+    ${td.quotationTitle}
+</span>. It is my pleasure to have this opportunity to serve you. We are always here to assist you. The brief itinerary of your tour would like to as follows: please have a look...
+</p>
+        <br/>
+        <p style="color:#d32f2f; font-weight:bold;">
+    ##PACKAGE COST FOR ALL PERSON = INR ${INR.format(totals.total)} As of now
+</p>
+
+<p style="color:#000; font-weight:bold;">
+    SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only..
+</p>
     </div>
     `;
 };
@@ -467,10 +529,17 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
     td?.policies?.paymentPolicy,
     customText.globalPaymentPolicy,
   );
+  const additionalInclusionLines = includedAdditionalServiceLines(
+    qd?.additionalServices,
+  );
   const inclusionCombined = quotationPoliciesOrGlobal(
     td?.policies?.inclusionPolicy,
     customText.globalInclusions,
   );
+  const inclusionWithAdditional = [
+    ...inclusionCombined,
+    ...additionalInclusionLines,
+  ];
   const exclusionCombined = quotationPoliciesOrGlobal(
     td?.policies?.exclusionPolicy,
     customText.globalExclusions,
@@ -535,7 +604,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <br/>
         
         <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
-        <p>${policyLines(inclusionCombined).replace(/\n/g, "<br/>")}</p>
+        <p>${policyLines(inclusionWithAdditional).replace(/\n/g, "<br/>")}</p>
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
         <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
@@ -599,6 +668,12 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   const pkg = {
     ...pid,
     ...snap,
+    days:
+      Array.isArray(snap.days) && snap.days.length
+        ? snap.days
+        : Array.isArray(pid.days)
+          ? pid.days
+          : [],
     destinationNights:
       Array.isArray(snap.destinationNights) && snap.destinationNights.length
         ? snap.destinationNights
@@ -617,6 +692,34 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     snap.quotationDetails && typeof snap.quotationDetails === "object"
       ? snap.quotationDetails
       : {};
+  const additionalServicesFromSnapshot = Array.isArray(qdSnap.additionalServices)
+    ? qdSnap.additionalServices
+    : [];
+  const resolvedArrivalDate =
+    qdSnap.arrivalDate ||
+    snap.arrivalDate ||
+    quick.arrivalDate ||
+    pkg.arrivalDate ||
+    pkg.validFrom ||
+    quick.createdAt;
+  const resolvedDepartureDate =
+    qdSnap.departureDate ||
+    snap.departureDate ||
+    quick.departureDate ||
+    pkg.departureDate ||
+    pkg.validTill ||
+    pkg.validFrom ||
+    quick.createdAt;
+  const deriveTimeFromDate = (value) => {
+    const raw = String(value || "");
+    if (!raw) return "";
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return "";
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    // Keep time blank for date-only values that default to midnight.
+    return hh === "00" && mm === "00" ? "" : `${hh}:${mm}`;
+  };
   const calcSnap = qdSnap.packageCalculations || {};
   const stdSnap = Number(calcSnap.standard?.finalTotal);
   const hasDetailedPricing =
@@ -654,9 +757,15 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     }));
   }
 
-  const itinerary = (pkg.days || []).map((day) => ({
+  const itinerarySource =
+    Array.isArray(pkg.days) && pkg.days.length
+      ? pkg.days
+      : Array.isArray(snap.itinerary)
+        ? snap.itinerary
+        : [];
+  const itinerary = itinerarySource.map((day) => ({
     dayTitle: safe(day.title, "Day"),
-    dayNote: safe(day.notes || day.aboutCity, ""),
+    dayNote: safe(day.notes || day.description || day.aboutCity, ""),
   }));
 
   return {
@@ -668,8 +777,8 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
         pkg.displayTitle,
         safe(pkg.title, safe(pkg.sector, "Tour Package")),
       ),
-      arrivalDate: pkg.validFrom || quick.createdAt,
-      departureDate: pkg.validTill || pkg.validFrom || quick.createdAt,
+      arrivalDate: resolvedArrivalDate,
+      departureDate: resolvedDepartureDate,
       policies: {
         inclusionPolicy: toPolicyArray(policy.inclusionPolicy),
         exclusionPolicy: toPolicyArray(policy.exclusionPolicy),
@@ -700,9 +809,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
                 ? qdSnap.taxes
                 : { taxPercent: 5, applyGST: true, gstOn: "Full" },
             packageCalculations: calcSnap,
-            additionalServices: Array.isArray(qdSnap.additionalServices)
-              ? qdSnap.additionalServices
-              : [],
+            additionalServices: additionalServicesFromSnapshot,
           }
         : {
             adults: toNum(quick.adults),
@@ -721,7 +828,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
               superior: { finalTotal: 0, afterDiscount: 0 },
             },
             taxes: { taxPercent: 5, applyGST: true, gstOn: "package" },
-            additionalServices: [],
+            additionalServices: additionalServicesFromSnapshot,
           },
       vehicleDetails: {
         basicsDetails: {
@@ -733,10 +840,10 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
         pickupDropDetails: {
           pickupLocation: safe(quick.pickupPoint, "As per itinerary"),
           dropLocation: safe(quick.dropPoint, "As per itinerary"),
-          pickupDate: quick.createdAt,
-          dropDate: quick.createdAt,
-          pickupTime: "",
-          dropTime: "",
+          pickupDate: resolvedArrivalDate,
+          dropDate: resolvedDepartureDate,
+          pickupTime: deriveTimeFromDate(resolvedArrivalDate),
+          dropTime: deriveTimeFromDate(resolvedDepartureDate),
         },
       },
     },
