@@ -10,6 +10,7 @@ import Bank from "../../models/bankDetails.js";
 import GlobalSettings from "../../models/globalSettings.model.js";
 import {
   buildCustomQuotationNormalEmail,
+  buildCustomQuotationPdfPreviewEmail,
   buildCustomQuotationBookingEmail,
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
@@ -708,6 +709,8 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     senderAccount,
     companyId,
     companyName,
+    pdfAttachment,
+    previewPdfMode = false,
   } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -735,10 +738,17 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
           customText.normal || {},
           meta,
         );
+  const previewPdfBody = buildCustomQuotationPdfPreviewEmail(
+    quotation,
+    customText.normal || {},
+    meta,
+  );
   const body =
     type === "booking"
       ? generatedBody
-      : String(bodyHtml || "").trim() || generatedBody;
+      : previewPdfMode
+        ? previewPdfBody
+        : String(bodyHtml || "").trim() || generatedBody;
 
   const finalSubject =
     subject ||
@@ -764,6 +774,21 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     },
   });
 
+  const providedPdfAttachment =
+    pdfAttachment &&
+    typeof pdfAttachment === "object" &&
+    String(pdfAttachment.contentBase64 || "").trim()
+      ? {
+          filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+          content: Buffer.from(
+            String(pdfAttachment.contentBase64).trim(),
+            "base64",
+          ),
+          contentType:
+            String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+        }
+      : null;
+
   try {
     await transporter.sendMail({
       from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
@@ -773,6 +798,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
       subject: finalSubject,
       html: body,
       text: body.replace(/<[^>]*>/g, ""), // fallback
+      attachments: providedPdfAttachment ? [providedPdfAttachment] : [],
     });
   } catch (error) {
     console.error("Mail Error:", error);
