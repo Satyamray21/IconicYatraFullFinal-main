@@ -51,6 +51,7 @@ const QuotationPDFDialog = ({
   onClose,
   quotation,
   pdfHeading = "CUSTOM QUOTATION",
+  onSendMail,
 }) => {
   const printRef = useRef();
   const [error, setError] = useState("");
@@ -61,6 +62,7 @@ const QuotationPDFDialog = ({
   const [companyOptions, setCompanyOptions] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [emailContentMode, setEmailContentMode] = useState("short");
   const [globalPolicyDefaults, setGlobalPolicyDefaults] = useState({
     inclusions: [],
     exclusions: [],
@@ -68,6 +70,18 @@ const QuotationPDFDialog = ({
     cancellationPolicy: "",
     termsAndConditions: "",
   });
+
+  const blobToBase64 = (blob) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = String(reader.result || "");
+        const base64 = result.includes(",") ? result.split(",")[1] : "";
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
 
   // Helper function to safely get nested values
   const getValue = (obj, path, defaultValue = "N/A") => {
@@ -569,7 +583,7 @@ const QuotationPDFDialog = ({
     }
   }, [open, logoUrl, bannerImage, days, convertToBase64]);
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async ({ shouldDownload = true } = {}) => {
     try {
       setLoading(true);
       setError("");
@@ -728,15 +742,35 @@ const QuotationPDFDialog = ({
         creator: "Iconic Yatra Travel Management System",
       });
 
-      pdf.save(
-        `${customerName.replace(/\s/g, "_")}_Quotation_${reference || Date.now()}.pdf`,
-      );
+      const fileName = `${customerName.replace(/\s/g, "_")}_Quotation_${reference || Date.now()}.pdf`;
+      if (shouldDownload) {
+        pdf.save(fileName);
+      }
+
+      const blob = pdf.output("blob");
+      const contentBase64 = await blobToBase64(blob);
+      return {
+        filename: fileName,
+        contentBase64,
+        mimeType: "application/pdf",
+      };
     } catch (err) {
       console.error("PDF generation error:", err);
       setError("PDF generation failed: " + (err.message || "Please try again"));
+      return null;
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSendMailWithPdf = async () => {
+    if (typeof onSendMail !== "function") return;
+    const payload = await handleDownloadPDF({ shouldDownload: false });
+    if (!payload?.contentBase64) return;
+    onSendMail({
+      pdfAttachment: payload,
+      previewPdfMode: emailContentMode === "short",
+    });
   };
 
   const handlePrint = () => {
@@ -1828,6 +1862,28 @@ const QuotationPDFDialog = ({
             >
               {loading ? "Generating PDF..." : "Download PDF"}
             </Button>
+            {typeof onSendMail === "function" && (
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel>Email Content</InputLabel>
+                <Select
+                  value={emailContentMode}
+                  onChange={(e) => setEmailContentMode(e.target.value)}
+                >
+                  <MenuItem value="short">Short Intro Content</MenuItem>
+                  <MenuItem value="full">Full Email Content</MenuItem>
+                </Select>
+              </FormControl>
+            )}
+            {typeof onSendMail === "function" && (
+              <Button
+                onClick={handleSendMailWithPdf}
+                startIcon={<Email />}
+                variant="outlined"
+                disabled={!renderComplete || loading}
+              >
+                Send Mail
+              </Button>
+            )}
             <Button onClick={onClose} startIcon={<Close />} color="inherit">
               Close
             </Button>
