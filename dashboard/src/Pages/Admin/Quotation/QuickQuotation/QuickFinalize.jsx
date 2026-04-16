@@ -533,6 +533,16 @@ const normalizePointLabel = (text) => {
   return parts.length >= 2 ? parts[parts.length - 1] : raw;
 };
 
+/** True when `days` is a list of day objects (not a night-count number from snapshot). */
+function isQuickPackageDayObjectArray(days) {
+  return (
+    Array.isArray(days) &&
+    days.length > 0 &&
+    typeof days[0] === "object" &&
+    days[0] !== null
+  );
+}
+
 /** Merge snapshot with populated package so hotel rows work when snapshot omits destinationNights. */
 function mergeQuickPackageForDisplay(apiData) {
   const snap =
@@ -545,6 +555,13 @@ function mergeQuickPackageForDisplay(apiData) {
     !Array.isArray(apiData.packageId)
       ? apiData.packageId
       : {};
+  const snapDays = snap.days;
+  const pidDays = pid.days;
+  const mergedDayObjects = isQuickPackageDayObjectArray(snapDays)
+    ? snapDays
+    : isQuickPackageDayObjectArray(pidDays)
+      ? pidDays
+      : [];
   return {
     ...pid,
     ...snap,
@@ -556,6 +573,8 @@ function mergeQuickPackageForDisplay(apiData) {
       Array.isArray(snap.stayLocations) && snap.stayLocations.length
         ? snap.stayLocations
         : pid.stayLocations,
+    // Snapshot often stores `days` as a night count (number); do not let it wipe populated package `days`.
+    days: mergedDayObjects,
   };
 }
 
@@ -789,8 +808,9 @@ function transformQuickApiToDisplay(apiData, company) {
     });
   }
 
-  const itineraryDays = Array.isArray(pkg.days)
-    ? pkg.days.map((day, index) => ({
+  const itineraryDays = (() => {
+    if (isQuickPackageDayObjectArray(pkg.days)) {
+      return pkg.days.map((day, index) => ({
         id: index + 1,
         date: formatDate(apiData.createdAt),
         title: day.title || `Day ${index + 1}`,
@@ -802,8 +822,20 @@ function transformQuickApiToDisplay(apiData, company) {
               name: "Itinerary",
             }
           : null,
-      }))
-    : [];
+      }));
+    }
+    const itin = Array.isArray(pkg.itinerary) ? pkg.itinerary : [];
+    if (itin.length) {
+      return itin.map((row, index) => ({
+        id: index + 1,
+        date: formatDate(apiData.createdAt),
+        title: row.title || `Day ${index + 1}`,
+        description: [row.description, row.activities].filter(Boolean).join("\n\n"),
+        image: null,
+      }));
+    }
+    return [];
+  })();
 
   return {
     date: formatDate(apiData.createdAt),
