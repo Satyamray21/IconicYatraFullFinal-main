@@ -1,9 +1,41 @@
 import { Associate } from "../models/associates.model.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
+
+// Helper function to convert flat object with dot notation to nested object
+const convertToNestedObject = (flatObj) => {
+  const result = {};
+  
+  for (const key in flatObj) {
+    if (flatObj[key] === null || flatObj[key] === undefined || flatObj[key] === '') {
+      continue;
+    }
+    
+    const keys = key.split('.');
+    let current = result;
+    
+    for (let i = 0; i < keys.length - 1; i++) {
+      const k = keys[i];
+      if (!current[k] || typeof current[k] !== 'object') {
+        current[k] = {};
+      }
+      current = current[k];
+    }
+    
+    current[keys[keys.length - 1]] = flatObj[key];
+  }
+  
+  return result;
+};
 
 
 
 export const createAssociate = async (req, res, next) => {
   try {
+    // Convert FormData flat structure to nested objects if needed
+    const bodyData = Object.keys(req.body).some(key => key.includes('.')) 
+      ? convertToNestedObject(req.body) 
+      : req.body;
+
     // Destructure the entire expected request body
     const {
       personalDetails,
@@ -11,7 +43,19 @@ export const createAssociate = async (req, res, next) => {
       address,
       firm,
       bank
-    } = req.body;
+    } = bodyData;
+
+    // Handle QR Code file upload if provided
+    let qrCodeUrl = null;
+    if (req.file) {
+      const uploadResponse = await uploadOnCloudinary(
+        req.file.path,
+        req.file.mimetype
+      );
+      if (uploadResponse) {
+        qrCodeUrl = uploadResponse.secure_url;
+      }
+    }
 
     // Optional: Validate top-level required objects before saving
     if (!personalDetails || !staffLocation || !address || !firm || !bank) {
@@ -61,7 +105,9 @@ export const createAssociate = async (req, res, next) => {
         branchName: bank.branchName,
         accountHolderName: bank.accountHolderName,
         accountNumber: bank.accountNumber,
-        ifscCode: bank.ifscCode
+        ifscCode: bank.ifscCode,
+        upiId: bank.upiId,
+        qrCode: qrCodeUrl || bank.qrCode
       }
     });
 
@@ -103,9 +149,27 @@ export const getAssociateById = async (req, res, next) => {
 // Update Associate by associateId
 export const updateAssociate = async (req, res, next) => {
   try {
+    // Convert FormData flat structure to nested objects
+    let updateData = convertToNestedObject(req.body);
+
+    // Handle QR Code file upload if provided
+    if (req.file) {
+      const uploadResponse = await uploadOnCloudinary(
+        req.file.path,
+        req.file.mimetype
+      );
+      if (uploadResponse) {
+        // Set the QR code URL in the bank object
+        if (!updateData.bank) {
+          updateData.bank = {};
+        }
+        updateData.bank.qrCode = uploadResponse.secure_url;
+      }
+    }
+
     const updated = await Associate.findOneAndUpdate(
       { associateId: req.params.id },
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ message: "Not found" });
