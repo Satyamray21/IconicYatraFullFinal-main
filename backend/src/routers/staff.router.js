@@ -6,13 +6,29 @@ import {
   updateStaff,
   deleteStaff
 } from "../controllers/staff.controller.js";
-
+import {upload} from "../middleware/imageMulter.middleware.js";
 const router = express.Router();
 
-router.post("/", createStaff);
+router.post(
+  "/", 
+  upload.fields([
+    { name: 'staffPhoto', maxCount: 1 },
+    { name: 'aadharPhoto', maxCount: 1 },
+    { name: 'panPhoto', maxCount: 1 }
+  ]), 
+  createStaff
+);
 router.get("/", getAllStaff);
 router.get("/:id", getStaffById);
-router.put("/:id", updateStaff);
+router.put(
+  "/:id",
+  upload.fields([
+    { name: 'staffPhoto', maxCount: 1 },
+    { name: 'aadharPhoto', maxCount: 1 },
+    { name: 'panPhoto', maxCount: 1 }
+  ]), 
+  updateStaff
+);
 router.delete("/:id", deleteStaff);
 
 export default router;
