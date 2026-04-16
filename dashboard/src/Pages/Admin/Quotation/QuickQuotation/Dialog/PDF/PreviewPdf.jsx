@@ -495,14 +495,7 @@ const QuotationPDFDialog = ({
     if (text.startsWith("₹")) return false;
     return true;
   };
-  /** Show column if any row has a hotel name, ₹ amount, or non-empty non-TBD value in that tier. */
-  const cellHasDisplayContent = (value) => {
-    const text = normalizePricingCell(value);
-    if (!text || text === "-" || text === "—") return false;
-    if (isTbdLikeHotelName(text)) return false;
-    if (isCurrencyCell(text)) return true;
-    return true;
-  };
+  const isDestinationHotelPricingRow = (row) => !isSummaryPricingRow(row);
   const renderHotelCellValue = (row, key) => {
     const value = row?.[key];
     if (isSummaryPricingRow(row)) return value || "-";
@@ -523,14 +516,19 @@ const QuotationPDFDialog = ({
     if (header === "superior") return "Superior";
     return String(header || "");
   };
-  const showStandardCol = hotelPricingData.some((row) =>
-    cellHasDisplayContent(row?.standard),
+  const showStandardCol = hotelPricingData.some(
+    (row) =>
+      isDestinationHotelPricingRow(row) &&
+      hasHotelNameValue(row?.standard),
   );
-  const showDeluxeCol = hotelPricingData.some((row) =>
-    cellHasDisplayContent(row?.deluxe),
+  const showDeluxeCol = hotelPricingData.some(
+    (row) =>
+      isDestinationHotelPricingRow(row) && hasHotelNameValue(row?.deluxe),
   );
-  const showSuperiorCol = hotelPricingData.some((row) =>
-    cellHasDisplayContent(row?.superior),
+  const showSuperiorCol = hotelPricingData.some(
+    (row) =>
+      isDestinationHotelPricingRow(row) &&
+      hasHotelNameValue(row?.superior),
   );
   const visiblePackageColumns = [
     showStandardCol,
