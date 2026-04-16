@@ -15,14 +15,84 @@ export const fetchAssociateById = createAsyncThunk("associate/fetchById", async 
 
 // Create new associate
 export const createAssociate = createAsyncThunk("associate/create", async (associateData) => {
-  const res = await axios.post("/associate", associateData);
-  return res.data;
+  // Check if qrCode file exists in any nested form data
+  const hasFile = associateData.bank?.qrCode instanceof File;
+
+  if (hasFile) {
+    const formData = new FormData();
+    
+    // Convert the entire data structure to FormData
+    const convertToFormData = (obj, prefix = "") => {
+      for (const key in obj) {
+        const value = obj[key];
+        if (value instanceof File) {
+          formData.append(key, value);
+        } else if (value && typeof value === "object" && value.$isDayjsObject) {
+          // Handle dayjs objects - convert to ISO date string
+          const fieldName = prefix ? `${prefix}.${key}` : key;
+          formData.append(fieldName, value.toDate().toISOString().split('T')[0]);
+        } else if (value instanceof Date) {
+          const fieldName = prefix ? `${prefix}.${key}` : key;
+          formData.append(fieldName, value.toISOString());
+        } else if (typeof value === "object" && value !== null && !(value instanceof Date)) {
+          convertToFormData(value, prefix ? `${prefix}.${key}` : key);
+        } else if (value !== null && value !== undefined) {
+          const fieldName = prefix ? `${prefix}.${key}` : key;
+          formData.append(fieldName, value);
+        }
+      }
+    };
+
+    convertToFormData(associateData);
+    const res = await axios.post("/associate", formData, {
+      headers: { "Content-Type": "multipart/form-data" }
+    });
+    return res.data;
+  } else {
+    const res = await axios.post("/associate", associateData);
+    return res.data;
+  }
 });
 
 // Update associate
 export const updateAssociate = createAsyncThunk("associate/update", async ({ id, data }) => {
-  const res = await axios.put(`/associate/${id}`, data);
-  return res.data;
+  // Check if qrCode file exists
+  const hasFile = data.bank?.qrCode instanceof File;
+
+  if (hasFile) {
+    const formData = new FormData();
+    
+    // Convert the entire data structure to FormData
+    const convertToFormData = (obj, prefix = "") => {
+      for (const key in obj) {
+        const value = obj[key];
+        if (value instanceof File) {
+          formData.append(key, value);
+        } else if (value && typeof value === "object" && value.$isDayjsObject) {
+          // Handle dayjs objects - convert to ISO date string
+          const fieldName = prefix ? `${prefix}.${key}` : key;
+          formData.append(fieldName, value.toDate().toISOString().split('T')[0]);
+        } else if (value instanceof Date) {
+          const fieldName = prefix ? `${prefix}.${key}` : key;
+          formData.append(fieldName, value.toISOString());
+        } else if (typeof value === "object" && value !== null && !(value instanceof Date)) {
+          convertToFormData(value, prefix ? `${prefix}.${key}` : key);
+        } else if (value !== null && value !== undefined) {
+          const fieldName = prefix ? `${prefix}.${key}` : key;
+          formData.append(fieldName, value);
+        }
+      }
+    };
+
+    convertToFormData(data);
+    const res = await axios.put(`/associate/${id}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" }
+    });
+    return res.data;
+  } else {
+    const res = await axios.put(`/associate/${id}`, data);
+    return res.data;
+  }
 });
 
 // Delete associate

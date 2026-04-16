@@ -105,6 +105,10 @@ const getInitialValues = (associate) => ({
     accountHolderName: associate?.bank?.accountHolderName || "",
     accountNumber: associate?.bank?.accountNumber || "",
     ifscCode: associate?.bank?.ifscCode || "",
+    upiId: associate?.bank?.upiId || "",
+    qrCode: null,
+    qrCodeUrl: associate?.bank?.qrCode || "",
+    qrCodePreview: associate?.bank?.qrCode || "",
   },
 });
 
@@ -651,6 +655,62 @@ const EditAssociateForm = () => {
               value={values.bank?.ifscCode || ""}
               onChange={handleNestedChange("bank", "ifscCode")}
             />
+          </Grid>
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              name="bank.upiId"
+              label="UPI ID"
+              fullWidth
+              value={values.bank?.upiId || ""}
+              onChange={handleNestedChange("bank", "upiId")}
+              placeholder="example@upi"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <Button variant="outlined" component="label" fullWidth>
+              Upload UPI QR Code
+              <input
+                hidden
+                type="file"
+                name="qrCode"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.currentTarget.files[0];
+                  if (file) {
+                    setFieldValue("bank.qrCode", file);
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      setFieldValue("bank.qrCodePreview", reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+            </Button>
+            {values.bank?.qrCodePreview && (
+              <Box mt={2}>
+                <Typography variant="body2" gutterBottom>
+                  QR Code Preview:
+                </Typography>
+                <Box
+                  component="img"
+                  src={values.bank.qrCodePreview}
+                  sx={{
+                    maxWidth: "150px",
+                    maxHeight: "150px",
+                    border: "1px solid #ddd",
+                    borderRadius: "4px",
+                    padding: "8px"
+                  }}
+                  alt="QR Code Preview"
+                />
+                {values.bank?.qrCode && (
+                  <Typography variant="caption" display="block" mt={1}>
+                    {typeof values.bank.qrCode === "object" ? values.bank.qrCode.name : "QR Code uploaded"}
+                  </Typography>
+                )}
+              </Box>
+            )}
           </Grid>
         </Grid>
       </Box>

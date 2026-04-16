@@ -102,6 +102,8 @@ const AssociatesForm = () => {
         accountHolderName: values.accountHolderName,
         accountNumber: values.accountNumber,
         ifscCode: values.ifscCode,
+        upiId: values.upiId,
+        qrCode: values.qrCode,
       },
     };
 
@@ -154,6 +156,9 @@ const AssociatesForm = () => {
       accountHolderName: "",
       accountNumber: "",
       ifscCode: "",
+      upiId: "",
+      qrCode: null,
+      qrCodePreview: null,
       nameOfBranch: "",
     },
 
