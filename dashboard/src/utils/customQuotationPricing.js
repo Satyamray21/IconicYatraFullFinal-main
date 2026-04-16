@@ -76,12 +76,8 @@ export function computeCustomQuotationPackages(opts) {
     const baseStandard =
         totalStandard * rooms + superiorMattressTotal + v;
     const baseDeluxe = totalDeluxe * rooms + deluxeMattressTotal + v;
-    let baseSuperior =
+    const baseSuperior =
         totalSuperior * rooms + superiorTierMattressTotal + v;
-
-    if (totalSuperior <= 0 && destinations.length > 0) {
-        baseSuperior = baseDeluxe;
-    }
 
     function tier(base) {
         const afterMargin = base + (mp / 100) * base + ma;
