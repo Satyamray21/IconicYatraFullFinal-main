@@ -560,6 +560,18 @@ const QuotationCard = () => {
         item?.status,
         "draft",
       );
+      const quickNights = getFirstValue(
+        item?.packageSnapshot?.nights,
+        item?.nights,
+        item?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+        item?.packageSnapshot?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+      );
 
       return {
         id: `Q-${index + 1}`,
@@ -570,7 +582,7 @@ const QuotationCard = () => {
         departure: formatDate(quickDeparture),
         sector: quickSector || "N/A",
         title: item?.packageSnapshot?.title || "Quick Quotation",
-        noOfNight: getFirstValue(item?.packageSnapshot?.nights, "-"),
+        noOfNight: getFirstValue(quickNights, "-"),
         tourType: item?.packageSnapshot?.tourType || "-",
         type: "Quick",
         quotationStatus: String(quickStatus).replace(/^./, (s) => s.toUpperCase()),
@@ -621,10 +633,21 @@ const QuotationCard = () => {
         "draft",
       );
       const customNights = getFirstValue(
+        item?.tourDetails?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
         item?.quotationDetails?.destinations?.reduce(
           (sum, d) => sum + Number(d?.nights || 0),
           0,
         ),
+        item?.pickupDrop?.reduce((sum, d) => sum + Number(d?.nights || 0), 0),
+        item?.tourDetails?.days
+          ? Number(item.tourDetails.days) - 1
+          : undefined,
+        item?.days
+          ? Number(item.days) - 1
+          : undefined,
         item?.duration?.nights,
       );
 
