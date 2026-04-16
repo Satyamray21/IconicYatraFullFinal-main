@@ -823,12 +823,17 @@ function transformQuickApiToDisplay(apiData, company) {
     });
   }
   if (totalCost > 0) {
+    const finalizedTier = String(apiData?.finalizedPackage || "")
+      .trim()
+      .toLowerCase();
+    const totalQuotationValue = `₹ ${Math.round(totalCost).toLocaleString("en-IN")}`;
     hotelPricingData.push({
       destination: "Total quotation cost",
       nights: "-",
-      standard: `₹ ${Math.round(totalCost).toLocaleString("en-IN")}`,
-      deluxe: "—",
-      superior: "—",
+      standard:
+        !finalizedTier || finalizedTier === "standard" ? totalQuotationValue : "—",
+      deluxe: finalizedTier === "deluxe" ? totalQuotationValue : "—",
+      superior: finalizedTier === "superior" ? totalQuotationValue : "—",
     });
   }
 

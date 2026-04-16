@@ -32,15 +32,31 @@ export function serializeAdditionalServicesForApi(services) {
 export function effectiveQuickPayableTotal(quick, localServices = []) {
   if (!quick) return null;
   const qd = quick.packageSnapshot?.quotationDetails || {};
-  const std = Number(qd.packageCalculations?.standard?.finalTotal);
+  const finalizedTier = String(quick?.finalizedPackage || "")
+    .trim()
+    .toLowerCase();
+  const packageCalculations = qd.packageCalculations || {};
+  const calcTierTotal = Number(packageCalculations?.[finalizedTier]?.finalTotal);
+  const std = Number(packageCalculations?.standard?.finalTotal);
   const hasLocal = Array.isArray(localServices) && localServices.length > 0;
   const localSum = sumBillableAdditionalServices(localServices);
   const apiSum = sumBillableAdditionalServices(qd.additionalServices);
   const servicesSum = hasLocal ? localSum : apiSum;
+  if (Number.isFinite(calcTierTotal)) return calcTierTotal + servicesSum;
   if (Number.isFinite(std)) return std + servicesSum;
 
-  const tc = Number(quick.totalCost) || 0;
-  return tc + servicesSum;
+  const tierCost = Number(qd?.[`${finalizedTier}Cost`]);
+  if (Number.isFinite(tierCost) && tierCost > 0) return tierCost + servicesSum;
+  const stdCost = Number(qd.standardCost);
+  if (Number.isFinite(stdCost) && stdCost > 0) return stdCost + servicesSum;
+  const delCost = Number(qd.deluxeCost);
+  if (Number.isFinite(delCost) && delCost > 0) return delCost + servicesSum;
+  const supCost = Number(qd.superiorCost);
+  if (Number.isFinite(supCost) && supCost > 0) return supCost + servicesSum;
+
+  const tc = Number(quick.totalCost);
+  if (Number.isFinite(tc) && tc > 0) return tc + servicesSum;
+  return servicesSum > 0 ? servicesSum : 0;
 }
 
 export function mapApiAdditionalServicesToState(rows) {
