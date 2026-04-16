@@ -351,6 +351,14 @@ const QuotationPDFDialog = ({
   )
     ? getRawValue(quotationData, "hotelPricingData")
     : [];
+  /** Same totals appear in Payment Summary — hide from the pricing table. */
+  const isTotalsRowDuplicatedInPaymentSummary = (row) => {
+    const label = String(row?.destination || "").toLowerCase().trim();
+    return (
+      label.includes("final package totals") ||
+      label.includes("total quotation cost")
+    );
+  };
   const finalPackageTotalsRow = hotelPricingRows.find((row) =>
     String(row?.destination || "")
       .toLowerCase()
@@ -441,35 +449,88 @@ const QuotationPDFDialog = ({
   const rawDays = getRawValue(quotationData, "days");
   const days = Array.isArray(rawDays) ? rawDays : [];
   const bannerImage = getValue(quotationData, "bannerImage", "");
-  const hotelPricingData = hotelPricingRows;
+  const hotelPricingData = hotelPricingRows.filter(
+    (row) => !isTotalsRowDuplicatedInPaymentSummary(row),
+  );
+
+  const normalizePricingCell = (value) =>
+    String(value ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  /** Hide placeholder hotel names (TBD etc.), but keep ₹ amounts. */
+  const isTbdLikeHotelName = (value) => {
+    const text = normalizePricingCell(value);
+    if (!text || text === "-" || text === "—") return false;
+    if (text.startsWith("₹")) return false;
+    const compact = text.replace(/[\s._\-–—]/g, "").toUpperCase();
+    if (compact === "TBD" || compact === "TBA") return true;
+    if (/\bTBD\b/i.test(text)) return true;
+    if (/\bTBA\b/i.test(text)) return true;
+    if (/^tbd\b/i.test(text)) return true;
+    return false;
+  };
+
   const isSummaryPricingRow = (row) => {
     const label = String(row?.destination || "").toLowerCase();
-    return label.includes("quotation cost") || label.includes("igst");
+    return (
+      label.includes("quotation cost") ||
+      label.includes("igst") ||
+      label.includes("transportation") ||
+      (label.includes("hotel") && label.includes("cost")) ||
+      label.includes("final package")
+    );
+  };
+  const isCurrencyCell = (value) => {
+    const text = String(value || "").trim();
+    return text.startsWith("₹") || /^rs\.?\s+/i.test(text);
   };
   const hasHotelNameValue = (value) => {
-    const text = String(value || "").trim();
+    const text = normalizePricingCell(value);
     if (!text || text === "-") return false;
     if (text === "—") return false;
-    if (/^tbd$/i.test(text)) return false;
+    if (isTbdLikeHotelName(text)) return false;
     if (text.startsWith("₹")) return false;
     return true;
   };
-  const nonSummaryRows = hotelPricingData.filter(
-    (row) => !isSummaryPricingRow(row),
-  );
+  /** Show column if any row has a hotel name, ₹ amount, or non-empty non-TBD value in that tier. */
+  const cellHasDisplayContent = (value) => {
+    const text = normalizePricingCell(value);
+    if (!text || text === "-" || text === "—") return false;
+    if (isTbdLikeHotelName(text)) return false;
+    if (isCurrencyCell(text)) return true;
+    return true;
+  };
   const renderHotelCellValue = (row, key) => {
     const value = row?.[key];
     if (isSummaryPricingRow(row)) return value || "-";
-    return hasHotelNameValue(value) ? value : "";
+    const v = normalizePricingCell(value);
+    if (!v) return "";
+    if (isTbdLikeHotelName(v)) return "";
+    if (isCurrencyCell(v)) return v;
+    if (!hasHotelNameValue(value)) return "";
+    const text = v;
+    const firstUpper = text.charAt(0).toUpperCase() + text.slice(1);
+    return `${firstUpper} / Similar`;
   };
-  const showStandardCol = nonSummaryRows.some((row) =>
-    hasHotelNameValue(row?.standard),
+  const toHeaderLabel = (header) => {
+    if (header === "destination") return "Destination";
+    if (header === "nights") return "Nights";
+    if (header === "standard") return "Standard";
+    if (header === "deluxe") return "Deluxe";
+    if (header === "superior") return "Superior";
+    return String(header || "");
+  };
+  const showStandardCol = hotelPricingData.some((row) =>
+    cellHasDisplayContent(row?.standard),
   );
-  const showDeluxeCol = nonSummaryRows.some((row) =>
-    hasHotelNameValue(row?.deluxe),
+  const showDeluxeCol = hotelPricingData.some((row) =>
+    cellHasDisplayContent(row?.deluxe),
   );
-  const showSuperiorCol = nonSummaryRows.some((row) =>
-    hasHotelNameValue(row?.superior),
+  const showSuperiorCol = hotelPricingData.some((row) =>
+    cellHasDisplayContent(row?.superior),
   );
   const visiblePackageColumns = [
     showStandardCol,
@@ -1290,36 +1351,45 @@ const QuotationPDFDialog = ({
             >
               <thead>
                 <tr style={{ background: "#667eea" }}>
-                  {hotelPricingData[0] &&
-                    Object.keys(hotelPricingData[0]).map(
-                      (header) =>
-                        (header === "destination" ||
-                          header === "nights" ||
-                          (header === "standard" && showStandardCol) ||
-                          (header === "deluxe" && showDeluxeCol) ||
-                          (header === "superior" && showSuperiorCol)) && (
-                          <th
-                            key={header}
-                            style={{
-                              color: "white",
-                              padding: "14px",
-                              textAlign: "left",
-                              fontWeight: "bold",
-                            }}
-                          >
-                            {header.replace(/([A-Z])/g, " $1").trim()}
-                          </th>
-                        ),
-                    )}
+                  {[
+                    { key: "destination", show: true },
+                    { key: "nights", show: true },
+                    { key: "standard", show: showStandardCol },
+                    { key: "deluxe", show: showDeluxeCol },
+                    { key: "superior", show: showSuperiorCol },
+                  ]
+                    .filter((h) => h.show)
+                    .map((h) => (
+                      <th
+                        key={h.key}
+                        style={{
+                          color: "white",
+                          padding: "14px",
+                          textAlign: "left",
+                          fontWeight: "bold",
+                          textTransform: "none",
+                        }}
+                      >
+                        {toHeaderLabel(h.key)}
+                      </th>
+                    ))}
                 </tr>
               </thead>
               <tbody>
                 {hotelPricingData.map((row, idx) => (
                   <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
                     <td style={{ padding: "12px" }}>
-                      {row?.destination || "-"}
+                      {(() => {
+                        const txt = String(row?.destination || "-").trim();
+                        return txt ? txt.charAt(0).toUpperCase() + txt.slice(1) : "-";
+                      })()}
                     </td>
-                    <td style={{ padding: "12px" }}>{row?.nights || "-"}</td>
+                    <td style={{ padding: "12px" }}>
+                      {(() => {
+                        const txt = String(row?.nights || "-").trim();
+                        return txt ? txt.charAt(0).toUpperCase() + txt.slice(1) : "-";
+                      })()}
+                    </td>
                     {showStandardCol && (
                       <td style={{ padding: "12px" }}>
                         {renderHotelCellValue(row, "standard")}
