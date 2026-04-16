@@ -120,7 +120,7 @@ const EditAssociateForm = () => {
   } = useSelector((state) => state.location);
 
   const [firmTypes, setFirmTypes] = React.useState(firmTypesDefault);
-  const [hasPrefilledData, setHasPrefilledData] = React.useState(false);
+  const hasPrefilledData = React.useRef(false);
 
   // Fetch associate data when component mounts or ID changes
   useEffect(() => {
@@ -168,47 +168,37 @@ const EditAssociateForm = () => {
   const { values, errors, touched, handleChange, setFieldValue, isSubmitting } = formik;
 
   // Handle pre-filled data when associate is loaded
-  useEffect(() => {
-    if (associate && !hasPrefilledData) {
-      console.log("Associate data loaded:", associate);
-      console.log("Staff Location:", associate.staffLocation);
+ useEffect(() => {
+  if (associate && !hasPrefilledData.current) {
+    hasPrefilledData.current = true;
 
-      // Set flag to indicate we have pre-filled data
-      setHasPrefilledData(true);
-
-      // If country is pre-filled, fetch states
-      if (associate.staffLocation?.country) {
-        dispatch(fetchStatesByCountry(associate.staffLocation.country));
-      }
-
-      // If state is pre-filled, fetch cities
-      if (associate.staffLocation?.state && associate.staffLocation?.country) {
-        dispatch(
-          fetchCitiesByState({
-            countryName: associate.staffLocation.country,
-            stateName: associate.staffLocation.state,
-          })
-        );
-      }
+    if (associate.staffLocation?.country) {
+      dispatch(fetchStatesByCountry(associate.staffLocation.country));
     }
-  }, [associate, dispatch, hasPrefilledData]);
+
+    if (associate.staffLocation?.state) {
+      dispatch(
+        fetchCitiesByState({
+          countryName: associate.staffLocation.country,
+          stateName: associate.staffLocation.state,
+        })
+      );
+    }
+  }
+}, [associate]);
 
   // Fetch states when country changes OR when associate data is loaded with pre-filled country
   useEffect(() => {
-    if (values.staffLocation?.country) {
-      dispatch(fetchStatesByCountry(values.staffLocation.country));
+  if (values.staffLocation?.country) {
+    dispatch(fetchStatesByCountry(values.staffLocation.country));
 
-      // Only clear state and city if we're changing the country, not when pre-filling
-      if (!hasPrefilledData) {
-        setFieldValue("staffLocation.state", "");
-        setFieldValue("staffLocation.city", "");
-        dispatch(clearCities());
-      }
-    } else {
-      dispatch(clearStates());
+    if (!hasPrefilledData.current) {
+      setFieldValue("staffLocation.state", "");
+      setFieldValue("staffLocation.city", "");
       dispatch(clearCities());
     }
-  }, [values.staffLocation?.country, dispatch, setFieldValue, hasPrefilledData]);
+  }
+}, [values.staffLocation?.country]);
 
   // Fetch cities when state changes OR when associate data is loaded with pre-filled state
   useEffect(() => {
@@ -414,7 +404,7 @@ const EditAssociateForm = () => {
                   handleNestedChange("staffLocation", "country")(e);
                   setFieldValue("staffLocation.state", "");
                   setFieldValue("staffLocation.city", "");
-                  setHasPrefilledData(false); // Reset flag when user changes country
+                   hasPrefilledData.current = false;  // Reset flag when user changes country
                 }}
                 label="Country"
                 error={getNestedTouched("staffLocation.country") && Boolean(getNestedError("staffLocation.country"))}
@@ -435,7 +425,7 @@ const EditAssociateForm = () => {
                 onChange={(e) => {
                   handleNestedChange("staffLocation", "state")(e);
                   setFieldValue("staffLocation.city", "");
-                  setHasPrefilledData(false); // Reset flag when user changes state
+                    hasPrefilledData.current = false;  // Reset flag when user changes state
                 }}
                 disabled={!values.staffLocation?.country}
                 label="State"
