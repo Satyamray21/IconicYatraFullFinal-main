@@ -20,7 +20,11 @@ import { useFormik } from "formik";
 import * as Yup from "yup";
 import dayjs from "dayjs";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchAssociateById, updateAssociate, clearSelectedAssociate } from "../../../../features/associate/associateSlice";
+import {
+  fetchAssociateById,
+  updateAssociate,
+  clearSelectedAssociate,
+} from "../../../../features/associate/associateSlice";
 import { useParams } from "react-router-dom";
 import {
   fetchCountries,
@@ -33,12 +37,12 @@ import {
 // ----- Static Data -----
 const titles = ["Mr", "Mrs", "Ms", "Dr"];
 const roles = [
-  "B2B Vendor",
+  "Vehicle Vendor",
   "Hotel Vendor",
+  "B2B Vendor",
   "Referral Partner",
   "Staff",
   "Sub Agent",
-  "Vehicle Vendor",
 ];
 const firmTypesDefault = [
   "Proprietorship",
@@ -76,7 +80,9 @@ const getInitialValues = (associate) => ({
     alternateContact: associate?.personalDetails?.alternateContact || "",
     associateType: associate?.personalDetails?.associateType || "",
     email: associate?.personalDetails?.email || "",
-    dob: associate?.personalDetails?.dob ? dayjs(associate.personalDetails.dob) : null,
+    dob: associate?.personalDetails?.dob
+      ? dayjs(associate.personalDetails.dob)
+      : null,
   },
   staffLocation: {
     country: associate?.staffLocation?.country || "",
@@ -115,7 +121,11 @@ const getInitialValues = (associate) => ({
 const EditAssociateForm = () => {
   const { associateId } = useParams();
   const dispatch = useDispatch();
-  const { selected: associate, loading, error } = useSelector((state) => state.associate);
+  const {
+    selected: associate,
+    loading,
+    error,
+  } = useSelector((state) => state.associate);
   const {
     countries: countriesData,
     states: statesData,
@@ -153,56 +163,61 @@ const EditAssociateForm = () => {
           ...values,
           personalDetails: {
             ...values.personalDetails,
-            dob: values.personalDetails.dob ? values.personalDetails.dob.format('YYYY-MM-DD') : null,
+            dob: values.personalDetails.dob
+              ? values.personalDetails.dob.format("YYYY-MM-DD")
+              : null,
           },
         };
 
-        const result = await dispatch(updateAssociate({
-          id: associateId,
-          data: submitData
-        })).unwrap();
+        const result = await dispatch(
+          updateAssociate({
+            id: associateId,
+            data: submitData,
+          }),
+        ).unwrap();
 
-        console.log('Update successful:', result);
+        console.log("Update successful:", result);
       } catch (error) {
-        console.error('Failed to update associate:', error);
+        console.error("Failed to update associate:", error);
       }
     },
   });
 
-  const { values, errors, touched, handleChange, setFieldValue, isSubmitting } = formik;
+  const { values, errors, touched, handleChange, setFieldValue, isSubmitting } =
+    formik;
 
   // Handle pre-filled data when associate is loaded
- useEffect(() => {
-  if (associate && !hasPrefilledData.current) {
-    hasPrefilledData.current = true;
+  useEffect(() => {
+    if (associate && !hasPrefilledData.current) {
+      hasPrefilledData.current = true;
 
-    if (associate.staffLocation?.country) {
-      dispatch(fetchStatesByCountry(associate.staffLocation.country));
-    }
+      if (associate.staffLocation?.country) {
+        dispatch(fetchStatesByCountry(associate.staffLocation.country));
+      }
 
-    if (associate.staffLocation?.state) {
-      dispatch(
-        fetchCitiesByState({
-          countryName: associate.staffLocation.country,
-          stateName: associate.staffLocation.state,
-        })
-      );
+      if (associate.staffLocation?.state) {
+        dispatch(
+          fetchCitiesByState({
+            countryName: associate.staffLocation.country,
+            stateName: associate.staffLocation.state,
+          }),
+        );
+      }
     }
-  }
-}, [associate]);
+  }, [associate]);
 
   // Fetch states when country changes OR when associate data is loaded with pre-filled country
   useEffect(() => {
-  if (values.staffLocation?.country) {
-    dispatch(fetchStatesByCountry(values.staffLocation.country));
+    if (values.staffLocation?.country) {
+      dispatch(fetchStatesByCountry(values.staffLocation.country));
 
-    if (!hasPrefilledData.current) {
-      setFieldValue("staffLocation.state", "");
-      setFieldValue("staffLocation.city", "");
-      dispatch(clearCities());
+      if (!hasPrefilledData.current) {
+        setFieldValue("staffLocation.state", "");
+        setFieldValue("staffLocation.city", "");
+        dispatch(clearCities());
+      }
     }
-  }
-}, [values.staffLocation?.country]);
+  }, [values.staffLocation?.country]);
 
   // Fetch cities when state changes OR when associate data is loaded with pre-filled state
   useEffect(() => {
@@ -211,7 +226,7 @@ const EditAssociateForm = () => {
         fetchCitiesByState({
           countryName: values.staffLocation.country,
           stateName: values.staffLocation.state,
-        })
+        }),
       );
     } else {
       dispatch(clearCities());
@@ -246,7 +261,10 @@ const EditAssociateForm = () => {
 
   // Safe access to nested values with fallbacks
   const getNestedValue = (obj, path, defaultValue = "") => {
-    return path.split('.').reduce((acc, part) => acc && acc[part], obj) || defaultValue;
+    return (
+      path.split(".").reduce((acc, part) => acc && acc[part], obj) ||
+      defaultValue
+    );
   };
 
   // Safe access to nested errors
@@ -262,7 +280,12 @@ const EditAssociateForm = () => {
   // Show loading state
   if (loading && !associate) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400}>
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight={400}
+      >
         <CircularProgress />
       </Box>
     );
@@ -319,8 +342,14 @@ const EditAssociateForm = () => {
               fullWidth
               value={values.personalDetails?.fullName || ""}
               onChange={handleNestedChange("personalDetails", "fullName")}
-              error={getNestedTouched("personalDetails.fullName") && Boolean(getNestedError("personalDetails.fullName"))}
-              helperText={getNestedTouched("personalDetails.fullName") && getNestedError("personalDetails.fullName")}
+              error={
+                getNestedTouched("personalDetails.fullName") &&
+                Boolean(getNestedError("personalDetails.fullName"))
+              }
+              helperText={
+                getNestedTouched("personalDetails.fullName") &&
+                getNestedError("personalDetails.fullName")
+              }
             />
           </Grid>
           <Grid size={{ xs: 3 }}>
@@ -330,8 +359,14 @@ const EditAssociateForm = () => {
               fullWidth
               value={values.personalDetails?.mobileNumber || ""}
               onChange={handleNestedChange("personalDetails", "mobileNumber")}
-              error={getNestedTouched("personalDetails.mobileNumber") && Boolean(getNestedError("personalDetails.mobileNumber"))}
-              helperText={getNestedTouched("personalDetails.mobileNumber") && getNestedError("personalDetails.mobileNumber")}
+              error={
+                getNestedTouched("personalDetails.mobileNumber") &&
+                Boolean(getNestedError("personalDetails.mobileNumber"))
+              }
+              helperText={
+                getNestedTouched("personalDetails.mobileNumber") &&
+                getNestedError("personalDetails.mobileNumber")
+              }
             />
           </Grid>
           <Grid size={{ xs: 3 }}>
@@ -340,7 +375,10 @@ const EditAssociateForm = () => {
               label="Alternate Contact"
               fullWidth
               value={values.personalDetails?.alternateContact || ""}
-              onChange={handleNestedChange("personalDetails", "alternateContact")}
+              onChange={handleNestedChange(
+                "personalDetails",
+                "alternateContact",
+              )}
             />
           </Grid>
           <Grid size={{ xs: 3 }}>
@@ -349,9 +387,15 @@ const EditAssociateForm = () => {
               <Select
                 name="personalDetails.associateType"
                 value={values.personalDetails?.associateType || ""}
-                onChange={handleNestedChange("personalDetails", "associateType")}
+                onChange={handleNestedChange(
+                  "personalDetails",
+                  "associateType",
+                )}
                 label="Associate Type"
-                error={getNestedTouched("personalDetails.associateType") && Boolean(getNestedError("personalDetails.associateType"))}
+                error={
+                  getNestedTouched("personalDetails.associateType") &&
+                  Boolean(getNestedError("personalDetails.associateType"))
+                }
               >
                 {roles.map((role) => (
                   <MenuItem key={role} value={role}>
@@ -368,8 +412,14 @@ const EditAssociateForm = () => {
               fullWidth
               value={values.personalDetails?.email || ""}
               onChange={handleNestedChange("personalDetails", "email")}
-              error={getNestedTouched("personalDetails.email") && Boolean(getNestedError("personalDetails.email"))}
-              helperText={getNestedTouched("personalDetails.email") && getNestedError("personalDetails.email")}
+              error={
+                getNestedTouched("personalDetails.email") &&
+                Boolean(getNestedError("personalDetails.email"))
+              }
+              helperText={
+                getNestedTouched("personalDetails.email") &&
+                getNestedError("personalDetails.email")
+              }
             />
           </Grid>
           <Grid size={{ xs: 3 }}>
@@ -382,9 +432,13 @@ const EditAssociateForm = () => {
                 slotProps={{
                   textField: {
                     fullWidth: true,
-                    error: getNestedTouched("personalDetails.dob") && Boolean(getNestedError("personalDetails.dob")),
-                    helperText: getNestedTouched("personalDetails.dob") && getNestedError("personalDetails.dob")
-                  }
+                    error:
+                      getNestedTouched("personalDetails.dob") &&
+                      Boolean(getNestedError("personalDetails.dob")),
+                    helperText:
+                      getNestedTouched("personalDetails.dob") &&
+                      getNestedError("personalDetails.dob"),
+                  },
                 }}
               />
             </LocalizationProvider>
@@ -408,14 +462,17 @@ const EditAssociateForm = () => {
                   handleNestedChange("staffLocation", "country")(e);
                   setFieldValue("staffLocation.state", "");
                   setFieldValue("staffLocation.city", "");
-                   hasPrefilledData.current = false;  // Reset flag when user changes country
+                  hasPrefilledData.current = false; // Reset flag when user changes country
                 }}
                 label="Country"
-                error={getNestedTouched("staffLocation.country") && Boolean(getNestedError("staffLocation.country"))}
+                error={
+                  getNestedTouched("staffLocation.country") &&
+                  Boolean(getNestedError("staffLocation.country"))
+                }
               >
                 {renderSelectOptions(
                   countriesData?.map((c) => c.name),
-                  "Loading countries..."
+                  "Loading countries...",
                 )}
               </Select>
             </FormControl>
@@ -429,15 +486,18 @@ const EditAssociateForm = () => {
                 onChange={(e) => {
                   handleNestedChange("staffLocation", "state")(e);
                   setFieldValue("staffLocation.city", "");
-                    hasPrefilledData.current = false;  // Reset flag when user changes state
+                  hasPrefilledData.current = false; // Reset flag when user changes state
                 }}
                 disabled={!values.staffLocation?.country}
                 label="State"
-                error={getNestedTouched("staffLocation.state") && Boolean(getNestedError("staffLocation.state"))}
+                error={
+                  getNestedTouched("staffLocation.state") &&
+                  Boolean(getNestedError("staffLocation.state"))
+                }
               >
                 {renderSelectOptions(
                   statesData?.map((s) => s.name),
-                  "Loading states..."
+                  "Loading states...",
                 )}
               </Select>
             </FormControl>
@@ -451,11 +511,14 @@ const EditAssociateForm = () => {
                 onChange={handleNestedChange("staffLocation", "city")}
                 disabled={!values.staffLocation?.state}
                 label="City"
-                error={getNestedTouched("staffLocation.city") && Boolean(getNestedError("staffLocation.city"))}
+                error={
+                  getNestedTouched("staffLocation.city") &&
+                  Boolean(getNestedError("staffLocation.city"))
+                }
               >
                 {renderSelectOptions(
                   citiesData?.map((c) => c.name),
-                  "Loading cities..."
+                  "Loading cities...",
                 )}
               </Select>
             </FormControl>
@@ -522,7 +585,10 @@ const EditAssociateForm = () => {
                 value={values.firm?.firmType || ""}
                 onChange={handleNestedChange("firm", "firmType")}
                 label="Firm Type"
-                error={getNestedTouched("firm.firmType") && Boolean(getNestedError("firm.firmType"))}
+                error={
+                  getNestedTouched("firm.firmType") &&
+                  Boolean(getNestedError("firm.firmType"))
+                }
               >
                 {firmTypes.map((type) => (
                   <MenuItem key={type} value={type}>
@@ -539,8 +605,14 @@ const EditAssociateForm = () => {
               fullWidth
               value={values.firm?.firmName || ""}
               onChange={handleNestedChange("firm", "firmName")}
-              error={getNestedTouched("firm.firmName") && Boolean(getNestedError("firm.firmName"))}
-              helperText={getNestedTouched("firm.firmName") && getNestedError("firm.firmName")}
+              error={
+                getNestedTouched("firm.firmName") &&
+                Boolean(getNestedError("firm.firmName"))
+              }
+              helperText={
+                getNestedTouched("firm.firmName") &&
+                getNestedError("firm.firmName")
+              }
             />
           </Grid>
           <Grid size={{ xs: 4 }}>
@@ -700,13 +772,15 @@ const EditAssociateForm = () => {
                     maxHeight: "150px",
                     border: "1px solid #ddd",
                     borderRadius: "4px",
-                    padding: "8px"
+                    padding: "8px",
                   }}
                   alt="QR Code Preview"
                 />
                 {values.bank?.qrCode && (
                   <Typography variant="caption" display="block" mt={1}>
-                    {typeof values.bank.qrCode === "object" ? values.bank.qrCode.name : "QR Code uploaded"}
+                    {typeof values.bank.qrCode === "object"
+                      ? values.bank.qrCode.name
+                      : "QR Code uploaded"}
                   </Typography>
                 )}
               </Box>
@@ -723,7 +797,7 @@ const EditAssociateForm = () => {
           disabled={isSubmitting || loading}
           startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
         >
-          {isSubmitting ? 'Updating...' : 'Update Associate'}
+          {isSubmitting ? "Updating..." : "Update Associate"}
         </Button>
       </Box>
     </Box>

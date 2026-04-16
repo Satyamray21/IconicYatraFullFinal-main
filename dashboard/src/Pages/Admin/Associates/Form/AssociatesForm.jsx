@@ -27,8 +27,14 @@ import {
   clearCities,
 } from "../../../../features/location/locationSlice";
 const titles = ["Mr", "Mrs", "Ms", "Dr"];
-const roles = ["B2B Vendor", "Hotel Vendor", "Referral Partner", "Staff", "Sub Agent", "Vehicle Vendor"];
-
+const roles = [
+  "Vehicle Vendor",
+  "Hotel Vendor",
+  "B2B Vendor",
+  "Referral Partner",
+  "Staff",
+  "Sub Agent",
+];
 
 const validationSchema = Yup.object().shape({
   fullName: Yup.string().required("Required"),
@@ -61,7 +67,8 @@ const AssociatesForm = () => {
   const handleFinalSubmit = (values) => {
     const formattedData = {
       personalDetails: {
-        fullName: `${values.fullName.split(" ")[0] || ""} ${values.fullName.split(" ").slice(1).join(" ") || ""}`.trim(),
+        fullName:
+          `${values.fullName.split(" ")[0] || ""} ${values.fullName.split(" ").slice(1).join(" ") || ""}`.trim(),
         mobileNumber: values.mobile,
         alternateContact: values.alternateContact,
         associateType: values.associateType,
@@ -69,7 +76,8 @@ const AssociatesForm = () => {
         title: values.title,
         dob: values.dob,
       },
-      staffLocation: {  // Changed from associateLocation to staffLocation
+      staffLocation: {
+        // Changed from associateLocation to staffLocation
         country: values.country,
         state: values.state,
         city: values.city,
@@ -81,19 +89,19 @@ const AssociatesForm = () => {
         pincode: values.pincode,
       },
       firm: {
-  firmType: values.firmType,
-  gstin: values.gstin,        // ✅ FIXED
-  cin: values.cin,
-  pan: values.pan,
-  turnover: values.turnover,  // ✅ FIXED
-  firmName: values.firmName,
-  firmDescription: values.firmDescription,
-  sameAsContact: values.sameAsContact,
-  address1: values.firmAddress1,
-  address2: values.firmAddress2,
-  address3: values.firmAddress3,
-  supportingDocs: values.supportingDocs,
-},
+        firmType: values.firmType,
+        gstin: values.gstin, // ✅ FIXED
+        cin: values.cin,
+        pan: values.pan,
+        turnover: values.turnover, // ✅ FIXED
+        firmName: values.firmName,
+        firmDescription: values.firmDescription,
+        sameAsContact: values.sameAsContact,
+        address1: values.firmAddress1,
+        address2: values.firmAddress2,
+        address3: values.firmAddress3,
+        supportingDocs: values.supportingDocs,
+      },
 
       bank: {
         bankName: values.bankName,
@@ -146,7 +154,7 @@ const AssociatesForm = () => {
       firmDescription: "",
       sameAsContact: false,
       supportingDocs: null,
-      firmAddress1: "",  // 👈 rename
+      firmAddress1: "", // 👈 rename
       firmAddress2: "",
       firmAddress3: "",
 
@@ -169,10 +177,7 @@ const AssociatesForm = () => {
       } else {
         handleFinalSubmit(values); // This will dispatch the action
       }
-    }
-
-
-    ,
+    },
   });
 
   const {
@@ -207,7 +212,7 @@ const AssociatesForm = () => {
         fetchCitiesByState({
           countryName: values.country,
           stateName: values.state,
-        })
+        }),
       );
     } else {
       dispatch(clearCities());
@@ -244,24 +249,24 @@ const AssociatesForm = () => {
               </Typography>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 3 }}>
-  <FormControl fullWidth>
-    <InputLabel id="title-label">Title</InputLabel>
-    <Select
-      labelId="title-label"
-      id="title"
-      name="title"
-      value={values.title || ""}
-      label="Title"
-      onChange={(e) => setFieldValue("title", e.target.value)}
-    >
-      {titles.map((title) => (
-        <MenuItem key={title} value={title}>
-          {title}
-        </MenuItem>
-      ))}
-    </Select>
-  </FormControl>
-</Grid>
+                  <FormControl fullWidth>
+                    <InputLabel id="title-label">Title</InputLabel>
+                    <Select
+                      labelId="title-label"
+                      id="title"
+                      name="title"
+                      value={values.title || ""}
+                      label="Title"
+                      onChange={(e) => setFieldValue("title", e.target.value)}
+                    >
+                      {titles.map((title) => (
+                        <MenuItem key={title} value={title}>
+                          {title}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
 
                 <Grid size={{ xs: 6 }}>
                   <TextField
@@ -301,7 +306,9 @@ const AssociatesForm = () => {
                   <FormControl
                     fullWidth
                     required
-                    error={touched.associateType && Boolean(errors.associateType)}
+                    error={
+                      touched.associateType && Boolean(errors.associateType)
+                    }
                   >
                     <InputLabel>Associate Type</InputLabel>
                     <Select
@@ -361,7 +368,7 @@ const AssociatesForm = () => {
                     >
                       {renderSelectOptions(
                         countriesData?.map((c) => c.name),
-                        "Loading countries..."
+                        "Loading countries...",
                       )}
                     </Select>
                   </FormControl>
@@ -380,7 +387,7 @@ const AssociatesForm = () => {
                     >
                       {renderSelectOptions(
                         statesData?.map((s) => s.name),
-                        "Loading states..."
+                        "Loading states...",
                       )}
                     </Select>
                   </FormControl>
@@ -396,7 +403,7 @@ const AssociatesForm = () => {
                     >
                       {renderSelectOptions(
                         citiesData?.map((c) => c.name),
-                        "Loading cities..."
+                        "Loading cities...",
                       )}
                     </Select>
                   </FormControl>
@@ -473,7 +480,6 @@ const AssociatesForm = () => {
             </Box>
           </>
         )}
-
 
         <Box display="flex" gap={2} justifyContent="center" mt={3}>
           {step === 1 && (
