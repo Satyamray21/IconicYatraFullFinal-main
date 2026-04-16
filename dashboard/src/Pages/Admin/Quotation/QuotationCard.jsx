@@ -281,10 +281,19 @@ const QuotationCard = () => {
     }
   };
 
+  const getFirstValue = (...values) => {
+    for (const value of values) {
+      if (value === 0) return value;
+      if (value !== undefined && value !== null && value !== "") return value;
+    }
+    return undefined;
+  };
+
   // Get Status Chip Color
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case "confirmed":
+      case "finalized":
         return "success";
       case "pending":
         return "warning";
@@ -530,22 +539,45 @@ const QuotationCard = () => {
     }),
 
     // Add Quick Quotations
-    ...(quickList || []).map((item, index) => ({
-      id: `Q-${index + 1}`,
-      originalId: item?._id, // For API calls
-      quoteId: `QT-${item?._id?.slice(-6) || "N/A"}`,
-      clientName: item?.customerName || "N/A",
-      arrival: formatDate(item?.createdAt),
-      departure: "-",
-      sector: item?.packageSnapshot?.tourType || "N/A",
-      title: "Quick Quotation",
-      noOfNight: item?.packageSnapshot?.nights || "-",
-      tourType: item?.packageSnapshot?.tourType || "-",
-      type: "Quick",
-      quotationStatus: item?.status || "Draft",
-      formStatus: "Completed",
-      businessType: "Travel",
-    })),
+    ...(quickList || []).map((item, index) => {
+      const quickArrival = getFirstValue(
+        item?.quotationDetails?.arrivalDate,
+        item?.packageSnapshot?.quotationDetails?.arrivalDate,
+        item?.packageSnapshot?.arrivalDate,
+      );
+      const quickDeparture = getFirstValue(
+        item?.quotationDetails?.departureDate,
+        item?.packageSnapshot?.quotationDetails?.departureDate,
+        item?.packageSnapshot?.departureDate,
+      );
+      const quickSector = getFirstValue(
+        item?.packageSnapshot?.sector,
+        item?.sector,
+        item?.clientLocation,
+      );
+      const quickStatus = getFirstValue(
+        item?.finalizeStatus,
+        item?.status,
+        "draft",
+      );
+
+      return {
+        id: `Q-${index + 1}`,
+        originalId: item?._id, // For API calls
+        quoteId: `QT-${item?._id?.slice(-6) || "N/A"}`,
+        clientName: item?.customerName || "N/A",
+        arrival: formatDate(quickArrival),
+        departure: formatDate(quickDeparture),
+        sector: quickSector || "N/A",
+        title: item?.packageSnapshot?.title || "Quick Quotation",
+        noOfNight: getFirstValue(item?.packageSnapshot?.nights, "-"),
+        tourType: item?.packageSnapshot?.tourType || "-",
+        type: "Quick",
+        quotationStatus: String(quickStatus).replace(/^./, (s) => s.toUpperCase()),
+        formStatus: "Completed",
+        businessType: "Travel",
+      };
+    }),
 
     // Add Full Quotations
     ...(fullList || []).map((item, index) => ({
@@ -568,24 +600,51 @@ const QuotationCard = () => {
     })),
 
     // Add Custom Quotations
-    ...(customList || []).map((item, index) => ({
-      id: `C-${index + 1}`,
-      originalId: item?._id,
-      quoteId: item?.quotationId || `CUST-${item?._id?.slice(-6) || "N/A"}`,
-      clientName: item?.clientDetails?.clientName || "N/A",
-      arrival: formatDate(item?.travelDates?.startDate),
-      departure: formatDate(item?.travelDates?.endDate),
-      sector: item?.destination || "N/A",
-      title: item?.quotationTitle || "Custom Package",
-      noOfNight: item?.duration?.nights || "-",
-      tourType: item?.tourType || "-",
-      type: "Custom",
-      quotationStatus:
-        item?.status ||
-        (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft"),
-      formStatus: "Completed",
-      businessType: "Travel",
-    })),
+    ...(customList || []).map((item, index) => {
+      const customArrival = getFirstValue(
+        item?.tourDetails?.arrivalDate,
+        item?.pickupDrop?.[0]?.arrivalDate,
+        item?.travelDates?.startDate,
+      );
+      const customDeparture = getFirstValue(
+        item?.tourDetails?.departureDate,
+        item?.pickupDrop?.[0]?.departureDate,
+        item?.travelDates?.endDate,
+      );
+      const customSector = getFirstValue(
+        item?.clientDetails?.sector,
+        item?.destination,
+      );
+      const customStatus = getFirstValue(
+        item?.finalizeStatus,
+        item?.status,
+        "draft",
+      );
+      const customNights = getFirstValue(
+        item?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+        item?.duration?.nights,
+      );
+
+      return {
+        id: `C-${index + 1}`,
+        originalId: item?._id,
+        quoteId: item?.quotationId || `CUST-${item?._id?.slice(-6) || "N/A"}`,
+        clientName: item?.clientDetails?.clientName || "N/A",
+        arrival: formatDate(customArrival),
+        departure: formatDate(customDeparture),
+        sector: customSector || "N/A",
+        title: item?.tourDetails?.quotationTitle || item?.quotationTitle || "Custom Package",
+        noOfNight: getFirstValue(customNights, "-"),
+        tourType: item?.clientDetails?.tourType || item?.tourType || "-",
+        type: "Custom",
+        quotationStatus: String(customStatus).replace(/^./, (s) => s.toUpperCase()),
+        formStatus: "Completed",
+        businessType: "Travel",
+      };
+    }),
   ];
 
   // Filter by type
