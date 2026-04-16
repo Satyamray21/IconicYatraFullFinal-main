@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Button, Typography, Paper } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   createCustomQuotation,
@@ -10,6 +10,7 @@ import {
   getCustomQuotationById, // <-- using option A as you confirmed
 } from "../../../../features/quotation/customQuotationSlice";
 import { getAllLeads } from "../../../../features/leads/leadSlice";
+import { inferNextCustomWizardStep } from "../../../../utils/inferCustomQuotationStep";
 
 // Step components
 import CustomQuotation from "./customquotation";
@@ -22,6 +23,7 @@ import CustomQuotationStep6 from "./customquotationStep6";
 const CustomQuotationMain = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
@@ -40,18 +42,36 @@ const CustomQuotationMain = () => {
 
   useEffect(() => {
     dispatch(getAllLeads());
+  }, [dispatch]);
+
+  useEffect(() => {
+    const resumeQuotationId = location.state?.resumeQuotationId;
+    const resumeStep = location.state?.resumeStep;
+
+    if (resumeQuotationId != null && resumeQuotationId !== "" && resumeStep != null) {
+      (async () => {
+        localStorage.setItem("currentQuotationId", resumeQuotationId);
+        setQuotationId(resumeQuotationId);
+        try {
+          await loadQuotation(resumeQuotationId);
+          const stepNum = Math.min(Math.max(Number(resumeStep) || 2, 1), 6);
+          setStep(stepNum);
+        } catch {
+          /* loadQuotation already toasts */
+        } finally {
+          navigate("/customquotation", { replace: true, state: null });
+        }
+      })();
+      return;
+    }
+
     const savedQuotationId = localStorage.getItem("currentQuotationId");
     if (savedQuotationId) {
       setQuotationId(savedQuotationId);
-      console.log(
-        "📋 Restored quotationId from localStorage:",
-        savedQuotationId,
-      );
-      // load from backend to populate formData
       loadQuotation(savedQuotationId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch]);
+  }, [location.state]);
 
   // Robust findMatchingLead (handles arrays/strings safely)
   const findMatchingLead = (clientName, sector) => {
@@ -109,6 +129,8 @@ const CustomQuotationMain = () => {
 
       setQuotationId(payload.quotationId || qid);
       localStorage.setItem("currentQuotationId", payload.quotationId || qid);
+
+      setStep(inferNextCustomWizardStep(payload));
     } catch (err) {
       console.error("Failed to load quotation:", err);
       toast.error("Could not load quotation data from server.");
