@@ -353,7 +353,9 @@ const QuotationPDFDialog = ({
     : [];
   /** Same totals appear in Payment Summary — hide from the pricing table. */
   const isTotalsRowDuplicatedInPaymentSummary = (row) => {
-    const label = String(row?.destination || "").toLowerCase().trim();
+    const label = String(row?.destination || "")
+      .toLowerCase()
+      .trim();
     return (
       label.includes("final package totals") ||
       label.includes("total quotation cost")
@@ -483,6 +485,35 @@ const QuotationPDFDialog = ({
       label.includes("final package")
     );
   };
+  const getDestinationLabel = (row) =>
+    String(row?.destination || "")
+      .toLowerCase()
+      .trim();
+  const isTransportationCostRow = (row) => {
+    const label = getDestinationLabel(row);
+    return label.includes("transportation") && label.includes("cost");
+  };
+  const isHotelCostRow = (row) => {
+    const label = getDestinationLabel(row);
+    return label.includes("hotel") && label.includes("cost");
+  };
+  const parseNightsCount = (value) => {
+    const match = String(value ?? "").match(/\d+/);
+    return match ? Number(match[0]) : 0;
+  };
+  const totalTripNights = hotelPricingData
+    .filter((row) => !isSummaryPricingRow(row))
+    .reduce((sum, row) => sum + parseNightsCount(row?.nights), 0);
+  const getNightsCellValue = (row) => {
+    if (isTransportationCostRow(row) && totalTripNights > 0) {
+      return `${totalTripNights + 1} D`;
+    }
+    if (isHotelCostRow(row) && totalTripNights > 0) {
+      return `${totalTripNights} N`;
+    }
+    const txt = String(row?.nights || "-").trim();
+    return txt ? txt.charAt(0).toUpperCase() + txt.slice(1) : "-";
+  };
   const isCurrencyCell = (value) => {
     const text = String(value || "").trim();
     return text.startsWith("₹") || /^rs\.?\s+/i.test(text);
@@ -518,8 +549,7 @@ const QuotationPDFDialog = ({
   };
   const showStandardCol = hotelPricingData.some(
     (row) =>
-      isDestinationHotelPricingRow(row) &&
-      hasHotelNameValue(row?.standard),
+      isDestinationHotelPricingRow(row) && hasHotelNameValue(row?.standard),
   );
   const showDeluxeCol = hotelPricingData.some(
     (row) =>
@@ -527,8 +557,7 @@ const QuotationPDFDialog = ({
   );
   const showSuperiorCol = hotelPricingData.some(
     (row) =>
-      isDestinationHotelPricingRow(row) &&
-      hasHotelNameValue(row?.superior),
+      isDestinationHotelPricingRow(row) && hasHotelNameValue(row?.superior),
   );
   const visiblePackageColumns = [
     showStandardCol,
@@ -1379,14 +1408,13 @@ const QuotationPDFDialog = ({
                     <td style={{ padding: "12px" }}>
                       {(() => {
                         const txt = String(row?.destination || "-").trim();
-                        return txt ? txt.charAt(0).toUpperCase() + txt.slice(1) : "-";
+                        return txt
+                          ? txt.charAt(0).toUpperCase() + txt.slice(1)
+                          : "-";
                       })()}
                     </td>
                     <td style={{ padding: "12px" }}>
-                      {(() => {
-                        const txt = String(row?.nights || "-").trim();
-                        return txt ? txt.charAt(0).toUpperCase() + txt.slice(1) : "-";
-                      })()}
+                      {getNightsCellValue(row)}
                     </td>
                     {showStandardCol && (
                       <td style={{ padding: "12px" }}>
