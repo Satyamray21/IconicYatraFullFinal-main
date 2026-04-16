@@ -75,3 +75,18 @@ export function formatCustomQuotationListStatus(item) {
   }
   return `Draft (Step ${next})`;
 }
+
+/**
+ * Quick quotation row: after DB create, remaining work is finalize screen (no step field on model).
+ */
+export function formatQuickQuotationListStatus(item) {
+  const fs = String(item?.finalizeStatus || "").toLowerCase();
+  const st = String(item?.status || "").toLowerCase();
+  if (fs === "finalized") {
+    return "Finalized";
+  }
+  if (st === "confirmed" || st === "completed") {
+    return "Completed";
+  }
+  return "Draft (Finalize)";
+}

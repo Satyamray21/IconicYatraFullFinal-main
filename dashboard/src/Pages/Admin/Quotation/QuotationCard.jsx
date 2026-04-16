@@ -65,6 +65,7 @@ import { deleteFlightQuotationById } from "../../../features/quotation/flightQuo
 import {
   inferLastCompletedCustomStep,
   formatCustomQuotationListStatus,
+  formatQuickQuotationListStatus,
 } from "../../../utils/inferCustomQuotationStep";
 
 const stats = [
@@ -292,12 +293,6 @@ const QuotationCard = () => {
     }
     return undefined;
   };
-
-  /** Custom & Quick: list column — finalized → Completed, else Draft */
-  const formatDraftOrCompleted = (finalizeStatus) =>
-    String(finalizeStatus || "").toLowerCase() === "finalized"
-      ? "Completed"
-      : "Draft";
 
   const navigateToCustomQuotation = (row) => {
     const raw = row?.rawData;
@@ -623,7 +618,7 @@ const QuotationCard = () => {
         noOfNight: getFirstValue(quickNights, "-"),
         tourType: item?.packageSnapshot?.tourType || "-",
         type: "Quick",
-        quotationStatus: formatDraftOrCompleted(item?.finalizeStatus),
+        quotationStatus: formatQuickQuotationListStatus(item),
         formStatus: "Completed",
         businessType: "Travel",
         rawData: item,
