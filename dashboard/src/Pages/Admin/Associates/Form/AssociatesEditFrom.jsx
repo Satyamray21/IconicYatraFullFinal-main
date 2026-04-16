@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { flushSync } from "react-dom";
 import {
   Box,
   Grid,
@@ -25,7 +26,7 @@ import {
   updateAssociate,
   clearSelectedAssociate,
 } from "../../../../features/associate/associateSlice";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   fetchCountries,
   fetchStatesByCountry,
@@ -33,6 +34,7 @@ import {
   clearStates,
   clearCities,
 } from "../../../../features/location/locationSlice";
+import { toast } from "react-toastify";
 
 // ----- Static Data -----
 const titles = ["Mr", "Mrs", "Ms", "Dr"];
@@ -120,6 +122,7 @@ const getInitialValues = (associate) => ({
 
 const EditAssociateForm = () => {
   const { associateId } = useParams();
+  const navigate = useNavigate();
   const dispatch = useDispatch();
   const {
     selected: associate,
@@ -169,16 +172,24 @@ const EditAssociateForm = () => {
           },
         };
 
-        const result = await dispatch(
+        await dispatch(
           updateAssociate({
             id: associateId,
             data: submitData,
           }),
         ).unwrap();
 
-        console.log("Update successful:", result);
+        // Navigate in a sync flush so it wins over Formik/Redux re-renders from
+        // enableReinitialize + updateAssociate.fulfilled updating `selected`.
+        flushSync(() => {
+          navigate("/associates", { replace: true });
+        });
+        toast.success("Associate updated successfully");
       } catch (error) {
         console.error("Failed to update associate:", error);
+        toast.error(
+          error?.message || "Failed to update associate. Please try again.",
+        );
       }
     },
   });
