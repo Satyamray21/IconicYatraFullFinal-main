@@ -1,7 +1,7 @@
 // ==================== FULL FIXED FILE ====================
 // customquotationStep6.jsx
 
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Box,
   Typography,
@@ -62,6 +62,7 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
   const dispatch = useDispatch();
   const { clientDetails, pickupDrop, tourDetails } = formData;
   const cities = pickupDrop || [];
+  const toNumber = (value) => Number(value || 0);
 
   // =====================================================
   // INITIALIZE CITY PRICE OBJECTS
@@ -142,6 +143,7 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
           mattressCount: values.noOfMattress,
           standardPackageMattressCostPerNight: values.superiorMattressCost,
           deluxePackageMattressCostPerNight: values.deluxeMattressCost,
+          superiorPackageMattressCostPerNight: values.superiorMattressCost,
           vehicleCost,
           marginPercent: values.marginPercent,
           marginAmount: values.marginAmount,
@@ -256,6 +258,7 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
     mattressCount: formik.values.noOfMattress,
     standardPackageMattressCostPerNight: formik.values.superiorMattressCost,
     deluxePackageMattressCostPerNight: formik.values.deluxeMattressCost,
+    superiorPackageMattressCostPerNight: formik.values.superiorMattressCost,
     vehicleCost: vehicleCostLive,
     marginPercent: formik.values.marginPercent,
     marginAmount: formik.values.marginAmount,
@@ -288,6 +291,29 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
     gstAmount: superiorGST,
     finalTotal: finalSuperiorTotal,
   } = pricing.superior;
+
+  const marginBaseCost = useMemo(() => {
+    if (Number.isFinite(baseStandard) && baseStandard > 0) return baseStandard;
+    if (Number.isFinite(baseDeluxe) && baseDeluxe > 0) return baseDeluxe;
+    if (Number.isFinite(baseSuperior) && baseSuperior > 0) return baseSuperior;
+    return 0;
+  }, [baseStandard, baseDeluxe, baseSuperior]);
+
+  const handleMarginPercentChange = (event) => {
+    const percent = toNumber(event.target.value);
+    const amount = marginBaseCost > 0 ? (marginBaseCost * percent) / 100 : 0;
+
+    formik.setFieldValue("marginPercent", percent);
+    formik.setFieldValue("marginAmount", Number(amount.toFixed(2)));
+  };
+
+  const handleMarginAmountChange = (event) => {
+    const amount = toNumber(event.target.value);
+    const percent = marginBaseCost > 0 ? (amount / marginBaseCost) * 100 : 0;
+
+    formik.setFieldValue("marginAmount", amount);
+    formik.setFieldValue("marginPercent", Number(percent.toFixed(2)));
+  };
 
   // =====================================================
   // UI START
@@ -644,7 +670,9 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
                 label="Margin (%)"
                 type="number"
                 fullWidth
-                {...formik.getFieldProps("marginPercent")}
+                name="marginPercent"
+                value={formik.values.marginPercent}
+                onChange={handleMarginPercentChange}
               />
             </Grid>
 
@@ -653,7 +681,9 @@ const CustomQuotationForm = ({ formData, leadData, onSubmit, loading }) => {
                 label="Margin Amount"
                 type="number"
                 fullWidth
-                {...formik.getFieldProps("marginAmount")}
+                name="marginAmount"
+                value={formik.values.marginAmount}
+                onChange={handleMarginAmountChange}
               />
             </Grid>
 
