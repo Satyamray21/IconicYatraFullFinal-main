@@ -6,7 +6,8 @@ const convertToNestedObject = (flatObj) => {
   const result = {};
   
   for (const key in flatObj) {
-    if (flatObj[key] === null || flatObj[key] === undefined || flatObj[key] === '') {
+    // Skip only null and undefined, allow empty strings
+    if (flatObj[key] === null || flatObj[key] === undefined) {
       continue;
     }
     
