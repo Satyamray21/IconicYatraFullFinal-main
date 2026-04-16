@@ -11,7 +11,7 @@ import path from "path";
 
 const router = express.Router();
 
-// Multer config for QR code upload
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "upload");
