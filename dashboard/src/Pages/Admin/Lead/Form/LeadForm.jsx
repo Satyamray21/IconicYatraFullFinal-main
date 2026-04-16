@@ -212,7 +212,7 @@ const formik = useFormik({
   };
 
   useEffect(() => {
-    if (formik.values.source === "Referral") {
+    if (formik.values.source === "Referral" || formik.values.source === "Agent's") {
       dispatch(fetchAllAssociates());
     }
   }, [formik.values.source, dispatch]);
@@ -323,6 +323,14 @@ const formik = useFormik({
     return ["Direct", "Referral", "Agent's"];
   };
 
+  const getSubAgentNames = () =>
+    associates
+      .filter(
+        (a) => a?.personalDetails?.associateType === "Sub Agent",
+      )
+      .map((a) => a?.personalDetails?.fullName)
+      .filter(Boolean);
+
   // ✅ Check if an option is deletable (API option)
   const isDeletableOption = (optionValue) => {
     if (formik.values.businessType !== "B2C") return false;
@@ -347,6 +355,7 @@ const formik = useFormik({
       sx={{ mb: 2 }}
       disabled={
         (name === "referralBy" && associatesLoading) ||
+        (name === "agentName" && associatesLoading) ||
         (name === "assignedTo" && staffLoading) ||
         (name === "source" && leadOptionsLoading)
       }
@@ -372,7 +381,7 @@ const formik = useFormik({
         }
       }}
     >
-      {name === "referralBy" && associatesLoading && (
+      {(name === "referralBy" || name === "agentName") && associatesLoading && (
         <MenuItem disabled>Loading associates...</MenuItem>
       )}
 
@@ -596,7 +605,7 @@ const formik = useFormik({
               renderSelectField(
                 "Agent Name",
                 "agentName",
-                dropdownOptions.agentName
+                associatesLoading ? ["Loading associates..."] : getSubAgentNames()
               )}
 
             {renderSelectField(
