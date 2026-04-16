@@ -337,7 +337,7 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
   }, [viewedLead]);
 
   useEffect(() => {
-    if (formik.values.source === "Referral") {
+    if (formik.values.source === "Referral" || formik.values.source === "Agent's") {
       dispatch(fetchAllAssociates());
     }
   }, [formik.values.source, dispatch]);
@@ -639,6 +639,12 @@ const Step1Content = ({
   associates, 
   associatesLoading 
 }) => {
+  const getSubAgentNames = () =>
+    associates
+      .filter((a) => a?.personalDetails?.associateType === "Sub Agent")
+      .map((a) => a?.personalDetails?.fullName || a?.name)
+      .filter(Boolean);
+
   const renderSelectField = (label, name, options = [], loading = false) => {
     const allOptions = [...new Set([...options, formik.values[name]].filter(Boolean))];
 
@@ -814,7 +820,12 @@ const Step1Content = ({
             )}
 
             {formik.values.businessType === "B2B" && formik.values.source === "Agent's" && (
-              renderSelectField("Agent Name", "agentName", dropdownOptions.agentName)
+              renderSelectField(
+                "Agent Name",
+                "agentName",
+                associatesLoading ? ["Loading..."] : getSubAgentNames(),
+                associatesLoading,
+              )
             )}
 
             {renderSelectField(
