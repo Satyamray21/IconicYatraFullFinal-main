@@ -1119,7 +1119,13 @@ const QuickFinalize = () => {
     const base = { ...quotation, days };
     if (!Number.isFinite(payable) || payable <= 0) return base;
     const hpd = [...(base.hotelPricingData || [])];
-    const idx = hpd.findIndex((r) => r.destination === "Total package cost");
+    const idx = hpd.findIndex((r) => {
+      const label = String(r?.destination || "").toLowerCase();
+      return (
+        label.includes("total quotation cost") ||
+        label.includes("total package cost")
+      );
+    });
     if (idx !== -1) {
       hpd[idx] = {
         ...hpd[idx],
@@ -2326,6 +2332,35 @@ const QuickFinalize = () => {
     : {};
   const qdSnap = snap.quotationDetails || {};
   const vehicleSnap = snap.vehicleDetails;
+  const quickPricingRows = Array.isArray(quotation.hotelPricingData)
+    ? quotation.hotelPricingData
+    : [];
+  const isSummaryRow = (row) => {
+    const label = String(row?.destination || "").toLowerCase();
+    return (
+      label.includes("final package totals") ||
+      label.includes("total quotation cost") ||
+      label.includes("total package cost") ||
+      label.includes("transportation cost") ||
+      label.includes("hotel total cost") ||
+      label.includes("igst")
+    );
+  };
+  const hasDisplayHotelName = (value) => {
+    const text = String(value || "").trim();
+    if (!text || text === "-" || text === "—") return false;
+    if (/^tbd$/i.test(text)) return false;
+    if (text.startsWith("₹")) return false;
+    return true;
+  };
+  const detailRows = quickPricingRows.filter((row) => !isSummaryRow(row));
+  const showStandardCol = detailRows.some((row) =>
+    hasDisplayHotelName(row?.standard),
+  );
+  const showDeluxeCol = detailRows.some((row) => hasDisplayHotelName(row?.deluxe));
+  const showSuperiorCol = detailRows.some((row) =>
+    hasDisplayHotelName(row?.superior),
+  );
 
   const Accordions = [
     { title: "Hotel Details" },
@@ -3170,9 +3205,9 @@ const QuickFinalize = () => {
                         {[
                           "Destination",
                           "Nights",
-                          "Standard",
-                          "Deluxe",
-                          "Superior",
+                          ...(showStandardCol ? ["Standard"] : []),
+                          ...(showDeluxeCol ? ["Deluxe"] : []),
+                          ...(showSuperiorCol ? ["Superior"] : []),
                         ].map((h) => (
                           <TableCell
                             key={h}
@@ -3184,34 +3219,42 @@ const QuickFinalize = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {(quotation.hotelPricingData || []).length === 0 ? (
+                      {quickPricingRows.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} align="center">
+                          <TableCell
+                            colSpan={
+                              2 +
+                              (showStandardCol ? 1 : 0) +
+                              (showDeluxeCol ? 1 : 0) +
+                              (showSuperiorCol ? 1 : 0)
+                            }
+                            align="center"
+                          >
                             <Typography variant="body2" color="text.secondary">
                               No destination rows for this package.
                             </Typography>
                           </TableCell>
                         </TableRow>
                       ) : (
-                        (quotation.hotelPricingData || []).map((row, index) => (
+                        quickPricingRows.map((row, index) => (
                           <TableRow
                             key={index}
                             sx={{
                               backgroundColor:
-                                index >= quotation.hotelPricingData.length - 2
+                                index >= quickPricingRows.length - 2
                                   ? "grey.50"
                                   : "inherit",
                               fontWeight:
-                                index === quotation.hotelPricingData.length - 1
+                                index === quickPricingRows.length - 1
                                   ? "bold"
                                   : "normal",
                             }}
                           >
                             <TableCell>{row.destination}</TableCell>
                             <TableCell>{row.nights}</TableCell>
-                            <TableCell>{row.standard}</TableCell>
-                            <TableCell>{row.deluxe}</TableCell>
-                            <TableCell>{row.superior}</TableCell>
+                            {showStandardCol && <TableCell>{row.standard}</TableCell>}
+                            {showDeluxeCol && <TableCell>{row.deluxe}</TableCell>}
+                            {showSuperiorCol && <TableCell>{row.superior}</TableCell>}
                           </TableRow>
                         ))
                       )}
