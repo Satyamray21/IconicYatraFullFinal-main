@@ -81,6 +81,7 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
       const quotation = await CustomQuotation.create({
         ...req.body,
         quotationId,
+        currentStep: 1,
       });
 
       return res
@@ -472,6 +473,11 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
     else {
       throw new ApiError(400, `Invalid step number: ${stepNumber}`);
     }
+
+    quotation.currentStep = Math.max(
+      Number(quotation.currentStep) || 1,
+      stepNumber,
+    );
 
     await quotation.save();
     console.log("✅ Step", stepNumber, "updated successfully!");
