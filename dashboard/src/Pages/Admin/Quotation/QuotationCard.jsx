@@ -62,6 +62,10 @@ import {
 } from "../../../features/quotation/customQuotationSlice";
 import { deleteVehicleQuotation } from "../../../features/quotation/vehicleQuotationSlice";
 import { deleteFlightQuotationById } from "../../../features/quotation/flightQuotationSlice";
+import {
+  inferLastCompletedCustomStep,
+  formatCustomQuotationListStatus,
+} from "../../../utils/inferCustomQuotationStep";
 
 const stats = [
   { title: "Today's", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
@@ -289,18 +293,56 @@ const QuotationCard = () => {
     return undefined;
   };
 
+  /** Custom & Quick: list column — finalized → Completed, else Draft */
+  const formatDraftOrCompleted = (finalizeStatus) =>
+    String(finalizeStatus || "").toLowerCase() === "finalized"
+      ? "Completed"
+      : "Draft";
+
+  const navigateToCustomQuotation = (row) => {
+    const raw = row?.rawData;
+    const qid = row?.quoteId;
+    if (!raw || !qid) return;
+    const fs = String(raw.finalizeStatus || "").toLowerCase();
+    const rowStatus = String(raw.status || "").toLowerCase();
+    if (fs === "finalized") {
+      navigate(`/customfinalize/${qid}`, {
+        state: { quotationData: raw },
+      });
+      return;
+    }
+    if (rowStatus === "confirmed" || rowStatus === "completed") {
+      navigate(`/customfinalize/${qid}`, {
+        state: { quotationData: raw },
+      });
+      return;
+    }
+    const lastCompleted = inferLastCompletedCustomStep(raw);
+    if (lastCompleted >= 6) {
+      navigate(`/customfinalize/${qid}`, {
+        state: { quotationData: raw },
+      });
+      return;
+    }
+    const nextStep = Math.min(lastCompleted + 1, 6);
+    navigate("/customquotation", {
+      state: { resumeQuotationId: qid, resumeStep: nextStep },
+    });
+  };
+
   // Get Status Chip Color
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    const s = String(status || "").toLowerCase();
+    if (s.startsWith("draft")) return "warning";
+    switch (s) {
       case "confirmed":
       case "finalized":
+      case "completed":
         return "success";
       case "pending":
         return "warning";
       case "cancelled":
         return "error";
-      case "completed":
-        return "info";
       case "draft":
         return "default";
       default:
@@ -354,12 +396,13 @@ const QuotationCard = () => {
     {
       field: "quotationStatus",
       headerName: "Status",
-      width: 140,
+      width: 200,
       renderCell: (params) => (
         <Chip
           label={params.value}
           size="small"
           color={getStatusColor(params.value)}
+          sx={{ maxWidth: 220, "& .MuiChip-label": { whiteSpace: "normal" } }}
         />
       )
     },
@@ -414,7 +457,7 @@ const QuotationCard = () => {
                   navigate(`/hotelquotation/edit/${params.row.originalId}`);
                   break;
                 case "Custom":
-                  navigate(`/customquotation/edit/${params.row.originalId}`);
+                  navigateToCustomQuotation(params.row);
                   break;
                 default:
                   break;
@@ -555,11 +598,6 @@ const QuotationCard = () => {
         item?.sector,
         item?.clientLocation,
       );
-      const quickStatus = getFirstValue(
-        item?.finalizeStatus,
-        item?.status,
-        "draft",
-      );
       const quickNights = getFirstValue(
         item?.packageSnapshot?.nights,
         item?.nights,
@@ -585,9 +623,10 @@ const QuotationCard = () => {
         noOfNight: getFirstValue(quickNights, "-"),
         tourType: item?.packageSnapshot?.tourType || "-",
         type: "Quick",
-        quotationStatus: String(quickStatus).replace(/^./, (s) => s.toUpperCase()),
+        quotationStatus: formatDraftOrCompleted(item?.finalizeStatus),
         formStatus: "Completed",
         businessType: "Travel",
+        rawData: item,
       };
     }),
 
@@ -609,6 +648,7 @@ const QuotationCard = () => {
         (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft"),
       formStatus: "Completed",
       businessType: "Travel",
+      rawData: item,
     })),
 
     // Add Custom Quotations
@@ -626,11 +666,6 @@ const QuotationCard = () => {
       const customSector = getFirstValue(
         item?.clientDetails?.sector,
         item?.destination,
-      );
-      const customStatus = getFirstValue(
-        item?.finalizeStatus,
-        item?.status,
-        "draft",
       );
       const customNights = getFirstValue(
         item?.tourDetails?.quotationDetails?.destinations?.reduce(
@@ -663,9 +698,10 @@ const QuotationCard = () => {
         noOfNight: getFirstValue(customNights, "-"),
         tourType: item?.clientDetails?.tourType || item?.tourType || "-",
         type: "Custom",
-        quotationStatus: String(customStatus).replace(/^./, (s) => s.toUpperCase()),
+        quotationStatus: formatCustomQuotationListStatus(item),
         formStatus: "Completed",
         businessType: "Travel",
+        rawData: item,
       };
     }),
   ];
@@ -716,13 +752,13 @@ const QuotationCard = () => {
         navigate(`/vehiclefinalize/${params.row.quoteId}`);
         break;
       case "Custom":
-        navigate(`/customfinalize/${params.row.quoteId}`, {
-          state: { quotationData: params.row.rawData },
-        });
+        navigateToCustomQuotation(params.row);
         break;
       case "Quick":
         // Must use Mongo _id — quoteId is only a display label (QT-xxxxxx)
-        navigate(`/quickfinalize/${params.row.originalId}`);
+        if (params.row.originalId) {
+          navigate(`/quickfinalize/${params.row.originalId}`);
+        }
         break;
       default:
         break;
