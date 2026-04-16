@@ -20,7 +20,7 @@ const associateSchema = mongoose.Schema({
     },
     alternateContact: {
       type: String,
-      unique: true
+      
     },
     associateType: {
       type: String,
