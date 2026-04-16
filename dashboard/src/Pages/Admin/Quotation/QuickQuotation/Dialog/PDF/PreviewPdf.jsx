@@ -432,7 +432,8 @@ const QuotationPDFDialog = ({
     [],
   );
 
-  const days = getValue(quotationData, "days", []);
+  const rawDays = getRawValue(quotationData, "days");
+  const days = Array.isArray(rawDays) ? rawDays : [];
   const bannerImage = getValue(quotationData, "bannerImage", "");
   const hotelPricingData = hotelPricingRows;
   const isSummaryPricingRow = (row) => {
@@ -560,12 +561,16 @@ const QuotationPDFDialog = ({
 
       for (let i = 0; i < days.length; i++) {
         const day = days[i];
-        if (
-          day.image &&
-          day.image.preview &&
-          typeof day.image.preview === "string"
-        ) {
-          const base64DayImage = await convertToBase64(day.image.preview, true);
+        const imgUrl =
+          day?.image &&
+          typeof day.image === "object" &&
+          (typeof day.image.preview === "string"
+            ? day.image.preview
+            : typeof day.image.url === "string"
+              ? day.image.url
+              : "");
+        if (imgUrl) {
+          const base64DayImage = await convertToBase64(imgUrl, true);
           if (base64DayImage) loadedImages[`day_${i}`] = base64DayImage;
         }
       }
