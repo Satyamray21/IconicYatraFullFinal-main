@@ -17,27 +17,6 @@ import {
   DialogContent,
   DialogActions,
 } from "@mui/material";
-import { useFormik } from "formik";
-import * as Yup from "yup";
-
-const validationSchema = Yup.object({
-  firmType: Yup.string().required("Firm Type is required"),
-  firmName: Yup.string().required("Firm Name is required"),
-  gstin: Yup.string(),
-  cin: Yup.string(),
-  pan: Yup.string(),
-  turnover: Yup.string(),
-  firmDescription: Yup.string(),
-  address1: Yup.string(),
-  address2: Yup.string(),
-  address3: Yup.string(),
-  bankName: Yup.string(),
-  branchName: Yup.string(),
-  accountHolderName: Yup.string(),
-  accountNumber: Yup.string(),
-  ifscCode: Yup.string(),
-});
-
 const AssociateFirmForm = ({ formik }) => {
   const [firmTypes, setFirmTypes] = useState([
     "Proprietorship",
@@ -314,12 +293,6 @@ const AssociateFirmForm = ({ formik }) => {
               )}
             </Grid>
           </Grid>
-        </Box>
-
-        <Box display="flex" justifyContent="center">
-          <Button type="submit" variant="contained" color="primary" onClick={formik.handleSubmit}>
-            Submit
-          </Button>
         </Box>
       </>
 

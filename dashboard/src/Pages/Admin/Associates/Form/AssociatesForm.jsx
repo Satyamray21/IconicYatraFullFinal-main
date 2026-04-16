@@ -10,6 +10,7 @@ import {
   FormControl,
   InputLabel,
   Select,
+  CircularProgress,
 } from "@mui/material";
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -26,6 +27,7 @@ import {
   clearStates,
   clearCities,
 } from "../../../../features/location/locationSlice";
+import { toast } from "react-toastify";
 const titles = ["Mr", "Mrs", "Ms", "Dr"];
 const roles = [
   "Vehicle Vendor",
@@ -55,6 +57,7 @@ const validationSchema = Yup.object().shape({
 
 const AssociatesForm = () => {
   const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const {
@@ -64,7 +67,8 @@ const AssociatesForm = () => {
     loading,
   } = useSelector((state) => state.location);
 
-  const handleFinalSubmit = (values) => {
+  const handleFinalSubmit = async (values) => {
+    setSubmitting(true);
     const formattedData = {
       personalDetails: {
         fullName:
@@ -115,14 +119,18 @@ const AssociatesForm = () => {
       },
     };
 
-    dispatch(createAssociate(formattedData))
-      .unwrap()
-      .then(() => {
-        navigate("/associates");
-      })
-      .catch((err) => {
-        console.error("Associates creation failed:", err);
-      });
+    try {
+      await dispatch(createAssociate(formattedData)).unwrap();
+      toast.success("Associates added successfully");
+      navigate("/associates");
+    } catch (err) {
+      console.error("Associates creation failed:", err);
+      toast.error(
+        err?.message || "Failed to add associate. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const formik = useFormik({
@@ -171,11 +179,11 @@ const AssociatesForm = () => {
     },
 
     validationSchema,
-    onSubmit: (values) => {
+    onSubmit: async (values) => {
       if (step === 1) {
         setStep(2);
       } else {
-        handleFinalSubmit(values); // This will dispatch the action
+        await handleFinalSubmit(values);
       }
     },
   });
@@ -471,11 +479,22 @@ const AssociatesForm = () => {
                 variant="contained"
                 color="secondary"
                 onClick={() => setStep(1)}
+                disabled={submitting}
               >
                 Back
               </Button>
-              <Button type="submit" variant="contained" color="primary">
-                Submit Final
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={submitting}
+                startIcon={
+                  submitting ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : null
+                }
+              >
+                {submitting ? "Submitting…" : "Submit Final"}
               </Button>
             </Box>
           </>
