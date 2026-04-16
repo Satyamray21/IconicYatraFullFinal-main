@@ -533,7 +533,16 @@ const QuotationPDFDialog = ({
     normalizeWebUrl(selectedCompany?.companyWebsite) ||
     normalizeWebUrl(footerWebsite) ||
     "#";
+  const companyTermsUrl =
+    normalizeWebUrl(selectedCompany?.termsConditions) || companyWebsiteUrl;
 
+  const companyPaymentLink = normalizeWebUrl(selectedCompany?.paymentLink);
+
+  const netBankingPayeeName =
+    String(selectedCompany?.companyName || "").trim() ||
+    (footerCompany && footerCompany !== "N/A"
+      ? String(footerCompany).trim()
+      : "");
   const companyCancellationUrl = normalizeWebUrl(
     selectedCompany?.cancellationPolicy,
   );
@@ -701,8 +710,8 @@ const QuotationPDFDialog = ({
         if (i === pageElements.length - 1) {
           if (termsLinkPosition) {
             const termsUrl =
-              companyWebsiteUrl !== "#"
-                ? companyWebsiteUrl
+              ompanyTermsUrl !== "#"
+                ? companyTermsUrl
                 : "https://www.iconicyatra.com";
             pdf.link(
               termsLinkPosition.x,
@@ -1481,7 +1490,56 @@ const QuotationPDFDialog = ({
           </table>
         </div>
       </div>
-
+      {netBankingPayeeName && (
+        <div style={{ marginBottom: "35px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "16px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            🏦 Net Banking / NEFT / RTGS
+          </div>
+          <div
+            style={{
+              padding: "18px",
+              background: "#f3f6ff",
+              borderRadius: "12px",
+              borderLeft: "4px solid #667eea",
+              fontSize: "14px",
+              lineHeight: "1.7",
+              color: "#333",
+            }}
+          >
+            <div style={{ marginBottom: "10px" }}>
+              Please transfer funds in favor of{" "}
+              <strong style={{ color: "#667eea" }}>
+                {netBankingPayeeName}
+              </strong>
+              . Use this name exactly as the account / beneficiary name when
+              paying via net banking, NEFT, RTGS, or IMPS.
+            </div>
+            {companyPaymentLink && (
+              <div style={{ marginTop: "12px" }}>
+                <span style={{ fontWeight: "600" }}>Online payment: </span>
+                <Link
+                  href={companyPaymentLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="hover"
+                  sx={{ fontWeight: "bold", wordBreak: "break-all" }}
+                >
+                  {companyPaymentLink}
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Inclusion Policy Section */}
       {finalInclusionArray.length > 0 && (
         <div>
@@ -1734,10 +1792,12 @@ const QuotationPDFDialog = ({
               padding: "8px",
             }}
           >
-            As per company website{" "}
+            Full terms & conditions:{" "}
             <a
               data-pdf-link="terms"
-              href={companyWebsiteUrl}
+              href={
+                companyTermsUrl !== "#" ? companyTermsUrl : companyWebsiteUrl
+              }
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -1746,9 +1806,11 @@ const QuotationPDFDialog = ({
                 fontWeight: "bold",
               }}
             >
-              {companyWebsiteUrl !== "#"
-                ? companyWebsiteUrl
-                : "www.iconicyatra.com"}
+              {companyTermsUrl !== "#"
+                ? companyTermsUrl
+                : companyWebsiteUrl !== "#"
+                  ? companyWebsiteUrl
+                  : "www.iconicyatra.com"}
             </a>
           </div>
         </div>
