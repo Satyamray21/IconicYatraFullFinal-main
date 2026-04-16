@@ -351,7 +351,13 @@ const QuotationPDFDialog = ({
   )
     ? getRawValue(quotationData, "hotelPricingData")
     : [];
+  const finalPackageTotalsRow = hotelPricingRows.find((row) =>
+    String(row?.destination || "")
+      .toLowerCase()
+      .includes("final package totals"),
+  );
   const totalCostRow =
+    finalPackageTotalsRow ||
     hotelPricingRows.find((row) =>
       String(row?.destination || "")
         .toLowerCase()
@@ -443,6 +449,8 @@ const QuotationPDFDialog = ({
   const hasHotelNameValue = (value) => {
     const text = String(value || "").trim();
     if (!text || text === "-") return false;
+    if (text === "—") return false;
+    if (/^tbd$/i.test(text)) return false;
     if (text.startsWith("₹")) return false;
     return true;
   };
