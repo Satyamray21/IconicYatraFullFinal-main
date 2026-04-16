@@ -94,6 +94,7 @@ import {
   effectiveQuickPayableTotal,
   mapApiAdditionalServicesToState,
   serializeAdditionalServicesForApi,
+  sumBillableAdditionalServices,
 } from "../../../../utils/quotationAdditionalServices";
 
 function setQuotationValueByPath(prev, path, value) {
@@ -184,8 +185,6 @@ function summarizeVoucherAmounts(vouchers) {
     dr: paidToVendor,
   };
 }
-
-const QUICK_PACKAGE_LABEL = "Quick Package";
 
 const normalizePolicyForEditor = (value) => {
   if (Array.isArray(value)) {
@@ -779,6 +778,31 @@ function transformQuickApiToDisplay(apiData, company) {
       deluxe: `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`,
       superior: `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`,
     });
+  } else if (
+    transportationCost > 0 &&
+    (standardTotalCost > 0 || deluxeTotalCost > 0 || superiorTotalCost > 0)
+  ) {
+    const hotelStd = Math.max(0, standardTotalCost - transportationCost);
+    const hotelDel = Math.max(0, deluxeTotalCost - transportationCost);
+    const hotelSup = Math.max(0, superiorTotalCost - transportationCost);
+    if (hotelStd > 0 || hotelDel > 0 || hotelSup > 0) {
+      hotelPricingData.push({
+        destination: "Hotel cost",
+        nights: "-",
+        standard:
+          hotelStd > 0
+            ? `₹ ${Math.round(hotelStd).toLocaleString("en-IN")}`
+            : "—",
+        deluxe:
+          hotelDel > 0
+            ? `₹ ${Math.round(hotelDel).toLocaleString("en-IN")}`
+            : "—",
+        superior:
+          hotelSup > 0
+            ? `₹ ${Math.round(hotelSup).toLocaleString("en-IN")}`
+            : "—",
+      });
+    }
   }
   if (standardTotalCost > 0 || deluxeTotalCost > 0 || superiorTotalCost > 0) {
     hotelPricingData.push({
@@ -1454,14 +1478,26 @@ const QuickFinalize = () => {
     const pkg =
       currentQuotation?.packageSnapshot || currentQuotation?.packageId || {};
     const title = pkg.packageName || pkg.title || "Package";
-    const total = effectiveQuickPayableTotal(currentQuotation, services) || 0;
+    const qd = currentQuotation?.packageSnapshot?.quotationDetails || {};
+    const transport =
+      Number(qd.transportationCost ?? pkg.transportationCost ?? 0) || 0;
+    const std = Number(qd.standardCost ?? pkg.standardCost ?? 0) || 0;
+    const del = Number(qd.deluxeCost ?? pkg.deluxeCost ?? 0) || 0;
+    const sup = Number(qd.superiorCost ?? pkg.superiorCost ?? 0) || 0;
+    const localSvc = sumBillableAdditionalServices(services);
+    const apiSvc = sumBillableAdditionalServices(qd.additionalServices || []);
+    const hasLocal = Array.isArray(services) && services.length > 0;
+    const addOns = hasLocal ? localSvc : apiSvc;
+    const fmt = (n) =>
+      n > 0 ? `₹ ${Math.round(n).toLocaleString("en-IN")}` : "—";
+    const tierPayable = (tierBase) => {
+      if (!tierBase || tierBase <= 0) return 0;
+      return tierBase + transport + addOns;
+    };
     return [
-      {
-        label: QUICK_PACKAGE_LABEL,
-        hotel: String(title),
-        cost:
-          total > 0 ? `₹ ${Math.round(total).toLocaleString("en-IN")}` : "—",
-      },
+      { label: "Standard", hotel: String(title), cost: fmt(tierPayable(std)) },
+      { label: "Deluxe", hotel: String(title), cost: fmt(tierPayable(del)) },
+      { label: "Superior", hotel: String(title), cost: fmt(tierPayable(sup)) },
     ];
   }, [currentQuotation, services]);
 
