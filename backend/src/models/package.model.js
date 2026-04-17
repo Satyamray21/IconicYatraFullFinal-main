@@ -169,9 +169,10 @@ const PackageSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
-    manualTotalCost: {
+    /** Flat amount added to standard / deluxe / superior final costs (same margin for each tier) */
+    manualCostMargin: {
       type: Number,
-      default: null,
+      default: 0,
       min: 0,
     },
     totalCost: {
