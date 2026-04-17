@@ -138,7 +138,7 @@ export const createLead = asyncHandler(async (req, res) => {
   };
 
   const accommodation = {
-    hotelType: Array.isArray(hotelType) ? hotelType : [hotelType],
+    hotelType: hotelTypeToSave,
     mealPlan,
     transport,
     sharingType,
@@ -187,9 +187,7 @@ export const createLead = asyncHandler(async (req, res) => {
   const tourDetails = {
     tourType,
     tourDestination,
-    servicesRequired: Array.isArray(servicesRequired)
-      ? servicesRequired
-      : [servicesRequired],
+    servicesRequired: servicesRequiredToSave,
     members,
     pickupDrop: {
       arrivalDate,
@@ -240,14 +238,13 @@ export const viewAllLeads = asyncHandler(async (req, res) => {
   }
   catch (err) {
     console.log("Error", err.message);
-    return new ApiError(404, {}, "No lead found")
-
+    throw new ApiError(404, {}, "No lead found")
   }
 })
 //update Lead
 export const updateLead = asyncHandler(async (req, res) => {
   const { leadId } = req.params;
-  const { personalDetails, location, address, officialDetail } = req.body;
+  const { personalDetails, location, address, officialDetail, tourDetails } = req.body;
 
   if (!leadId) {
     throw new ApiError(400, "leadId is required");
@@ -309,6 +306,11 @@ export const updateLead = asyncHandler(async (req, res) => {
       ...officialDetail,
       source: sourceToSave, // override with correct source
     };
+  }
+
+  if (tourDetails) {
+    console.log("🎫 Updating tourDetails");
+    Object.assign(existingLead.tourDetails, tourDetails);
   }
 
   try {
@@ -415,18 +417,15 @@ export const deleteLead = asyncHandler(async (req, res) => {
 //view by LeadId 
 export const viewByLeadId = asyncHandler(async (req, res) => {
   const { leadId } = req.params;
-  try {
-    const lead = await Lead.findOne({ leadId });
-    if (!lead) {
-      throw new ApiError(404, "Lead not found");
-    }
-    res.status(200)
-      .json(new ApiResponse(201, lead, "Lead fetched Successfully By given Id"));
-
+  if (!leadId) {
+    throw new ApiError(400, "leadId is required");
   }
-  catch (err) {
-    console.log("Error", err.message);
+  const lead = await Lead.findOne({ leadId });
+  if (!lead) {
+    throw new ApiError(404, "Lead not found");
   }
+  res.status(200)
+    .json(new ApiResponse(200, lead, "Lead fetched successfully by given Id"));
 })
 //change in Status
 export const changeLeadStatus = asyncHandler(async (req, res) => {
