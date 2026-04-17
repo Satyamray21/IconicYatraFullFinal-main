@@ -767,17 +767,31 @@ useEffect(() => {
     };
 
     const handleAddSightseeing = (dayIndex, e) => {
-        if (e.key === "Enter" && e.target.value.trim() !== "") {
-            e.preventDefault();
-            const updatedDays = [...tourDetails.days];
-            const newSight = e.target.value.trim();
+        if (e.key !== "Enter") return;
+        const raw = typeof e.target.value === "string" ? e.target.value : "";
+        const newSight = raw.trim();
+        if (!newSight) return;
 
-            updatedDays[dayIndex].sightseeing.push(newSight);
-            updatedDays[dayIndex].selectedSightseeing.push(newSight);
+        e.preventDefault();
 
-            setTourDetails({ ...tourDetails, days: updatedDays });
-            e.target.value = "";
-        }
+        setTourDetails((prev) => {
+            if (!prev.days || dayIndex < 0 || dayIndex >= prev.days.length) return prev;
+            const updatedDays = prev.days.map((d, i) => {
+                if (i !== dayIndex) return d;
+                const prevSight = Array.isArray(d.sightseeing) ? d.sightseeing : [];
+                const prevSel = Array.isArray(d.selectedSightseeing)
+                    ? d.selectedSightseeing
+                    : [];
+                return {
+                    ...d,
+                    sightseeing: [...prevSight, newSight],
+                    selectedSightseeing: [...prevSel, newSight],
+                };
+            });
+            return { ...prev, days: updatedDays };
+        });
+
+        e.target.value = "";
     };
 
     const handleSubmit = async () => {

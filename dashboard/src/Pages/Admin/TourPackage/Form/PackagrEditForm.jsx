@@ -513,33 +513,36 @@ const PackageEditView = () => {
   };
 
   const handleAddSightseeing = (dayIndex, e) => {
-    if (
-      !e ||
-      !e.key ||
-      !pkg.days ||
-      dayIndex < 0 ||
-      dayIndex >= pkg.days.length
-    )
+    if (!e?.key || !pkg.days || dayIndex < 0 || dayIndex >= pkg.days.length) {
       return;
-
-    if (e.key === "Enter" && e.target.value?.trim() !== "") {
-      e.preventDefault();
-      const updatedDays = [...pkg.days];
-      const newSight = e.target.value.trim();
-
-      if (!updatedDays[dayIndex].sightseeing) {
-        updatedDays[dayIndex].sightseeing = [];
-      }
-      if (!updatedDays[dayIndex].selectedSightseeing) {
-        updatedDays[dayIndex].selectedSightseeing = [];
-      }
-
-      updatedDays[dayIndex].sightseeing.push(newSight);
-      updatedDays[dayIndex].selectedSightseeing.push(newSight);
-
-      setPkg({ ...pkg, days: updatedDays });
-      e.target.value = "";
     }
+
+    if (e.key !== "Enter") return;
+
+    const raw = typeof e.target.value === "string" ? e.target.value : "";
+    const newSight = raw.trim();
+    if (!newSight) return;
+
+    e.preventDefault();
+
+    setPkg((prev) => {
+      if (!prev.days || dayIndex < 0 || dayIndex >= prev.days.length) return prev;
+      const updatedDays = prev.days.map((d, i) => {
+        if (i !== dayIndex) return d;
+        const prevSight = Array.isArray(d.sightseeing) ? d.sightseeing : [];
+        const prevSel = Array.isArray(d.selectedSightseeing)
+          ? d.selectedSightseeing
+          : [];
+        return {
+          ...d,
+          sightseeing: [...prevSight, newSight],
+          selectedSightseeing: [...prevSel, newSight],
+        };
+      });
+      return { ...prev, days: updatedDays };
+    });
+
+    e.target.value = "";
   };
 
   // NEW: Handler for destination nights change
@@ -1509,7 +1512,7 @@ const PackageEditView = () => {
                           {Array.isArray(day?.selectedSightseeing) &&
                             day.selectedSightseeing.map((s, i) => (
                               <Chip
-                                key={i}
+                                key={`${index}-${i}-${String(s)}`}
                                 label={s}
                                 onDelete={() => {
                                   const newSelected = [
