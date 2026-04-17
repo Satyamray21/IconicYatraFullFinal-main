@@ -85,7 +85,7 @@ const createInitialPackageState = () => ({
   numberOfRooms: 1,
   transportationCostPerDay: 0,
   transportationDays: 0,
-  manualTotalCost: null,
+  manualCostMargin: 0,
   mealPlan: {
     planType: "",
     description: "",
@@ -190,16 +190,18 @@ const PackageEditView = () => {
         };
 
         // Initialize days safely
-        const initializedDays = (safeCurrent.days || []).map((d) => ({
-          title: d?.title || "",
-          notes: d?.notes || "",
-          aboutCity: d?.aboutCity || "",
-          dayImage: d?.dayImage || "",
-          sightseeing: Array.isArray(d?.sightseeing) ? d.sightseeing : [],
-          selectedSightseeing: Array.isArray(d?.selectedSightseeing)
-            ? d.selectedSightseeing
-            : [],
-        }));
+        const initializedDays = (safeCurrent.days || []).map((d) => {
+          const sight = Array.isArray(d?.sightseeing) ? d.sightseeing : [];
+          const sel = Array.isArray(d?.selectedSightseeing) ? d.selectedSightseeing : [];
+          return {
+            title: d?.title || "",
+            notes: d?.notes || "",
+            aboutCity: d?.aboutCity || "",
+            dayImage: d?.dayImage || "",
+            sightseeing: sight,
+            selectedSightseeing: sel.length ? sel : [...sight],
+          };
+        });
 
         // Initialize stayLocations safely
         const initializedStayLocations = (safeCurrent.stayLocations || []).map(
@@ -279,11 +281,7 @@ const PackageEditView = () => {
             Number(safeCurrent.transportationDays) ||
             safeCurrent.days?.length ||
             0,
-          manualTotalCost:
-            safeCurrent.manualTotalCost === null ||
-            safeCurrent.manualTotalCost === undefined
-              ? null
-              : Number(safeCurrent.manualTotalCost),
+          manualCostMargin: Number(safeCurrent.manualCostMargin) || 0,
           mealPlan: safeCurrent.mealPlan || { planType: "", description: "" },
           destinationNights: initializedDestinationNights,
 
@@ -474,9 +472,11 @@ const PackageEditView = () => {
 
     const updated = [...pkg.days];
     if (field === "selectedSightseeing") {
+      const arr = Array.isArray(value) ? value : [];
       updated[index] = {
         ...updated[index],
-        [field]: Array.isArray(value) ? value : [],
+        selectedSightseeing: arr,
+        sightseeing: arr,
       };
     } else {
       updated[index] = {
@@ -800,12 +800,7 @@ const PackageEditView = () => {
         finalStandardCost,
         finalDeluxeCost,
         finalSuperiorCost,
-        manualTotalCost:
-          pkg.manualTotalCost === null ||
-          pkg.manualTotalCost === undefined ||
-          pkg.manualTotalCost === ""
-            ? null
-            : Number(pkg.manualTotalCost),
+        manualCostMargin: Number(pkg.manualCostMargin) || 0,
         totalCost: finalTotalCost,
         mealPlan: pkg.mealPlan || { planType: "", description: "" },
         destinationNights: validatedDestinationNights,
@@ -905,17 +900,13 @@ const PackageEditView = () => {
     (Number(pkg.transportationCostPerDay) || 0) *
     (Number(pkg.transportationDays) || 0);
 
+  const margin = Number(pkg.manualCostMargin) || 0;
   const calculatedTotalCost = hotelTotalCost + transportationTotalCost;
-  const finalStandardCost = standardHotelTotalCost + transportationTotalCost;
-  const finalDeluxeCost = deluxeHotelTotalCost + transportationTotalCost;
-  const finalSuperiorCost = superiorHotelTotalCost + transportationTotalCost;
+  const finalStandardCost = standardHotelTotalCost + transportationTotalCost + margin;
+  const finalDeluxeCost = deluxeHotelTotalCost + transportationTotalCost + margin;
+  const finalSuperiorCost = superiorHotelTotalCost + transportationTotalCost + margin;
 
-  const finalTotalCost =
-    pkg.manualTotalCost === null ||
-    pkg.manualTotalCost === undefined ||
-    pkg.manualTotalCost === ""
-      ? calculatedTotalCost
-      : Number(pkg.manualTotalCost) || 0;
+  const finalTotalCost = calculatedTotalCost + margin;
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -2036,19 +2027,17 @@ const PackageEditView = () => {
                   <TextField
                     fullWidth
                     type="number"
-                    label="Manual Final Total (Optional)"
-                    value={
-                      pkg.manualTotalCost === null ? "" : pkg.manualTotalCost
-                    }
+                    label="Margin (add to each tier)"
+                    value={Number(pkg.manualCostMargin) === 0 ? "" : pkg.manualCostMargin}
                     onChange={(e) =>
                       setPkg({
                         ...pkg,
-                        manualTotalCost:
-                          e.target.value === "" ? null : Number(e.target.value),
+                        manualCostMargin:
+                          e.target.value === "" ? 0 : Number(e.target.value),
                       })
                     }
                     inputProps={{ min: 0 }}
-                    helperText="Leave empty to use calculated total"
+                    helperText="Added to Standard, Deluxe & Superior costs"
                   />
                 </Grid>
                 <Grid size={{ xs: 12 }}>

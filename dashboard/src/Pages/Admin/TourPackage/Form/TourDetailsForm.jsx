@@ -194,10 +194,7 @@ useEffect(() => {
         numberOfRooms: Number(initialData?.numberOfRooms) || 1,
         transportationCostPerDay: Number(initialData?.transportationCostPerDay) || 0,
         transportationDays: Number(initialData?.transportationDays) || (initialData?.days?.length || 0),
-        manualTotalCost:
-            initialData?.manualTotalCost === null || initialData?.manualTotalCost === undefined
-                ? null
-                : Number(initialData?.manualTotalCost),
+        manualCostMargin: Number(initialData?.manualCostMargin) || 0,
         mealPlan: {
             planType: initialData?.mealPlan?.planType || "",
             description: initialData?.mealPlan?.description || "",
@@ -290,17 +287,19 @@ useEffect(() => {
         return hotelTotalCost + transportationTotalCost;
     }, [hotelTotalCost, transportationTotalCost]);
 
+    const costMargin = Number(tourDetails.manualCostMargin) || 0;
+
     const finalStandardCost = useMemo(
-        () => standardHotelTotalCost + transportationTotalCost,
-        [standardHotelTotalCost, transportationTotalCost]
+        () => standardHotelTotalCost + transportationTotalCost + costMargin,
+        [standardHotelTotalCost, transportationTotalCost, costMargin]
     );
     const finalDeluxeCost = useMemo(
-        () => deluxeHotelTotalCost + transportationTotalCost,
-        [deluxeHotelTotalCost, transportationTotalCost]
+        () => deluxeHotelTotalCost + transportationTotalCost + costMargin,
+        [deluxeHotelTotalCost, transportationTotalCost, costMargin]
     );
     const finalSuperiorCost = useMemo(
-        () => superiorHotelTotalCost + transportationTotalCost,
-        [superiorHotelTotalCost, transportationTotalCost]
+        () => superiorHotelTotalCost + transportationTotalCost + costMargin,
+        [superiorHotelTotalCost, transportationTotalCost, costMargin]
     );
 
     useEffect(() => {
@@ -317,12 +316,9 @@ useEffect(() => {
     }, [tourDetails.days]);
 
     const finalTotalCost = useMemo(() => {
-        const manual = tourDetails.manualTotalCost;
-        if (manual === null || manual === undefined || manual === "") {
-            return calculatedTotalCost;
-        }
-        return Number(manual) || 0;
-    }, [tourDetails.manualTotalCost, calculatedTotalCost]);
+        const margin = Number(tourDetails.manualCostMargin) || 0;
+        return calculatedTotalCost + margin;
+    }, [tourDetails.manualCostMargin, calculatedTotalCost]);
     const selectedCities = useMemo(() => {
         return packageData?.stayLocations?.map(location => location.city) || [];
     }, [packageData]);
@@ -733,7 +729,16 @@ useEffect(() => {
     // Rest of your handlers remain the same
     const handleDayChange = (index, field, value) => {
         const updatedDays = [...tourDetails.days];
-        updatedDays[index][field] = value;
+        if (field === "selectedSightseeing") {
+            const arr = Array.isArray(value) ? value : [];
+            updatedDays[index] = {
+                ...updatedDays[index],
+                selectedSightseeing: arr,
+                sightseeing: arr,
+            };
+        } else {
+            updatedDays[index][field] = value;
+        }
         setTourDetails({ ...tourDetails, days: updatedDays });
     };
 
@@ -778,6 +783,29 @@ useEffect(() => {
     const handleSubmit = async () => {
         let textUpdateSuccess = false;
 
+        let bannerImageUrl =
+            typeof tourDetails.bannerImage === "string" ? tourDetails.bannerImage : "";
+
+        if (tourDetails.bannerImage instanceof File) {
+            try {
+                const formData = new FormData();
+                formData.append("banner", tourDetails.bannerImage);
+                const res = await axios.post(`/packages/${packageId}/banner`, formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                });
+                bannerImageUrl =
+                    res.data?.package?.bannerImage ||
+                    res.data?.bannerImage ||
+                    bannerImageUrl;
+            } catch (err) {
+                console.warn("⚠️ Banner upload failed:", err.response?.data || err.message);
+                alert(
+                    "Banner image failed to upload. Please try again or upload from edit screen. " +
+                        (err.response?.data?.message || err.message || "")
+                );
+            }
+        }
+
         try {
             const payload = {
                 arrivalCity: tourDetails.arrivalCity,
@@ -820,10 +848,7 @@ useEffect(() => {
                 finalStandardCost,
                 finalDeluxeCost,
                 finalSuperiorCost,
-                manualTotalCost:
-                    tourDetails.manualTotalCost === null || tourDetails.manualTotalCost === undefined || tourDetails.manualTotalCost === ""
-                        ? null
-                        : Number(tourDetails.manualTotalCost),
+                manualCostMargin: Number(tourDetails.manualCostMargin) || 0,
                 totalCost: finalTotalCost,
                 policy: {
                     inclusionPolicy: policyInputs.inclusionPolicy ? [policyInputs.inclusionPolicy] : [],
@@ -835,6 +860,15 @@ useEffect(() => {
                 status: "active"
             };
 
+            if (bannerImageUrl) {
+                payload.bannerImage = bannerImageUrl;
+            } else if (
+                typeof tourDetails.bannerImage === "string" &&
+                tourDetails.bannerImage
+            ) {
+                payload.bannerImage = tourDetails.bannerImage;
+            }
+
             await dispatch(updatePackageTourDetails({ id: packageId, data: payload })).unwrap();
             await dispatch(fetchPackages()).unwrap();
 
@@ -842,18 +876,6 @@ useEffect(() => {
         } catch (err) {
             console.error("❌ Failed to update textual details:", err.response?.data || err.message);
             alert("❌ Failed to save textual tour details");
-        }
-
-        if (tourDetails.bannerImage instanceof File) {
-            try {
-                const formData = new FormData();
-                formData.append("banner", tourDetails.bannerImage);
-                await axios.post(`/packages/${packageId}/banner`, formData, {
-                    headers: { "Content-Type": "multipart/form-data" },
-                });
-            } catch (err) {
-                console.warn("⚠️ Banner upload failed:", err.response?.data || err.message);
-            }
         }
 
         for (let i = 0; i < tourDetails.days.length; i++) {
@@ -1584,16 +1606,16 @@ useEffect(() => {
                         <TextField
                             fullWidth
                             type="number"
-                            label="Manual Final Total (Optional)"
-                            value={tourDetails.manualTotalCost === null ? "" : tourDetails.manualTotalCost}
+                            label="Margin (add to each tier)"
+                            value={Number(tourDetails.manualCostMargin) === 0 ? "" : tourDetails.manualCostMargin}
                             onChange={(e) =>
                                 setTourDetails({
                                     ...tourDetails,
-                                    manualTotalCost: e.target.value === "" ? null : Number(e.target.value),
+                                    manualCostMargin: e.target.value === "" ? 0 : Number(e.target.value),
                                 })
                             }
                             inputProps={{ min: 0 }}
-                            helperText="Leave empty to use calculated total"
+                            helperText="Added to Standard, Deluxe & Superior costs"
                         />
                     </Grid>
                     <Grid size={{ xs: 12 }}>

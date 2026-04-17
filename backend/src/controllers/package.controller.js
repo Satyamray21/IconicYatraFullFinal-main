@@ -158,17 +158,12 @@ function normalizePricing(data) {
 
     const transportationTotalCost = transportationCostPerDay * transportationDays;
     const calculatedTotalCost = hotelTotalCost + transportationTotalCost;
-    const hasManualTotalCost =
-        data.manualTotalCost !== null &&
-        data.manualTotalCost !== undefined &&
-        data.manualTotalCost !== "";
-    const manualTotalCost = hasManualTotalCost
-        ? Math.max(0, Number(data.manualTotalCost) || 0)
-        : null;
+    const margin = Math.max(0, Number(data.manualCostMargin) || 0);
+    data.manualCostMargin = margin;
 
-    const finalStandardCost = categoryTotals.standardHotelTotalCost + transportationTotalCost;
-    const finalDeluxeCost = categoryTotals.deluxeHotelTotalCost + transportationTotalCost;
-    const finalSuperiorCost = categoryTotals.superiorHotelTotalCost + transportationTotalCost;
+    const finalStandardCost = categoryTotals.standardHotelTotalCost + transportationTotalCost + margin;
+    const finalDeluxeCost = categoryTotals.deluxeHotelTotalCost + transportationTotalCost + margin;
+    const finalSuperiorCost = categoryTotals.superiorHotelTotalCost + transportationTotalCost + margin;
 
     data.numberOfRooms = numberOfRooms;
     data.transportationCostPerDay = transportationCostPerDay;
@@ -182,8 +177,7 @@ function normalizePricing(data) {
     data.finalStandardCost = finalStandardCost;
     data.finalDeluxeCost = finalDeluxeCost;
     data.finalSuperiorCost = finalSuperiorCost;
-    data.manualTotalCost = manualTotalCost;
-    data.totalCost = manualTotalCost !== null ? manualTotalCost : calculatedTotalCost;
+    data.totalCost = calculatedTotalCost + margin;
 
     return data;
 }
@@ -434,6 +428,11 @@ export const createPackage = asyncHandler(async (req, res) => {
 // ----------------------
 export const updateStep1 = asyncHandler(async (req, res) => {
     const { id } = req.params;
+    const existing = await Package.findById(id);
+    if (!existing) {
+        return res.status(404).json({ message: "Package not found" });
+    }
+
     const data = { ...req.body };
 
     // ✅ VALIDATE TOUR TYPE
@@ -488,6 +487,12 @@ export const updateStep1 = asyncHandler(async (req, res) => {
      if (data.perPerson !== undefined) {
         data.perPerson = parseInt(data.perPerson) || 1;
     }
+    if (Array.isArray(data.days)) {
+        data.days = normalizeDays(data.days);
+    }
+    if (data.manualCostMargin === undefined || data.manualCostMargin === null) {
+        data.manualCostMargin = existing.manualCostMargin ?? 0;
+    }
     // Normalize data
     data.mealPlan = normalizeMealPlan(data.mealPlan);
     data.destinationNights = normalizeDestinationNights(data.destinationNights);
@@ -540,6 +545,9 @@ export const updateTourDetails = asyncHandler(async (req, res) => {
         data.destinationNights = normalizeDestinationNights(data.destinationNights);
     } else {
         data.destinationNights = existing.destinationNights || [];
+    }
+    if (data.manualCostMargin === undefined || data.manualCostMargin === null) {
+        data.manualCostMargin = existing.manualCostMargin ?? 0;
     }
     normalizePricing(data);
 
