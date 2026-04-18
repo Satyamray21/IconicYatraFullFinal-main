@@ -10,6 +10,7 @@ import Bank from "../../models/bankDetails.js";
 import GlobalSettings from "../../models/globalSettings.model.js";
 import {
   buildCustomQuotationNormalEmail,
+  buildCustomQuotationPdfPreviewEmail,
   buildCustomQuotationBookingEmail,
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
@@ -80,6 +81,7 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
       const quotation = await CustomQuotation.create({
         ...req.body,
         quotationId,
+        currentStep: 1,
       });
 
       return res
@@ -472,6 +474,11 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
       throw new ApiError(400, `Invalid step number: ${stepNumber}`);
     }
 
+    quotation.currentStep = Math.max(
+      Number(quotation.currentStep) || 1,
+      stepNumber,
+    );
+
     await quotation.save();
     console.log("✅ Step", stepNumber, "updated successfully!");
 
@@ -510,12 +517,15 @@ const resolveMailAuth = (senderAccount) => {
   const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
 
   const user = useSecondary
-    ? process.env.EMAIL_USER2
-    : process.env.EMAIL_USER;
+    ? process.env.gmail2 || process.env.EMAIL_USER2 || process.env.gmail || process.env.EMAIL_USER
+    : process.env.gmail || process.env.EMAIL_USER;
 
   const pass = useSecondary
-    ? process.env.EMAIL_PASS2
-    : process.env.EMAIL_PASS;
+    ? process.env.app_pass2 ||
+      process.env.EMAIL_PASS2 ||
+      process.env.app_pass ||
+      process.env.EMAIL_PASS
+    : process.env.app_pass || process.env.EMAIL_PASS;
 
   return { user, pass };
 };
@@ -602,6 +612,10 @@ const loadEmailMeta = async (company) => {
         accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
       }).lean()
     : [];
+  const pickHttp = (v) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return /^https?:\/\//i.test(s) ? s : "";
+  };
 
   return {
     companyName: company?.companyName || "Iconic Travel",
@@ -612,6 +626,8 @@ const loadEmailMeta = async (company) => {
     globalPaymentPolicy: globalSettings?.paymentPolicy || "",
     globalTermsAndConditions: globalSettings?.termsAndConditions || "",
     companyTermsConditions: company?.termsConditions || "",
+    companyCancellationPolicyUrl: pickHttp(company?.cancellationPolicy),
+    companyPaymentLink: pickHttp(company?.paymentLink),
     bankDetails,
   };
 };
@@ -699,6 +715,8 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     senderAccount,
     companyId,
     companyName,
+    pdfAttachment,
+    previewPdfMode = false,
   } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -726,10 +744,17 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
           customText.normal || {},
           meta,
         );
+  const previewPdfBody = buildCustomQuotationPdfPreviewEmail(
+    quotation,
+    customText.normal || {},
+    meta,
+  );
   const body =
     type === "booking"
       ? generatedBody
-      : String(bodyHtml || "").trim() || generatedBody;
+      : previewPdfMode
+        ? previewPdfBody
+        : String(bodyHtml || "").trim() || generatedBody;
 
   const finalSubject =
     subject ||
@@ -755,6 +780,21 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     },
   });
 
+  const providedPdfAttachment =
+    pdfAttachment &&
+    typeof pdfAttachment === "object" &&
+    String(pdfAttachment.contentBase64 || "").trim()
+      ? {
+          filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+          content: Buffer.from(
+            String(pdfAttachment.contentBase64).trim(),
+            "base64",
+          ),
+          contentType:
+            String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+        }
+      : null;
+
   try {
     await transporter.sendMail({
       from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
@@ -764,6 +804,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
       subject: finalSubject,
       html: body,
       text: body.replace(/<[^>]*>/g, ""), // fallback
+      attachments: providedPdfAttachment ? [providedPdfAttachment] : [],
     });
   } catch (error) {
     console.error("Mail Error:", error);

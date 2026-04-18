@@ -8,10 +8,12 @@ import Bank from "../../models/bankDetails.js";
 import {
   adaptQuickQuotationForCustomMailer,
   buildCustomQuotationNormalEmail,
+  buildCustomQuotationPdfPreviewEmail,
   buildCustomQuotationBookingEmail,
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
 import nodemailer from "nodemailer";
+import PDFDocument from "pdfkit";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
@@ -47,7 +49,9 @@ async function resolveQuickQuotationMongoId(raw) {
   if (!m) return null;
   const suffix = m[1].toLowerCase();
   const rows = await QuickQuotation.aggregate([
-    { $project: { _id: 1, suf: { $substrCP: [{ $toString: "$_id" }, 18, 6] } } },
+    {
+      $project: { _id: 1, suf: { $substrCP: [{ $toString: "$_id" }, 18, 6] } },
+    },
     { $match: { $expr: { $eq: [{ $toLower: "$suf" }, suffix] } } },
     { $limit: 2 },
   ]);
@@ -55,7 +59,7 @@ async function resolveQuickQuotationMongoId(raw) {
   if (rows.length > 1) {
     throw new ApiError(
       400,
-      "Multiple quotations match this short id; use the full quotation id from the list."
+      "Multiple quotations match this short id; use the full quotation id from the list.",
     );
   }
   return String(rows[0]._id);
@@ -75,7 +79,10 @@ function mergeQuotationDetails(prev = {}, next = {}) {
     out.rooms = { ...(prev.rooms || {}), ...next.rooms };
   }
   if (next.companyMargin && typeof next.companyMargin === "object") {
-    out.companyMargin = { ...(prev.companyMargin || {}), ...next.companyMargin };
+    out.companyMargin = {
+      ...(prev.companyMargin || {}),
+      ...next.companyMargin,
+    };
   }
   if (next.taxes && typeof next.taxes === "object") {
     out.taxes = { ...(prev.taxes || {}), ...next.taxes };
@@ -92,7 +99,7 @@ function mergePackageSnapshot(prev = {}, next = {}) {
   if (next.quotationDetails && typeof next.quotationDetails === "object") {
     out.quotationDetails = mergeQuotationDetails(
       prev.quotationDetails || {},
-      next.quotationDetails
+      next.quotationDetails,
     );
   }
   return out;
@@ -103,7 +110,33 @@ function mergePackageSnapshot(prev = {}, next = {}) {
 // ==========================
 export const createQuickQuotation = async (req, res) => {
   try {
-    const { customerName, email, phone, packageId, adults, children, kids, infants, message, totalCost, transportation, pickupPoint, dropPoint } = req.body;
+    const {
+      customerName,
+      email,
+      phone,
+      clientLocation,
+      packageId,
+      adults,
+      children,
+      kids,
+      infants,
+      message,
+      totalCost,
+      transportation,
+      pickupPoint,
+      dropPoint,
+      arrivalDate,
+      departureDate,
+      numberOfPax,
+      noOfRooms,
+      transportationCost,
+      hotelTotalCost,
+      standardCost,
+      deluxeCost,
+      superiorCost,
+      mealPlan,
+      packageSnapshot: packageSnapshotInput,
+    } = req.body;
 
     if (!customerName || !email || !packageId) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -112,10 +145,41 @@ export const createQuickQuotation = async (req, res) => {
     const pkg = await Package.findById(packageId).lean();
     if (!pkg) return res.status(404).json({ message: "Package not found" });
 
+    const packageSnapshot = {
+      ...pkg,
+      ...(packageSnapshotInput && typeof packageSnapshotInput === "object"
+        ? packageSnapshotInput
+        : {}),
+      clientLocation:
+        (clientLocation && String(clientLocation).trim()) ||
+        packageSnapshotInput?.clientLocation ||
+        "",
+      quotationDetails: {
+        ...(pkg?.quotationDetails && typeof pkg.quotationDetails === "object"
+          ? pkg.quotationDetails
+          : {}),
+        arrivalDate: arrivalDate || "",
+        departureDate: departureDate || "",
+        numberOfPax: Number(numberOfPax) || 0,
+        noOfRooms: Number(noOfRooms) || 0,
+        transportationCost: Number(transportationCost) || 0,
+        hotelTotalCost: Number(hotelTotalCost) || 0,
+        standardCost: Number(standardCost) || 0,
+        deluxeCost: Number(deluxeCost) || 0,
+        superiorCost: Number(superiorCost) || 0,
+        mealPlan:
+          mealPlan ||
+          packageSnapshotInput?.mealPlan ||
+          pkg?.mealPlan?.planType ||
+          "",
+      },
+    };
+
     const newQuotation = await QuickQuotation.create({
       customerName,
       email,
       phone,
+      clientLocation: String(clientLocation || "").trim(),
       packageId,
       adults,
       children,
@@ -129,7 +193,7 @@ export const createQuickQuotation = async (req, res) => {
       transportation: transportation || pkg.transportation || "",
       totalCost: totalCost || 0,
 
-      packageSnapshot: pkg,
+      packageSnapshot,
       policy: pkg.policy,
     });
 
@@ -167,9 +231,8 @@ export const getQuickQuotationById = async (req, res) => {
     if (!mongoId)
       return res.status(404).json({ message: "Quotation not found" });
 
-    const quotation = await QuickQuotation.findById(mongoId).populate(
-      "packageId",
-    );
+    const quotation =
+      await QuickQuotation.findById(mongoId).populate("packageId");
 
     if (!quotation)
       return res.status(404).json({ message: "Quotation not found" });
@@ -202,7 +265,7 @@ export const updateQuickQuotation = async (req, res) => {
     if (body.packageSnapshot && typeof body.packageSnapshot === "object") {
       body.packageSnapshot = mergePackageSnapshot(
         existing.packageSnapshot || {},
-        body.packageSnapshot
+        body.packageSnapshot,
       );
     }
     if (body.policy && typeof body.policy === "object") {
@@ -262,7 +325,7 @@ export const uploadQuickQuotationBanner = async (req, res) => {
     const updated = await QuickQuotation.findByIdAndUpdate(
       mongoId,
       { packageSnapshot: mergedSnap },
-      { new: true }
+      { new: true },
     );
 
     res
@@ -330,14 +393,14 @@ export const sendQuotationMail = async (
   customerName,
   pkg,
   quotation,
-  company
+  company,
 ) => {
   try {
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: company.email,           // <-- dynamic email
-        pass: company.appPassword,     // <-- dynamic app password
+        user: company.email, // <-- dynamic email
+        pass: company.appPassword, // <-- dynamic app password
       },
     });
 
@@ -345,22 +408,22 @@ export const sendQuotationMail = async (
       customerName,
       pkg,
       quotation,
-      company
+      company,
     );
 
     await transporter.sendMail({
-      from: `"${company.companyName}" <${company.email}>`,  // dynamic sender
+      from: `"${company.companyName}" <${company.email}>`, // dynamic sender
       to: toEmail,
       subject: `Your Quotation for ${pkg?.title || pkg?.packageName}`,
       html: htmlContent,
       attachments: company.logoCid
         ? [
-          {
-            filename: company.logoFilename,
-            path: company.logoPath,
-            cid: company.logoCid,
-          },
-        ]
+            {
+              filename: company.logoFilename,
+              path: company.logoPath,
+              cid: company.logoCid,
+            },
+          ]
         : [],
     });
 
@@ -369,7 +432,6 @@ export const sendQuotationMail = async (
     return { success: false, message: err.message };
   }
 };
-
 
 // ==========================
 // Send Quotation Mail (Manual Trigger)
@@ -394,7 +456,10 @@ const resolveMailAuth = (senderAccount) => {
     ? process.env.gmail2 || process.env.gmail
     : process.env.gmail;
   const pass = useSecondary
-    ? process.env.app_pass2 || process.env.EMAIL_PASS2 || process.env.app_pass || process.env.EMAIL_PASS
+    ? process.env.app_pass2 ||
+      process.env.EMAIL_PASS2 ||
+      process.env.app_pass ||
+      process.env.EMAIL_PASS
     : process.env.app_pass || process.env.EMAIL_PASS;
   return { user, pass };
 };
@@ -403,8 +468,7 @@ const sumReceivedFromClient = (vouchers) => {
   let receivedFromClient = 0;
   for (const v of vouchers || []) {
     const n = Number(v?.amount) || 0;
-    const isReceive =
-      v?.drCr === "Cr" || v?.paymentType === "Receive Voucher";
+    const isReceive = v?.drCr === "Cr" || v?.paymentType === "Receive Voucher";
     if (isReceive) receivedFromClient += n;
   }
   return receivedFromClient;
@@ -412,9 +476,7 @@ const sumReceivedFromClient = (vouchers) => {
 
 const attachCompanyLogoFields = (company) => {
   const c = { ...company };
-  c.logoPath = c.logo
-    ? path.join(__dirname, "../../../public/", c.logo)
-    : null;
+  c.logoPath = c.logo ? path.join(__dirname, "../../../public/", c.logo) : null;
   c.logoCid = c.logo ? "companyLogo" : null;
   c.logoFilename = c.logo || null;
   c.appPassword =
@@ -453,6 +515,94 @@ const loadEmailMetaQuick = async (company) => {
   };
 };
 
+const stripHtml = (html = "") =>
+  String(html || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+const extractIntroSummaryForPdf = (text = "") => {
+  const normalized = String(text || "").replace(/\r/g, "");
+  const strictMatch = normalized.match(
+    /(Dear[\s\S]*?SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only\.\.)/i,
+  );
+  if (strictMatch?.[1]) {
+    return strictMatch[1].trim();
+  }
+
+  const lines = normalized
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (!lines.length) return "";
+  const detailsIdx = lines.findIndex((l) =>
+    l.toLowerCase().includes("details of tour package"),
+  );
+  if (detailsIdx > 0) return lines.slice(0, detailsIdx).join("\n\n").trim();
+  return lines.slice(0, 24).join("\n\n").trim();
+};
+
+const buildPdfAttachment = async ({ subject, htmlBody, quotationRef }) => {
+  const fullText = stripHtml(htmlBody);
+  const text = extractIntroSummaryForPdf(fullText) || fullText;
+  const safeRef = String(quotationRef || "quick_quotation").replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_",
+  );
+  const filename = `${safeRef}_quotation.pdf`;
+
+  return await new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({
+        size: "A4",
+        margin: 40,
+        info: {
+          Title: subject || "Quick Quotation",
+          Author: "Iconic Yatra",
+        },
+      });
+      const chunks = [];
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => {
+        resolve({
+          filename,
+          content: Buffer.concat(chunks),
+          contentType: "application/pdf",
+        });
+      });
+      doc.on("error", reject);
+
+      doc.fontSize(14).text(subject || "Quick Quotation", { align: "left" });
+      doc.moveDown(0.8);
+      doc
+        .fontSize(10)
+        .fillColor("#666666")
+        .text(`Reference: ${quotationRef || "-"}`);
+      doc.moveDown(1);
+      doc
+        .fillColor("#000000")
+        .fontSize(11)
+        .text(text || "No content available", {
+          align: "left",
+          lineGap: 3,
+        });
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+};
+
 const readBookingOverridesFromRequest = (reqBody = {}) => {
   const customText = reqBody?.customText || {};
   const booking = customText?.booking || {};
@@ -466,14 +616,18 @@ const readBookingOverridesFromRequest = (reqBody = {}) => {
     ...(customText?.nextPayableAmount !== undefined
       ? { nextPayableAmount: customText.nextPayableAmount }
       : {}),
-    ...(customText?.dueDate !== undefined ? { dueDate: customText.dueDate } : {}),
+    ...(customText?.dueDate !== undefined
+      ? { dueDate: customText.dueDate }
+      : {}),
     ...(customText?.paymentDueDate !== undefined
       ? { dueDate: customText.paymentDueDate }
       : {}),
     ...(customText?.receivedAmount !== undefined
       ? { receivedAmount: customText.receivedAmount }
       : {}),
-    ...(customText?.dueAmount !== undefined ? { dueAmount: customText.dueAmount } : {}),
+    ...(customText?.dueAmount !== undefined
+      ? { dueAmount: customText.dueAmount }
+      : {}),
     ...(topLevel.nextPayableAmount !== undefined
       ? { nextPayableAmount: topLevel.nextPayableAmount }
       : {}),
@@ -481,7 +635,9 @@ const readBookingOverridesFromRequest = (reqBody = {}) => {
     ...(topLevel.receivedAmount !== undefined
       ? { receivedAmount: topLevel.receivedAmount }
       : {}),
-    ...(topLevel.dueAmount !== undefined ? { dueAmount: topLevel.dueAmount } : {}),
+    ...(topLevel.dueAmount !== undefined
+      ? { dueAmount: topLevel.dueAmount }
+      : {}),
     ...booking,
   };
 };
@@ -507,7 +663,9 @@ export const previewQuickQuotationMail = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const mongoId = await resolveQuickQuotationMongoId(id);
   if (!mongoId) throw new ApiError(404, "Quotation not found");
-  const quotation = await QuickQuotation.findById(mongoId).populate("packageId").lean();
+  const quotation = await QuickQuotation.findById(mongoId)
+    .populate("packageId")
+    .lean();
   if (!quotation) throw new ApiError(404, "Quotation not found");
 
   const selectedCompany = await resolveCompanyForEmail({
@@ -549,8 +707,8 @@ export const previewQuickQuotationMail = asyncHandler(async (req, res) => {
           body: bookingBody,
         },
       },
-      "Quick quotation email preview generated"
-    )
+      "Quick quotation email preview generated",
+    ),
   );
 });
 
@@ -568,16 +726,23 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
     senderAccount,
     companyId,
     companyName,
+    pdfAttachment,
+    previewPdfMode = false,
   } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
     throw new ApiError(400, "Receiver email is required");
   }
 
-  const quotation = await QuickQuotation.findById(mongoId).populate("packageId").lean();
+  const quotation = await QuickQuotation.findById(mongoId)
+    .populate("packageId")
+    .lean();
   if (!quotation) throw new ApiError(404, "Quotation not found");
 
-  const selectedCompany = await resolveCompanyForEmail({ companyId, companyName });
+  const selectedCompany = await resolveCompanyForEmail({
+    companyId,
+    companyName,
+  });
   if (!selectedCompany) throw new ApiError(400, "Company not found");
 
   const shaped = adaptQuickQuotationForCustomMailer(quotation);
@@ -594,10 +759,17 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
           req.body?.customText?.normal || {},
           meta,
         );
+  const previewPdfBody = buildCustomQuotationPdfPreviewEmail(
+    shaped,
+    req.body?.customText?.normal || {},
+    meta,
+  );
   const body =
     type === "booking"
       ? generatedBody
-      : String(bodyHtml || "").trim() || generatedBody;
+      : previewPdfMode
+        ? previewPdfBody
+        : String(bodyHtml || "").trim() || generatedBody;
 
   const shortRef = `QT-${mongoId.slice(-6)}`;
   const guestName = quotation.customerName || "Guest";
@@ -611,7 +783,7 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
   if (!auth.user || !auth.pass) {
     throw new ApiError(
       500,
-      "Sender email credentials are not configured for selected account"
+      "Sender email credentials are not configured for selected account",
     );
   }
 
@@ -622,7 +794,29 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
     auth: { user: auth.user, pass: auth.pass },
   });
 
+  const providedPdfAttachment =
+    pdfAttachment &&
+    typeof pdfAttachment === "object" &&
+    String(pdfAttachment.contentBase64 || "").trim()
+      ? {
+          filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+          content: Buffer.from(
+            String(pdfAttachment.contentBase64).trim(),
+            "base64",
+          ),
+          contentType:
+            String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+        }
+      : null;
+
   try {
+    const generatedPdfAttachment = providedPdfAttachment
+      ? null
+      : await buildPdfAttachment({
+          subject: finalSubject,
+          htmlBody: body,
+          quotationRef: `QT-${mongoId.slice(-6)}`,
+        });
     await transporter.sendMail({
       from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
       to,
@@ -631,19 +825,28 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
       subject: finalSubject,
       html: body,
       text: body.replace(/<[^>]*>/g, ""),
+      attachments: [providedPdfAttachment || generatedPdfAttachment].filter(
+        Boolean,
+      ),
     });
   } catch (error) {
     console.error("Quick QT mail error:", error);
     throw new ApiError(500, "Failed to send email");
   }
 
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      { quotationId: mongoId, type, senderAccount: senderAccount || "gmail1" },
-      "Mail sent successfully"
-    )
-  );
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          quotationId: mongoId,
+          type,
+          senderAccount: senderAccount || "gmail1",
+        },
+        "Mail sent successfully",
+      ),
+    );
 });
 
 export const finalizeQuickQuotation = asyncHandler(async (req, res) => {
@@ -661,9 +864,9 @@ export const finalizeQuickQuotation = asyncHandler(async (req, res) => {
   }
   await quotation.save();
 
-  return res.status(200).json(
-    new ApiResponse(200, quotation, "Quotation finalized successfully")
-  );
+  return res
+    .status(200)
+    .json(new ApiResponse(200, quotation, "Quotation finalized successfully"));
 });
 
 export const sendQuickQuotationMail = async (req, res) => {
@@ -675,7 +878,8 @@ export const sendQuickQuotationMail = async (req, res) => {
     if (!mongoId)
       return res.status(404).json({ message: "Quotation not found" });
 
-    const quotation = await QuickQuotation.findById(mongoId).populate("packageId");
+    const quotation =
+      await QuickQuotation.findById(mongoId).populate("packageId");
     if (!quotation)
       return res.status(404).json({ message: "Quotation not found" });
 
@@ -698,7 +902,7 @@ export const sendQuickQuotationMail = async (req, res) => {
       quotation.customerName,
       pkg,
       quotation,
-      company
+      company,
     );
 
     if (!emailResult.success) {
@@ -728,8 +932,8 @@ export const sendQuickQuotationMail = async (req, res) => {
 const getQuotationEmailTemplate = (customerName, pkg, quotation, company) => {
   // Format total cost with commas
   const formatCurrency = (amount) => {
-    if (!amount || amount === 0) return 'Contact for pricing';
-    return '₹' + Math.round(amount).toLocaleString('en-IN') + ' INR';
+    if (!amount || amount === 0) return "Contact for pricing";
+    return "₹" + Math.round(amount).toLocaleString("en-IN") + " INR";
   };
 
   // Calculate values
@@ -749,7 +953,7 @@ const getQuotationEmailTemplate = (customerName, pkg, quotation, company) => {
   if (pkg?.stayLocations && Array.isArray(pkg.stayLocations)) {
     totalNights = pkg.stayLocations.reduce(
       (total, location) => total + (location.nights || 0),
-      0
+      0,
     );
   }
 
@@ -773,7 +977,7 @@ const getQuotationEmailTemplate = (customerName, pkg, quotation, company) => {
         const hotels = d.hotels
           ?.map(
             (h) =>
-              `${h.category?.toUpperCase() || ""} – ${h.hotelName} (₹${h.pricePerPerson})`
+              `${h.category?.toUpperCase() || ""} – ${h.hotelName} (₹${h.pricePerPerson})`,
           )
           .join("<br/>");
 
@@ -808,9 +1012,11 @@ const getQuotationEmailTemplate = (customerName, pkg, quotation, company) => {
         <div style="margin-bottom:15px; padding-bottom:15px; border-bottom:1px solid #eee;">
           <strong>Day ${index + 1}: ${day.title || ""}</strong><br/>
           ${day.notes ? `<div style="margin-top:5px;">${day.notes}</div>` : ""}
-          ${day.aboutCity
-            ? `<div style="margin-top:5px; color:#555;">${day.aboutCity}</div>`
-            : ""}
+          ${
+            day.aboutCity
+              ? `<div style="margin-top:5px; color:#555;">${day.aboutCity}</div>`
+              : ""
+          }
         </div>`;
       })
       .join("");
@@ -819,7 +1025,10 @@ const getQuotationEmailTemplate = (customerName, pkg, quotation, company) => {
   // Policies
   const cleanHTML = (html) => {
     if (!html) return "";
-    return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+    return html
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .trim();
   };
 
   const inclusionPolicy =

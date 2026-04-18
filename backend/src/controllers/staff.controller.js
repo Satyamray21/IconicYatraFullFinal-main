@@ -2,29 +2,91 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Staff } from "../models/staff.model.js";
-import { Country } from "../models/country.model.js";
-import { State } from "../models/state.model.js";
-import { City } from "../models/city.model.js"
-import { Counter } from "../models/Counter.js"
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import mongoose from "mongoose";
 
-// CREATE Staff
+// CREATE Staff with optional multiple photo uploads
 export const createStaff = asyncHandler(async (req, res) => {
-  const { personalDetails, staffLocation, address, firm, bank } = req.body;
+  const { personalDetails, staffLocation, address, bank } = req.body;
 
-  if (!personalDetails?.mobileNumber || !personalDetails?.firstName) {
+  // Parse personalDetails if it's a string (from form-data)
+  let parsedPersonalDetails = personalDetails;
+  if (typeof personalDetails === 'string') {
+    parsedPersonalDetails = JSON.parse(personalDetails);
+  }
+
+  // Parse other nested objects if they come as strings
+  let parsedStaffLocation = staffLocation;
+  let parsedAddress = address;
+  let parsedBank = bank;
+  
+  if (typeof staffLocation === 'string') {
+    parsedStaffLocation = JSON.parse(staffLocation);
+  }
+  if (typeof address === 'string') {
+    parsedAddress = JSON.parse(address);
+  }
+  if (typeof bank === 'string') {
+    parsedBank = JSON.parse(bank);
+  }
+
+  // Validate required fields
+  if (!parsedPersonalDetails?.mobileNumber || !parsedPersonalDetails?.fullName) {
     throw new ApiError(400, "Required fields missing in personalDetails");
   }
 
+  // Check for existing staff
   const existing = await Staff.findOne({
-    "personalDetails.mobileNumber": personalDetails.mobileNumber
+    $or: [
+      { "personalDetails.mobileNumber": parsedPersonalDetails.mobileNumber },
+      { "personalDetails.email": parsedPersonalDetails.email }
+    ]
   });
 
   if (existing) {
-    throw new ApiError(409, "Staff with this mobile number already exists");
+    throw new ApiError(409, "Staff with this mobile number or email already exists");
   }
 
-  // Find the maximum staffId
+  // Handle file uploads (all optional)
+  const files = req.files || {};
+  
+  // Upload staff photo if provided
+  let staffPhotoData = null;
+  if (files.staffPhoto && files.staffPhoto[0]) {
+    const upload = await uploadOnCloudinary(files.staffPhoto[0].path, files.staffPhoto[0].mimetype);
+    if (upload) {
+      staffPhotoData = {
+        url: upload.secure_url,
+        publicId: upload.public_id
+      };
+    }
+  }
+
+  // Upload aadhar photo if provided
+  let aadharPhotoData = null;
+  if (files.aadharPhoto && files.aadharPhoto[0]) {
+    const upload = await uploadOnCloudinary(files.aadharPhoto[0].path, files.aadharPhoto[0].mimetype);
+    if (upload) {
+      aadharPhotoData = {
+        url: upload.secure_url,
+        publicId: upload.public_id
+      };
+    }
+  }
+
+  // Upload pan photo if provided
+  let panPhotoData = null;
+  if (files.panPhoto && files.panPhoto[0]) {
+    const upload = await uploadOnCloudinary(files.panPhoto[0].path, files.panPhoto[0].mimetype);
+    if (upload) {
+      panPhotoData = {
+        url: upload.secure_url,
+        publicId: upload.public_id
+      };
+    }
+  }
+
+  // Generate staff ID
   const lastStaff = await Staff.findOne().sort({ staffId: -1 });
   let nextId = 1;
 
@@ -35,14 +97,21 @@ export const createStaff = asyncHandler(async (req, res) => {
 
   const staffId = `ICYR_ST${String(nextId).padStart(4, "0")}`;
 
-  const staff = await Staff.create({
+  // Prepare staff data
+  const staffData = {
     staffId,
-    personalDetails,
-    staffLocation,
-    address,
-    firm,
-    bank
-  });
+    personalDetails: {
+      ...parsedPersonalDetails,
+      staffPhoto: staffPhotoData,
+      aadharPhoto: aadharPhotoData,
+      panPhoto: panPhotoData,
+    },
+    staffLocation: parsedStaffLocation,
+    address: parsedAddress,
+    bank: parsedBank
+  };
+
+  const staff = await Staff.create(staffData);
 
   return res
     .status(201)
@@ -51,10 +120,7 @@ export const createStaff = asyncHandler(async (req, res) => {
 
 // GET all staff
 export const getAllStaff = asyncHandler(async (req, res) => {
-  const staffList = await Staff.find()
-    .populate("staffLocation.country")
-    .populate("staffLocation.state")
-    .populate("staffLocation.city");
+  const staffList = await Staff.find().lean();
 
   return res
     .status(200)
@@ -67,18 +133,10 @@ export const getStaffById = asyncHandler(async (req, res) => {
 
   let staff;
 
-  // Check if it's a valid MongoDB ObjectId
   if (mongoose.Types.ObjectId.isValid(id)) {
-    staff = await Staff.findById(id)
-      .populate("staffLocation.country")
-      .populate("staffLocation.state")
-      .populate("staffLocation.city");
+    staff = await Staff.findById(id).lean();
   } else {
-    // Otherwise, treat it as a custom staffId
-    staff = await Staff.findOne({ staffId: id })
-      .populate("staffLocation.country")
-      .populate("staffLocation.state")
-      .populate("staffLocation.city");
+    staff = await Staff.findOne({ staffId: id }).lean();
   }
 
   if (!staff) {
@@ -90,23 +148,88 @@ export const getStaffById = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, staff, "Staff fetched successfully"));
 });
 
-
-// UPDATE staff
+// UPDATE staff with optional photo updates
 export const updateStaff = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const updateData = req.body;
 
+  let existingStaff;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    existingStaff = await Staff.findById(id);
+  } else {
+    existingStaff = await Staff.findOne({ staffId: id });
+  }
+
+  if (!existingStaff) {
+    throw new ApiError(404, "Staff not found");
+  }
+
+  // Parse nested fields when sent as JSON strings (multipart/form-data from dashboard)
+  let parsedUpdate = { ...updateData };
+  if (typeof parsedUpdate.personalDetails === 'string') {
+    parsedUpdate.personalDetails = JSON.parse(parsedUpdate.personalDetails);
+  }
+  if (typeof parsedUpdate.staffLocation === 'string') {
+    parsedUpdate.staffLocation = JSON.parse(parsedUpdate.staffLocation);
+  }
+  if (typeof parsedUpdate.address === 'string') {
+    parsedUpdate.address = JSON.parse(parsedUpdate.address);
+  }
+  if (typeof parsedUpdate.bank === 'string') {
+    parsedUpdate.bank = JSON.parse(parsedUpdate.bank);
+  }
+
+  // Handle file uploads if provided
+  const files = req.files || {};
+  
+  if (files.staffPhoto && files.staffPhoto[0]) {
+    const upload = await uploadOnCloudinary(files.staffPhoto[0].path, files.staffPhoto[0].mimetype);
+    if (upload) {
+      parsedUpdate.personalDetails = {
+        ...parsedUpdate.personalDetails,
+        staffPhoto: {
+          url: upload.secure_url,
+          publicId: upload.public_id
+        }
+      };
+    }
+  }
+
+  if (files.aadharPhoto && files.aadharPhoto[0]) {
+    const upload = await uploadOnCloudinary(files.aadharPhoto[0].path, files.aadharPhoto[0].mimetype);
+    if (upload) {
+      parsedUpdate.personalDetails = {
+        ...parsedUpdate.personalDetails,
+        aadharPhoto: {
+          url: upload.secure_url,
+          publicId: upload.public_id
+        }
+      };
+    }
+  }
+
+  if (files.panPhoto && files.panPhoto[0]) {
+    const upload = await uploadOnCloudinary(files.panPhoto[0].path, files.panPhoto[0].mimetype);
+    if (upload) {
+      parsedUpdate.personalDetails = {
+        ...parsedUpdate.personalDetails,
+        panPhoto: {
+          url: upload.secure_url,
+          publicId: upload.public_id
+        }
+      };
+    }
+  }
+
   let updatedStaff;
 
   if (mongoose.Types.ObjectId.isValid(id)) {
-    // Update by MongoDB _id
-    updatedStaff = await Staff.findByIdAndUpdate(id, updateData, {
+    updatedStaff = await Staff.findByIdAndUpdate(id, parsedUpdate, {
       new: true,
       runValidators: true,
     });
   } else {
-    // Update by custom staffId
-    updatedStaff = await Staff.findOneAndUpdate({ staffId: id }, updateData, {
+    updatedStaff = await Staff.findOneAndUpdate({ staffId: id }, parsedUpdate, {
       new: true,
       runValidators: true,
     });
@@ -121,18 +244,15 @@ export const updateStaff = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, updatedStaff, "Staff updated successfully"));
 });
 
-
 // DELETE staff
 export const deleteStaff = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   let deleted;
 
-  // Check if it's a valid MongoDB ObjectId
   if (mongoose.Types.ObjectId.isValid(id)) {
     deleted = await Staff.findByIdAndDelete(id);
   } else {
-    // If not ObjectId, treat it as custom staffId
     deleted = await Staff.findOneAndDelete({ staffId: id });
   }
 

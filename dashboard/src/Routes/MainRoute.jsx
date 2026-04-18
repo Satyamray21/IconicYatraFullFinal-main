@@ -366,9 +366,9 @@ const MainRoute = () => {
           <Route path="/packageform" element={<MultiStepPackageForm />} />
           <Route path="/packageform-old" element={<PackageForm />} />
           <Route path="/tourpackage/packageeditform/:id" element={<PackageEditForm />} />
+          <Route path="/associates/associateseditform/:associateId" element={<AssociatesEditFrom />} />
           <Route path="/associates" element={<AssociatesCard />} />
           <Route path="/associatesform" element={<AssociatesForm />} />
-          <Route path="/associates/associateseditform/:associateId" element={<AssociatesEditFrom />} />
           <Route path="/staff" element={<StaffCard />} />
           <Route path="/staffform" element={<StaffForm />} />
           <Route path="/staff/staffeditform/:staffId" element={<StaffEditForm />} />

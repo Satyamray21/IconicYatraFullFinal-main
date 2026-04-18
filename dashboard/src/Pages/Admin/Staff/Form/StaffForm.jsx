@@ -10,6 +10,8 @@ import {
   FormControl,
   InputLabel,
   Select,
+  Avatar,
+  IconButton,
 } from "@mui/material";
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -26,17 +28,25 @@ import {
   clearStates,
   clearCities,
 } from "../../../../features/location/locationSlice";
+import PhotoCamera from "@mui/icons-material/PhotoCamera";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 const titles = ["Mr", "Mrs", "Ms", "Dr"];
 const roles = ["Admin", "Manager", "Executive"];
 
 const validationSchema = Yup.object().shape({
   fullName: Yup.string().required("Required"),
-  mobile: Yup.string().required("Required"),
-  alternateContact: Yup.string(),
+  mobile: Yup.string()
+    .required("Required")
+    .matches(/^[0-9]{10}$/, "Mobile number must be 10 digits"),
+  alternateContact: Yup.string().matches(/^[0-9]{10}$/, "Alternate contact must be 10 digits"),
   designation: Yup.string().required("Required"),
   userRole: Yup.string().required("Required"),
-  email: Yup.string().email("Invalid email"),
+  email: Yup.string().email("Invalid email").required("Required"),
+  aadharNumber: Yup.string()
+    .required("Aadhar number is required")
+    .matches(/^[0-9]{12}$/, "Aadhar number must be 12 digits"),
+  panNumber: Yup.string().matches(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN number format"),
   title: Yup.string(),
   dob: Yup.date().nullable(),
   country: Yup.string().required("Required"),
@@ -50,6 +60,11 @@ const validationSchema = Yup.object().shape({
 
 const StaffForm = () => {
   const [step, setStep] = useState(1);
+  const [photoPreviews, setPhotoPreviews] = useState({
+    staffPhoto: null,
+    aadharPhoto: null,
+    panPhoto: null,
+  });
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
@@ -60,7 +75,6 @@ const StaffForm = () => {
     loading,
   } = useSelector((state) => state.location);
 
-  // Initialize formik FIRST
   const formik = useFormik({
     initialValues: {
       title: "",
@@ -71,6 +85,8 @@ const StaffForm = () => {
       userRole: "",
       email: "",
       dob: null,
+      aadharNumber: "",
+      panNumber: "",
 
       // Staff Address
       address1: "",
@@ -81,19 +97,10 @@ const StaffForm = () => {
       state: "",
       city: "",
 
-      // Firm
-      firmType: "",
-      gstin: "",
-      cin: "",
-      pan: "",
-      turnover: "",
-      firmName: "",
-      firmDescription: "",
-      sameAsContact: false,
-      supportingDocs: null,
-      firmAddress1: "",
-      firmAddress2: "",
-      firmAddress3: "",
+      // Photos
+      staffPhoto: null,
+      aadharPhoto: null,
+      panPhoto: null,
 
       // Bank
       bankName: "",
@@ -101,7 +108,6 @@ const StaffForm = () => {
       accountHolderName: "",
       accountNumber: "",
       ifscCode: "",
-      nameOfBranch: "",
     },
     validationSchema,
     onSubmit: (values) => {
@@ -113,7 +119,6 @@ const StaffForm = () => {
     },
   });
 
-  // NOW destructure formik after initialization
   const {
     values,
     errors,
@@ -124,7 +129,6 @@ const StaffForm = () => {
     resetForm,
   } = formik;
 
-  // Use effects that depend on formik values should come AFTER formik initialization
   useEffect(() => {
     dispatch(fetchCountries());
   }, [dispatch]);
@@ -154,55 +158,87 @@ const StaffForm = () => {
     }
   }, [values.state, values.country, dispatch]);
 
-  const handleFinalSubmit = (values) => {
-    const formattedData = {
-      personalDetails: {
-        title: values.title,
-        firstName: values.fullName.split(" ")[0] || "",
-        lastName: values.fullName.split(" ").slice(1).join(" ") || "",
-        fullName: values.fullName,
-        mobileNumber: values.mobile,
-        alternateContact: values.alternateContact,
-        designation: values.designation,
-        userRole: values.userRole,
-        email: values.email,
-        dob: values.dob ? new Date(values.dob) : null,
-      },
-      staffLocation: {
-        country: values.country,
-        state: values.state,
-        city: values.city,
-      },
-      address: {
-        addressLine1: values.address1,
-        addressLine2: values.address2,
-        addressLine3: values.address3,
-        pincode: values.pincode,
-      },
-      firm: {
-        firmType: values.firmType,
-        gstin: values.gstin,
-        cin: values.cin,
-        pan: values.pan,
-        turnover: values.turnover,
-        firmName: values.firmName,
-        firmDescription: values.firmDescription,
-        sameAsContact: values.sameAsContact,
-        address1: values.firmAddress1,
-        address2: values.firmAddress2,
-        address3: values.firmAddress3,
-        supportingDocs: values.supportingDocs,
-      },
-      bank: {
-        bankName: values.bankName,
-        branchName: values.branchName,
-        accountHolderName: values.accountHolderName,
-        accountNumber: values.accountNumber,
-        ifscCode: values.ifscCode,
-      },
-    };
+  const handlePhotoChange = (fieldName, event) => {
+    const file = event.currentTarget.files[0];
+    if (file) {
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setPhotoPreviews(prev => ({
+        ...prev,
+        [fieldName]: previewUrl
+      }));
+      setFieldValue(fieldName, file);
+    }
+  };
 
-    dispatch(createStaff(formattedData))
+  const handleRemovePhoto = (fieldName) => {
+    setPhotoPreviews(prev => ({
+      ...prev,
+      [fieldName]: null
+    }));
+    setFieldValue(fieldName, null);
+  };
+
+  const handleFinalSubmit = (values) => {
+    const formData = new FormData();
+    
+    // Append personal details
+    const personalDetails = {
+      title: values.title,
+      firstName: values.fullName.split(" ")[0] || "",
+      lastName: values.fullName.split(" ").slice(1).join(" ") || "",
+      fullName: values.fullName,
+      mobileNumber: values.mobile,
+      alternateContact: values.alternateContact,
+      designation: values.designation,
+      userRole: values.userRole,
+      email: values.email,
+      dob: values.dob ? new Date(values.dob) : null,
+      aadharNumber: values.aadharNumber,
+      panNumber: values.panNumber,
+    };
+    
+    formData.append("personalDetails", JSON.stringify(personalDetails));
+    
+    // Append staff location
+    const staffLocation = {
+      country: values.country,
+      state: values.state,
+      city: values.city,
+    };
+    formData.append("staffLocation", JSON.stringify(staffLocation));
+    
+    // Append address
+    const address = {
+      addressLine1: values.address1,
+      addressLine2: values.address2,
+      addressLine3: values.address3,
+      pincode: values.pincode,
+    };
+    formData.append("address", JSON.stringify(address));
+    
+    // Append bank details
+    const bank = {
+      bankName: values.bankName,
+      branchName: values.branchName,
+      accountHolderName: values.accountHolderName,
+      accountNumber: values.accountNumber,
+      ifscCode: values.ifscCode,
+    };
+    formData.append("bank", JSON.stringify(bank));
+    
+    // Append photos if they exist
+    if (values.staffPhoto) {
+      formData.append("staffPhoto", values.staffPhoto);
+    }
+    if (values.aadharPhoto) {
+      formData.append("aadharPhoto", values.aadharPhoto);
+    }
+    if (values.panPhoto) {
+      formData.append("panPhoto", values.panPhoto);
+    }
+
+    dispatch(createStaff(formData))
       .unwrap()
       .then(() => {
         navigate("/staff");
@@ -212,16 +248,13 @@ const StaffForm = () => {
       });
   };
 
-  // Helper function to render select options
   const renderSelectOptions = (options, loadingText = "Loading...") => {
     if (loading) {
       return <MenuItem disabled>{loadingText}</MenuItem>;
     }
-
     if (!options || options.length === 0) {
       return <MenuItem disabled>No options available</MenuItem>;
     }
-
     return options.map((option) => (
       <MenuItem key={option} value={option}>
         {option}
@@ -268,7 +301,6 @@ const StaffForm = () => {
                     helperText={touched.fullName && errors.fullName}
                   />
                 </Grid>
-
                 <Grid size={{ xs: 3 }}>
                   <TextField
                     name="mobile"
@@ -288,6 +320,8 @@ const StaffForm = () => {
                     fullWidth
                     value={values.alternateContact}
                     onChange={handleChange}
+                    error={touched.alternateContact && Boolean(errors.alternateContact)}
+                    helperText={touched.alternateContact && errors.alternateContact}
                   />
                 </Grid>
                 <Grid size={{ xs: 3 }}>
@@ -324,13 +358,13 @@ const StaffForm = () => {
                     name="email"
                     label="Email Id"
                     fullWidth
+                    required
                     value={values.email}
                     onChange={handleChange}
                     error={touched.email && Boolean(errors.email)}
                     helperText={touched.email && errors.email}
                   />
                 </Grid>
-
                 <Grid size={{ xs: 3 }}>
                   <LocalizationProvider dateAdapter={AdapterDayjs}>
                     <DatePicker
@@ -341,6 +375,157 @@ const StaffForm = () => {
                       slotProps={{ textField: { fullWidth: true } }}
                     />
                   </LocalizationProvider>
+                </Grid>
+                <Grid size={{ xs: 3 }}>
+                  <TextField
+                    name="aadharNumber"
+                    label="Aadhar Number"
+                    fullWidth
+                    required
+                    value={values.aadharNumber}
+                    onChange={handleChange}
+                    error={touched.aadharNumber && Boolean(errors.aadharNumber)}
+                    helperText={touched.aadharNumber && errors.aadharNumber}
+                  />
+                </Grid>
+                <Grid size={{ xs: 3 }}>
+                  <TextField
+                    name="panNumber"
+                    label="PAN Number (Optional)"
+                    fullWidth
+                    value={values.panNumber}
+                    onChange={handleChange}
+                    error={touched.panNumber && Boolean(errors.panNumber)}
+                    helperText={touched.panNumber && errors.panNumber}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+
+            {/* Photo Upload Section */}
+            <Box border={1} borderColor="divider" borderRadius={2} p={2} mb={3}>
+              <Typography variant="subtitle1" gutterBottom>
+                Photo Uploads (Optional)
+              </Typography>
+              <Grid container spacing={3}>
+                {/* Staff Photo */}
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <Box textAlign="center">
+                    <Typography variant="body2" gutterBottom>
+                      Staff Photo
+                    </Typography>
+                    <Box position="relative" display="inline-block">
+                      <Avatar
+                        src={photoPreviews.staffPhoto}
+                        sx={{ width: 120, height: 120, mb: 1 }}
+                      >
+                        {!photoPreviews.staffPhoto && "Staff"}
+                      </Avatar>
+                      {photoPreviews.staffPhoto && (
+                        <IconButton
+                          size="small"
+                          sx={{ position: 'absolute', top: 0, right: 0 }}
+                          onClick={() => handleRemovePhoto('staffPhoto')}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      size="small"
+                      startIcon={<PhotoCamera />}
+                    >
+                      Upload
+                      <input
+                        hidden
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handlePhotoChange('staffPhoto', e)}
+                      />
+                    </Button>
+                  </Box>
+                </Grid>
+
+                {/* Aadhar Photo */}
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <Box textAlign="center">
+                    <Typography variant="body2" gutterBottom>
+                      Aadhar Photo
+                    </Typography>
+                    <Box position="relative" display="inline-block">
+                      <Avatar
+                        src={photoPreviews.aadharPhoto}
+                        sx={{ width: 120, height: 120, mb: 1 }}
+                      >
+                        {!photoPreviews.aadharPhoto && "Aadhar"}
+                      </Avatar>
+                      {photoPreviews.aadharPhoto && (
+                        <IconButton
+                          size="small"
+                          sx={{ position: 'absolute', top: 0, right: 0 }}
+                          onClick={() => handleRemovePhoto('aadharPhoto')}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      size="small"
+                      startIcon={<PhotoCamera />}
+                    >
+                      Upload
+                      <input
+                        hidden
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handlePhotoChange('aadharPhoto', e)}
+                      />
+                    </Button>
+                  </Box>
+                </Grid>
+
+                {/* PAN Photo */}
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <Box textAlign="center">
+                    <Typography variant="body2" gutterBottom>
+                      PAN Photo
+                    </Typography>
+                    <Box position="relative" display="inline-block">
+                      <Avatar
+                        src={photoPreviews.panPhoto}
+                        sx={{ width: 120, height: 120, mb: 1 }}
+                      >
+                        {!photoPreviews.panPhoto && "PAN"}
+                      </Avatar>
+                      {photoPreviews.panPhoto && (
+                        <IconButton
+                          size="small"
+                          sx={{ position: 'absolute', top: 0, right: 0 }}
+                          onClick={() => handleRemovePhoto('panPhoto')}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      size="small"
+                      startIcon={<PhotoCamera />}
+                    >
+                      Upload
+                      <input
+                        hidden
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handlePhotoChange('panPhoto', e)}
+                      />
+                    </Button>
+                  </Box>
                 </Grid>
               </Grid>
             </Box>

@@ -191,6 +191,10 @@ useEffect(() => {
                     },
                 ],
         perPerson: initialData?.perPerson || 1,
+        numberOfRooms: Number(initialData?.numberOfRooms) || 1,
+        transportationCostPerDay: Number(initialData?.transportationCostPerDay) || 0,
+        transportationDays: Number(initialData?.transportationDays) || (initialData?.days?.length || 0),
+        manualCostMargin: Number(initialData?.manualCostMargin) || 0,
         mealPlan: {
             planType: initialData?.mealPlan?.planType || "",
             description: initialData?.mealPlan?.description || "",
@@ -235,6 +239,86 @@ useEffect(() => {
             termsAndConditions: []
         }
     });
+
+    const hotelTotalCost = useMemo(() => {
+        return (tourDetails.destinationNights || []).reduce((destTotal, dest) => {
+            const nights = Number(dest?.nights) || 0;
+            const rooms = Number(tourDetails.numberOfRooms) || 1;
+            const hotelRatePerNight = (dest?.hotels || []).reduce(
+                (rateTotal, hotel) => rateTotal + (Number(hotel?.pricePerPerson) || 0),
+                0
+            );
+            return destTotal + (nights * hotelRatePerNight * rooms);
+        }, 0);
+    }, [tourDetails.destinationNights, tourDetails.numberOfRooms]);
+
+    const { standardHotelTotalCost, deluxeHotelTotalCost, superiorHotelTotalCost } = useMemo(() => {
+        const rooms = Number(tourDetails.numberOfRooms) || 1;
+        return (tourDetails.destinationNights || []).reduce(
+            (acc, dest) => {
+                const nights = Number(dest?.nights) || 0;
+                const hotels = dest?.hotels || [];
+                const standardRate = Number(
+                    hotels.find((hotel) => hotel?.category === "standard")?.pricePerPerson
+                ) || 0;
+                const deluxeRate = Number(
+                    hotels.find((hotel) => hotel?.category === "deluxe")?.pricePerPerson
+                ) || 0;
+                const superiorRate = Number(
+                    hotels.find((hotel) => hotel?.category === "superior")?.pricePerPerson
+                ) || 0;
+
+                acc.standardHotelTotalCost += (nights * standardRate * rooms);
+                acc.deluxeHotelTotalCost += (nights * deluxeRate * rooms);
+                acc.superiorHotelTotalCost += (nights * superiorRate * rooms);
+                return acc;
+            },
+            { standardHotelTotalCost: 0, deluxeHotelTotalCost: 0, superiorHotelTotalCost: 0 }
+        );
+    }, [tourDetails.destinationNights, tourDetails.numberOfRooms]);
+
+    const transportationTotalCost = useMemo(() => {
+        const perDay = Number(tourDetails.transportationCostPerDay) || 0;
+        const days = Number(tourDetails.transportationDays) || 0;
+        return perDay * days;
+    }, [tourDetails.transportationCostPerDay, tourDetails.transportationDays]);
+
+    const calculatedTotalCost = useMemo(() => {
+        return hotelTotalCost + transportationTotalCost;
+    }, [hotelTotalCost, transportationTotalCost]);
+
+    const costMargin = Number(tourDetails.manualCostMargin) || 0;
+
+    const finalStandardCost = useMemo(
+        () => standardHotelTotalCost + transportationTotalCost + costMargin,
+        [standardHotelTotalCost, transportationTotalCost, costMargin]
+    );
+    const finalDeluxeCost = useMemo(
+        () => deluxeHotelTotalCost + transportationTotalCost + costMargin,
+        [deluxeHotelTotalCost, transportationTotalCost, costMargin]
+    );
+    const finalSuperiorCost = useMemo(
+        () => superiorHotelTotalCost + transportationTotalCost + costMargin,
+        [superiorHotelTotalCost, transportationTotalCost, costMargin]
+    );
+
+    useEffect(() => {
+        const autoTransportationDays = tourDetails.days?.length || 0;
+        setTourDetails((prev) => {
+            if ((Number(prev.transportationDays) || 0) === autoTransportationDays) {
+                return prev;
+            }
+            return {
+                ...prev,
+                transportationDays: autoTransportationDays,
+            };
+        });
+    }, [tourDetails.days]);
+
+    const finalTotalCost = useMemo(() => {
+        const margin = Number(tourDetails.manualCostMargin) || 0;
+        return calculatedTotalCost + margin;
+    }, [tourDetails.manualCostMargin, calculatedTotalCost]);
     const selectedCities = useMemo(() => {
         return packageData?.stayLocations?.map(location => location.city) || [];
     }, [packageData]);
@@ -645,7 +729,16 @@ useEffect(() => {
     // Rest of your handlers remain the same
     const handleDayChange = (index, field, value) => {
         const updatedDays = [...tourDetails.days];
-        updatedDays[index][field] = value;
+        if (field === "selectedSightseeing") {
+            const arr = Array.isArray(value) ? value : [];
+            updatedDays[index] = {
+                ...updatedDays[index],
+                selectedSightseeing: arr,
+                sightseeing: arr,
+            };
+        } else {
+            updatedDays[index][field] = value;
+        }
         setTourDetails({ ...tourDetails, days: updatedDays });
     };
 
@@ -674,21 +767,58 @@ useEffect(() => {
     };
 
     const handleAddSightseeing = (dayIndex, e) => {
-        if (e.key === "Enter" && e.target.value.trim() !== "") {
-            e.preventDefault();
-            const updatedDays = [...tourDetails.days];
-            const newSight = e.target.value.trim();
+        if (e.key !== "Enter") return;
+        const raw = typeof e.target.value === "string" ? e.target.value : "";
+        const newSight = raw.trim();
+        if (!newSight) return;
 
-            updatedDays[dayIndex].sightseeing.push(newSight);
-            updatedDays[dayIndex].selectedSightseeing.push(newSight);
+        e.preventDefault();
 
-            setTourDetails({ ...tourDetails, days: updatedDays });
-            e.target.value = "";
-        }
+        setTourDetails((prev) => {
+            if (!prev.days || dayIndex < 0 || dayIndex >= prev.days.length) return prev;
+            const updatedDays = prev.days.map((d, i) => {
+                if (i !== dayIndex) return d;
+                const prevSight = Array.isArray(d.sightseeing) ? d.sightseeing : [];
+                const prevSel = Array.isArray(d.selectedSightseeing)
+                    ? d.selectedSightseeing
+                    : [];
+                return {
+                    ...d,
+                    sightseeing: [...prevSight, newSight],
+                    selectedSightseeing: [...prevSel, newSight],
+                };
+            });
+            return { ...prev, days: updatedDays };
+        });
+
+        e.target.value = "";
     };
 
     const handleSubmit = async () => {
         let textUpdateSuccess = false;
+
+        let bannerImageUrl =
+            typeof tourDetails.bannerImage === "string" ? tourDetails.bannerImage : "";
+
+        if (tourDetails.bannerImage instanceof File) {
+            try {
+                const formData = new FormData();
+                formData.append("banner", tourDetails.bannerImage);
+                const res = await axios.post(`/packages/${packageId}/banner`, formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                });
+                bannerImageUrl =
+                    res.data?.package?.bannerImage ||
+                    res.data?.bannerImage ||
+                    bannerImageUrl;
+            } catch (err) {
+                console.warn("⚠️ Banner upload failed:", err.response?.data || err.message);
+                alert(
+                    "Banner image failed to upload. Please try again or upload from edit screen. " +
+                        (err.response?.data?.message || err.message || "")
+                );
+            }
+        }
 
         try {
             const payload = {
@@ -720,6 +850,20 @@ useEffect(() => {
                     ]
                 })),
                 perPerson: tourDetails.perPerson || 1,
+                numberOfRooms: Number(tourDetails.numberOfRooms) || 1,
+                transportationCostPerDay: Number(tourDetails.transportationCostPerDay) || 0,
+                transportationDays: Number(tourDetails.transportationDays) || 0,
+                transportationTotalCost,
+                hotelTotalCost,
+                standardHotelTotalCost,
+                deluxeHotelTotalCost,
+                superiorHotelTotalCost,
+                calculatedTotalCost,
+                finalStandardCost,
+                finalDeluxeCost,
+                finalSuperiorCost,
+                manualCostMargin: Number(tourDetails.manualCostMargin) || 0,
+                totalCost: finalTotalCost,
                 policy: {
                     inclusionPolicy: policyInputs.inclusionPolicy ? [policyInputs.inclusionPolicy] : [],
                     exclusionPolicy: policyInputs.exclusionPolicy ? [policyInputs.exclusionPolicy] : [],
@@ -730,6 +874,15 @@ useEffect(() => {
                 status: "active"
             };
 
+            if (bannerImageUrl) {
+                payload.bannerImage = bannerImageUrl;
+            } else if (
+                typeof tourDetails.bannerImage === "string" &&
+                tourDetails.bannerImage
+            ) {
+                payload.bannerImage = tourDetails.bannerImage;
+            }
+
             await dispatch(updatePackageTourDetails({ id: packageId, data: payload })).unwrap();
             await dispatch(fetchPackages()).unwrap();
 
@@ -737,18 +890,6 @@ useEffect(() => {
         } catch (err) {
             console.error("❌ Failed to update textual details:", err.response?.data || err.message);
             alert("❌ Failed to save textual tour details");
-        }
-
-        if (tourDetails.bannerImage instanceof File) {
-            try {
-                const formData = new FormData();
-                formData.append("banner", tourDetails.bannerImage);
-                await axios.post(`/packages/${packageId}/banner`, formData, {
-                    headers: { "Content-Type": "multipart/form-data" },
-                });
-            } catch (err) {
-                console.warn("⚠️ Banner upload failed:", err.response?.data || err.message);
-            }
         }
 
         for (let i = 0; i < tourDetails.days.length; i++) {
@@ -1232,6 +1373,22 @@ useEffect(() => {
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
+                        fullWidth
+                        type="number"
+                        label="Number of Rooms"
+                        value={tourDetails.numberOfRooms}
+                        onChange={(e) =>
+                            setTourDetails({
+                                ...tourDetails,
+                                numberOfRooms: e.target.value === "" ? 1 : Math.max(1, Number(e.target.value)),
+                            })
+                        }
+                        inputProps={{ min: 1 }}
+                        helperText="Applied in all hotel category totals"
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
                         select
                         label="Meal Plan"
                         value={tourDetails.mealPlan.planType}
@@ -1431,6 +1588,67 @@ useEffect(() => {
                         )}
                     </TableBody>
                 </Table>
+
+                <Grid container spacing={2} sx={{ mt: 2 }}>
+                    <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField
+                            fullWidth
+                            type="number"
+                            label="Transportation Cost / Day"
+                            value={Number(tourDetails.transportationCostPerDay) === 0 ? "" : tourDetails.transportationCostPerDay}
+                            onChange={(e) =>
+                                setTourDetails({
+                                    ...tourDetails,
+                                    transportationCostPerDay: e.target.value === "" ? 0 : Number(e.target.value),
+                                })
+                            }
+                            inputProps={{ min: 0 }}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField
+                            fullWidth
+                            type="number"
+                            label="Transportation Days"
+                            value={tourDetails.transportationDays || 0}
+                            inputProps={{ min: 0 }}
+                            InputProps={{ readOnly: true }}
+                            helperText="Auto-calculated from itinerary day count"
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField
+                            fullWidth
+                            type="number"
+                            label="Margin (add to each tier)"
+                            value={Number(tourDetails.manualCostMargin) === 0 ? "" : tourDetails.manualCostMargin}
+                            onChange={(e) =>
+                                setTourDetails({
+                                    ...tourDetails,
+                                    manualCostMargin: e.target.value === "" ? 0 : Number(e.target.value),
+                                })
+                            }
+                            inputProps={{ min: 0 }}
+                            helperText="Added to Standard, Deluxe & Superior costs"
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12 }}>
+                        <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#fafafa" }}>
+                            <Typography variant="body2">
+                                Hotel Total = sum of (destination nights × selected hotel rates): <strong>Rs. {hotelTotalCost}</strong>
+                            </Typography>
+                            <Typography variant="body2">
+                                Final Standard Cost: <strong>Rs. {finalStandardCost}</strong>
+                            </Typography>
+                            <Typography variant="body2">
+                                Final Deluxe Cost: <strong>Rs. {finalDeluxeCost}</strong>
+                            </Typography>
+                            <Typography variant="body2">
+                                Final Superior Cost: <strong>Rs. {finalSuperiorCost}</strong>
+                            </Typography>
+                        </Paper>
+                    </Grid>
+                </Grid>
             </Grid>
 
             <Typography variant="h5" fontWeight="bold" color="primary" sx={{ mt: 4, mb: 3, textAlign: 'center' }}>

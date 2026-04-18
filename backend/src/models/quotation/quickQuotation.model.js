@@ -7,6 +7,7 @@ const quickQuotationSchema = new mongoose.Schema(
         customerName: { type: String, required: true, trim: true },
         email: { type: String, required: true, trim: true },
         phone: { type: String, trim: true },
+        clientLocation: { type: String, trim: true, default: "" },
 
         packageId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -79,13 +80,34 @@ quickQuotationSchema.pre("save", async function (next) {
         const pkg = await Package.findById(this.packageId).lean();
 
         if (pkg) {
-            // Save snapshot
-            this.packageSnapshot = pkg;
+            const incomingSnapshot =
+                this.packageSnapshot && typeof this.packageSnapshot === "object"
+                    ? this.packageSnapshot
+                    : {};
+
+            // Merge package snapshot with incoming values from request.
+            // Incoming fields (e.g. quotationDetails.arrivalDate/departureDate) must win.
+            this.packageSnapshot = {
+                ...pkg,
+                ...incomingSnapshot,
+                quotationDetails: {
+                    ...(pkg?.quotationDetails && typeof pkg.quotationDetails === "object"
+                        ? pkg.quotationDetails
+                        : {}),
+                    ...(incomingSnapshot?.quotationDetails &&
+                    typeof incomingSnapshot.quotationDetails === "object"
+                        ? incomingSnapshot.quotationDetails
+                        : {}),
+                },
+            };
 
             // Save policies
-            this.policy = pkg.policy;
+            this.policy = {
+                ...(pkg?.policy && typeof pkg.policy === "object" ? pkg.policy : {}),
+                ...(this.policy && typeof this.policy === "object" ? this.policy : {}),
+            };
 
-            if (pkg.transportation) {
+            if (!this.transportation && pkg.transportation) {
                 this.transportation = pkg.transportation;
             }
 

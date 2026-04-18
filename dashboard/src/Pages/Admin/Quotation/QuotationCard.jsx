@@ -62,6 +62,11 @@ import {
 } from "../../../features/quotation/customQuotationSlice";
 import { deleteVehicleQuotation } from "../../../features/quotation/vehicleQuotationSlice";
 import { deleteFlightQuotationById } from "../../../features/quotation/flightQuotationSlice";
+import {
+  inferLastCompletedCustomStep,
+  formatCustomQuotationListStatus,
+  formatQuickQuotationListStatus,
+} from "../../../utils/inferCustomQuotationStep";
 
 const stats = [
   { title: "Today's", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
@@ -145,6 +150,14 @@ const QuotationCard = () => {
   }, [quickError]);
 
   const handleDeleteClick = (quotationId, quotationType) => {
+    if (!quotationId) {
+      setSnackbar({
+        open: true,
+        message: "Unable to delete: quotation id missing.",
+        severity: "error"
+      });
+      return;
+    }
     setDeleteConfirm({
       open: true,
       quotationId,
@@ -273,17 +286,58 @@ const QuotationCard = () => {
     }
   };
 
+  const getFirstValue = (...values) => {
+    for (const value of values) {
+      if (value === 0) return value;
+      if (value !== undefined && value !== null && value !== "") return value;
+    }
+    return undefined;
+  };
+
+  const navigateToCustomQuotation = (row) => {
+    const raw = row?.rawData;
+    const qid = row?.quoteId;
+    if (!raw || !qid) return;
+    const fs = String(raw.finalizeStatus || "").toLowerCase();
+    const rowStatus = String(raw.status || "").toLowerCase();
+    if (fs === "finalized") {
+      navigate(`/customfinalize/${qid}`, {
+        state: { quotationData: raw },
+      });
+      return;
+    }
+    if (rowStatus === "confirmed" || rowStatus === "completed") {
+      navigate(`/customfinalize/${qid}`, {
+        state: { quotationData: raw },
+      });
+      return;
+    }
+    const lastCompleted = inferLastCompletedCustomStep(raw);
+    if (lastCompleted >= 6) {
+      navigate(`/customfinalize/${qid}`, {
+        state: { quotationData: raw },
+      });
+      return;
+    }
+    const nextStep = Math.min(lastCompleted + 1, 6);
+    navigate("/customquotation", {
+      state: { resumeQuotationId: qid, resumeStep: nextStep },
+    });
+  };
+
   // Get Status Chip Color
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    const s = String(status || "").toLowerCase();
+    if (s.startsWith("draft")) return "warning";
+    switch (s) {
       case "confirmed":
+      case "finalized":
+      case "completed":
         return "success";
       case "pending":
         return "warning";
       case "cancelled":
         return "error";
-      case "completed":
-        return "info";
       case "draft":
         return "default";
       default:
@@ -337,12 +391,13 @@ const QuotationCard = () => {
     {
       field: "quotationStatus",
       headerName: "Status",
-      width: 140,
+      width: 200,
       renderCell: (params) => (
         <Chip
           label={params.value}
           size="small"
           color={getStatusColor(params.value)}
+          sx={{ maxWidth: 220, "& .MuiChip-label": { whiteSpace: "normal" } }}
         />
       )
     },
@@ -397,7 +452,7 @@ const QuotationCard = () => {
                   navigate(`/hotelquotation/edit/${params.row.originalId}`);
                   break;
                 case "Custom":
-                  navigate(`/customquotation/edit/${params.row.originalId}`);
+                  navigateToCustomQuotation(params.row);
                   break;
                 default:
                   break;
@@ -419,8 +474,12 @@ const QuotationCard = () => {
             size="small"
             onClick={(e) => {
               e.stopPropagation();
+              const idToDelete =
+                params.row.type === "Quick"
+                  ? params.row.originalId
+                  : (params.row.originalId || params.row.id);
               handleDeleteClick(
-                params.row.originalId || params.row.id,
+                idToDelete,
                 params.row.type
               );
             }}
@@ -518,22 +577,53 @@ const QuotationCard = () => {
     }),
 
     // Add Quick Quotations
-    ...(quickList || []).map((item, index) => ({
-      id: `Q-${index + 1}`,
-      originalId: item?._id, // For API calls
-      quoteId: `QT-${item?._id?.slice(-6) || "N/A"}`,
-      clientName: item?.customerName || "N/A",
-      arrival: formatDate(item?.createdAt),
-      departure: "-",
-      sector: item?.packageSnapshot?.tourType || "N/A",
-      title: "Quick Quotation",
-      noOfNight: item?.packageSnapshot?.nights || "-",
-      tourType: item?.packageSnapshot?.tourType || "-",
-      type: "Quick",
-      quotationStatus: item?.status || "Draft",
-      formStatus: "Completed",
-      businessType: "Travel",
-    })),
+    ...(quickList || []).map((item, index) => {
+      const quickArrival = getFirstValue(
+        item?.quotationDetails?.arrivalDate,
+        item?.packageSnapshot?.quotationDetails?.arrivalDate,
+        item?.packageSnapshot?.arrivalDate,
+      );
+      const quickDeparture = getFirstValue(
+        item?.quotationDetails?.departureDate,
+        item?.packageSnapshot?.quotationDetails?.departureDate,
+        item?.packageSnapshot?.departureDate,
+      );
+      const quickSector = getFirstValue(
+        item?.packageSnapshot?.sector,
+        item?.sector,
+        item?.clientLocation,
+      );
+      const quickNights = getFirstValue(
+        item?.packageSnapshot?.nights,
+        item?.nights,
+        item?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+        item?.packageSnapshot?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+      );
+
+      return {
+        id: `Q-${index + 1}`,
+        originalId: item?._id, // For API calls
+        quoteId: `QT-${item?._id?.slice(-6) || "N/A"}`,
+        clientName: item?.customerName || "N/A",
+        arrival: formatDate(quickArrival),
+        departure: formatDate(quickDeparture),
+        sector: quickSector || "N/A",
+        title: item?.packageSnapshot?.title || "Quick Quotation",
+        noOfNight: getFirstValue(quickNights, "-"),
+        tourType: item?.packageSnapshot?.tourType || "-",
+        type: "Quick",
+        quotationStatus: formatQuickQuotationListStatus(item),
+        formStatus: "Completed",
+        businessType: "Travel",
+        rawData: item,
+      };
+    }),
 
     // Add Full Quotations
     ...(fullList || []).map((item, index) => ({
@@ -553,27 +643,62 @@ const QuotationCard = () => {
         (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft"),
       formStatus: "Completed",
       businessType: "Travel",
+      rawData: item,
     })),
 
     // Add Custom Quotations
-    ...(customList || []).map((item, index) => ({
-      id: `C-${index + 1}`,
-      originalId: item?._id,
-      quoteId: item?.quotationId || `CUST-${item?._id?.slice(-6) || "N/A"}`,
-      clientName: item?.clientDetails?.clientName || "N/A",
-      arrival: formatDate(item?.travelDates?.startDate),
-      departure: formatDate(item?.travelDates?.endDate),
-      sector: item?.destination || "N/A",
-      title: item?.quotationTitle || "Custom Package",
-      noOfNight: item?.duration?.nights || "-",
-      tourType: item?.tourType || "-",
-      type: "Custom",
-      quotationStatus:
-        item?.status ||
-        (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft"),
-      formStatus: "Completed",
-      businessType: "Travel",
-    })),
+    ...(customList || []).map((item, index) => {
+      const customArrival = getFirstValue(
+        item?.tourDetails?.arrivalDate,
+        item?.pickupDrop?.[0]?.arrivalDate,
+        item?.travelDates?.startDate,
+      );
+      const customDeparture = getFirstValue(
+        item?.tourDetails?.departureDate,
+        item?.pickupDrop?.[0]?.departureDate,
+        item?.travelDates?.endDate,
+      );
+      const customSector = getFirstValue(
+        item?.clientDetails?.sector,
+        item?.destination,
+      );
+      const customNights = getFirstValue(
+        item?.tourDetails?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+        item?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+        item?.pickupDrop?.reduce((sum, d) => sum + Number(d?.nights || 0), 0),
+        item?.tourDetails?.days
+          ? Number(item.tourDetails.days) - 1
+          : undefined,
+        item?.days
+          ? Number(item.days) - 1
+          : undefined,
+        item?.duration?.nights,
+      );
+
+      return {
+        id: `C-${index + 1}`,
+        originalId: item?._id,
+        quoteId: item?.quotationId || `CUST-${item?._id?.slice(-6) || "N/A"}`,
+        clientName: item?.clientDetails?.clientName || "N/A",
+        arrival: formatDate(customArrival),
+        departure: formatDate(customDeparture),
+        sector: customSector || "N/A",
+        title: item?.tourDetails?.quotationTitle || item?.quotationTitle || "Custom Package",
+        noOfNight: getFirstValue(customNights, "-"),
+        tourType: item?.clientDetails?.tourType || item?.tourType || "-",
+        type: "Custom",
+        quotationStatus: formatCustomQuotationListStatus(item),
+        formStatus: "Completed",
+        businessType: "Travel",
+        rawData: item,
+      };
+    }),
   ];
 
   // Filter by type
@@ -622,13 +747,13 @@ const QuotationCard = () => {
         navigate(`/vehiclefinalize/${params.row.quoteId}`);
         break;
       case "Custom":
-        navigate(`/customfinalize/${params.row.quoteId}`, {
-          state: { quotationData: params.row.rawData },
-        });
+        navigateToCustomQuotation(params.row);
         break;
       case "Quick":
         // Must use Mongo _id — quoteId is only a display label (QT-xxxxxx)
-        navigate(`/quickfinalize/${params.row.originalId}`);
+        if (params.row.originalId) {
+          navigate(`/quickfinalize/${params.row.originalId}`);
+        }
         break;
       default:
         break;

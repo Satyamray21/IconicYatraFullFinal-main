@@ -17,27 +17,6 @@ import {
   DialogContent,
   DialogActions,
 } from "@mui/material";
-import { useFormik } from "formik";
-import * as Yup from "yup";
-
-const validationSchema = Yup.object({
-  firmType: Yup.string().required("Firm Type is required"),
-  firmName: Yup.string().required("Firm Name is required"),
-  gstin: Yup.string(),
-  cin: Yup.string(),
-  pan: Yup.string(),
-  turnover: Yup.string(),
-  firmDescription: Yup.string(),
-  address1: Yup.string(),
-  address2: Yup.string(),
-  address3: Yup.string(),
-  bankName: Yup.string(),
-  branchName: Yup.string(),
-  accountHolderName: Yup.string(),
-  accountNumber: Yup.string(),
-  ifscCode: Yup.string(),
-});
-
 const AssociateFirmForm = ({ formik }) => {
   const [firmTypes, setFirmTypes] = useState([
     "Proprietorship",
@@ -257,13 +236,63 @@ const AssociateFirmForm = ({ formik }) => {
                 onChange={formik.handleChange}
               />
             </Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                label="UPI ID"
+                name="upiId"
+                value={formik.values.upiId}
+                onChange={formik.handleChange}
+                placeholder="example@upi"
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <Button variant="outlined" component="label" fullWidth>
+                Upload UPI QR Code
+                <input
+                  hidden
+                  type="file"
+                  name="qrCode"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files[0];
+                    if (file) {
+                      formik.setFieldValue("qrCode", file);
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        formik.setFieldValue("qrCodePreview", reader.result);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </Button>
+              {formik.values.qrCodePreview && (
+                <Box mt={2}>
+                  <Typography variant="body2" gutterBottom>
+                    QR Code Preview:
+                  </Typography>
+                  <Box
+                    component="img"
+                    src={formik.values.qrCodePreview}
+                    sx={{
+                      maxWidth: "150px",
+                      maxHeight: "150px",
+                      border: "1px solid #ddd",
+                      borderRadius: "4px",
+                      padding: "8px"
+                    }}
+                    alt="QR Code Preview"
+                  />
+                  {formik.values.qrCode && (
+                    <Typography variant="caption" display="block" mt={1}>
+                      {formik.values.qrCode.name}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </Grid>
           </Grid>
-        </Box>
-
-        <Box display="flex" justifyContent="center">
-          <Button type="submit" variant="contained" color="primary" onClick={formik.handleSubmit}>
-            Submit
-          </Button>
         </Box>
       </>
 

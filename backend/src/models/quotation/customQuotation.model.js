@@ -135,6 +135,14 @@ const customQuotationSchema = new mongoose.Schema(
             unique: true,
         },
 
+        /** Last completed wizard step (1–6); used to resume from quotation list */
+        currentStep: {
+            type: Number,
+            default: 1,
+            min: 1,
+            max: 6,
+        },
+
         finalizeStatus: {
             type: String,
             enum: ["draft", "finalized"],
