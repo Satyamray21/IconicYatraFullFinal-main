@@ -3,14 +3,24 @@ export const calculateAccommodation = (members, accommodation) => {
   const { sharingType, noOfRooms = 0 } = accommodation || {};
   const totalMembers = (adults || 0) + (children || 0);
 
-  let capacityPerRoom = 1; // Default single sharing
+  const normalized = (sharingType || "").trim().toLowerCase();
 
-  switch (sharingType?.toLowerCase()) {
+  let capacityPerRoom = 1;
+
+  switch (normalized) {
+    case "single":
+      capacityPerRoom = 1;
+      break;
+    case "double":
     case "double sharing":
       capacityPerRoom = 2;
       break;
+    case "triple":
     case "triple sharing":
       capacityPerRoom = 3;
+      break;
+    case "quad":
+      capacityPerRoom = 4;
       break;
     case "family room":
       capacityPerRoom = 4;

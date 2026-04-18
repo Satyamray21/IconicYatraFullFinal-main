@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Grid,
@@ -20,18 +20,25 @@ import {
   StepLabel,
   CircularProgress,
   Alert,
+  IconButton,
+  Chip,
+  Snackbar,
+  Autocomplete,
 } from "@mui/material";
+import { Delete as DeleteIcon } from "@mui/icons-material";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { useDispatch, useSelector } from "react-redux";
-import { viewLeadById, updateLead, resetViewStatus, resetUpdateStatus } from "../../../../features/leads/leadSlice";
+import { viewLeadById, updateLead, resetViewStatus, resetUpdateStatus, getLeadOptions, addLeadOption, deleteLeadOption } from "../../../../features/leads/leadSlice";
 import AssociatesForm from "../../Associates/Form/AssociatesForm";
 import dayjs from "dayjs";
 import { fetchCountries, fetchStatesByCountry, fetchCitiesByState, clearStates, clearCities } from '../../../../features/location/locationSlice';
+import { Country, State, City } from "country-state-city";
 import { fetchAllAssociates } from "../../../../features/associate/associateSlice";
 import { fetchAllStaff } from "../../../../features/staff/staffSlice";
+import axios from "../../../../utils/axios";
 
 // Validation schema combining both steps
 const validationSchema = Yup.object({
@@ -59,9 +66,43 @@ const validationSchema = Yup.object({
   }),
 });
 
+/** City names for tour pickup/dropdown (matches TourDetailsForm behaviour, local list avoids clobbering Redux `cities` for address step). */
+function getTourPickupCityNames(tourType, countryName, destinationStateName) {
+  if (tourType === "Domestic") {
+    try {
+      return (City.getCitiesOfCountry("IN") || []).map((c) => c.name).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+  if (!countryName) return [];
+  const country = Country.getAllCountries().find(
+    (c) => c.name.toLowerCase() === String(countryName).trim().toLowerCase()
+  );
+  if (!country) return [];
+  let cities;
+  try {
+    cities = City.getCitiesOfCountry(country.isoCode) || [];
+  } catch {
+    return [];
+  }
+  if (!destinationStateName) {
+    return cities.map((c) => c.name).filter(Boolean);
+  }
+  const states = State.getStatesOfCountry(country.isoCode) || [];
+  const st = states.find(
+    (s) => s.name.toLowerCase() === String(destinationStateName).trim().toLowerCase()
+  );
+  if (!st) return cities.map((c) => c.name).filter(Boolean);
+  return cities
+    .filter((c) => c.stateCode === st.isoCode)
+    .map((c) => c.name)
+    .filter(Boolean);
+}
+
 const LeadEditForm = ({ leadId, onSave, onCancel }) => {
   const dispatch = useDispatch();
-  const { viewedLead, viewLoading, viewError, updateLoading, updateError } = useSelector((state) => state.leads);
+  const { viewedLead, viewLoading, viewError, updateLoading, updateError, options: leadOptions = [], loading: leadOptionsLoading } = useSelector((state) => state.leads);
   const {
     countries,
     states,
@@ -76,9 +117,56 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
   );
   const [activeStep, setActiveStep] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [newValue, setNewValue] = useState("");
   const [activeField, setActiveField] = useState("");
   const [showAssociateForm, setShowAssociateForm] = useState(false);
+  const [optionToDelete, setOptionToDelete] = useState(null);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+
+  // ✅ Extract source options from API response
+  const getSourceOptionsFromAPI = () => {
+    if (!leadOptions || !Array.isArray(leadOptions)) return [];
+
+    const sourceOptions = leadOptions
+      .filter(option => option.fieldName === "source")
+      .map(option => ({
+        id: option._id || option.id,
+        value: option.value
+      }));
+
+    return sourceOptions;
+  };
+
+  // ✅ Get option ID for deletion
+  const getOptionId = (optionValue) => {
+    const apiSourceOptions = getSourceOptionsFromAPI();
+    const option = apiSourceOptions.find(opt => opt.value === optionValue);
+    return option ? option.id : null;
+  };
+
+  // ✅ Check if an option is deletable (API option)
+  const isDeletableOption = (optionValue) => {
+    if (viewedLead?.officialDetail?.businessType !== "B2C") return false;
+    const apiSourceOptions = getSourceOptionsFromAPI();
+    return apiSourceOptions.some(opt => opt.value === optionValue);
+  };
+
+  // ✅ Get source options based on business type
+  const getSourceOptions = () => {
+    if (viewedLead?.officialDetail?.businessType === "B2C") {
+      // For B2C: "Direct" + API options
+      const apiSourceOptions = getSourceOptionsFromAPI();
+      return ["Direct", ...apiSourceOptions.map(opt => opt.value)];
+    }
+
+    // For B2B: Only hardcoded options
+    return ["Direct", "Referral", "Agent's"];
+  };
 
   // Initialize with static options
   const [dropdownOptions, setDropdownOptions] = useState({
@@ -96,7 +184,7 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     departureLocation: ["Airport", "Railway Station", "Hotel", "Bus Stand"],
     hotelType: ["3 Star", "4 Star", "5 Star", "Luxury", "Budget"],
     mealPlan: ["Breakfast", "Half Board", "Full Board", "All Inclusive"],
-    sharingType: ["Single", "Double", "Triple", "Quad"],
+    sharingType: ["single", "double", "triple", "quad", "double sharing", "triple sharing", "family room"],
   });
 
   const [customItems, setCustomItems] = useState({
@@ -215,6 +303,22 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     };
   };
 
+  // Update dropdown options with API source options
+  useEffect(() => {
+    if (leadOptions && leadOptions.length > 0) {
+      const apiSourceOptions = getSourceOptionsFromAPI();
+      setDropdownOptions(prev => ({
+        ...prev,
+        source: [
+          "Direct",
+          ...apiSourceOptions.map(opt => opt.value),
+          "Referral",
+          "Agent's"
+        ]
+      }));
+    }
+  }, [leadOptions]);
+
   // Update dropdown options with API data
   const updateDropdownOptionsWithApiData = (apiData) => {
     if (!apiData) return;
@@ -320,6 +424,9 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     if (leadId) {
       dispatch(viewLeadById(leadId));
     }
+    
+    // ✅ Fetch lead options on mount
+    dispatch(getLeadOptions());
 
     return () => {
       dispatch(resetViewStatus());
@@ -367,37 +474,174 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     }
   }, [formik.values.state, formik.values.country, dispatch]);
 
+  // ✅ Calculate accommodation based on members and sharing type
+  const calculateAccommodation = async () => {
+    try {
+      const { values, setFieldValue } = formik;
+      const members = {
+        adults: values.adults,
+        children: values.children,
+        kidsWithoutMattress: values.kidsWithoutMattress,
+        infants: values.infants,
+      };
+
+      const accommodation = {
+        sharingType: values.sharingType,
+        noOfRooms: values.noOfRooms,
+      };
+
+      const { data } = await axios.post(
+        "/accommodation/calculate-accommodation",
+        { members, accommodation }
+      );
+
+      if (data.success) {
+        setFieldValue("noOfRooms", data.data.autoCalculatedRooms);
+        setFieldValue("noOfMattress", data.data.extraMattress);
+      }
+    } catch (error) {
+      console.error("Accommodation calculation failed:", error);
+    }
+  };
+
+  // ✅ Trigger accommodation calculation when relevant fields change
+  useEffect(() => {
+    if (formik.values.sharingType && formik.values.noOfRooms) {
+      calculateAccommodation();
+    }
+  }, [
+    formik.values.sharingType,
+    formik.values.noOfRooms,
+    formik.values.adults,
+    formik.values.children,
+    formik.values.kidsWithoutMattress,
+    formik.values.infants,
+  ]);
+
+  useEffect(() => {
+    if (formik.values.arrivalDate && formik.values.departureDate) {
+      const nights = dayjs(formik.values.departureDate).diff(
+        dayjs(formik.values.arrivalDate),
+        "day"
+      );
+      if (nights >= 0) {
+        formik.setFieldValue("noOfNights", String(nights));
+      } else {
+        formik.setFieldValue("noOfNights", "0");
+      }
+    }
+  }, [formik.values.arrivalDate, formik.values.departureDate]);
+
   const steps = ['Customer Details', 'Tour Details', 'Review'];
 
-  const handleAddNewClick = (field) => {
+  const handleAddNewClick = (field, prefill = "") => {
     if (["assignedTo", "referralBy", "agentName"].includes(field)) {
       setActiveField(field);
       setShowAssociateForm(true);
     } else {
       setActiveField(field);
-      setNewValue("");
+      setNewValue(prefill || "");
       setDialogOpen(true);
     }
   };
 
-  const handleAddNewValue = () => {
-    if (newValue.trim() !== "") {
-      setDropdownOptions((prev) => ({
-        ...prev,
-        [activeField]: [
-          ...new Set([...(prev[activeField] || []), newValue.trim()]),
-        ],
-      }));
-      setCustomItems((prev) => ({
-        ...prev,
-        [activeField]: [
-          ...new Set([...(prev[activeField] || []), newValue.trim()]),
-        ],
-      }));
-      formik.setFieldValue(activeField, newValue.trim());
-      setDialogOpen(false);
-      setNewValue("");
+  // ✅ Handle delete option
+  const handleDeleteLeadOptionById = async (id) => {
+    if (!id) return;
+    try {
+      await dispatch(deleteLeadOption(id)).unwrap();
+      setTimeout(() => {
+        dispatch(getLeadOptions());
+      }, 100);
+      setSnackbar({
+        open: true,
+        message: "Option deleted successfully",
+        severity: "success",
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error?.message || "Failed to delete option",
+        severity: "error",
+      });
     }
+  };
+
+  const handleDeleteOption = async () => {
+    if (!optionToDelete) return;
+
+    try {
+      await dispatch(deleteLeadOption(optionToDelete.id)).unwrap();
+      setTimeout(() => {
+        dispatch(getLeadOptions());
+      }, 100);
+      setSnackbar({
+        open: true,
+        message: `Source option "${optionToDelete.value}" deleted successfully`,
+        severity: "success",
+      });
+
+      setDeleteDialogOpen(false);
+      setOptionToDelete(null);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: `Failed to delete source option: ${error.message || "Unknown error"}`,
+        severity: "error",
+      });
+    }
+  };
+
+  // ✅ Open delete confirmation dialog
+  const handleOpenDeleteDialog = (option) => {
+    setOptionToDelete(option);
+    setDeleteDialogOpen(true);
+  };
+
+  // ✅ Updated handleAddNewValue to save to API
+  const handleAddNewValue = async () => {
+    if (newValue.trim() !== "") {
+      try {
+        // Save to API
+        await dispatch(addLeadOption({
+          fieldName: activeField,
+          value: newValue.trim()
+        })).unwrap();
+
+        // Refresh lead options from API
+        setTimeout(() => {
+          dispatch(getLeadOptions());
+        }, 100);
+
+        // Update local state
+        setDropdownOptions((prev) => ({
+          ...prev,
+          [activeField]: [
+            ...new Set([...(prev[activeField] || []), newValue.trim()]),
+          ],
+        }));
+
+        formik.setFieldValue(activeField, newValue.trim());
+        setDialogOpen(false);
+        setNewValue("");
+
+        setSnackbar({
+          open: true,
+          message: `New ${activeField} added successfully`,
+          severity: "success",
+        });
+      } catch (error) {
+        setSnackbar({
+          open: true,
+          message: `Failed to add new ${activeField}`,
+          severity: "error",
+        });
+      }
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   const handleFieldChange = (e) => {
@@ -529,6 +773,13 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
             staffLoading={staffLoading}
             associates={associates}
             associatesLoading={associatesLoading}
+            onAddNewClick={handleAddNewClick}
+            onDeleteOption={handleDeleteOption}
+            onOpenDeleteDialog={handleOpenDeleteDialog}
+            isDeletableOption={isDeletableOption}
+            getOptionId={getOptionId}
+            getSourceOptionsFromAPI={getSourceOptionsFromAPI}
+            leadOptionsLoading={leadOptionsLoading}
           />
         )}
 
@@ -542,6 +793,9 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
             countries={countries}
             states={states}
             locationLoading={locationLoading}
+            leadOptions={leadOptions}
+            leadOptionsLoading={leadOptionsLoading}
+            onDeleteOption={handleDeleteLeadOptionById}
           />
         )}
 
@@ -610,6 +864,26 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
         </DialogActions>
       </Dialog>
 
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Delete Confirmation</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete "{optionToDelete?.value}"?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleDeleteOption}
+            variant="contained"
+            color="error"
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Associate Form Dialog */}
       <Dialog
         open={showAssociateForm}
@@ -621,6 +895,18 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
           <AssociatesForm onSave={handleAssociateSave} />
         </DialogContent>
       </Dialog>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
@@ -637,7 +923,14 @@ const Step1Content = ({
   staffList, 
   staffLoading, 
   associates, 
-  associatesLoading 
+  associatesLoading,
+  onAddNewClick,
+  onDeleteOption,
+  onOpenDeleteDialog,
+  isDeletableOption,
+  getOptionId,
+  getSourceOptionsFromAPI,
+  leadOptionsLoading,
 }) => {
   const getSubAgentNames = () =>
     associates
@@ -645,8 +938,81 @@ const Step1Content = ({
       .map((a) => a?.personalDetails?.fullName || a?.name)
       .filter(Boolean);
 
-  const renderSelectField = (label, name, options = [], loading = false) => {
+  const renderSelectField = (label, name, options = [], loading = false, showDelete = false) => {
     const allOptions = [...new Set([...options, formik.values[name]].filter(Boolean))];
+
+    if (name === "source" && formik.values.businessType === "B2C") {
+      return (
+        <TextField
+          fullWidth
+          select
+          label={label}
+          name={name}
+          value={formik.values[name] || ''}
+          onChange={onFieldChange}
+          onBlur={formik.handleBlur}
+          error={formik.touched[name] && Boolean(formik.errors[name])}
+          helperText={formik.touched[name] && formik.errors[name]}
+          sx={{ mb: 2 }}
+          disabled={loading}
+          SelectProps={{
+            renderValue: (selected) => {
+              if (selected !== "Direct" && isDeletableOption(selected)) {
+                return (
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    <Chip
+                      label={selected}
+                      size="small"
+                      onDelete={() => onOpenDeleteDialog({
+                        id: getOptionId(selected),
+                        value: selected
+                      })}
+                      deleteIcon={<DeleteIcon />}
+                    />
+                  </Box>
+                );
+              }
+              return selected;
+            }
+          }}
+        >
+          {loading && (
+            <MenuItem disabled>Loading...</MenuItem>
+          )}
+          
+          {!loading && allOptions.map((opt) => (
+            <MenuItem
+              key={opt}
+              value={opt}
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              {opt}
+              {opt !== "Direct" && isDeletableOption(opt) && (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenDeleteDialog({
+                      id: getOptionId(opt),
+                      value: opt
+                    });
+                  }}
+                  sx={{ ml: 1 }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              )}
+            </MenuItem>
+          ))}
+
+          <MenuItem value="__add_new__">➕ Add New</MenuItem>
+        </TextField>
+      );
+    }
 
     return (
       <TextField
@@ -806,7 +1172,7 @@ const Step1Content = ({
             </FormControl>
 
             {renderSelectField("Priority", "priority", dropdownOptions.priority)}
-            {renderSelectField("Source *", "source", dropdownOptions.source)}
+            {renderSelectField("Source *", "source", dropdownOptions.source, leadOptionsLoading, true)}
 
             {formik.values.businessType === "B2B" && formik.values.source === "Referral" && (
               renderSelectField(
@@ -865,29 +1231,237 @@ const Step2Content = ({
   onAddNewClick, 
   countries, 
   states,
-  locationLoading 
+  locationLoading,
+  leadOptions = [],
+  leadOptionsLoading = false,
+  onDeleteOption,
 }) => {
-  const getOptions = useCallback((field) => {
-    const baseOptions = [
-      ...(dropdownOptions[field] || []),
-      ...(customItems[field] || []),
-    ];
-    const currentValue = formik.values[field];
-    return [...new Set([...baseOptions, currentValue].filter(Boolean))];
-  }, [dropdownOptions, customItems, formik.values]);
+  const dispatch = useDispatch();
 
-  const destinationOptions = useMemo(() => {
+  const tourDestinationStateNames = useMemo(() => {
     if (formik.values.tourType === "Domestic") {
-      return ["Select destination"];
-    } else {
-      if (!formik.values.country || formik.values.country === "Loading countries...") {
-        return ["Select a country first"];
-      }
-      if (locationLoading) return ["Loading destinations..."];
-      if (!states || states.length === 0) return ["No destinations available"];
-      return states.map(s => s.name);
+      const india = Country.getAllCountries().find((c) => c.name === "India");
+      if (!india) return [];
+      return State.getStatesOfCountry(india.isoCode).map((s) => s.name);
     }
-  }, [formik.values.tourType, formik.values.country, states, locationLoading]);
+    return (states || []).map((s) => s.name).filter(Boolean);
+  }, [formik.values.tourType, states]);
+
+  const pickupCityList = useMemo(
+    () =>
+      getTourPickupCityNames(
+        formik.values.tourType,
+        formik.values.country,
+        formik.values.destination
+      ),
+    [formik.values.tourType, formik.values.country, formik.values.destination]
+  );
+
+  const arrivalCitySourceList = useMemo(() => {
+    const v = formik.values.arrivalCity;
+    if (v && !pickupCityList.includes(v)) return [...pickupCityList, v];
+    return pickupCityList;
+  }, [pickupCityList, formik.values.arrivalCity]);
+
+  const departureCitySourceList = useMemo(() => {
+    const v = formik.values.departureCity;
+    if (v && !pickupCityList.includes(v)) return [...pickupCityList, v];
+    return pickupCityList;
+  }, [pickupCityList, formik.values.departureCity]);
+
+  const [arrivalSearch, setArrivalSearch] = useState("");
+  const [departureSearch, setDepartureSearch] = useState("");
+  const [filteredArrivalCities, setFilteredArrivalCities] = useState([]);
+  const [filteredDepartureCities, setFilteredDepartureCities] = useState([]);
+
+  const smartSearch = useMemo(() => {
+    return (searchTerm, citiesList, fieldName) => {
+      const input = String(searchTerm || "").toLowerCase().trim();
+      const hasSearch = input.length > 0;
+
+      const customCities =
+        leadOptions
+          ?.filter((opt) => opt.fieldName === fieldName)
+          .map((opt) => opt.value) || [];
+
+      const allAvailableCities = [...new Set([...(citiesList || []), ...customCities])];
+
+      if (!hasSearch) {
+        const limitedCities = allAvailableCities.slice(0, 30);
+        return ["__add_new", ...limitedCities];
+      }
+
+      const results = [];
+      const startsWith = [];
+      const wordStartsWith = [];
+      const contains = [];
+
+      allAvailableCities.forEach((city) => {
+        const cityName = String(city).toLowerCase();
+
+        if (cityName === input) {
+          results.unshift(city);
+        } else if (cityName.startsWith(input)) {
+          startsWith.push(city);
+        } else if (cityName.split(" ").some((word) => word.startsWith(input))) {
+          wordStartsWith.push(city);
+        } else if (cityName.includes(input)) {
+          contains.push(city);
+        }
+      });
+
+      startsWith.sort((a, b) => a.localeCompare(b));
+      wordStartsWith.sort((a, b) => a.localeCompare(b));
+      contains.sort((a, b) => a.localeCompare(b));
+
+      const searchResults = [...results, ...startsWith, ...wordStartsWith, ...contains];
+
+      if (results.length === 0 && startsWith.length === 0) {
+        return ["__add_new", ...searchResults.slice(0, 50)];
+      }
+
+      return [...searchResults.slice(0, 50)];
+    };
+  }, [leadOptions]);
+
+  useEffect(() => {
+    setFilteredArrivalCities(smartSearch(arrivalSearch, arrivalCitySourceList, "arrivalCity"));
+  }, [arrivalSearch, arrivalCitySourceList, smartSearch]);
+
+  useEffect(() => {
+    setFilteredDepartureCities(
+      smartSearch(departureSearch, departureCitySourceList, "departureCity")
+    );
+  }, [departureSearch, departureCitySourceList, smartSearch]);
+
+  const renderCityOption = (props, option, fieldName, typeahead) => {
+    if (option === "__add_new") {
+      return (
+        <li
+          {...props}
+          key="add_new"
+          style={{
+            color: "#1976d2",
+            fontWeight: 600,
+            backgroundColor: "#f0f7ff",
+            borderBottom: "2px solid #1976d2",
+          }}
+        >
+          {`+ Add New City "${typeahead || ""}"`}
+        </li>
+      );
+    }
+
+    const optData = leadOptions?.find(
+      (o) => o.fieldName === fieldName && o.value === option
+    );
+
+    return (
+      <li
+        {...props}
+        key={option}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "8px 12px",
+        }}
+      >
+        <span>{option}</span>
+        {optData && (
+          <IconButton
+            size="small"
+            color="error"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (window.confirm(`Delete "${option}"?`)) {
+                onDeleteOption(optData._id);
+              }
+            }}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        )}
+      </li>
+    );
+  };
+
+  // ✅ Get options for field from Redux (similar to LeadTourForm)
+  const getOptionsForField = (fieldName) => {
+    const filteredOptions = leadOptions
+      ?.filter((opt) => opt.fieldName === fieldName)
+      .map((opt) => ({
+        id: opt._id,
+        value: opt.value,
+        label: opt.value,
+      })) || [];
+
+    const customItemsForField = (customItems[fieldName] || []).map((opt, index) => ({
+      id: null,
+      value: opt,
+      label: opt,
+      isCustom: true,
+    }));
+
+    const combined = [...filteredOptions, ...customItemsForField];
+    const uniqueOptions = combined.reduce((acc, current) => {
+      const exists = acc.find(item => item.value === current.value);
+      if (!exists) {
+        acc.push(current);
+      }
+      return acc;
+    }, []);
+
+    return [
+      ...uniqueOptions,
+      { value: "__add_new", label: "+ Add New", id: null }
+    ];
+  };
+
+  // ✅ Render dropdown with proper option handling
+  const renderDropdownOptions = (fieldName, excludeValues) => {
+    const exclude =
+      excludeValues instanceof Set ? excludeValues : new Set(excludeValues || []);
+    const optionsForField = getOptionsForField(fieldName).filter(
+      (option) => option.value === "__add_new" || !exclude.has(option.value)
+    );
+
+    return optionsForField.map((option) => {
+      if (option.value === "__add_new") {
+        return (
+          <MenuItem
+            key={`add-${fieldName}`}
+            value=""
+            onClick={() => {
+              onAddNewClick(fieldName);
+            }}
+          >
+            + Add New
+          </MenuItem>
+        );
+      }
+      
+      return (
+        <MenuItem key={option.value} value={option.value}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+            <span>{option.label}</span>
+            {option.id && (
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteOption(option.id);
+                }}
+                sx={{ ml: 1 }}
+              >
+                <DeleteIcon fontSize="small" color="error" />
+              </IconButton>
+            )}
+          </Box>
+        </MenuItem>
+      );
+    });
+  };
 
   const countryOptions = useMemo(() => {
     if (!countries || countries.length === 0) return ["Loading countries..."];
@@ -905,6 +1479,7 @@ const Step2Content = ({
       formik.setFieldValue("country", "");
       formik.setFieldValue("destination", "");
       formik.setFieldValue("state", "");
+      dispatch(clearStates());
     }
   };
 
@@ -1008,22 +1583,56 @@ const Step2Content = ({
             </Grid>
 
             <Grid size={{xs:12, md:6}}>
-              {renderSelectField(
-                "destination",
-                "Tour Destination",
-                destinationOptions,
-                true,
-                (formik.values.tourType === "International" && !formik.values.country) || locationLoading
-              )}
+              <TextField
+                select
+                fullWidth
+                name="destination"
+                label="Tour Destination *"
+                value={formik.values.destination}
+                onChange={onFieldChange}
+                error={formik.touched.destination && Boolean(formik.errors.destination)}
+                helperText={formik.touched.destination && formik.errors.destination}
+                disabled={
+                  (formik.values.tourType === "International" && !formik.values.country) ||
+                  locationLoading
+                }
+                sx={{ mb: 2 }}
+              >
+                {formik.values.destination &&
+                  !tourDestinationStateNames.includes(formik.values.destination) &&
+                  !getOptionsForField("destination").some(
+                    (o) => o.value === formik.values.destination && o.value !== "__add_new"
+                  ) && (
+                  <MenuItem key="destination-current" value={formik.values.destination}>
+                    {formik.values.destination} (current)
+                  </MenuItem>
+                )}
+                {tourDestinationStateNames.map((name) => (
+                  <MenuItem key={`dest-state-${name}`} value={name}>
+                    {name}
+                  </MenuItem>
+                ))}
+                {renderDropdownOptions(
+                  "destination",
+                  new Set(tourDestinationStateNames)
+                )}
+              </TextField>
             </Grid>
 
             <Grid size={{xs:12, md:6}}>
-              {renderSelectField(
-                "services",
-                "Services Required",
-                getOptions("services"),
-                true
-              )}
+              <TextField
+                select
+                fullWidth
+                name="services"
+                label="Services Required *"
+                value={formik.values.services}
+                onChange={onFieldChange}
+                error={formik.touched.services && Boolean(formik.errors.services)}
+                helperText={formik.touched.services && formik.errors.services}
+                sx={{ mb: 2 }}
+              >
+                {renderDropdownOptions("services")}
+              </TextField>
             </Grid>
 
             <Grid size={{xs:12, md:3}}>
@@ -1071,12 +1680,19 @@ const Step2Content = ({
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
-              {renderSelectField(
-                "sharingType",
-                "Sharing Type",
-                getOptions("sharingType"),
-                true
-              )}
+              <TextField
+                select
+                fullWidth
+                name="sharingType"
+                label="Sharing Type *"
+                value={formik.values.sharingType}
+                onChange={onFieldChange}
+                error={formik.touched.sharingType && Boolean(formik.errors.sharingType)}
+                helperText={formik.touched.sharingType && formik.errors.sharingType}
+                sx={{ mb: 2 }}
+              >
+                {renderDropdownOptions("sharingType")}
+              </TextField>
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
@@ -1088,11 +1704,35 @@ const Step2Content = ({
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
-              {renderSelectField("hotelType", "Hotel Type", getOptions("hotelType"))}
+              <TextField
+                select
+                fullWidth
+                name="hotelType"
+                label="Hotel Type"
+                value={formik.values.hotelType}
+                onChange={onFieldChange}
+                error={formik.touched.hotelType && Boolean(formik.errors.hotelType)}
+                helperText={formik.touched.hotelType && formik.errors.hotelType}
+                sx={{ mb: 2 }}
+              >
+                {renderDropdownOptions("hotelType")}
+              </TextField>
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
-              {renderSelectField("mealPlan", "Meal Plan", getOptions("mealPlan"))}
+              <TextField
+                select
+                fullWidth
+                name="mealPlan"
+                label="Meal Plan"
+                value={formik.values.mealPlan}
+                onChange={onFieldChange}
+                error={formik.touched.mealPlan && Boolean(formik.errors.mealPlan)}
+                helperText={formik.touched.mealPlan && formik.errors.mealPlan}
+                sx={{ mb: 2 }}
+              >
+                {renderDropdownOptions("mealPlan")}
+              </TextField>
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
@@ -1111,19 +1751,121 @@ const Step2Content = ({
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
-              {renderSelectField("arrivalCity", "Arrival City", getOptions("arrivalCity"))}
+              <Autocomplete
+                options={filteredArrivalCities}
+                loading={leadOptionsLoading}
+                value={formik.values.arrivalCity || null}
+                onInputChange={(event, newInputValue) => setArrivalSearch(newInputValue)}
+                onChange={(e, newValue) => {
+                  if (newValue === "__add_new") {
+                    onAddNewClick("arrivalCity", arrivalSearch);
+                  } else {
+                    formik.setFieldValue("arrivalCity", newValue || "");
+                    setArrivalSearch("");
+                  }
+                }}
+                filterOptions={(x) => x}
+                isOptionEqualToValue={(opt, val) => opt === val}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Arrival City"
+                    fullWidth
+                    sx={{ mb: 2 }}
+                    error={formik.touched.arrivalCity && Boolean(formik.errors.arrivalCity)}
+                    helperText={
+                      (formik.touched.arrivalCity && formik.errors.arrivalCity) ||
+                      (formik.values.tourType === "Domestic"
+                        ? "All Indian cities — type to search or add new"
+                        : formik.values.country
+                          ? `Cities in ${formik.values.country}${
+                              formik.values.destination
+                                ? ` (${formik.values.destination})`
+                                : ""
+                            } — type to search or add new`
+                          : "Select tour country to load cities")
+                    }
+                  />
+                )}
+                renderOption={(props, option) =>
+                  renderCityOption(props, option, "arrivalCity", arrivalSearch)
+                }
+              />
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
-              {renderSelectField("arrivalLocation", "Arrival Location", getOptions("arrivalLocation"))}
+              <TextField
+                select
+                fullWidth
+                name="arrivalLocation"
+                label="Arrival Location"
+                value={formik.values.arrivalLocation}
+                onChange={onFieldChange}
+                error={formik.touched.arrivalLocation && Boolean(formik.errors.arrivalLocation)}
+                helperText={formik.touched.arrivalLocation && formik.errors.arrivalLocation}
+                sx={{ mb: 2 }}
+              >
+                {renderDropdownOptions("arrivalLocation")}
+              </TextField>
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
-              {renderSelectField("departureCity", "Departure City", getOptions("departureCity"))}
+              <Autocomplete
+                options={filteredDepartureCities}
+                loading={leadOptionsLoading}
+                value={formik.values.departureCity || null}
+                onInputChange={(event, newInputValue) => setDepartureSearch(newInputValue)}
+                onChange={(e, newValue) => {
+                  if (newValue === "__add_new") {
+                    onAddNewClick("departureCity", departureSearch);
+                  } else {
+                    formik.setFieldValue("departureCity", newValue || "");
+                    setDepartureSearch("");
+                  }
+                }}
+                filterOptions={(x) => x}
+                isOptionEqualToValue={(opt, val) => opt === val}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Departure City"
+                    fullWidth
+                    sx={{ mb: 2 }}
+                    error={formik.touched.departureCity && Boolean(formik.errors.departureCity)}
+                    helperText={
+                      (formik.touched.departureCity && formik.errors.departureCity) ||
+                      (formik.values.tourType === "Domestic"
+                        ? "All Indian cities — type to search or add new"
+                        : formik.values.country
+                          ? `Cities in ${formik.values.country}${
+                              formik.values.destination
+                                ? ` (${formik.values.destination})`
+                                : ""
+                            } — type to search or add new`
+                          : "Select tour country to load cities")
+                    }
+                  />
+                )}
+                renderOption={(props, option) =>
+                  renderCityOption(props, option, "departureCity", departureSearch)
+                }
+              />
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
-              {renderSelectField("departureLocation", "Departure Location", getOptions("departureLocation"))}
+              <TextField
+                select
+                fullWidth
+                name="departureLocation"
+                label="Departure Location"
+                value={formik.values.departureLocation}
+                onChange={onFieldChange}
+                error={formik.touched.departureLocation && Boolean(formik.errors.departureLocation)}
+                helperText={formik.touched.departureLocation && formik.errors.departureLocation}
+                sx={{ mb: 2 }}
+              >
+                {renderDropdownOptions("departureLocation")}
+              </TextField>
             </Grid>
 
             <Grid size={{xs:12, md:4}}>
@@ -1172,6 +1914,9 @@ const ReviewContent = ({ formik }) => {
     { label: "Infants", value: formik.values.infants },
     { label: "Arrival Date", value: formik.values.arrivalDate ? dayjs(formik.values.arrivalDate).format('DD/MM/YYYY') : "Not set" },
     { label: "Departure Date", value: formik.values.departureDate ? dayjs(formik.values.departureDate).format('DD/MM/YYYY') : "Not set" },
+    { label: "No of Nights", value: formik.values.noOfNights ?? "Not set" },
+    { label: "Arrival City", value: formik.values.arrivalCity || "Not specified" },
+    { label: "Departure City", value: formik.values.departureCity || "Not specified" },
     { label: "No of Rooms", value: formik.values.noOfRooms },
     { label: "Sharing Type", value: formik.values.sharingType },
     { label: "Hotel Type", value: formik.values.hotelType || "Not specified" },

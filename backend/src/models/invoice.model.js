@@ -44,6 +44,8 @@ const invoiceSchema = new mongoose.Schema(
         withTax: { type: Boolean, default: true },
         items: [itemSchema],
         totalAmount: { type: Number, required: true },
+        /** Sum of taxable base amounts (pre-GST) across line items */
+        invoiceValuePurchase: { type: Number, default: 0 },
         receivedAmount: { type: Number, default: 0 },
         balanceAmount: { type: Number, default: 0 },
         paymentMode: { type: String, required: true },
