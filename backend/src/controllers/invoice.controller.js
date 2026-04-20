@@ -4,6 +4,7 @@ import {
     renumberInvoicesAfterDeleteForMonth,
     getCalendarMonthKey,
     getMonthBoundsForKey,
+    backfillInvoiceSerialsForExisting,
 } from "../utils/invoiceSerial.utils.js";
 // Create Invoice
 export const createInvoice = async (req, res) => {
@@ -71,7 +72,12 @@ export const getInvoiceById = async (req, res) => {
 
 
 
-const IMMUTABLE_INVOICE_KEYS = ["advancedReceiptNo", "financialYear", "invoiceNo"];
+const IMMUTABLE_INVOICE_KEYS = [
+    "advancedReceiptNo",
+    "financialYear",
+    "invoiceNo",
+    "invoiceSerialNo",
+];
 
 //Update Invoice
 export const updateInvoice = async (req, res) => {
@@ -210,5 +216,38 @@ export const getNextInvoiceNumber = async (req, res) => {
         res.json({ nextNumber: formatted });
     } catch (error) {
         res.status(500).json({ message: "Error generating invoice number" });
+    }
+};
+
+/**
+ * One-time repair for existing invoices to fill invoiceSerialNo.
+ * Body: { companyId?: string, year?: number }
+ */
+export const backfillExistingInvoiceSerials = async (req, res) => {
+    try {
+        const { companyId, year } = req.body || {};
+        if (companyId) {
+            const company = await Company.findById(companyId);
+            if (!company) {
+                return res.status(404).json({ message: "Company not found" });
+            }
+        }
+        if (year !== undefined && !Number.isFinite(Number(year))) {
+            return res.status(400).json({ message: "year must be a number" });
+        }
+
+        const result = await backfillInvoiceSerialsForExisting({
+            companyId: companyId || null,
+            year: year !== undefined ? Number(year) : null,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message:
+                "Existing invoice serials backfilled (yearly sequence starts from 124 per company).",
+            ...result,
+        });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
     }
 };
