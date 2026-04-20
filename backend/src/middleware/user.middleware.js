@@ -10,7 +10,12 @@ export const verifyToken = (req, res, next) => {
     const token = authHeader.split(" ")[1];
     try {
         const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
-        req.user = decoded; // { id, role }
+        if (decoded?.id != null && typeof decoded.id === "object" && decoded.id.$oid) {
+            decoded.id = String(decoded.id.$oid);
+        } else if (decoded?.id != null) {
+            decoded.id = String(decoded.id);
+        }
+        req.user = decoded; // { id, role, staffUserId?, userKey? }
         next();
     } catch (error) {
         res.status(401).json({ error: "Invalid or expired token" });

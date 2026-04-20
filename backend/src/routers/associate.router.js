@@ -6,6 +6,7 @@ import {
   updateAssociate,
   deleteAssociate,
 } from "../controllers/associates.controller.js";
+import { requirePermission } from "../middleware/staffPermission.middleware.js";
 import multer from "multer";
 import path from "path";
 
@@ -38,10 +39,10 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
-router.post("/", upload.single("qrCode"), createAssociate);
-router.get("/", getAllAssociates);
-router.get("/:id", getAssociateById);
-router.put("/:id", upload.single("qrCode"), updateAssociate);
-router.delete("/:id", deleteAssociate);
+router.post("/", requirePermission("canManageStaff"), upload.single("qrCode"), createAssociate);
+router.get("/", requirePermission("canManageStaff"), getAllAssociates);
+router.get("/:id", requirePermission("canManageStaff"), getAssociateById);
+router.put("/:id", requirePermission("canManageStaff"), upload.single("qrCode"), updateAssociate);
+router.delete("/:id", requirePermission("canManageStaff"), deleteAssociate);
 
 export default router;

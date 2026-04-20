@@ -13,7 +13,7 @@ const ProfileDetails = ({ user }) => {
     const saveName = () => {
         const fd = new FormData();
         fd.append("fullName", name);
-        dispatch(updateProfile({ userId: user.userId, formData: fd }));
+        dispatch(updateProfile({ formData: fd }));
         setEditing(false);
     };
 

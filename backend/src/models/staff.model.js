@@ -87,4 +87,4 @@ const staffSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-export const Staff = new mongoose.model("Staff", staffSchema);
+export const Staff = mongoose.model("Staff", staffSchema);

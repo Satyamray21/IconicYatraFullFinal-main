@@ -4,7 +4,10 @@ import {
     login,
     getUsers,
     getUserById,
+    getCurrentProfile,
+    getMyLoginHistory,
     updateUser,
+    updateCurrentUser,
     deleteUser,
     sendResetCode,
     changePassword
@@ -25,6 +28,9 @@ router.post("/change-password", changePassword);
 
 // CRUD (protected)
 router.get("/", verifyToken, authorizeRoles("Admin", "Superadmin"), getUsers);
+router.get("/me", verifyToken, getCurrentProfile);
+router.get("/me/login-history", verifyToken, getMyLoginHistory);
+router.put("/me", verifyToken, upload.single("profileImg"), updateCurrentUser);
 router.get("/:userId", verifyToken, getUserById);
 router.put("/:userId", verifyToken, upload.single("profileImg"), updateUser);
 router.delete("/:userId", verifyToken, authorizeRoles("Admin", "Superadmin"), deleteUser);

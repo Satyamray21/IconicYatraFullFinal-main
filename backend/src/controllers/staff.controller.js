@@ -148,9 +148,22 @@ export const getStaffById = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, staff, "Staff fetched successfully"));
 });
 
-// UPDATE staff with optional photo updates
-export const updateStaff = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+/** JWT staff login only — own document, no canAccessStaff. */
+export const getMyStaffProfile = asyncHandler(async (req, res) => {
+  const sid = req.user?.id;
+  if (!sid) {
+    throw new ApiError(401, "Unauthorized");
+  }
+  const staff = await Staff.findById(sid).lean();
+  if (!staff) {
+    throw new ApiError(404, "Staff profile not found");
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, staff, "Staff fetched successfully"));
+});
+
+async function runStaffUpdateById(id, req, res) {
   const updateData = req.body;
 
   let existingStaff;
@@ -164,24 +177,22 @@ export const updateStaff = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Staff not found");
   }
 
-  // Parse nested fields when sent as JSON strings (multipart/form-data from dashboard)
   let parsedUpdate = { ...updateData };
-  if (typeof parsedUpdate.personalDetails === 'string') {
+  if (typeof parsedUpdate.personalDetails === "string") {
     parsedUpdate.personalDetails = JSON.parse(parsedUpdate.personalDetails);
   }
-  if (typeof parsedUpdate.staffLocation === 'string') {
+  if (typeof parsedUpdate.staffLocation === "string") {
     parsedUpdate.staffLocation = JSON.parse(parsedUpdate.staffLocation);
   }
-  if (typeof parsedUpdate.address === 'string') {
+  if (typeof parsedUpdate.address === "string") {
     parsedUpdate.address = JSON.parse(parsedUpdate.address);
   }
-  if (typeof parsedUpdate.bank === 'string') {
+  if (typeof parsedUpdate.bank === "string") {
     parsedUpdate.bank = JSON.parse(parsedUpdate.bank);
   }
 
-  // Handle file uploads if provided
   const files = req.files || {};
-  
+
   if (files.staffPhoto && files.staffPhoto[0]) {
     const upload = await uploadOnCloudinary(files.staffPhoto[0].path, files.staffPhoto[0].mimetype);
     if (upload) {
@@ -189,8 +200,8 @@ export const updateStaff = asyncHandler(async (req, res) => {
         ...parsedUpdate.personalDetails,
         staffPhoto: {
           url: upload.secure_url,
-          publicId: upload.public_id
-        }
+          publicId: upload.public_id,
+        },
       };
     }
   }
@@ -202,8 +213,8 @@ export const updateStaff = asyncHandler(async (req, res) => {
         ...parsedUpdate.personalDetails,
         aadharPhoto: {
           url: upload.secure_url,
-          publicId: upload.public_id
-        }
+          publicId: upload.public_id,
+        },
       };
     }
   }
@@ -215,8 +226,8 @@ export const updateStaff = asyncHandler(async (req, res) => {
         ...parsedUpdate.personalDetails,
         panPhoto: {
           url: upload.secure_url,
-          publicId: upload.public_id
-        }
+          publicId: upload.public_id,
+        },
       };
     }
   }
@@ -242,6 +253,23 @@ export const updateStaff = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, updatedStaff, "Staff updated successfully"));
+}
+
+export const updateMyStaffProfile = asyncHandler(async (req, res) => {
+  const sid = req.user?.id;
+  if (!sid) {
+    throw new ApiError(401, "Unauthorized");
+  }
+  const me = await Staff.findById(sid).lean();
+  if (!me) {
+    throw new ApiError(404, "Staff not found");
+  }
+  return runStaffUpdateById(me.staffId, req, res);
+});
+
+// UPDATE staff with optional photo updates
+export const updateStaff = asyncHandler(async (req, res) => {
+  return runStaffUpdateById(req.params.id, req, res);
 });
 
 // DELETE staff

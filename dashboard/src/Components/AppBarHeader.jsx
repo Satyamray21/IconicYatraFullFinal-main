@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   AppBar,
   Box,
@@ -13,6 +13,20 @@ import {
   Divider,
   useMediaQuery,
   useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import {
   ChevronLeft,
@@ -23,7 +37,9 @@ import {
   Edit,
 } from "@mui/icons-material";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { fetchProfile } from "../features/user/userSlice";
+import axios from "../utils/axios";
 
 const DashboardHeader = () => {
   const theme = useTheme();
@@ -31,11 +47,42 @@ const DashboardHeader = () => {
   const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
   const location = useLocation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   // ✅ Redux user state (profileSlice se)
   const { user } = useSelector((state) => state.profile);
 
   const [anchorEl, setAnchorEl] = useState(null);
+
+  const [loginHistoryOpen, setLoginHistoryOpen] = useState(false);
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [loginHistoryLoading, setLoginHistoryLoading] = useState(false);
+  const [loginHistoryError, setLoginHistoryError] = useState(null);
+
+  const fetchLoginHistory = useCallback(async () => {
+    setLoginHistoryLoading(true);
+    setLoginHistoryError(null);
+    try {
+      const { data } = await axios.get("/user/me/login-history", {
+        params: { limit: 50 },
+      });
+      setLoginHistory(Array.isArray(data?.data) ? data.data : []);
+    } catch (e) {
+      setLoginHistoryError(
+        e.response?.data?.message ||
+          e.response?.data?.error ||
+          "Could not load login history"
+      );
+      setLoginHistory([]);
+    } finally {
+      setLoginHistoryLoading(false);
+    }
+  }, []);
+
+  const handleOpenLoginHistory = () => {
+    setLoginHistoryOpen(true);
+    fetchLoginHistory();
+  };
 
   const pageTitles = {
     "/": "Dashboard",
@@ -148,9 +195,15 @@ const DashboardHeader = () => {
             <Notifications />
           </IconButton>
 
-          <IconButton>
-            <CalendarToday />
-          </IconButton>
+          <Tooltip title="Login history">
+            <IconButton
+              onClick={handleOpenLoginHistory}
+              aria-label="Login history"
+              color="inherit"
+            >
+              <CalendarToday />
+            </IconButton>
+          </Tooltip>
 
           {/* Profile Section */}
           <Stack
@@ -244,6 +297,10 @@ const DashboardHeader = () => {
               <MenuItem
                 onClick={() => {
                   handleClose();
+                  const token = localStorage.getItem("token");
+                  if (token) {
+                    dispatch(fetchProfile());
+                  }
                   navigate("/profile/edit");
                 }}
                 sx={{
@@ -294,6 +351,75 @@ const DashboardHeader = () => {
           </Menu>
         </Stack>
       </Toolbar>
+
+      <Dialog
+        open={loginHistoryOpen}
+        onClose={() => setLoginHistoryOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>Login history</DialogTitle>
+        <DialogContent dividers>
+          {loginHistoryLoading ? (
+            <Box
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              minHeight={200}
+            >
+              <CircularProgress size={40} />
+            </Box>
+          ) : loginHistoryError ? (
+            <Typography color="error">{loginHistoryError}</Typography>
+          ) : loginHistory.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 2 }}>
+              No login history found for this account.
+            </Typography>
+          ) : (
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "action.hover" }}>
+                    <TableCell>Date &amp; time</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>IP</TableCell>
+                    <TableCell>Location</TableCell>
+                    <TableCell>ISP</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loginHistory.map((log) => (
+                    <TableRow key={log._id || `${log.dateTime}-${log.ip}`}>
+                      <TableCell>{log.dateTime}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.status}
+                          size="small"
+                          color={
+                            log.status === "Login Successful"
+                              ? "success"
+                              : "error"
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>{log.ip}</TableCell>
+                      <TableCell>
+                        {[log.city, log.region, log.country]
+                          .filter(Boolean)
+                          .join(", ") || "—"}
+                      </TableCell>
+                      <TableCell>{log.isp || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLoginHistoryOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </AppBar>
   );
 };

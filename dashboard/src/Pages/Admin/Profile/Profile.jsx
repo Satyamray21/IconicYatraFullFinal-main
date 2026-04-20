@@ -23,8 +23,8 @@ const Profile = () => {
     const [activeTab, setActiveTab] = useState("profile");
 
     useEffect(() => {
-        const userId = localStorage.getItem("userId");
-        if (userId) dispatch(fetchProfile(userId));
+        const token = localStorage.getItem("token");
+        if (token) dispatch(fetchProfile());
     }, [dispatch]);
     useEffect(() => {
   const params = new URLSearchParams(location.search);

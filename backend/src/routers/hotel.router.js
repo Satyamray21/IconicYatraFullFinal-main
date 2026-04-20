@@ -13,14 +13,14 @@ import {
     getHotelForEdit,
     debugHotel
 } from "../controllers/hotel.controller.js";
-import { verifyToken } from "../middleware/user.middleware.js";
+import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
 // ✅ Step 1: Create hotel with basic details
 router.post(
     "/create-hotel",
-    verifyToken,
+    requirePermission("canCreateBooking"),
     upload.fields([
         { name: "mainImage", maxCount: 1 }
     ]),
@@ -31,7 +31,7 @@ router.post(
 // ✅ Step 2: Update room details
 router.put(
     "/update-step2/:id",
-    verifyToken,
+    requirePermission("canEditBooking"),
     upload.fields([
         { name: "roomImages", maxCount: 10 },
     ]),
@@ -42,24 +42,24 @@ router.put(
 // ✅ Step 3: Update mattress cost
 router.put(
     "/update-step3/:id",
-    verifyToken,
+    requirePermission("canEditBooking"),
     updateHotelStep3
 );
 
 // ✅ Step 4: Update peak cost & final submit
 router.put(
     "/update-step4/:id",
-    verifyToken,
+    requirePermission("canEditBooking"),
     updateHotelStep4
 );
 
 // ✅ Get hotel for editing (with step tracking)
-router.get("/edit/:id", verifyToken, getHotelForEdit);
+router.get("/edit/:id", requirePermission("canAccessBookings"), getHotelForEdit);
 
 // ✅ Other existing routes...
 router.put(
     "/update/:id",
-    verifyToken,
+    requirePermission("canEditBooking"),
     upload.fields([
         { name: "mainImage", maxCount: 1 },
         { name: "roomImages", maxCount: 10 },
@@ -68,10 +68,10 @@ router.put(
     updateHotel
 );
 
-router.get("/all-hotel", verifyToken, getHotels);
-router.get("/:id", verifyToken, getHotelById);
-router.delete("/delete/:id", verifyToken, deleteHotel);
-router.patch("/:id/status", verifyToken, updateStatus);
-router.get("/debug/:id", verifyToken, debugHotel);
+router.get("/all-hotel", requirePermission("canAccessBookings"), getHotels);
+router.get("/:id", requirePermission("canAccessBookings"), getHotelById);
+router.delete("/delete/:id", requirePermission("canDeleteBooking"), deleteHotel);
+router.patch("/:id/status", requirePermission("canEditBooking"), updateStatus);
+router.get("/debug/:id", requirePermission("canAccessBookings"), debugHotel);
 
 export default router;

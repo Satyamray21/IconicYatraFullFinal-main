@@ -7,12 +7,14 @@ import {
     deleteCompany,
 } from "../controllers/company.controller.js";
 import { upload } from "../middleware/imageMulter.middleware.js";
+import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
 // handle multiple uploads: logo + signature
 router.post(
     "/",
+    requirePermission("canEditInvoice"),
     upload.fields([
         { name: "logo", maxCount: 1 },
         { name: "signature", maxCount: 1 },
@@ -20,11 +22,12 @@ router.post(
     createCompany
 );
 
-router.get("/", getCompanies);
-router.get("/:id", getCompanyById);
+router.get("/", requirePermission("canAccessInvoices"), getCompanies);
+router.get("/:id", requirePermission("canAccessInvoices"), getCompanyById);
 
 router.put(
     "/:id",
+    requirePermission("canEditInvoice"),
     upload.fields([
         { name: "logo", maxCount: 1 },
         { name: "signature", maxCount: 1 },
@@ -32,6 +35,6 @@ router.put(
     updateCompany
 );
 
-router.delete("/:id", deleteCompany);
+router.delete("/:id", requirePermission("canEditInvoice"), deleteCompany);
 
 export default router;

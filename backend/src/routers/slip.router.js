@@ -2,11 +2,11 @@ import express from "express";
 import { sendSlipEmail } from "../utils/sendSlipEmail.js";
 import path from "path";
 import fs from "fs";
+import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
-// POST /send
-router.post("/send", async (req, res) => {
+router.post("/send", requirePermission("canEditInvoice"), async (req, res) => {
     const { email, slipName } = req.body;
 
     if (!email) {

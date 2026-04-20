@@ -10,6 +10,8 @@ import {
     getRelatedBlogs,
     getBlogStats
 } from '../controllers/blog.controller.js';
+import { verifyToken } from '../middleware/user.middleware.js';
+import { requirePermission } from '../middleware/staffPermission.middleware.js';
 
 const router = express.Router();
 
@@ -20,9 +22,10 @@ router.get('/category/:category', getBlogsByCategory);
 router.get('/:identifier/related', getRelatedBlogs);
 router.get('/:identifier', getBlogByIdentifier);
 
-// Protected routes (add authentication middleware as needed)
 router.post(
     '/',
+    verifyToken,
+    requirePermission('canCreateBlog'),
     upload.single('image'),
     handleUploadError,
     createBlog
@@ -30,11 +33,13 @@ router.post(
 
 router.put(
     '/:id',
+    verifyToken,
+    requirePermission('canEditBlog'),
     upload.single('image'),
     handleUploadError,
     updateBlog
 );
 
-router.delete('/:id', deleteBlog);
+router.delete('/:id', verifyToken, requirePermission('canDeleteBlog'), deleteBlog);
 
 export default router;

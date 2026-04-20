@@ -13,16 +13,16 @@ import {
     sendCustomQuotationMail,
 } from "../../controllers/quotation/customQuotation.controller.js";
 import { upload } from "../../middleware/imageMulter.middleware.js";
+import { requirePermission } from "../../middleware/staffPermission.middleware.js";
 
 const router = Router();
 
-// CRUD routes
-router.post("/", createCustomQuotation);
-router.get("/", getAllCustomQuotations);
+router.post("/", requirePermission("canCreateBooking"), createCustomQuotation);
+router.get("/", requirePermission("canAccessBookings"), getAllCustomQuotations);
 
-// ✅ Handles both single (bannerImage) and multiple (itineraryImages)
 router.post(
     "/update-step",
+    requirePermission("canEditBooking"),
     upload.fields([
         { name: "bannerImage", maxCount: 1 },
         { name: "itineraryImages", maxCount: 20 },
@@ -30,13 +30,13 @@ router.post(
     updateQuotationStep
 );
 
-router.patch("/:quotationId/finalize", finalizeCustomQuotation);
-router.patch("/:quotationId/package-calculations", updatePackageCalculations);
-router.post("/:quotationId/email/preview", previewCustomQuotationMail);
-router.post("/:quotationId/email/send", sendCustomQuotationMail);
-router.get("/:quotationId", getCustomQuotationById);
-router.put("/quotation/:quotationId", updateCustomQuotationByQuotationId);
-router.put("/:id", updateCustomQuotation);
-router.delete("/:id", deleteCustomQuotation);
+router.patch("/:quotationId/finalize", requirePermission("canEditBooking"), finalizeCustomQuotation);
+router.patch("/:quotationId/package-calculations", requirePermission("canEditBooking"), updatePackageCalculations);
+router.post("/:quotationId/email/preview", requirePermission("canEditBooking"), previewCustomQuotationMail);
+router.post("/:quotationId/email/send", requirePermission("canEditBooking"), sendCustomQuotationMail);
+router.get("/:quotationId", requirePermission("canAccessBookings"), getCustomQuotationById);
+router.put("/quotation/:quotationId", requirePermission("canEditBooking"), updateCustomQuotationByQuotationId);
+router.put("/:id", requirePermission("canEditBooking"), updateCustomQuotation);
+router.delete("/:id", requirePermission("canDeleteBooking"), deleteCustomQuotation);
 
 export default router;

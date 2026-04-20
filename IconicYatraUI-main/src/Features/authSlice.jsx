@@ -85,7 +85,12 @@ const authSlice = createSlice({
 
             .addCase(loginUser.rejected, (state, action) => {
                 state.loading = false;
-                state.error = action.payload?.message || "Login failed";
+                const p = action.payload;
+                state.error =
+                    p?.message ||
+                    p?.error ||
+                    (typeof p === "string" ? p : null) ||
+                    "Login failed";
             })
             .addCase(sendResetCode.pending, (state) => {
                 state.resetLoading = true;

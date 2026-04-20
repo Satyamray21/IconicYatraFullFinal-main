@@ -1,4 +1,10 @@
 import mongoose from "mongoose";
+import {
+    allocateNextInvoiceSerial,
+    getFinancialYearFromDate,
+    getCalendarMonthKey,
+    monthNameUtcLong,
+} from "../utils/invoiceSerial.utils.js";
 
 const itemSchema = new mongoose.Schema({
     particulars: { type: String, required: true },
@@ -10,16 +16,6 @@ const itemSchema = new mongoose.Schema({
     amount: { type: Number, required: true },
     basePrice: { type: Number, default: 0 },
 });
-
-/** Indian FY (April–March) and label string e.g. "2024-25" from a calendar date */
-function getFinancialYearFromDate(date) {
-    const d = date instanceof Date ? date : new Date(date);
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    const financialYearStart = m >= 3 ? y : y - 1;
-    const financialYearEnd = financialYearStart + 1;
-    return `${financialYearStart}-${String(financialYearEnd).slice(-2)}`;
-}
 
 const invoiceSchema = new mongoose.Schema(
     {
@@ -85,21 +81,17 @@ invoiceSchema.pre("save", function (next) {
     next();
 });
 
-/* ✅ Auto-generate financialYear and advancedReceiptNo */
+/* ✅ Auto-generate financialYear, advancedReceiptNo, invoiceNo — new invoices only (monotonic serial / FY) */
 invoiceSchema.pre("save", async function (next) {
     try {
-        // Only generate if not already set
-        if (this.advancedReceiptNo && this.financialYear) {
+        if (!this.isNew) {
             return next();
         }
 
-        // Align FY, receipt month label, and serial scope with invoice date (backdated invoices)
         const refDate = this.invoiceDate ? new Date(this.invoiceDate) : new Date();
         const fyString = getFinancialYearFromDate(refDate);
-
         this.financialYear = fyString;
 
-        // Fetch company details
         const Company = mongoose.model("Company");
         const company = await Company.findById(this.companyId);
 
@@ -111,27 +103,18 @@ invoiceSchema.pre("save", async function (next) {
             ? company.companyName.split(" ").map(w => w[0].toUpperCase()).join("").substring(0, 2)
             : "CO";
 
-        // Sequential number within company + FY (exclude this doc on updates)
-        const countQuery = {
-            companyId: this.companyId,
-            financialYear: fyString,
-        };
-        if (!this.isNew) {
-            countQuery._id = { $ne: this._id };
-        }
-        const countForFY = await mongoose.model("Invoice").countDocuments(countQuery);
+        const monthName = monthNameUtcLong(refDate);
 
-        const serial = String(countForFY + 1).padStart(3, "0");
-        const monthName = refDate.toLocaleString("en-US", { month: "long" });
-
-        // Generate advancedReceiptNo only if not provided
-        if (!this.advancedReceiptNo) {
-            this.advancedReceiptNo = `AR-${shortName}-${monthName}-${serial}`;
-        }
-
-        // Generate invoiceNo only if not provided
-        if (!this.invoiceNo) {
-            this.invoiceNo = `${shortName}-${fyString}/${serial}`;
+        if (!this.advancedReceiptNo || !this.invoiceNo) {
+            const serialNum = await allocateNextInvoiceSerial(this.companyId, refDate);
+            const serial = String(serialNum).padStart(3, "0");
+            const yyyymm = getCalendarMonthKey(refDate).replace("-", "");
+            if (!this.advancedReceiptNo) {
+                this.advancedReceiptNo = `AR-${shortName}-${monthName}-${serial}`;
+            }
+            if (!this.invoiceNo) {
+                this.invoiceNo = `${shortName}-${fyString}/${yyyymm}-${serial}`;
+            }
         }
 
         next();
