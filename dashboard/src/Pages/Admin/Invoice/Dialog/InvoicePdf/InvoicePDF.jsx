@@ -36,6 +36,40 @@ const InvoicePDF = ({ invoiceData }) => {
             0
         ) || 0;
 
+    const round2 = (n) => Number(Number(n || 0).toFixed(2));
+    const fmtMoney = (n) =>
+        round2(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const isInterStateSupply = () =>
+        !String(invoiceData?.stateOfSupply || "")
+            .toLowerCase()
+            .includes("uttar pradesh");
+
+    const getInvoiceSerialNumber = () => {
+        const explicitSerial =
+            invoiceData?.invoiceSerialNo ??
+            invoiceData?.serialNo ??
+            invoiceData?.invoiceSNo;
+        const explicitNum = Number(explicitSerial);
+        if (Number.isFinite(explicitNum) && explicitNum > 0) {
+            return explicitNum;
+        }
+
+        const arMatch = String(invoiceData?.advancedReceiptNo || "").match(/(\d{3,})$/);
+        if (arMatch?.[1]) {
+            const parsed = Number(arMatch[1]);
+            if (Number.isFinite(parsed) && parsed > 0) return parsed;
+        }
+
+        // Fallback only: derive display number from January, base starts at 124
+        const baseStart = 124;
+        const dt = invoiceDate ? new Date(invoiceDate) : null;
+        if (!dt || Number.isNaN(dt.getTime())) return baseStart;
+        const janStart = new Date(dt.getFullYear(), 0, 1);
+        const diffDays = Math.floor((dt - janStart) / (1000 * 60 * 60 * 24));
+        return baseStart + Math.max(0, diffDays);
+    };
+
     const amountToWords = (amount) => {
         if (!amount) return "Zero Only INR";
         const ones = [
@@ -220,6 +254,7 @@ const InvoicePDF = ({ invoiceData }) => {
 
     const subtotal = calculateSubtotal();
     const totalTax = calculateTotalTax();
+    const invoiceSerialNoDisplay = `${financialYear || "N/A"}/${getInvoiceSerialNumber()}`;
 
     return (
         <Box sx={{ bgcolor: "#f5f7fa", p: 2 }}>
@@ -367,6 +402,9 @@ const InvoicePDF = ({ invoiceData }) => {
                                 <b>Financial Year:</b> {financialYear}
                             </div>
                             <div>
+                                <b>Invoice S.No:</b> {invoiceSerialNoDisplay}
+                            </div>
+                            <div>
                                 <div>
                                     <b>Advanced Receipt No:</b> {advancedReceiptNo}
                                 </div>
@@ -424,16 +462,16 @@ const InvoicePDF = ({ invoiceData }) => {
                                         998552
                                     </TableCell>
                                     <TableCell align="right" sx={{ fontSize: "10px", px: 1.5 }}>
-                                        ₹{item.basePrice || 0}
+                                        ₹{fmtMoney(item.basePrice)}
                                     </TableCell>
                                     <TableCell align="right" sx={{ fontSize: "10px", px: 1.5 }}>
-                                        ₹{item.discount || 0}
+                                        ₹{fmtMoney(item.discount)}
                                     </TableCell>
                                     <TableCell align="right" sx={{ fontSize: "10px", px: 1.5 }}>
-                                        ₹{item.taxAmount || 0}
+                                        ₹{fmtMoney(item.taxAmount)}
                                     </TableCell>
                                     <TableCell align="right" sx={{ fontSize: "10px", px: 1.5 }}>
-                                        ₹{item.amount || 0}
+                                        ₹{fmtMoney(item.amount)}
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -450,7 +488,7 @@ const InvoicePDF = ({ invoiceData }) => {
                                     align="right"
                                     sx={{ fontWeight: "bold", fontSize: "10px", px: 1.5 }}
                                 >
-                                    ₹{totalAmount}
+                                    ₹{fmtMoney(totalAmount)}
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -483,26 +521,38 @@ const InvoicePDF = ({ invoiceData }) => {
                                         <TableCell sx={{ fontWeight: "bold" }}>Tax ₹</TableCell>
                                     </TableRow>
                                     {items.map((item, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell>
-                                                {!invoiceData?.stateOfSupply?.includes("Uttar Pradesh")
-                                                    ? "IGST"
-                                                    : "CGST / SGST"}
-
-                                            </TableCell>
-                                            <TableCell>
-                                                ₹{(item.basePrice || 0) - (item.discount || 0)}
-                                            </TableCell>
-                                            <TableCell>{item.taxPercent || 0}%</TableCell>
-                                            <TableCell>₹{item.taxAmount || 0}</TableCell>
-                                        </TableRow>
+                                        isInterStateSupply() ? (
+                                            <TableRow key={`igst-${i}`}>
+                                                <TableCell>IGST</TableCell>
+                                                <TableCell>
+                                                    ₹{fmtMoney((item.basePrice || 0) - (item.discount || 0))}
+                                                </TableCell>
+                                                <TableCell>{round2(item.taxPercent)}%</TableCell>
+                                                <TableCell>₹{fmtMoney(item.taxAmount)}</TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            <TableRow key={`cgst-sgst-${i}`}>
+                                                <TableCell>CGST + SGST</TableCell>
+                                                <TableCell>
+                                                    ₹{fmtMoney((item.basePrice || 0) - (item.discount || 0))}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {round2((Number(item.taxPercent) || 0) / 2)}% +{" "}
+                                                    {round2((Number(item.taxPercent) || 0) / 2)}%
+                                                </TableCell>
+                                                <TableCell>
+                                                    CGST ₹{fmtMoney((Number(item.taxAmount) || 0) / 2)} + SGST ₹
+                                                    {fmtMoney((Number(item.taxAmount) || 0) / 2)}
+                                                </TableCell>
+                                            </TableRow>
+                                        )
                                     ))}
                                     <TableRow sx={{ bgcolor: "#f5f5f5" }}>
                                         <TableCell colSpan={3} sx={{ fontWeight: "bold" }}>
                                             Total Tax
                                         </TableCell>
                                         <TableCell sx={{ fontWeight: "bold" }}>
-                                            ₹{totalTax}
+                                            ₹{fmtMoney(totalTax)}
                                         </TableCell>
                                     </TableRow>
                                 </TableBody>
@@ -528,26 +578,26 @@ const InvoicePDF = ({ invoiceData }) => {
                                 <TableBody>
                                     <TableRow>
                                         <TableCell>Sub Total</TableCell>
-                                        <TableCell align="right">₹{subtotal}</TableCell>
+                                        <TableCell align="right">₹{fmtMoney(subtotal)}</TableCell>
                                     </TableRow>
                                     <TableRow>
                                         <TableCell>Total Tax</TableCell>
-                                        <TableCell align="right">₹{totalTax}</TableCell>
+                                        <TableCell align="right">₹{fmtMoney(totalTax)}</TableCell>
                                     </TableRow>
                                     <TableRow>
                                         <TableCell>Total</TableCell>
-                                        <TableCell align="right">₹{totalAmount}</TableCell>
+                                        <TableCell align="right">₹{fmtMoney(totalAmount)}</TableCell>
                                     </TableRow>
                                     <TableRow>
                                         <TableCell>Received</TableCell>
-                                        <TableCell align="right">₹{receivedAmount}</TableCell>
+                                        <TableCell align="right">₹{fmtMoney(receivedAmount)}</TableCell>
                                     </TableRow>
                                     <TableRow sx={{ bgcolor: "#e3f2fd" }}>
                                         <TableCell sx={{ fontWeight: "bold" }}>
                                             Balance Due
                                         </TableCell>
                                         <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                                            ₹{balanceAmount}
+                                            ₹{fmtMoney(balanceAmount)}
                                         </TableCell>
                                     </TableRow>
                                 </TableBody>
