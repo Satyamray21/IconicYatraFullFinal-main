@@ -8,17 +8,18 @@ import {
     getCompanyTotalPayments,
     getVouchersByQuotationRef,
 } from "../controllers/payment.controller.js";
+import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
 router.route("/")
-    .post(createVoucher)
-    .get(getAllVouchers);
-router.route("/totalPayment").get(getCompanyTotalPayments);
-router.get("/by-quotation/:quotationRef", getVouchersByQuotationRef);
+    .post(requirePermission("canCreateInvoice"), createVoucher)
+    .get(requirePermission("canAccessInvoices"), getAllVouchers);
+router.route("/totalPayment").get(requirePermission("canAccessInvoices"), getCompanyTotalPayments);
+router.get("/by-quotation/:quotationRef", requirePermission("canAccessInvoices"), getVouchersByQuotationRef);
 router.route("/:id")
-    .get(getVoucherById)
-    .put(updateVoucher)
-    .delete(deleteVoucher);
+    .get(requirePermission("canAccessInvoices"), getVoucherById)
+    .put(requirePermission("canEditInvoice"), updateVoucher)
+    .delete(requirePermission("canEditInvoice"), deleteVoucher);
 
 export default router;

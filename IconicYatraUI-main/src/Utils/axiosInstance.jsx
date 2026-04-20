@@ -8,7 +8,7 @@ export const axiosInstance = axios.create({
     baseURL: `${BASE_URL}/api/v1/user`,
     headers: { "Content-Type": "application/json" },
 });
-0
+
 // Payment APIs
 export const paymentAxios = axios.create({
     baseURL: `${BASE_URL}/api/v1/easebusspayment`,

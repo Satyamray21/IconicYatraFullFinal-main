@@ -7,14 +7,15 @@ import {
     updateBankDetails,
     deleteBankDetails,
 } from "../../controllers/common/bankDetails.controller.js"
+import { requirePermission } from "../../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
-router.post("/addBankDetails", addBankDetails);
-router.get("/allBankDetails", getAllBankDetails);
-router.get("/viewBankDetails/:id", getBankDetailsById)
-router.put("/updateBankDetails/:id", updateBankDetails);
-router.delete("/deleteBankDetails/:id", deleteBankDetails);
+router.post("/addBankDetails", requirePermission("canEditInvoice"), addBankDetails);
+router.get("/allBankDetails", requirePermission("canAccessInvoices"), getAllBankDetails);
+router.get("/viewBankDetails/:id", requirePermission("canAccessInvoices"), getBankDetailsById);
+router.put("/updateBankDetails/:id", requirePermission("canEditInvoice"), updateBankDetails);
+router.delete("/deleteBankDetails/:id", requirePermission("canEditInvoice"), deleteBankDetails);
 
 
 export default router;

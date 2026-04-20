@@ -18,13 +18,40 @@ import {
   DialogContentText,
   Snackbar,
   Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import LockIcon from "@mui/icons-material/Lock";
+import HistoryIcon from "@mui/icons-material/History";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllStaff, deleteStaff } from "../../../features/staff/staffSlice";
+import { isStaffSession } from "../../../features/user/userSlice";
+import axios from "../../../utils/axios";
+
+function isUserModelAdmin(user) {
+  if (!user || isStaffSession(user)) return false;
+  const role = user.userRole || user.role || "";
+  return ["Superadmin", "Admin", "Executive"].includes(role);
+}
+
+function normalizeLoginHistoryPayload(res) {
+  const inner = res?.data?.data;
+  if (Array.isArray(inner)) return inner;
+  if (inner && Array.isArray(inner.data)) return inner.data;
+  return [];
+}
 
 const stats = [
   { title: "Today's", active: 0, lead: 0, quotation: 0 },
@@ -39,20 +66,72 @@ const StaffCard = () => {
   const dispatch = useDispatch();
 
   const { list: staffList = [], loading, error } = useSelector((state) => state.staffs);
+  const user = useSelector((state) => state.profile.user);
+  const canViewStaffLoginHistory = isUserModelAdmin(user);
 
-  // State for delete confirmation dialog
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
     staffId: null,
     staffName: "",
   });
 
-  // State for snackbar notifications
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success",
   });
+
+  const [staffLoginDialog, setStaffLoginDialog] = useState({
+    open: false,
+    staffId: "",
+    staffName: "",
+    rows: [],
+    loading: false,
+    error: null,
+  });
+
+  const openStaffLoginHistory = async (row) => {
+    setStaffLoginDialog({
+      open: true,
+      staffId: row.staffId,
+      staffName: row.staffName || row.staffId,
+      rows: [],
+      loading: true,
+      error: null,
+    });
+    try {
+      const r = await axios.get(
+        `/staff-permission/${encodeURIComponent(row.staffId)}/login-history`,
+        { params: { limit: 80 } }
+      );
+      const rows = normalizeLoginHistoryPayload(r);
+      setStaffLoginDialog((prev) => ({
+        ...prev,
+        rows,
+        loading: false,
+      }));
+    } catch (e) {
+      setStaffLoginDialog((prev) => ({
+        ...prev,
+        loading: false,
+        error:
+          e.response?.data?.message ||
+          e.response?.data?.error ||
+          "Failed to fetch login history",
+      }));
+    }
+  };
+
+  const closeStaffLoginHistory = () => {
+    setStaffLoginDialog({
+      open: false,
+      staffId: "",
+      staffName: "",
+      rows: [],
+      loading: false,
+      error: null,
+    });
+  };
 
   useEffect(() => {
     dispatch(fetchAllStaff());
@@ -64,6 +143,13 @@ const StaffCard = () => {
 
   const handleEditClick = (row) => {
     navigate(`/staff/staffeditform/${row.staffId}`);
+  };
+
+  const handleManagePermissions = (row) => {
+    const staffData = staffList.find((s) => s.staffId === row.staffId);
+    navigate(`/admin/staff/${row.staffId}/permissions`, {
+      state: { staffData },
+    });
   };
 
   const handleDeleteClick = (row) => {
@@ -131,22 +217,50 @@ const StaffCard = () => {
     {
       field: "action",
       headerName: "Action",
-      width: 100,
+      width: canViewStaffLoginHistory ? 200 : 150,
+      sortable: false,
       renderCell: (params) => (
-        <Box display="flex" gap={1}>
+        <Box display="flex" gap={0.5} alignItems="center">
           <IconButton
             color="primary"
             size="small"
             onClick={() => handleEditClick(params.row)}
             disabled={loading}
+            title="Edit Staff"
           >
             <EditIcon fontSize="small" />
           </IconButton>
+          <IconButton
+            color="success"
+            size="small"
+            onClick={() => handleManagePermissions(params.row)}
+            disabled={loading}
+            title="Manage Permissions"
+          >
+            <LockIcon fontSize="small" />
+          </IconButton>
+          {canViewStaffLoginHistory && (
+            <Tooltip title="Login history">
+              <IconButton
+                color="info"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openStaffLoginHistory(params.row);
+                }}
+                disabled={loading}
+                aria-label={`Login history for ${params.row.staffName}`}
+              >
+                <HistoryIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           <IconButton
             color="error"
             size="small"
             onClick={() => handleDeleteClick(params.row)}
             disabled={loading}
+            title="Delete Staff"
           >
             <DeleteIcon fontSize="small" />
           </IconButton>
@@ -234,6 +348,87 @@ const StaffCard = () => {
             />
           </Box>
         </Box>
+
+        <Dialog
+          open={staffLoginDialog.open}
+          onClose={closeStaffLoginHistory}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>
+            Login history — {staffLoginDialog.staffName}{" "}
+            <Typography component="span" variant="body2" color="text.secondary">
+              ({staffLoginDialog.staffId})
+            </Typography>
+          </DialogTitle>
+          <DialogContent dividers>
+            {staffLoginDialog.loading ? (
+              <Box
+                display="flex"
+                justifyContent="center"
+                alignItems="center"
+                minHeight={220}
+              >
+                <CircularProgress />
+              </Box>
+            ) : staffLoginDialog.error ? (
+              <Alert severity="error">{staffLoginDialog.error}</Alert>
+            ) : staffLoginDialog.rows.length === 0 ? (
+              <Typography color="text.secondary" sx={{ py: 2 }}>
+                No login history for this staff (create staff login &amp; permissions
+                first).
+              </Typography>
+            ) : (
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "action.hover" }}>
+                      <TableCell>Date &amp; time</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>IP</TableCell>
+                      <TableCell>Location</TableCell>
+                      <TableCell>ISP</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {staffLoginDialog.rows.map((log, idx) => (
+                      <TableRow
+                        key={
+                          log._id
+                            ? String(log._id)
+                            : `${staffLoginDialog.staffId}-${log.dateTime}-${idx}`
+                        }
+                      >
+                        <TableCell>{log.dateTime}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={log.status}
+                            size="small"
+                            color={
+                              log.status === "Login Successful"
+                                ? "success"
+                                : "error"
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>{log.ip}</TableCell>
+                        <TableCell>
+                          {[log.city, log.region, log.country]
+                            .filter(Boolean)
+                            .join(", ") || "—"}
+                        </TableCell>
+                        <TableCell>{log.isp || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeStaffLoginHistory}>Close</Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Delete Confirmation Dialog */}
         <Dialog

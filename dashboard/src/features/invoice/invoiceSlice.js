@@ -63,6 +63,21 @@ export const deleteInvoice = createAsyncThunk(
     }
 );
 
+/** Optional payload: { companyId } to limit repair; omit to repair all companies */
+export const renumberCompanyAdvancedReceipts = createAsyncThunk(
+    "invoice/renumberCompanyAdvancedReceipts",
+    async (payload, { rejectWithValue }) => {
+        try {
+            const response = await axios.post(`/invoice/renumber-company`, payload || {});
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(
+                error.response?.data?.message || "Failed to repair advance receipt numbers"
+            );
+        }
+    }
+);
+
 
 const initialState = {
     invoices: [],

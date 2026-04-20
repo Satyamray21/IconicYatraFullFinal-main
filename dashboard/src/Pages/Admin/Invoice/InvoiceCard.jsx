@@ -31,6 +31,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import {
     getInvoices,
     deleteInvoice,
+    renumberCompanyAdvancedReceipts,
 } from "../../../features/invoice/invoiceSlice";
 
 const InvoiceCard = () => {
@@ -52,6 +53,7 @@ const InvoiceCard = () => {
         message: "",
         severity: "success",
     });
+    const [repairingAr, setRepairingAr] = useState(false);
 
     const handleCloseSnackbar = () => {
         setSnackbar((prev) => ({ ...prev, open: false }));
@@ -75,6 +77,27 @@ const InvoiceCard = () => {
     // ➕ Add invoice
     const handleAddClick = () => {
         navigate("/invoiceform");
+    };
+
+    const handleRepairAdvancedReceipts = async () => {
+        setRepairingAr(true);
+        try {
+            const result = await dispatch(renumberCompanyAdvancedReceipts()).unwrap();
+            await dispatch(getInvoices());
+            setSnackbar({
+                open: true,
+                message: result?.message || "Advance receipt numbers updated",
+                severity: "success",
+            });
+        } catch (err) {
+            setSnackbar({
+                open: true,
+                message: typeof err === "string" ? err : "Could not repair advance receipt numbers",
+                severity: "error",
+            });
+        } finally {
+            setRepairingAr(false);
+        }
     };
 
     // ✏️ Edit invoice
@@ -171,10 +194,21 @@ const InvoiceCard = () => {
                     justifyContent="space-between"
                     alignItems="center"
                     gap={2}
+                    flexWrap="wrap"
                 >
-                    <Button variant="contained" color="warning" onClick={handleAddClick}>
-                        Add
-                    </Button>
+                    <Box display="flex" gap={1} flexWrap="wrap">
+                        <Button variant="contained" color="warning" onClick={handleAddClick}>
+                            Add
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            color="warning"
+                            disabled={repairingAr}
+                            onClick={handleRepairAdvancedReceipts}
+                        >
+                            {repairingAr ? "Repairing…" : "Repair AR numbers"}
+                        </Button>
+                    </Box>
 
                     <TextField
                         size="small"
@@ -198,6 +232,7 @@ const InvoiceCard = () => {
                             <TableRow>
                                 <TableCell>Sr No.</TableCell>
                                 <TableCell>Invoice No</TableCell>
+                                <TableCell>Adv. receipt</TableCell>
                                 <TableCell>Invoice Date</TableCell>
                                 <TableCell>Due Date</TableCell>
                                 <TableCell>Party Name</TableCell>
@@ -219,6 +254,9 @@ const InvoiceCard = () => {
                                     >
                                         <TableCell>{page * rowsPerPage + index + 1}</TableCell>
                                         <TableCell>{invoice.invoiceNo}</TableCell>
+                                        <TableCell sx={{ whiteSpace: "nowrap" }}>
+                                            {invoice.advancedReceiptNo || "—"}
+                                        </TableCell>
                                         <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
                                         <TableCell>{formatDate(invoice.dueDate)}</TableCell>
                                         <TableCell>{invoice.billingName}</TableCell>
@@ -248,7 +286,7 @@ const InvoiceCard = () => {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={9} align="center">
+                                    <TableCell colSpan={10} align="center">
                                         No invoices found
                                     </TableCell>
                                 </TableRow>
