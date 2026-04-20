@@ -78,6 +78,21 @@ export const renumberCompanyAdvancedReceipts = createAsyncThunk(
     }
 );
 
+/** Optional payload: { companyId?, year? } to backfill invoiceSerialNo for existing invoices */
+export const backfillInvoiceSerials = createAsyncThunk(
+    "invoice/backfillInvoiceSerials",
+    async (payload, { rejectWithValue }) => {
+        try {
+            const response = await axios.post(`/invoice/backfill-serials`, payload || {});
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(
+                error.response?.data?.message || "Failed to backfill invoice serial numbers"
+            );
+        }
+    }
+);
+
 
 const initialState = {
     invoices: [],
