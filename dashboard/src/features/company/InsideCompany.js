@@ -1,7 +1,7 @@
 // features/company/InsideCompany.js
 
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import axios from "axios";
+import axios from "../../utils/axios";
 
 // Log the environment variable to see what's available
 
