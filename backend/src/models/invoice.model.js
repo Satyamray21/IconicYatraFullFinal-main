@@ -33,6 +33,8 @@ const invoiceSchema = new mongoose.Schema(
         billingAddress: { type: String },
         gstin: { type: String },
         invoiceNo: { type: String, unique: true, required: true },
+        /** Persistent serial number from backend sequence allocator */
+        invoiceSerialNo: { type: Number, default: 0 },
         invoiceDate: { type: Date, required: true },
         dueDate: { type: Date },
         stateOfSupply: { type: String, required: true },
@@ -105,17 +107,13 @@ invoiceSchema.pre("save", async function (next) {
 
         const monthName = monthNameUtcLong(refDate);
 
-        if (!this.advancedReceiptNo || !this.invoiceNo) {
-            const serialNum = await allocateNextInvoiceSerial(this.companyId, refDate);
-            const serial = String(serialNum).padStart(3, "0");
-            const yyyymm = getCalendarMonthKey(refDate).replace("-", "");
-            if (!this.advancedReceiptNo) {
-                this.advancedReceiptNo = `AR-${shortName}-${monthName}-${serial}`;
-            }
-            if (!this.invoiceNo) {
-                this.invoiceNo = `${shortName}-${fyString}/${yyyymm}-${serial}`;
-            }
-        }
+        // Always allocate from backend sequence; never trust incoming invoice/AR numbers.
+        const serialNum = await allocateNextInvoiceSerial(this.companyId, refDate);
+        const serial = String(serialNum).padStart(3, "0");
+        const yyyymm = getCalendarMonthKey(refDate).replace("-", "");
+        this.invoiceSerialNo = serialNum;
+        this.advancedReceiptNo = `AR-${shortName}-${monthName}-${serial}`;
+        this.invoiceNo = `${shortName}-${fyString}/${yyyymm}-${serial}`;
 
         next();
     } catch (error) {

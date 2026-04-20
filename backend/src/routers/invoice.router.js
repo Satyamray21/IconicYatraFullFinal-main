@@ -8,6 +8,7 @@ import {
   getNextInvoiceNumber,
   renumberInvoiceMonth,
   renumberCompanyAdvancedReceipts,
+  backfillExistingInvoiceSerials,
 } from "../controllers/invoice.controller.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
@@ -28,6 +29,11 @@ router.post(
   "/renumber-company",
   requirePermission("canEditInvoice"),
   renumberCompanyAdvancedReceipts,
+);
+router.post(
+  "/backfill-serials",
+  requirePermission("canEditInvoice"),
+  backfillExistingInvoiceSerials,
 );
 
 router

@@ -20,6 +20,12 @@ export function getCalendarMonthKey(date) {
     return `${y}-${m}`;
 }
 
+/** Calendar year from invoiceDate UTC, e.g. "2026". */
+export function getCalendarYearKey(date) {
+    const d = date instanceof Date ? date : new Date(date);
+    return String(d.getUTCFullYear());
+}
+
 export function getMonthBoundsForKey(yearMonth) {
     const [y, m] = yearMonth.split("-").map(Number);
     const start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
@@ -42,19 +48,26 @@ function companyShortName(company) {
         : "CO";
 }
 
-/** Max 3-digit AR suffix for invoices in this company + calendar month */
-export async function getMaxAdvancedReceiptSuffixForMonth(companyId, yearMonth) {
-    const { start, end } = getMonthBoundsForKey(yearMonth);
+/** Max serial used by invoices in this company + calendar year */
+export async function getMaxInvoiceSerialForYear(companyId, yearKey) {
+    const y = Number(yearKey);
+    const start = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
+    const end = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
     const peers = await mongoose
         .model("Invoice")
         .find({
             companyId,
             invoiceDate: { $gte: start, $lte: end },
         })
-        .select("advancedReceiptNo")
+        .select("advancedReceiptNo invoiceSerialNo")
         .lean();
     let maxSerial = 0;
     for (const p of peers) {
+        const direct = Number(p.invoiceSerialNo);
+        if (Number.isFinite(direct) && direct > 0) {
+            maxSerial = Math.max(maxSerial, direct);
+            continue;
+        }
         const m = (p.advancedReceiptNo || "").match(/(\d{3})$/);
         if (m) {
             maxSerial = Math.max(maxSerial, parseInt(m[1], 10));
@@ -64,22 +77,28 @@ export async function getMaxAdvancedReceiptSuffixForMonth(companyId, yearMonth) 
 }
 
 /**
- * Next serial for this company + invoiceDate's calendar month (monotonic within month).
+ * Next serial for this company + invoiceDate's calendar year (monotonic within year).
+ * Business rule: January new cycle starts from 124 (i.e. seed previous at 123).
  */
 export async function allocateNextInvoiceSerial(companyId, refDate) {
-    const yearMonth = getCalendarMonthKey(refDate);
-    const maxFromInvoices = await getMaxAdvancedReceiptSuffixForMonth(companyId, yearMonth);
+    const yearKey = getCalendarYearKey(refDate);
+    const maxFromInvoices = await getMaxInvoiceSerialForYear(companyId, yearKey);
     const cid = new mongoose.Types.ObjectId(companyId);
+    const baselineSeed = 123;
 
     const pipeline = [
         {
             $set: {
                 companyId: cid,
-                yearMonth,
+                yearMonth: yearKey,
                 lastSerial: {
                     $add: [
                         {
-                            $max: [{ $ifNull: ["$lastSerial", 0] }, maxFromInvoices],
+                            $max: [
+                                { $ifNull: ["$lastSerial", 0] },
+                                maxFromInvoices,
+                                baselineSeed,
+                            ],
                         },
                         1,
                     ],
@@ -89,7 +108,7 @@ export async function allocateNextInvoiceSerial(companyId, refDate) {
     ];
 
     const doc = await InvoiceSequence.findOneAndUpdate(
-        { companyId: cid, yearMonth },
+        { companyId: cid, yearMonth: yearKey },
         pipeline,
         { new: true, upsert: true }
     );
@@ -151,4 +170,64 @@ export async function renumberInvoicesAfterDeleteForMonth(companyId, yearMonth) 
         },
         { upsert: true }
     );
+}
+
+/**
+ * Backfill persistent invoiceSerialNo for existing invoices.
+ * Rule: for each company + calendar year, serial starts from 124 (baseline 123 + 1)
+ * and increments by invoiceDate asc, createdAt asc.
+ */
+export async function backfillInvoiceSerialsForExisting({
+    companyId = null,
+    year = null,
+} = {}) {
+    const Invoice = mongoose.model("Invoice");
+    const query = {};
+    if (companyId) {
+        query.companyId = new mongoose.Types.ObjectId(companyId);
+    }
+    if (year !== null && year !== undefined && Number.isFinite(Number(year))) {
+        const y = Number(year);
+        query.invoiceDate = {
+            $gte: new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0)),
+            $lte: new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999)),
+        };
+    }
+
+    const rows = await Invoice.find(query)
+        .select("_id companyId invoiceDate createdAt invoiceSerialNo")
+        .sort({ companyId: 1, invoiceDate: 1, createdAt: 1 })
+        .lean();
+
+    const groups = new Map();
+    for (const row of rows) {
+        const y = new Date(row.invoiceDate).getUTCFullYear();
+        const key = `${String(row.companyId)}::${y}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(row);
+    }
+
+    let updatedCount = 0;
+    const summary = [];
+    for (const [key, list] of groups.entries()) {
+        const [cid, y] = key.split("::");
+        let serial = 123;
+        for (const inv of list) {
+            serial += 1;
+            await Invoice.updateOne(
+                { _id: inv._id },
+                { $set: { invoiceSerialNo: serial } }
+            );
+            updatedCount += 1;
+        }
+        summary.push({
+            companyId: cid,
+            year: Number(y),
+            startSerial: 124,
+            endSerial: serial,
+            invoices: list.length,
+        });
+    }
+
+    return { updatedCount, summary };
 }
