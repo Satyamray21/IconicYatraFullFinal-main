@@ -48,11 +48,11 @@ function companyShortName(company) {
         : "CO";
 }
 
-/** Max serial used by invoices in this company + calendar year */
-export async function getMaxInvoiceSerialForYear(companyId, yearKey) {
-    const y = Number(yearKey);
-    const start = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
-    const end = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
+/** Max serial used by invoices in this company + financial year */
+export async function getMaxInvoiceSerialForFinancialYear(companyId, fyKey) {
+    const [startYear] = String(fyKey).split("-").map(Number);
+    const start = new Date(Date.UTC(startYear, 3, 1, 0, 0, 0, 0));
+    const end = new Date(Date.UTC(startYear + 1, 2, 31, 23, 59, 59, 999));
     const peers = await mongoose
         .model("Invoice")
         .find({
@@ -77,20 +77,20 @@ export async function getMaxInvoiceSerialForYear(companyId, yearKey) {
 }
 
 /**
- * Next serial for this company + invoiceDate's calendar year (monotonic within year).
- * Business rule: January new cycle starts from 124 (i.e. seed previous at 123).
+ * Next serial for this company + invoiceDate's financial year (monotonic within FY).
+ * Business rule: every new financial year starts from 001.
  */
 export async function allocateNextInvoiceSerial(companyId, refDate) {
-    const yearKey = getCalendarYearKey(refDate);
-    const maxFromInvoices = await getMaxInvoiceSerialForYear(companyId, yearKey);
+    const fyKey = getFinancialYearFromDate(refDate);
+    const maxFromInvoices = await getMaxInvoiceSerialForFinancialYear(companyId, fyKey);
     const cid = new mongoose.Types.ObjectId(companyId);
-    const baselineSeed = 123;
+    const baselineSeed = 0;
 
     const pipeline = [
         {
             $set: {
                 companyId: cid,
-                yearMonth: yearKey,
+                yearMonth: fyKey,
                 lastSerial: {
                     $add: [
                         {
@@ -108,7 +108,7 @@ export async function allocateNextInvoiceSerial(companyId, refDate) {
     ];
 
     const doc = await InvoiceSequence.findOneAndUpdate(
-        { companyId: cid, yearMonth: yearKey },
+        { companyId: cid, yearMonth: fyKey },
         pipeline,
         { new: true, upsert: true }
     );
@@ -174,7 +174,7 @@ export async function renumberInvoicesAfterDeleteForMonth(companyId, yearMonth) 
 
 /**
  * Backfill persistent invoiceSerialNo for existing invoices.
- * Rule: for each company + calendar year, serial starts from 124 (baseline 123 + 1)
+ * Rule: for each company + financial year, serial starts from 001
  * and increments by invoiceDate asc, createdAt asc.
  */
 export async function backfillInvoiceSerialsForExisting({
@@ -201,8 +201,8 @@ export async function backfillInvoiceSerialsForExisting({
 
     const groups = new Map();
     for (const row of rows) {
-        const y = new Date(row.invoiceDate).getUTCFullYear();
-        const key = `${String(row.companyId)}::${y}`;
+        const fy = getFinancialYearFromDate(row.invoiceDate);
+        const key = `${String(row.companyId)}::${fy}`;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(row);
     }
@@ -210,8 +210,8 @@ export async function backfillInvoiceSerialsForExisting({
     let updatedCount = 0;
     const summary = [];
     for (const [key, list] of groups.entries()) {
-        const [cid, y] = key.split("::");
-        let serial = 123;
+        const [cid, fy] = key.split("::");
+        let serial = 0;
         for (const inv of list) {
             serial += 1;
             await Invoice.updateOne(
@@ -222,8 +222,8 @@ export async function backfillInvoiceSerialsForExisting({
         }
         summary.push({
             companyId: cid,
-            year: Number(y),
-            startSerial: 124,
+            financialYear: fy,
+            startSerial: 1,
             endSerial: serial,
             invoices: list.length,
         });

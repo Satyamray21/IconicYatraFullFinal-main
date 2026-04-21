@@ -5,6 +5,8 @@ import {
     getCalendarMonthKey,
     getMonthBoundsForKey,
     backfillInvoiceSerialsForExisting,
+    getFinancialYearFromDate,
+    getCalendarMonthKey as getInvoiceYearMonthKey,
 } from "../utils/invoiceSerial.utils.js";
 // Create Invoice
 export const createInvoice = async (req, res) => {
@@ -176,26 +178,73 @@ export const renumberCompanyAdvancedReceipts = async (req, res) => {
         }
 
         const repaired = [];
+        const repairedInvoiceNumbers = [];
         for (const compId of companyIds) {
             const cidStr = compId.toString();
+            const company = await Company.findById(compId).select("companyName").lean();
+            const shortName = company?.companyName
+                ? company.companyName
+                      .split(" ")
+                      .map((w) => w[0].toUpperCase())
+                      .join("")
+                      .substring(0, 2)
+                : "CO";
             const rows = await Invoice.find({ companyId: compId })
-                .select("invoiceDate")
+                .select("_id invoiceDate createdAt")
                 .lean();
             const months = new Set();
+            const fyGroups = new Map();
             for (const row of rows) {
                 months.add(getCalendarMonthKey(row.invoiceDate));
+                const fy = getFinancialYearFromDate(row.invoiceDate);
+                if (!fyGroups.has(fy)) fyGroups.set(fy, []);
+                fyGroups.get(fy).push(row);
             }
             for (const ym of months) {
                 await renumberInvoicesAfterDeleteForMonth(cidStr, ym);
                 repaired.push({ companyId: cidStr, yearMonth: ym });
             }
+            for (const [financialYear, invoices] of fyGroups.entries()) {
+                invoices.sort(
+                    (a, b) =>
+                        new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime() ||
+                        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                );
+                for (let i = 0; i < invoices.length; i++) {
+                    const row = invoices[i];
+                    const serialNum = i + 1;
+                    const serial = String(serialNum).padStart(3, "0");
+                    const yyyymm = getInvoiceYearMonthKey(row.invoiceDate).replace("-", "");
+                    const invoiceNo = `${shortName}-${financialYear}/${yyyymm}-${serial}`;
+                    await Invoice.updateOne(
+                        { _id: row._id },
+                        {
+                            $set: {
+                                financialYear,
+                                invoiceSerialNo: serialNum,
+                                invoiceNo,
+                            },
+                        }
+                    );
+                }
+                repairedInvoiceNumbers.push({
+                    companyId: cidStr,
+                    financialYear,
+                    invoices: invoices.length,
+                    startSerial: 1,
+                    endSerial: invoices.length,
+                });
+            }
         }
 
         res.json({
             success: true,
-            message: "Advanced receipt numbers set to 001… per company and calendar month (UTC)",
+            message:
+                "Advanced receipt and invoice numbers repaired. AR runs 001..n per month and invoice serial runs 001..n per financial year.",
             repairedCount: repaired.length,
             repaired,
+            repairedInvoiceNumberCount: repairedInvoiceNumbers.length,
+            repairedInvoiceNumbers,
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -244,7 +293,7 @@ export const backfillExistingInvoiceSerials = async (req, res) => {
         return res.status(200).json({
             success: true,
             message:
-                "Existing invoice serials backfilled (yearly sequence starts from 124 per company).",
+                "Existing invoice serials backfilled (financial-year sequence starts from 001 per company).",
             ...result,
         });
     } catch (error) {
