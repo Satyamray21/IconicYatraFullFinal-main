@@ -531,6 +531,8 @@ const VehicleQuotationPage = () => {
           ? "inclusionPolicy"
           : policyKey === "exclusions"
             ? "exclusionPolicy"
+            : policyKey === "terms"
+              ? "termsAndConditions"
             : policyKey]: newValue,
       }));
     }
@@ -1164,29 +1166,42 @@ const VehicleQuotationPage = () => {
     {
       title: "Inclusion Policy",
       icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
-      content: defaultPolicies.inclusions,
-      field: "inclusions",
+      content:
+        linesToPolicyArray(policyInputs.inclusionPolicy).length > 0
+          ? linesToPolicyArray(policyInputs.inclusionPolicy)
+          : defaultPolicies.inclusions,
+      field: "policies.inclusions",
       isArray: true,
     },
     {
       title: "Exclusion Policy",
       icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
-      content: defaultPolicies.exclusions,
-      field: "exclusions",
+      content:
+        linesToPolicyArray(policyInputs.exclusionPolicy).length > 0
+          ? linesToPolicyArray(policyInputs.exclusionPolicy)
+          : defaultPolicies.exclusions,
+      field: "policies.exclusions",
       isArray: true,
     },
     {
       title: "Payment Policy",
       icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
-      content: defaultPolicies.paymentPolicy,
-      field: "paymentPolicy",
+      content:
+        (Array.isArray(policyInputs.paymentPolicy)
+          ? policyInputs.paymentPolicy.join("\n")
+          : String(policyInputs.paymentPolicy || "").trim()) ||
+        defaultPolicies.paymentPolicy,
+      field: "policies.paymentPolicy",
       isArray: false,
     },
     {
       title: "Cancellation & Refund",
       icon: <Warning sx={{ mr: 0.5, color: "warning.main" }} />,
-      content: defaultPolicies.cancellationPolicy,
-      field: "cancellationPolicy",
+      content:
+        linesToPolicyArray(policyInputs.cancellationPolicy).length > 0
+          ? linesToPolicyArray(policyInputs.cancellationPolicy)
+          : defaultPolicies.cancellationPolicy,
+      field: "policies.cancellationPolicy",
       isArray: true,
     },
   ];
@@ -1231,6 +1246,9 @@ const VehicleQuotationPage = () => {
   const tableHeaders = ["Vehicle Name", "Pickup", "Drop", "Cost"];
 
   const terms =
+    (Array.isArray(policyInputs.termsAndConditions)
+      ? policyInputs.termsAndConditions.join("\n")
+      : String(policyInputs.termsAndConditions || "").trim()) ||
     "1. This is only a Quote. Availability is checked only on confirmation.\n2. Rates are subject to change without prior notice.\n3. All disputes are subject to Noida Jurisdiction only.";
 
   const footer = {
@@ -1982,7 +2000,11 @@ const VehicleQuotationPage = () => {
                         <IconButton
                           size="small"
                           onClick={() =>
-                            handleEditOpen("terms", terms, "Terms & Conditions")
+                            handleEditOpen(
+                              "policies.terms",
+                              terms,
+                              "Terms & Conditions",
+                            )
                           }
                         >
                           <Edit fontSize="small" />
