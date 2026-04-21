@@ -9,7 +9,7 @@ import {
     Typography,
     Button,
     Divider,
-    Radio,
+    Checkbox,
 } from "@mui/material";
 import { Formik, Form } from "formik";
 import { useSelector } from "react-redux";
@@ -19,7 +19,7 @@ const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
 /**
  * @param {object} props
  * @param {{ label: string, hotel: string, cost: string }[]} [props.packageOptionsOverride] When set (e.g. quick quotation), these options replace Redux-driven package rows.
- * @param {string} [props.preselectedPackageLabel] Pre-select radio when it matches an option label (quick finalize uses this).
+ * @param {string} [props.preselectedPackageLabel] Pre-select when it matches an option label.
  */
 const FinalizeDialog = ({
     open,
@@ -30,14 +30,13 @@ const FinalizeDialog = ({
     /** Billable add-on services (amount + line tax) to add to each package total in the dialog */
     additionalServicesSum = 0,
 }) => {
-    const [selectedOption, setSelectedOption] = useState("");
+    const [selectedOptions, setSelectedOptions] = useState([]);
 
     const { selectedQuotation } = useSelector(
         (state) => state.customQuotation
     );
 
     // SAFELY extract pricing
-
     const adj = Number(additionalServicesSum) || 0;
     const adjustPkg = (v) => {
         if (typeof v !== "number" || Number.isNaN(v)) return "N/A";
@@ -110,150 +109,152 @@ const FinalizeDialog = ({
             ? packageOptionsOverride
             : quotationOptionsFromRedux;
 
-    const handleSubmit = (values) => {
-        onConfirm(values);
+    const handlePackageToggle = (packageLabel) => {
+        setSelectedOptions((prev) => {
+            if (prev.includes(packageLabel)) {
+                return prev.filter((p) => p !== packageLabel);
+            } else {
+                return [...prev, packageLabel];
+            }
+        });
     };
 
-    const preselect =
-        preselectedPackageLabel != null && String(preselectedPackageLabel).trim()
-            ? String(preselectedPackageLabel).trim()
-            : selectedQuotation?.finalizedPackage;
+    const handleSubmit = (values) => {
+        onConfirm({
+            quotations: selectedOptions,
+            // For backward compatibility, also send single package
+            quotation: selectedOptions.length > 0 ? selectedOptions[0] : "",
+        });
+    };
+
     React.useEffect(() => {
-        if (open && preselect) {
-            const match = quotationOptions.some((o) => o.label === preselect);
-            if (match) setSelectedOption(preselect);
-            else if (FINAL_PACKAGES.includes(preselect))
-                setSelectedOption(preselect);
+        if (open) {
+            const preselect =
+                preselectedPackageLabel != null && String(preselectedPackageLabel).trim()
+                    ? String(preselectedPackageLabel).trim()
+                    : selectedQuotation?.finalizedPackages?.[0] || selectedQuotation?.finalizedPackage;
+
+            if (preselect && FINAL_PACKAGES.includes(preselect)) {
+                setSelectedOptions([preselect]);
+            }
         }
-        if (!open) setSelectedOption("");
-    }, [open, preselect, quotationOptions]);
+        if (!open) setSelectedOptions([]);
+    }, [open, preselectedPackageLabel, selectedQuotation?.finalizedPackage]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ fontWeight: 600, color: "#1976d2" }}>
-                Finalize Quotation
+                Finalize Quotation - Select Packages
             </DialogTitle>
 
-            <Formik
-                enableReinitialize
-                initialValues={{
-                    quotation:
-                        preselect &&
-                        (FINAL_PACKAGES.includes(preselect) ||
-                            quotationOptions.some((o) => o.label === preselect))
-                            ? preselect
-                            : "",
-                }}
-                onSubmit={handleSubmit}
-            >
-                {({ setFieldValue }) => (
-                    <Form>
-                        <DialogContent>
-                            <Typography
-                                variant="subtitle1"
-                                sx={{ fontWeight: 600, mb: 2 }}
-                                color="text.primary"
-                            >
-                                <span style={{ color: "red" }}>*</span> Quotation
-                            </Typography>
+            <DialogContent>
+                <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 600, mb: 2, mt: 2 }}
+                    color="text.primary"
+                >
+                    <span style={{ color: "red" }}>*</span> Select one or more packages
+                </Typography>
 
-                            <Grid container spacing={2}>
-                                {quotationOptions.map((option) => {
-                                    const isSelected = selectedOption === option.label;
+                <Grid container spacing={2}>
+                    {quotationOptions.map((option) => {
+                        const isSelected = selectedOptions.includes(option.label);
 
-                                    return (
-                                        <Grid size={{ xs: 12, md: 4 }} key={option.label}>
-                                            <Box
-                                                onClick={() => {
-                                                    setSelectedOption(option.label);
-                                                    setFieldValue("quotation", option.label);
-                                                }}
-                                                sx={{
-                                                    border: isSelected
-                                                        ? "2px solid #ff9800"
-                                                        : "1px solid #ccc",
-                                                    borderRadius: 1,
-                                                    p: 2,
-                                                    cursor: "pointer",
-                                                    textAlign: "center",
-                                                    transition: "0.2s",
-                                                    "&:hover": { borderColor: "#1976d2" },
-                                                }}
-                                            >
-                                                <Box
-                                                    sx={{
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                    }}
-                                                >
-                                                    <Radio
-                                                        checked={isSelected}
-                                                        value={option.label}
-                                                        name="quotation"
-                                                        sx={{
-                                                            color: "#ff9800",
-                                                            "&.Mui-checked": { color: "#ff9800" },
-                                                        }}
-                                                    />
-                                                    <Typography
-                                                        variant="subtitle1"
-                                                        sx={{ color: "#ff9800", fontWeight: 600 }}
-                                                    >
-                                                        {option.label}
-                                                    </Typography>
-                                                </Box>
+                        return (
+                            <Grid size={{ xs: 12, md: 4 }} key={option.label}>
+                                <Box
+                                    onClick={() => handlePackageToggle(option.label)}
+                                    sx={{
+                                        border: isSelected
+                                            ? "2px solid #ff9800"
+                                            : "1px solid #ccc",
+                                        borderRadius: 1,
+                                        p: 2,
+                                        cursor: "pointer",
+                                        textAlign: "center",
+                                        transition: "0.2s",
+                                        backgroundColor: isSelected ? "#fff8e1" : "transparent",
+                                        "&:hover": { borderColor: "#1976d2", backgroundColor: "#f5f5f5" },
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                        }}
+                                    >
+                                        <Checkbox
+                                            checked={isSelected}
+                                            onChange={() => handlePackageToggle(option.label)}
+                                            sx={{
+                                                color: "#ff9800",
+                                                "&.Mui-checked": { color: "#ff9800" },
+                                            }}
+                                        />
+                                        <Typography
+                                            variant="subtitle1"
+                                            sx={{ color: "#ff9800", fontWeight: 600 }}
+                                        >
+                                            {option.label}
+                                        </Typography>
+                                    </Box>
 
-                                                <Divider sx={{ my: 1, borderColor: "#ff9800" }} />
+                                    <Divider sx={{ my: 1, borderColor: "#ff9800" }} />
 
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{ mb: 1, color: "#1976d2" }}
-                                                >
-                                                    » {option.hotel}
-                                                </Typography>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{ mb: 1, color: "#1976d2" }}
+                                    >
+                                        » {option.hotel}
+                                    </Typography>
 
-                                                <Typography variant="body2" color="text.secondary">
-                                                    Total Cost:{" "}
-                                                    <span style={{ fontWeight: 600 }}>{option.cost}</span>
-                                                </Typography>
-                                            </Box>
-                                        </Grid>
-                                    );
-                                })}
+                                    <Typography variant="body2" color="text.secondary">
+                                        Total Cost:{" "}
+                                        <span style={{ fontWeight: 600 }}>{option.cost}</span>
+                                    </Typography>
+                                </Box>
                             </Grid>
-                        </DialogContent>
+                        );
+                    })}
+                </Grid>
 
-                        <DialogActions sx={{ justifyContent: "center", pb: 2 }}>
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                type="submit"
-                                disabled={!selectedOption}
-                                sx={{
-                                    textTransform: "none",
-                                    backgroundColor: selectedOption ? "#64b5f6" : "#bbdefb",
-                                    "&:hover": { backgroundColor: "#2196f3" },
-                                }}
-                            >
-                                Confirm
-                            </Button>
-
-                            <Button
-                                variant="contained"
-                                onClick={onClose}
-                                sx={{
-                                    backgroundColor: "#f57c00",
-                                    textTransform: "none",
-                                    "&:hover": { backgroundColor: "#ef6c00" },
-                                }}
-                            >
-                                Cancel
-                            </Button>
-                        </DialogActions>
-                    </Form>
+                {selectedOptions.length > 0 && (
+                    <Box sx={{ mt: 3, p: 2, backgroundColor: "#e3f2fd", borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            Selected Packages: {selectedOptions.join(", ")}
+                        </Typography>
+                    </Box>
                 )}
-            </Formik>
+            </DialogContent>
+
+            <DialogActions sx={{ justifyContent: "center", pb: 2 }}>
+                <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleSubmit}
+                    disabled={selectedOptions.length === 0}
+                    sx={{
+                        textTransform: "none",
+                        backgroundColor: selectedOptions.length > 0 ? "#64b5f6" : "#bbdefb",
+                        "&:hover": { backgroundColor: "#2196f3" },
+                    }}
+                >
+                    Confirm
+                </Button>
+
+                <Button
+                    variant="contained"
+                    onClick={onClose}
+                    sx={{
+                        backgroundColor: "#f57c00",
+                        textTransform: "none",
+                        "&:hover": { backgroundColor: "#ef6c00" },
+                    }}
+                >
+                    Cancel
+                </Button>
+            </DialogActions>
         </Dialog>
     );
 };

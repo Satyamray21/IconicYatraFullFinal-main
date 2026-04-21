@@ -621,6 +621,7 @@ useEffect(() => {
             hotelVendorName: "",
             vehicleVendorName: "",
         },
+        finalizedVendorsWithAmounts: [],
         vehicles: [],
         pricing: { discount: "", gst: "", total: "" },
         policies: {
@@ -842,6 +843,15 @@ useEffect(() => {
     }, [quotation, billableServicesSum, selectedQuotation]);
 
     const finalizedVendors = React.useMemo(() => {
+        const vendorAmountRows = Array.isArray(quotation?.finalizedVendorsWithAmounts)
+            ? quotation.finalizedVendorsWithAmounts
+                  .map((v) => ({
+                      name: String(v?.vendorName || "").trim(),
+                      amount: Number(v?.amount) || 0,
+                  }))
+                  .filter((v) => Boolean(v.name))
+            : [];
+
         const savedNames = [
             quotation?.finalizedVendorDetails?.hotelVendorName,
             quotation?.finalizedVendorDetails?.vehicleVendorName,
@@ -857,8 +867,20 @@ useEffect(() => {
             )
             .map((v) => String(v?.partyName || "").trim())
             .filter(Boolean);
-        return Array.from(new Set([...savedNames, ...paymentNames]));
-    }, [paymentHistory, quotation?.finalizedVendorDetails]);
+        const mergedNames = Array.from(new Set([...savedNames, ...paymentNames]));
+        const mergedRows = mergedNames.map((name) => {
+            const found = vendorAmountRows.find((row) => row.name === name);
+            return found || { name, amount: null };
+        });
+        vendorAmountRows.forEach((row) => {
+            if (!mergedRows.some((x) => x.name === row.name)) mergedRows.push(row);
+        });
+        return mergedRows;
+    }, [
+        paymentHistory,
+        quotation?.finalizedVendorDetails,
+        quotation?.finalizedVendorsWithAmounts,
+    ]);
 
     useEffect(() => {
         const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
@@ -1040,6 +1062,7 @@ useEffect(() => {
                 hotelVendorName: tourDetails?.vendorDetails?.hotelVendorName || "",
                 vehicleVendorName: tourDetails?.vendorDetails?.vehicleVendorName || "",
             },
+            finalizedVendorsWithAmounts: apiData?.finalizedVendorsWithAmounts || [],
             vehicles: vehicleDetails ? [{
                 pickup: {
                     date: formatDate(vehicleDetails.pickupDate),
@@ -1704,11 +1727,13 @@ useEffect(() => {
     };
 
     const handleConfirm = async (values) => {
-        const pkg = values?.quotation;
-        if (!pkg || !id) {
+        // Support both single and multiple packages
+        const packages = values?.quotations || (values?.quotation ? [values.quotation] : []);
+        
+        if (packages.length === 0 || !id) {
             setSnackbar({
                 open: true,
-                message: "Select a package to finalize",
+                message: "Select at least one package to finalize",
                 severity: "error",
             });
             return;
@@ -1717,7 +1742,8 @@ useEffect(() => {
             await dispatch(
                 finalizeCustomQuotation({
                     quotationId: id,
-                    finalizedPackage: pkg,
+                    finalizedPackage: packages[0], // Keep for backward compatibility
+                    finalizedPackages: packages, // New field for multiple packages
                 })
             ).unwrap();
             await dispatch(getCustomQuotationById(id)).unwrap();
@@ -1726,7 +1752,7 @@ useEffect(() => {
             setOpenBankDialog(true);
             setSnackbar({
                 open: true,
-                message: `Quotation finalized — ${pkg}`,
+                message: `Quotation finalized — ${packages.join(", ")}`,
                 severity: "success",
             });
         } catch (e) {
@@ -1759,17 +1785,40 @@ useEffect(() => {
         });
         if (id) {
             try {
+                const vendorRows = Array.isArray(vendorPayload?.finalizedVendorsWithAmounts)
+                    ? vendorPayload.finalizedVendorsWithAmounts
+                    : [];
+                const hotelVendorNamesFromRows = vendorRows
+                    .filter((v) => String(v?.vendorType || "").toLowerCase() === "hotel")
+                    .map((v) => String(v?.vendorName || "").trim())
+                    .filter(Boolean);
+
+                const updateData = {
+                    "tourDetails.vendorDetails.vendorType":
+                        vendorPayload.vendorType || "",
+                    "tourDetails.vendorDetails.hotelVendorName":
+                        vendorPayload.hotelVendorName ||
+                        hotelVendorNamesFromRows.join(", ") ||
+                        "",
+                    "tourDetails.vendorDetails.vehicleVendorName":
+                        vendorPayload.vehicleVendorName || "",
+                };
+
+                // Update with vendor amounts if provided
+                if (vendorPayload.finalizedVendorsWithAmounts && vendorPayload.finalizedVendorsWithAmounts.length > 0) {
+                    // Store vendor amounts in a separate finalize call
+                    await dispatch(
+                        finalizeCustomQuotation({
+                            quotationId: id,
+                            finalizedVendorsWithAmounts: vendorPayload.finalizedVendorsWithAmounts,
+                        })
+                    ).unwrap();
+                }
+
                 await dispatch(
                     updateCustomQuotation({
                         quotationId: id,
-                        formData: {
-                            "tourDetails.vendorDetails.vendorType":
-                                vendorPayload.vendorType || "",
-                            "tourDetails.vendorDetails.hotelVendorName":
-                                vendorPayload.hotelVendorName || "",
-                            "tourDetails.vendorDetails.vehicleVendorName":
-                                vendorPayload.vehicleVendorName || "",
-                        },
+                        formData: updateData,
                     })
                 ).unwrap();
                 await refreshQuotationFromApi();
@@ -2678,16 +2727,30 @@ useEffect(() => {
                                     >
                                         Finalized Vendors
                                     </Typography>
+                                    <Box sx={{ mb: 1.5 }}>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={<Edit />}
+                                            onClick={() => setOpenBankDialog(true)}
+                                        >
+                                            Edit Vendors
+                                        </Button>
+                                    </Box>
 
                                     {finalizedVendors.length ? (
                                         <Box display="flex" gap={1} flexWrap="wrap">
-                                            {finalizedVendors.map((name) => (
+                                            {finalizedVendors.map((vendor) => (
                                                 <Chip
-                                                    key={name}
+                                                    key={vendor.name}
                                                     size="small"
                                                     color="success"
                                                     variant="outlined"
-                                                    label={name}
+                                                    label={
+                                                        vendor.amount != null
+                                                            ? `${vendor.name} (₹ ${Number(vendor.amount).toLocaleString("en-IN")})`
+                                                            : vendor.name
+                                                    }
                                                 />
                                             ))}
                                         </Box>
@@ -3301,6 +3364,8 @@ useEffect(() => {
                 accountOptions={accountOptions}
                 onAddBankOpen={handleAddBankOpen}
                 onConfirm={handleBankConfirm}
+                initialVendorDetails={quotation?.finalizedVendorDetails}
+                initialFinalizedVendorsWithAmounts={quotation?.finalizedVendorsWithAmounts}
             />
             <AddBankDialog
                 open={openAddBankDialog}

@@ -922,6 +922,7 @@ function transformQuickApiToDisplay(apiData, company) {
       hotelVendorName: apiData.vendorDetails?.hotelVendorName || "",
       vehicleVendorName: apiData.vendorDetails?.vehicleVendorName || "",
     },
+    finalizedVendorsWithAmounts: apiData.finalizedVendorsWithAmounts || [],
     vehicles: [],
     pricing: {
       discount: "—",
@@ -1061,6 +1062,7 @@ const QuickFinalize = () => {
       hotelVendorName: "",
       vehicleVendorName: "",
     },
+    finalizedVendorsWithAmounts: [],
     vehicles: [],
     pricing: { discount: "", gst: "", total: "" },
     policies: {
@@ -1451,6 +1453,14 @@ const QuickFinalize = () => {
     return Number.isFinite(n) ? n : null;
   }, [currentQuotation, services]);
   const finalizedVendors = React.useMemo(() => {
+    const vendorAmountRows = Array.isArray(quotation?.finalizedVendorsWithAmounts)
+      ? quotation.finalizedVendorsWithAmounts
+          .map((v) => ({
+            name: String(v?.vendorName || "").trim(),
+            amount: Number(v?.amount) || 0,
+          }))
+          .filter((v) => Boolean(v.name))
+      : [];
     const savedNames = [
       quotation?.finalizedVendorDetails?.hotelVendorName,
       quotation?.finalizedVendorDetails?.vehicleVendorName,
@@ -1462,8 +1472,20 @@ const QuickFinalize = () => {
       .filter((v) => v?.paymentType === "Payment Voucher" || v?.drCr === "Dr")
       .map((v) => String(v?.partyName || "").trim())
       .filter(Boolean);
-    return Array.from(new Set([...savedNames, ...paymentNames]));
-  }, [paymentHistory, quotation?.finalizedVendorDetails]);
+    const mergedNames = Array.from(new Set([...savedNames, ...paymentNames]));
+    const mergedRows = mergedNames.map((name) => {
+      const found = vendorAmountRows.find((row) => row.name === name);
+      return found || { name, amount: null };
+    });
+    vendorAmountRows.forEach((row) => {
+      if (!mergedRows.some((x) => x.name === row.name)) mergedRows.push(row);
+    });
+    return mergedRows;
+  }, [
+    paymentHistory,
+    quotation?.finalizedVendorDetails,
+    quotation?.finalizedVendorsWithAmounts,
+  ]);
   useEffect(() => {
     const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
     setQuotation((prev) => ({
@@ -1940,13 +1962,32 @@ const QuickFinalize = () => {
   const handleBankConfirm = async (vendorPayload = {}) => {
     if (apiEntityId) {
       try {
+        const vendorRows = Array.isArray(vendorPayload?.finalizedVendorsWithAmounts)
+          ? vendorPayload.finalizedVendorsWithAmounts
+          : [];
+        const hotelVendorNamesFromRows = vendorRows
+          .filter((v) => String(v?.vendorType || "").toLowerCase() === "hotel")
+          .map((v) => String(v?.vendorName || "").trim())
+          .filter(Boolean);
+
+        if (vendorRows.length > 0) {
+          await dispatch(
+            finalizeQuickQuotation({
+              id: apiEntityId,
+              finalizedVendorsWithAmounts: vendorRows,
+            }),
+          ).unwrap();
+        }
         await dispatch(
           updateQuickQuotation({
             id: apiEntityId,
             formData: {
               vendorDetails: {
                 vendorType: vendorPayload.vendorType || "",
-                hotelVendorName: vendorPayload.hotelVendorName || "",
+                hotelVendorName:
+                  vendorPayload.hotelVendorName ||
+                  hotelVendorNamesFromRows.join(", ") ||
+                  "",
                 vehicleVendorName: vendorPayload.vehicleVendorName || "",
               },
             },
@@ -2864,16 +2905,30 @@ const QuickFinalize = () => {
                   >
                     Finalized Vendors
                   </Typography>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<Edit />}
+                      onClick={() => setOpenBankDialog(true)}
+                    >
+                      Edit Vendors
+                    </Button>
+                  </Box>
 
                   {finalizedVendors.length ? (
                     <Box display="flex" gap={1} flexWrap="wrap">
-                      {finalizedVendors.map((name) => (
+                      {finalizedVendors.map((vendor) => (
                         <Chip
-                          key={name}
+                          key={vendor.name}
                           size="small"
                           color="success"
                           variant="outlined"
-                          label={name}
+                          label={
+                            vendor.amount != null
+                              ? `${vendor.name} (₹ ${Number(vendor.amount).toLocaleString("en-IN")})`
+                              : vendor.name
+                          }
                         />
                       ))}
                     </Box>
@@ -3586,6 +3641,8 @@ const QuickFinalize = () => {
         open={openBankDialog}
         onClose={handleBankDialogClose}
         onConfirm={handleBankConfirm}
+        initialVendorDetails={quotation?.finalizedVendorDetails}
+        initialFinalizedVendorsWithAmounts={quotation?.finalizedVendorsWithAmounts}
       />
       <AddBankDialog
         open={openAddBankDialog}

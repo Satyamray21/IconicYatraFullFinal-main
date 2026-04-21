@@ -133,11 +133,38 @@ export const updateCustomQuotationCosting = createAsyncThunk(
 // Finalize custom quotation (Standard / Deluxe / Superior)
 export const finalizeCustomQuotation = createAsyncThunk(
     "customQuotation/finalize",
-    async ({ quotationId, finalizedPackage }, { rejectWithValue }) => {
+    async (
+        { quotationId, finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts },
+        { rejectWithValue, getState }
+    ) => {
         try {
-            const res = await axios.patch(`/customQT/${quotationId}/finalize`, {
-                finalizedPackage,
-            });
+            const payload = {};
+            const selectedQuotation = getState()?.customQuotation?.selectedQuotation;
+            const existingPackage =
+                selectedQuotation?.finalizedPackages?.[0] ||
+                selectedQuotation?.finalizedPackage;
+            
+            // Prioritize multiple packages if available
+            if (Array.isArray(finalizedPackages) && finalizedPackages.length > 0) {
+                payload.finalizedPackages = finalizedPackages;
+                payload.finalizedPackage = finalizedPackages[0];
+            } else if (finalizedPackage && String(finalizedPackage).trim()) {
+                payload.finalizedPackage = finalizedPackage;
+            } else if (
+                Array.isArray(finalizedVendorsWithAmounts) &&
+                finalizedVendorsWithAmounts.length > 0 &&
+                existingPackage
+            ) {
+                // Backend currently requires a valid package even for vendor-only updates.
+                payload.finalizedPackage = existingPackage;
+            }
+            
+            // Add vendor amounts if provided
+            if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {
+                payload.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts;
+            }
+            
+            const res = await axios.patch(`/customQT/${quotationId}/finalize`, payload);
             return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(
