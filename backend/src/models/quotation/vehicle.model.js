@@ -99,6 +99,18 @@ const vehicleSchema = mongoose.Schema({
             remarks: { type: String, trim: true, default: "" },
         },
     ],
+    additionalServices: [
+        {
+            included: { type: String, enum: ["yes", "no"], default: "yes" },
+            particulars: { type: String, trim: true, default: "" },
+            amount: { type: Number, default: 0, min: 0 },
+            taxType: { type: String, trim: true, default: "" },
+            taxRate: { type: Number, default: 0, min: 0 },
+            taxAmount: { type: Number, default: 0, min: 0 },
+            totalAmount: { type: Number, default: 0, min: 0 },
+            taxLabel: { type: String, trim: true, default: "" },
+        },
+    ],
     policies: policySchema,
     itinerary: [
         {

@@ -136,6 +136,14 @@ function buildMongoSetFromDisplayField(field, value) {
       return { "quotationTitle": String(value) };
     case "destinationSummary":
       return { "destinationSummary": String(value) };
+    case "costDetails.totalCost":
+      return { "costDetails.totalCost": String(value) };
+    case "discount":
+      return { discount: String(value) };
+    case "tax.applyGst":
+      return { "tax.applyGst": String(value) };
+    case "additionalServices":
+      return { additionalServices: Array.isArray(value) ? value : [] };
     default:
       return null;
   }
@@ -208,6 +216,18 @@ const VehicleQuotationPage = () => {
       setLocalItinerary(q.vehicle.itinerary);
     }
   }, [q?.vehicle?.itinerary]);
+
+  useEffect(() => {
+    setIsFinalized(q?.vehicle?.finalizeStatus === "finalized");
+    setServices(
+      Array.isArray(q?.vehicle?.additionalServices)
+        ? q.vehicle.additionalServices.map((s) => ({
+            ...s,
+            id: s?.id || s?._id || `${Date.now()}_${Math.random()}`,
+          }))
+        : [],
+    );
+  }, [q?.vehicle?.finalizeStatus, q?.vehicle?.additionalServices]);
 
   const [editDialog, setEditDialog] = useState({
     open: false,
@@ -352,6 +372,7 @@ const VehicleQuotationPage = () => {
 
   const actions = [
     "Finalize",
+    "Booking Confirmation Mail",
     "Transaction History",
     "Vendor Management",
     "Add Service",
@@ -386,9 +407,9 @@ const VehicleQuotationPage = () => {
   return nextTemplates;
 };
 
-  const openEmailDialogWithTemplates = async () => {
+  const openEmailDialogWithTemplates = async (mailType = "normal") => {
     const defaultCompany = mailCompanies?.[0];
-    setEmailTemplateType("normal");
+    setEmailTemplateType(mailType === "booking" ? "booking" : "normal");
     try {
       await refreshEmailTemplates(defaultCompany?._id);
     } catch {
@@ -397,14 +418,19 @@ const VehicleQuotationPage = () => {
     setOpenEmailDialog(true);
   };
 
-  const handleEmailOpen = async () => {
+  const handleEmailOpen = async (mailType = "normal") => {
+    if (mailType === "booking") {
+      setAutoGeneratePdfForMail(false);
+      await openEmailDialogWithTemplates("booking");
+      return;
+    }
     if (!pdfAttachmentForMail?.contentBase64) {
       setAutoGeneratePdfForMail(true);
       setEmailContentType("short");
       setOpenPreviewDialog(true);
       return;
     }
-    await openEmailDialogWithTemplates();
+    await openEmailDialogWithTemplates("normal");
   };
   const handleEmailClose = () => {
     setOpenEmailDialog(false);
@@ -658,7 +684,7 @@ const VehicleQuotationPage = () => {
   const handleAddService = () => {
     if (
       !currentService.particulars ||
-      (currentService.included === "no" && !currentService.amount)
+      (currentService.included === "yes" && !currentService.amount)
     ) {
       alert("Please fill in all required fields");
       return;
@@ -670,7 +696,7 @@ const VehicleQuotationPage = () => {
     const taxRate = selectedTax ? selectedTax.rate : 0;
 
     const amount =
-      currentService.included === "yes" ? 0 : parseFloat(currentService.amount);
+      currentService.included === "yes" ? parseFloat(currentService.amount) : 0;
     const taxAmount = amount * (taxRate / 100) || 0;
 
     const newService = {
@@ -705,9 +731,26 @@ const VehicleQuotationPage = () => {
     setServices((prev) => prev.filter((service) => service.id !== id));
   };
 
-  const handleSaveServices = () => {
-    console.log("Services saved:", services);
-    handleAddServiceClose();
+  const handleSaveServices = async () => {
+    if (!q?.vehicle?.vehicleQuotationId) return;
+    try {
+      await axios.patch(`/vehicleQT/${q.vehicle.vehicleQuotationId}`, {
+        additionalServices: services.map(({ id: _id, ...rest }) => rest),
+      });
+      await dispatch(getVehicleQuotationById(q.vehicle.vehicleQuotationId));
+      setSnackbar({
+        open: true,
+        message: "Services saved successfully",
+        severity: "success",
+      });
+      handleAddServiceClose();
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: e?.response?.data?.message || "Failed to save services",
+        severity: "error",
+      });
+    }
   };
 
   const handleViewInvoice = () => {
@@ -724,6 +767,9 @@ const VehicleQuotationPage = () => {
       case "Finalize":
         handleFinalizeOpen();
         break;
+      case "Booking Confirmation Mail":
+        handleEmailOpen("booking");
+        break;
       case "Transaction History":
         setOpenTransactionDialog(true);
         break;
@@ -734,7 +780,7 @@ const VehicleQuotationPage = () => {
         handleAddServiceOpen();
         break;
       case "Email Quotation":
-        handleEmailOpen();
+        handleEmailOpen("normal");
         break;
       case "Preview PDF":
         handlePreviewDialogOpen();
@@ -828,7 +874,7 @@ const VehicleQuotationPage = () => {
           !isBookingMail &&
           !!pdfAttachmentForMail?.contentBase64 &&
           previewPdfModeForMail,
-        ...(pdfAttachmentForMail?.contentBase64
+        ...(!isBookingMail && pdfAttachmentForMail?.contentBase64
           ? { pdfAttachment: pdfAttachmentForMail }
           : {}),
       });
@@ -1258,6 +1304,21 @@ const VehicleQuotationPage = () => {
         )}
       </Box>
 
+      {isFinalized && Array.isArray(vehicle?.finalizedVendorsWithAmounts) && vehicle.finalizedVendorsWithAmounts.length > 0 && (
+        <Card sx={{ mb: 2, borderLeft: "4px solid", borderColor: "success.main" }}>
+          <CardContent sx={{ py: 1.5 }}>
+            <Typography variant="subtitle2" fontWeight="bold" color="success.main" gutterBottom>
+              Finalized Vendors
+            </Typography>
+            {vehicle.finalizedVendorsWithAmounts.map((v, idx) => (
+              <Typography key={v?._id || idx} variant="body2">
+                {v?.vendorName || "Vendor"} ({v?.vendorType || "Other"}) - {formatCurrency(v?.amount || 0)}
+              </Typography>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Main Content */}
       <Box>
         <Grid container spacing={2}>
@@ -1575,12 +1636,40 @@ const VehicleQuotationPage = () => {
                             <AccessTime sx={{ fontSize: 16, mr: 0.5 }} />
                             {pickupDropDetails.dropTime ? new Date(pickupDropDetails.dropTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A"}
                           </TableCell>
-                          <TableCell>{formatCurrency(totalCost)}</TableCell>
+                          <TableCell>
+                            {formatCurrency(totalCost)}
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                handleEditOpen(
+                                  "costDetails.totalCost",
+                                  String(costDetails.totalCost || totalCost || ""),
+                                  "Total Cost",
+                                )
+                              }
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </TableCell>
                         </TableRow>
                         <TableRow sx={{ backgroundColor: "grey.50" }}>
                           <TableCell>Discount</TableCell>
                           <TableCell colSpan={2} />
-                          <TableCell>-{formatCurrency(discountAmount)}</TableCell>
+                          <TableCell>
+                            -{formatCurrency(discountAmount)}
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                handleEditOpen(
+                                  "discount",
+                                  String(vehicle.discount || discountAmount || ""),
+                                  "Discount",
+                                )
+                              }
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </TableCell>
                         </TableRow>
                         <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
                           <TableCell>Subtotal (After Discount)</TableCell>
@@ -1592,7 +1681,21 @@ const VehicleQuotationPage = () => {
                         <TableRow>
                           <TableCell>GST @ {gstPercentage}%</TableCell>
                           <TableCell colSpan={2} />
-                          <TableCell>{formatCurrency(gstAmount)}</TableCell>
+                          <TableCell>
+                            {formatCurrency(gstAmount)}
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                handleEditOpen(
+                                  "tax.applyGst",
+                                  String(vehicle?.tax?.applyGst || `${gstPercentage}%`),
+                                  "GST %",
+                                )
+                              }
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </TableCell>
                         </TableRow>
                         <TableRow sx={{ backgroundColor: "primary.main" }}>
                           <TableCell
