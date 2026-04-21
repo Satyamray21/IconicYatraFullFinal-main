@@ -107,6 +107,14 @@ const QuickQuotationForm = () => {
         dropPoint: finalData.packageDetails?.dropPoint || "",
         arrivalDate: finalData.packageDetails?.arrivalDate || "",
         departureDate: finalData.packageDetails?.departureDate || "",
+        pickupTime:
+          finalData.packageDetails?.pickupTime ||
+          finalData.clientDetails?.pickupTime ||
+          "",
+        dropTime:
+          finalData.packageDetails?.dropTime ||
+          finalData.clientDetails?.dropTime ||
+          "",
         numberOfPax: Number(finalData.packageDetails?.numberOfPax) || 0,
         noOfRooms: Number(finalData.packageDetails?.noOfRooms) || 0,
         transportationCost:
@@ -149,6 +157,14 @@ const QuickQuotationForm = () => {
           dropPoint: finalData.packageDetails?.dropPoint || "",
           arrivalDate: finalData.packageDetails?.arrivalDate || "",
           departureDate: finalData.packageDetails?.departureDate || "",
+          pickupTime:
+            finalData.packageDetails?.pickupTime ||
+            finalData.clientDetails?.pickupTime ||
+            "",
+          dropTime:
+            finalData.packageDetails?.dropTime ||
+            finalData.clientDetails?.dropTime ||
+            "",
           noOfRooms: Number(finalData.packageDetails?.noOfRooms) || 0,
           transportationCost:
             Number(finalData.packageDetails?.transportationCost) || 0,

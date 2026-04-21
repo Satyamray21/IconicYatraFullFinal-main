@@ -173,6 +173,16 @@ const cancellationPolicyUrlLine = (url) => {
   </p>`;
 };
 
+const stripPickupDropMeta = (value) => {
+  const raw = safe(value, "");
+  if (!raw) return "";
+  return raw
+    .replace(/\(([^)]*)\)/g, "")
+    .replace(/^(arrival|departure)\s*:\s*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+};
+
 const companyPaymentLinkLine = (url) => {
   const u = safe(url, "");
   if (!isHttpUrlString(u)) return "";
@@ -720,6 +730,27 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     // Keep time blank for date-only values that default to midnight.
     return hh === "00" && mm === "00" ? "" : `${hh}:${mm}`;
   };
+  const parseDateAndTimeFromPointText = (value) => {
+    const raw = safe(value, "");
+    if (!raw) return { date: "", time: "" };
+
+    // Example supported: "Arrival: At Airport (03/06/2026 at 15:30)"
+    const m = raw.match(
+      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2}))?\)/i,
+    );
+    if (!m) return { date: "", time: "" };
+
+    const dd = String(m[1]).padStart(2, "0");
+    const mm = String(m[2]).padStart(2, "0");
+    const yyyy = String(m[3]).length === 2 ? `20${m[3]}` : String(m[3]);
+    const hh = m[4] ? String(m[4]).padStart(2, "0") : "";
+    const min = m[5] ? String(m[5]).padStart(2, "0") : "";
+    const iso = `${yyyy}-${mm}-${dd}T00:00:00.000Z`;
+    return {
+      date: Number.isNaN(new Date(iso).getTime()) ? "" : iso,
+      time: hh && min ? `${hh}:${min}` : "",
+    };
+  };
   const calcSnap = qdSnap.packageCalculations || {};
   const stdSnap = Number(calcSnap.standard?.finalTotal);
   const hasDetailedPricing =
@@ -778,6 +809,17 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
       dayNote: safe(day.notes || day.description || day.aboutCity, ""),
     };
   });
+
+  const arrivalFromText = parseDateAndTimeFromPointText(quick.pickupPoint);
+  const departureFromText = parseDateAndTimeFromPointText(quick.dropPoint);
+  const pickupTimeResolved = safe(
+    quick.pickupTime,
+    safe(quick?.packageSnapshot?.quotationDetails?.pickupTime, ""),
+  );
+  const dropTimeResolved = safe(
+    quick.dropTime,
+    safe(quick?.packageSnapshot?.quotationDetails?.dropTime, ""),
+  );
 
   return {
     quotationId: String(quick._id || ""),
@@ -849,12 +891,24 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
           ),
         },
         pickupDropDetails: {
-          pickupLocation: safe(quick.pickupPoint, "As per itinerary"),
-          dropLocation: safe(quick.dropPoint, "As per itinerary"),
-          pickupDate: resolvedArrivalDate,
-          dropDate: resolvedDepartureDate,
-          pickupTime: deriveTimeFromDate(resolvedArrivalDate),
-          dropTime: deriveTimeFromDate(resolvedDepartureDate),
+          pickupLocation: safe(
+            stripPickupDropMeta(quick.pickupPoint),
+            "As per itinerary",
+          ),
+          dropLocation: safe(
+            stripPickupDropMeta(quick.dropPoint),
+            "As per itinerary",
+          ),
+          pickupDate: arrivalFromText.date || resolvedArrivalDate,
+          dropDate: departureFromText.date || resolvedDepartureDate,
+          pickupTime:
+            pickupTimeResolved ||
+            arrivalFromText.time ||
+            deriveTimeFromDate(resolvedArrivalDate),
+          dropTime:
+            dropTimeResolved ||
+            departureFromText.time ||
+            deriveTimeFromDate(resolvedDepartureDate),
         },
       },
     },

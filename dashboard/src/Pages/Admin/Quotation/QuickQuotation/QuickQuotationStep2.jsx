@@ -43,6 +43,8 @@ const StepClientDetails = ({ onNext }) => {
         dropPoint: "",
         arrivalDate: "",
         departureDate: "",
+        pickupTime: "",
+        dropTime: "",
         noOfRooms: 1,
       }}
       validate={(values) => {
@@ -160,6 +162,14 @@ const StepClientDetails = ({ onNext }) => {
                       setFieldValue("arrivalDate", pd.arrivalDate || "");
                       setFieldValue("departureDate", pd.departureDate || "");
                       setFieldValue(
+                        "pickupTime",
+                        pd.arrivalTime || pd.pickupTime || "",
+                      );
+                      setFieldValue(
+                        "dropTime",
+                        pd.departureTime || pd.dropTime || "",
+                      );
+                      setFieldValue(
                         "pickupPoint",
                         formatPickupDropLine(
                           pd.arrivalCity,
@@ -176,6 +186,8 @@ const StepClientDetails = ({ onNext }) => {
                     } else {
                       setFieldValue("arrivalDate", "");
                       setFieldValue("departureDate", "");
+                      setFieldValue("pickupTime", "");
+                      setFieldValue("dropTime", "");
                       setFieldValue("pickupPoint", "");
                       setFieldValue("dropPoint", "");
                     }
@@ -289,6 +301,30 @@ const StepClientDetails = ({ onNext }) => {
                 value={values.clientLocation}
                 onChange={handleChange}
                 placeholder="e.g., Delhi, Uttar Pradesh, India"
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="time"
+                label="Pick Up Time"
+                name="pickupTime"
+                value={values.pickupTime}
+                onChange={handleChange}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="time"
+                label="Drop Time"
+                name="dropTime"
+                value={values.dropTime}
+                onChange={handleChange}
+                InputLabelProps={{ shrink: true }}
               />
             </Grid>
 

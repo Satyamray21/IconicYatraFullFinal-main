@@ -29,11 +29,13 @@ const quickQuotationSchema = new mongoose.Schema(
             type: String,
             default: ""
         },
+        pickupTime: { type: Date, default: null },
 
         dropPoint: {
             type: String,
             default: ""
         },
+        dropTime: { type: Date, default: null },
 
         totalCost: {
             type: Number,
