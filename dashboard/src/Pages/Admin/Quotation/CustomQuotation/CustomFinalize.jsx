@@ -1066,11 +1066,11 @@ useEffect(() => {
             vehicles: vehicleDetails ? [{
                 pickup: {
                     date: formatDate(vehicleDetails.pickupDate),
-                    time: formatDateTime(vehicleDetails.pickupTime).split(', ')[1]
+                    time: formatTime(vehicleDetails.pickupTime)
                 },
                 drop: {
                     date: formatDate(vehicleDetails.dropDate),
-                    time: formatDateTime(vehicleDetails.dropTime).split(', ')[1]
+                    time: formatTime(vehicleDetails.dropTime)
                 },
             }] : [],
             pricing: {
@@ -1124,17 +1124,37 @@ useEffect(() => {
     // Add this near your other helper functions
     const formatTime = (timeString) => {
         if (!timeString) return "N/A";
-        // If it's already in a readable format, return as is
-        if (timeString.includes(':')) return timeString;
+        const raw = String(timeString).trim();
+        if (!raw) return "N/A";
+        if (raw.includes("T")) {
+            const d = new Date(raw);
+            if (!Number.isNaN(d.getTime())) {
+                return d.toLocaleTimeString('en-IN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            }
+        }
+        if (/^\d{1,2}:\d{2}/.test(raw)) {
+            const [hh, mm] = raw.split(":");
+            const d = new Date();
+            d.setHours(Number(hh) || 0, Number(mm) || 0, 0, 0);
+            return d.toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
         // Otherwise try to parse it
         try {
-            return new Date(`1970-01-01T${timeString}`).toLocaleTimeString('en-IN', {
+            return new Date(`1970-01-01T${raw}`).toLocaleTimeString('en-IN', {
                 hour: '2-digit',
                 minute: '2-digit',
                 hour12: true
             });
         } catch {
-            return timeString;
+            return raw;
         }
     };
 

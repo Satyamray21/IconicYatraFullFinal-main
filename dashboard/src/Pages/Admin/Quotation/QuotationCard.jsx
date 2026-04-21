@@ -511,7 +511,7 @@ const QuotationCard = () => {
   const combinedList = [
     ...(vehicleList || []).map((item, index) => ({
       id: `V-${index + 1}`,
-      originalId: item?._id,
+      originalId: item?.vehicleQuotationId || item?._id,
       quoteId: item?.vehicleQuotationId || "N/A",
       clientName: item?.basicsDetails?.clientName || "N/A",
       arrival: formatDate(item?.pickupDropDetails?.pickupDate),
@@ -524,14 +524,16 @@ const QuotationCard = () => {
       noOfNight: item?.basicsDetails?.noOfDays || "-",
       tourType: item?.basicsDetails?.tripType || "-",
       type: "Vehicle",
-      quotationStatus: item?.status || "Pending",
+      quotationStatus:
+        item?.status ||
+        (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending"),
       formStatus: "Completed",
       businessType: "Travel",
     })),
 
     ...(flightList || []).map((item, index) => ({
       id: `F-${index + 1}`,
-      originalId: item?._id,
+      originalId: item?.flightQuotationId || item?._id,
       quoteId: item?.flightQuotationId || "N/A",
       clientName: item?.clientDetails?.clientName || "N/A",
       arrival: formatDate(item?.flightDetails?.[0]?.departureDate),
@@ -545,7 +547,9 @@ const QuotationCard = () => {
       noOfNight: "-",
       tourType: item?.tripType || "-",
       type: "Flight",
-      quotationStatus: item?.status || "Pending",
+      quotationStatus:
+        item?.status ||
+        (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending"),
       formStatus: "Completed",
       businessType: "Travel",
     })),
@@ -570,7 +574,9 @@ const QuotationCard = () => {
         noOfNight: item?.pickupDrop?.nights || "-",
         tourType: item?.clientDetails?.tourType || "-",
         type: "Hotel",
-        quotationStatus: item?.status ? item.status : "Pending",
+        quotationStatus:
+          item?.status ||
+          (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending"),
         formStatus: "Completed",
         businessType: "Travel",
       };

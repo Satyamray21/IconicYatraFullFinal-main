@@ -525,6 +525,27 @@ const formatDateTime = (dateString) => {
   return `${dd}/${mm}/${yyyy} at ${hh}:${min}`;
 };
 
+const formatDateWithOptionalTime = (dateValue, timeValue) => {
+  const baseDate = new Date(dateValue);
+  if (Number.isNaN(baseDate.getTime())) return "";
+
+  const rawTime = String(timeValue || "").trim();
+  if (!rawTime) return formatDateTime(dateValue);
+
+  const timeAsDate = new Date(rawTime);
+  if (!Number.isNaN(timeAsDate.getTime())) {
+    baseDate.setHours(timeAsDate.getHours(), timeAsDate.getMinutes(), 0, 0);
+    return formatDateTime(baseDate.toISOString());
+  }
+
+  const match = rawTime.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return formatDateTime(dateValue);
+  const hh = Math.min(Math.max(Number(match[1]) || 0, 0), 23);
+  const mm = Math.min(Math.max(Number(match[2]) || 0, 0), 59);
+  baseDate.setHours(hh, mm, 0, 0);
+  return formatDateTime(baseDate.toISOString());
+};
+
 const normalizePointLabel = (text) => {
   const raw = String(text || "").trim();
   if (!raw) return "—";
@@ -891,7 +912,13 @@ function transformQuickApiToDisplay(apiData, company) {
           apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
           apiData?.packageSnapshot?.arrivalDate ||
           apiData?.createdAt;
-        const dt = formatDateTime(arrivalRawDate);
+        const arrivalRawTime =
+          apiData?.packageSnapshot?.quotationDetails?.pickupTime ||
+          apiData?.packageSnapshot?.quotationDetails?.arrivalTime ||
+          apiData?.packageSnapshot?.pickupTime ||
+          apiData?.packageSnapshot?.arrivalTime ||
+          apiData?.pickupTime;
+        const dt = formatDateWithOptionalTime(arrivalRawDate, arrivalRawTime);
         const point = normalizePointLabel(apiData.pickupPoint);
         return dt ? `Arrival: ${point} (${dt})` : `Arrival: ${point}`;
       })(),
@@ -900,7 +927,13 @@ function transformQuickApiToDisplay(apiData, company) {
           apiData?.packageSnapshot?.quotationDetails?.departureDate ||
           apiData?.packageSnapshot?.departureDate ||
           apiData?.createdAt;
-        const dt = formatDateTime(departureRawDate);
+        const departureRawTime =
+          apiData?.packageSnapshot?.quotationDetails?.dropTime ||
+          apiData?.packageSnapshot?.quotationDetails?.departureTime ||
+          apiData?.packageSnapshot?.dropTime ||
+          apiData?.packageSnapshot?.departureTime ||
+          apiData?.dropTime;
+        const dt = formatDateWithOptionalTime(departureRawDate, departureRawTime);
         const point = normalizePointLabel(apiData.dropPoint);
         return dt ? `Departure: ${point} (${dt})` : `Departure: ${point}`;
       })(),
