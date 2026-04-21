@@ -58,7 +58,7 @@ import {
   Receipt,
   Visibility,
 } from "@mui/icons-material";
-import Add from '@mui/icons-material/Add';
+import Add from "@mui/icons-material/Add";
 import EmailQuotationDialog from "./Dialog/EmailQuotationDialog";
 import MakePaymentDialog from "./Dialog/MakePaymentDialog";
 import FinalizeDialog from "./Dialog/FinalizeDialog";
@@ -69,7 +69,11 @@ import AddServiceDialog from "./Dialog/AddServiceDialog";
 import VehicleQuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 import TransactionHistoryDialog from "./Dialog/TransactionHistoryDialog";
 import VendorManagementDialog from "./Dialog/VendorManagementDialog";
-import { getVehicleQuotationById, addItinerary, editItinerary } from "../../../../features/quotation/vehicleQuotationSlice";
+import {
+  getVehicleQuotationById,
+  addItinerary,
+  editItinerary,
+} from "../../../../features/quotation/vehicleQuotationSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../../../../utils/axios";
@@ -87,7 +91,7 @@ const normalizePolicyForEditor = (value) => {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return "";
-    return trimmed.replace(/<[^>]*>/g, '');
+    return trimmed.replace(/<[^>]*>/g, "");
   }
 
   return "";
@@ -98,14 +102,18 @@ const normalizePolicyState = (source = {}) => {
   const policySource = source?.policy || source || {};
   return {
     inclusionPolicy: normalizePolicyForEditor(
-      policySource?.inclusionPolicy ?? policySource?.inclusions
+      policySource?.inclusionPolicy ?? policySource?.inclusions,
     ),
     exclusionPolicy: normalizePolicyForEditor(
-      policySource?.exclusionPolicy ?? policySource?.exclusions
+      policySource?.exclusionPolicy ?? policySource?.exclusions,
     ),
     paymentPolicy: normalizePolicyForEditor(policySource?.paymentPolicy),
-    cancellationPolicy: normalizePolicyForEditor(policySource?.cancellationPolicy),
-    termsAndConditions: normalizePolicyForEditor(policySource?.termsAndConditions),
+    cancellationPolicy: normalizePolicyForEditor(
+      policySource?.cancellationPolicy,
+    ),
+    termsAndConditions: normalizePolicyForEditor(
+      policySource?.termsAndConditions,
+    ),
   };
 };
 
@@ -113,7 +121,10 @@ const normalizePolicyState = (source = {}) => {
 function linesToPolicyArray(v) {
   if (Array.isArray(v)) return v.map(String);
   if (typeof v === "string") {
-    return v.split("\n").map((s) => s.trim()).filter(Boolean);
+    return v
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
   return [String(v)];
 }
@@ -133,9 +144,9 @@ function buildMongoSetFromDisplayField(field, value) {
     case "policies.terms":
       return { [`${P}.termsAndConditions`]: linesToPolicyArray(value) };
     case "quotationTitle":
-      return { "quotationTitle": String(value) };
+      return { quotationTitle: String(value) };
     case "destinationSummary":
-      return { "destinationSummary": String(value) };
+      return { destinationSummary: String(value) };
     case "costDetails.totalCost":
       return { "costDetails.totalCost": String(value) };
     case "discount":
@@ -171,16 +182,16 @@ const VehicleQuotationPage = () => {
   const [emailContentType, setEmailContentType] = useState("short");
   const [itineraryDialog, setItineraryDialog] = useState({
     open: false,
-    mode: 'add',
+    mode: "add",
     day: null,
     title: "",
     description: "",
-    id: null
+    id: null,
   });
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
-    severity: "success"
+    severity: "success",
   });
   const [localItinerary, setLocalItinerary] = useState([]);
 
@@ -198,7 +209,7 @@ const VehicleQuotationPage = () => {
     exclusionPolicy: "",
     paymentPolicy: "",
     cancellationPolicy: "",
-    termsAndConditions: ""
+    termsAndConditions: "",
   });
 
   const [isLoadingGlobalSettings, setIsLoadingGlobalSettings] = useState(false);
@@ -207,7 +218,7 @@ const VehicleQuotationPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { viewedVehicleQuotation: q, loading } = useSelector(
-    (state) => state.vehicleQuotation
+    (state) => state.vehicleQuotation,
   );
 
   // Initialize local itinerary from API data
@@ -303,7 +314,9 @@ const VehicleQuotationPage = () => {
     if (!id) return;
     setPaymentHistoryLoading(true);
     try {
-      const res = await axios.get(`/payment/by-quotation/${encodeURIComponent(id)}`);
+      const res = await axios.get(
+        `/payment/by-quotation/${encodeURIComponent(id)}`,
+      );
       setPaymentHistory(res.data?.data || []);
     } catch (e) {
       setPaymentHistory([]);
@@ -323,12 +336,12 @@ const VehicleQuotationPage = () => {
 
   useEffect(() => {
     const convertImageToBase64 = (img) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
       canvas.width = img.width;
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
-      return canvas.toDataURL('image/png');
+      return canvas.toDataURL("image/png");
     };
 
     const img = new Image();
@@ -345,14 +358,16 @@ const VehicleQuotationPage = () => {
       const res = await axios.get("/global-settings");
       const settings = normalizePolicyState(res.data);
       setGlobalSettings(settings);
-      
+
       // Update policyInputs with global defaults if not already set
-      setPolicyInputs(prev => ({
+      setPolicyInputs((prev) => ({
         inclusionPolicy: prev.inclusionPolicy || settings.inclusionPolicy,
         exclusionPolicy: prev.exclusionPolicy || settings.exclusionPolicy,
         paymentPolicy: prev.paymentPolicy || settings.paymentPolicy,
-        cancellationPolicy: prev.cancellationPolicy || settings.cancellationPolicy,
-        termsAndConditions: prev.termsAndConditions || settings.termsAndConditions
+        cancellationPolicy:
+          prev.cancellationPolicy || settings.cancellationPolicy,
+        termsAndConditions:
+          prev.termsAndConditions || settings.termsAndConditions,
       }));
     } catch (err) {
       console.error("Failed to fetch global settings:", err);
@@ -374,38 +389,37 @@ const VehicleQuotationPage = () => {
     "Finalize",
     "Booking Confirmation Mail",
     "Transaction History",
-    "Vendor Management",
     "Add Service",
     "Email Quotation",
     "Preview PDF",
-    "Client PDF",
+
     "Make Payment",
   ];
 
   // Dialog handlers
   const refreshEmailTemplates = async (companyId) => {
-  if (!id) return { normal: {}, booking: {} };
-  const selectedCompany = mailCompanies.find((c) => c?._id === companyId);
-  const res = await axios.get(`/vehicleQT/email/preview/${id}`, {
-    params: {
-      companyId: companyId || undefined,
-      companyName: selectedCompany?.companyName || undefined,
-    }
-  });
-  const data = res?.data?.data || {};
-  const nextTemplates = {
-    normal: {
-      subject: data?.normal?.subject || "",
-      message: data?.normal?.body || "",
-    },
-    booking: {
-      subject: data?.booking?.subject || "",
-      message: data?.booking?.body || "",
-    },
+    if (!id) return { normal: {}, booking: {} };
+    const selectedCompany = mailCompanies.find((c) => c?._id === companyId);
+    const res = await axios.get(`/vehicleQT/email/preview/${id}`, {
+      params: {
+        companyId: companyId || undefined,
+        companyName: selectedCompany?.companyName || undefined,
+      },
+    });
+    const data = res?.data?.data || {};
+    const nextTemplates = {
+      normal: {
+        subject: data?.normal?.subject || "",
+        message: data?.normal?.body || "",
+      },
+      booking: {
+        subject: data?.booking?.subject || "",
+        message: data?.booking?.body || "",
+      },
+    };
+    setEmailTemplateBodies(nextTemplates);
+    return nextTemplates;
   };
-  setEmailTemplateBodies(nextTemplates);
-  return nextTemplates;
-};
 
   const openEmailDialogWithTemplates = async (mailType = "normal") => {
     const defaultCompany = mailCompanies?.[0];
@@ -453,7 +467,9 @@ const VehicleQuotationPage = () => {
       // ignore browser storage errors
     }
     const party = encodeURIComponent(clientName);
-    navigate(`/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`);
+    navigate(
+      `/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`,
+    );
   };
   const handlePaymentClose = () => setOpenPaymentDialog(false);
 
@@ -476,7 +492,7 @@ const VehicleQuotationPage = () => {
     value,
     title,
     nested = false,
-    nestedKey = ""
+    nestedKey = "",
   ) => {
     setEditDialog({ open: true, field, value, title, nested, nestedKey });
   };
@@ -509,11 +525,13 @@ const VehicleQuotationPage = () => {
     // Update local policyInputs state
     if (editDialog.field.startsWith("policies.")) {
       const policyKey = editDialog.field.split(".")[1];
-      setPolicyInputs(prev => ({
+      setPolicyInputs((prev) => ({
         ...prev,
-        [policyKey === "inclusions" ? "inclusionPolicy" : 
-         policyKey === "exclusions" ? "exclusionPolicy" :
-         policyKey]: newValue
+        [policyKey === "inclusions"
+          ? "inclusionPolicy"
+          : policyKey === "exclusions"
+            ? "exclusionPolicy"
+            : policyKey]: newValue,
       }));
     }
 
@@ -523,12 +541,12 @@ const VehicleQuotationPage = () => {
       try {
         await axios.patch(
           `/vehicleQT/${q.vehicle.vehicleQuotationId}`,
-          mongoSet
+          mongoSet,
         );
-        
+
         // Refresh the data
         await dispatch(getVehicleQuotationById(q.vehicle.vehicleQuotationId));
-        
+
         setSnackbar({
           open: true,
           message: "Saved successfully",
@@ -554,14 +572,17 @@ const VehicleQuotationPage = () => {
     if (q?.vehicle?.vehicleQuotationId) {
       try {
         const selectedVendorName = String(vendor || "").trim();
-        const existingVendors = Array.isArray(q?.vehicle?.finalizedVendorsWithAmounts)
+        const existingVendors = Array.isArray(
+          q?.vehicle?.finalizedVendorsWithAmounts,
+        )
           ? q.vehicle.finalizedVendorsWithAmounts
           : [];
 
         const hasSelectedVendor = existingVendors.some(
           (item) =>
-            String(item?.vendorName || "").trim().toLowerCase() ===
-            selectedVendorName.toLowerCase(),
+            String(item?.vendorName || "")
+              .trim()
+              .toLowerCase() === selectedVendorName.toLowerCase(),
         );
 
         const finalizedVendorsWithAmounts =
@@ -577,9 +598,12 @@ const VehicleQuotationPage = () => {
               ]
             : existingVendors;
 
-        await axios.post(`/vehicleQT/${q.vehicle.vehicleQuotationId}/finalize`, {
-          finalizedVendorsWithAmounts,
-        });
+        await axios.post(
+          `/vehicleQT/${q.vehicle.vehicleQuotationId}/finalize`,
+          {
+            finalizedVendorsWithAmounts,
+          },
+        );
         await dispatch(getVehicleQuotationById(q.vehicle.vehicleQuotationId));
       } catch {
         setSnackbar({
@@ -691,7 +715,7 @@ const VehicleQuotationPage = () => {
     }
 
     const selectedTax = taxOptions.find(
-      (option) => option.value === currentService.taxType
+      (option) => option.value === currentService.taxType,
     );
     const taxRate = selectedTax ? selectedTax.rate : 0;
 
@@ -757,7 +781,7 @@ const VehicleQuotationPage = () => {
     const data = {
       lead: q.lead || {},
       vehicle: q.vehicle || {},
-      basicsDetails: q.vehicle?.basicsDetails || {}
+      basicsDetails: q.vehicle?.basicsDetails || {},
     };
     generateInvoicePDF(data, logoBase64);
   };
@@ -810,19 +834,20 @@ const VehicleQuotationPage = () => {
         "All transfers and tours in a Private AC cab or similar vehicle.",
         "Parking, toll charges, fuel, and driver expenses.",
         "Hotel taxes.",
-        "Car AC will be off during hill station tours due to low temperatures."
+        "Car AC will be off during hill station tours due to low temperatures.",
       ],
       exclusions: [
         "Any extra costs arising due to unavoidable circumstances like natural calamities, lockdowns, heavy snowfall/rains, local political issues, strikes, riots, bandh, bad weather conditions, vehicle malfunctions, or law & order problems.",
         "Cancellations of flight, train, bus, etc. No refunds or adjustments possible if sightseeing is affected due to such reasons. Extra costs to be borne by the guest on the spot.",
         "Any costs for COVID testing before, during, or after the tour. Mandatory quarantine expenses to be borne by guests.",
-        "Sightseeing entry tickets are not included in the package cost."
+        "Sightseeing entry tickets are not included in the package cost.",
       ],
-      paymentPolicy: "50% amount to be paid at the time of confirmation, balance 50% to be paid at least 10 days before the start date.",
+      paymentPolicy:
+        "50% amount to be paid at the time of confirmation, balance 50% to be paid at least 10 days before the start date.",
       cancellationPolicy: [
         "Cancellations before 15 days: 50% of the total tour cost will be deducted.",
-        "Cancellations within 7 days: No refunds, 100% charges applicable."
-      ]
+        "Cancellations within 7 days: No refunds, 100% charges applicable.",
+      ],
     };
 
     const data = {
@@ -832,9 +857,9 @@ const VehicleQuotationPage = () => {
       pickupDropDetails,
       costDetails,
       members,
-      defaultPolicies
+      defaultPolicies,
     };
-    
+
     generateClientPDF(data, logoBase64);
   };
 
@@ -844,7 +869,8 @@ const VehicleQuotationPage = () => {
       if (!isBookingMail && !pdfAttachmentForMail?.contentBase64) {
         setSnackbar({
           open: true,
-          message: "PDF not attached. Use Preview PDF > Send Mail to attach PDF.",
+          message:
+            "PDF not attached. Use Preview PDF > Send Mail to attach PDF.",
           severity: "warning",
         });
         return false;
@@ -866,7 +892,9 @@ const VehicleQuotationPage = () => {
                 ...(values?.nextPayableAmount
                   ? { nextPayableAmount: Number(values.nextPayableAmount) }
                   : {}),
-                ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+                ...(values?.paymentDueDate
+                  ? { dueDate: values.paymentDueDate }
+                  : {}),
               },
             }
           : undefined,
@@ -899,28 +927,30 @@ const VehicleQuotationPage = () => {
     const currentDays = localItinerary.length;
 
     if (maxDays > 0 && currentDays >= maxDays) {
-      alert(`Cannot add more than ${maxDays} days as specified in the quotation.`);
+      alert(
+        `Cannot add more than ${maxDays} days as specified in the quotation.`,
+      );
       return;
     }
 
     setItineraryDialog({
       open: true,
-      mode: 'add',
+      mode: "add",
       day: currentDays + 1,
       title: `Day ${currentDays + 1}`,
       description: "",
-      id: null
+      id: null,
     });
   };
 
   const handleEditItinerary = (item, index) => {
     setItineraryDialog({
       open: true,
-      mode: 'edit',
+      mode: "edit",
       day: index + 1,
       title: item.title || `Day ${index + 1}`,
       description: item.description,
-      id: item._id
+      id: item._id,
     });
   };
 
@@ -931,59 +961,75 @@ const VehicleQuotationPage = () => {
       setSnackbar({
         open: true,
         message: "Please fill in both title and description",
-        severity: "error"
+        severity: "error",
       });
       return;
     }
 
     try {
-      if (mode === 'add') {
+      if (mode === "add") {
         const newItineraryItem = {
           _id: `temp_${Date.now()}`,
           title,
-          description
+          description,
         };
 
-        setLocalItinerary(prev => [...prev, newItineraryItem]);
+        setLocalItinerary((prev) => [...prev, newItineraryItem]);
 
-        dispatch(addItinerary({
-          vehicleQuotationId: q.vehicle.vehicleQuotationId,
-          itinerary: [{ title, description }]
-        }));
-
-      } else if (mode === 'edit') {
-        setLocalItinerary(prev =>
-          prev.map(item =>
-            item._id === id ? { ...item, title, description } : item
-          )
+        dispatch(
+          addItinerary({
+            vehicleQuotationId: q.vehicle.vehicleQuotationId,
+            itinerary: [{ title, description }],
+          }),
+        );
+      } else if (mode === "edit") {
+        setLocalItinerary((prev) =>
+          prev.map((item) =>
+            item._id === id ? { ...item, title, description } : item,
+          ),
         );
 
-        dispatch(editItinerary({
-          vehicleQuotationId: q.vehicle.vehicleQuotationId,
-          itineraryId: id,
-          data: { title, description }
-        }));
+        dispatch(
+          editItinerary({
+            vehicleQuotationId: q.vehicle.vehicleQuotationId,
+            itineraryId: id,
+            data: { title, description },
+          }),
+        );
       }
 
-      setItineraryDialog({ open: false, mode: 'add', day: null, title: "", description: "", id: null });
+      setItineraryDialog({
+        open: false,
+        mode: "add",
+        day: null,
+        title: "",
+        description: "",
+        id: null,
+      });
 
       setSnackbar({
         open: true,
-        message: `Itinerary ${mode === 'add' ? 'added' : 'updated'} successfully`,
-        severity: "success"
+        message: `Itinerary ${mode === "add" ? "added" : "updated"} successfully`,
+        severity: "success",
       });
-
     } catch (error) {
       setSnackbar({
         open: true,
         message: "Failed to save itinerary",
-        severity: "error"
+        severity: "error",
       });
     }
   };
 
   const handleCloseItineraryDialog = () => {
-    setItineraryDialog({ open: false, mode: 'add', day: null, title: "", description: "", id: null });
+    setItineraryDialog({
+      open: false,
+      mode: "add",
+      day: null,
+      title: "",
+      description: "",
+      id: null,
+    });
   };
 
   const handleCloseSnackbar = () => {
@@ -1008,7 +1054,13 @@ const VehicleQuotationPage = () => {
       nextPayableAmount: "",
       paymentDueDate: "",
     };
-  }, [emailTemplateType, emailTemplateBodies, mailCompanies, q, emailToPrefill]);
+  }, [
+    emailTemplateType,
+    emailTemplateBodies,
+    mailCompanies,
+    q,
+    emailToPrefill,
+  ]);
 
   // Helper function to extract GST percentage
   const extractGstPercentage = (gstValue) => {
@@ -1026,7 +1078,12 @@ const VehicleQuotationPage = () => {
 
   if (loading || !q) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="70vh">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        height="70vh"
+      >
         <CircularProgress />
       </Box>
     );
@@ -1047,7 +1104,7 @@ const VehicleQuotationPage = () => {
   const totalCost = parseFloat(costDetails.totalCost) || 0;
   const discountAmount = parseFloat(vehicle.discount) || 0;
   const amountAfterDiscount = totalCost - discountAmount;
-  
+
   // Get GST percentage from tax.applyGst
   const gstPercentage = extractGstPercentage(vehicle.tax?.applyGst || "5%");
   const gstAmount = (amountAfterDiscount * gstPercentage) / 100;
@@ -1087,19 +1144,20 @@ const VehicleQuotationPage = () => {
       "All transfers and tours in a Private AC cab or similar vehicle.",
       "Parking, toll charges, fuel, and driver expenses.",
       "Hotel taxes.",
-      "Car AC will be off during hill station tours due to low temperatures."
+      "Car AC will be off during hill station tours due to low temperatures.",
     ],
     exclusions: [
       "Any extra costs arising due to unavoidable circumstances like natural calamities, lockdowns, heavy snowfall/rains, local political issues, strikes, riots, bandh, bad weather conditions, vehicle malfunctions, or law & order problems.",
       "Cancellations of flight, train, bus, etc. No refunds or adjustments possible if sightseeing is affected due to such reasons. Extra costs to be borne by the guest on the spot.",
       "Any costs for COVID testing before, during, or after the tour. Mandatory quarantine expenses to be borne by guests.",
-      "Sightseeing entry tickets are not included in the package cost."
+      "Sightseeing entry tickets are not included in the package cost.",
     ],
-    paymentPolicy: "50% amount to be paid at the time of confirmation, balance 50% to be paid at least 10 days before the start date.",
+    paymentPolicy:
+      "50% amount to be paid at the time of confirmation, balance 50% to be paid at least 10 days before the start date.",
     cancellationPolicy: [
       "Cancellations before 15 days: 50% of the total tour cost will be deducted.",
-      "Cancellations within 7 days: No refunds, 100% charges applicable."
-    ]
+      "Cancellations within 7 days: No refunds, 100% charges applicable.",
+    ],
   };
 
   const Policies = [
@@ -1135,15 +1193,29 @@ const VehicleQuotationPage = () => {
 
   const pickupDetails = [
     {
-      icon: <CheckCircle sx={{ fontSize: 16, mr: 0.5, color: "success.main" }} />,
-      text: `Arrival: ${pickupDropDetails.pickupLocation || "N/A"} (${pickupDropDetails.pickupDate ? new Date(pickupDropDetails.pickupDate).toLocaleDateString() : "N/A"})`,
+      icon: (
+        <CheckCircle sx={{ fontSize: 16, mr: 0.5, color: "success.main" }} />
+      ),
+      text:
+        pickupDropDetails.pickupArrivalNote ||
+        `Arrival: ${pickupDropDetails.pickupLocation || "N/A"} (${
+          pickupDropDetails.pickupDate
+            ? new Date(pickupDropDetails.pickupDate).toLocaleDateString()
+            : "N/A"
+        })`,
       editable: true,
       field: "pickup",
       nestedKey: "arrival",
     },
     {
       icon: <Cancel sx={{ fontSize: 16, mr: 0.5, color: "error.main" }} />,
-      text: `Departure: ${pickupDropDetails.dropLocation || "N/A"} (${pickupDropDetails.dropDate ? new Date(pickupDropDetails.dropDate).toLocaleDateString() : "N/A"})`,
+      text:
+        pickupDropDetails.pickupDepartureNote ||
+        `Departure: ${pickupDropDetails.dropLocation || "N/A"} (${
+          pickupDropDetails.dropDate
+            ? new Date(pickupDropDetails.dropDate).toLocaleDateString()
+            : "N/A"
+        })`,
       editable: true,
       field: "pickup",
       nestedKey: "departure",
@@ -1158,7 +1230,8 @@ const VehicleQuotationPage = () => {
 
   const tableHeaders = ["Vehicle Name", "Pickup", "Drop", "Cost"];
 
-  const terms = "1. This is only a Quote. Availability is checked only on confirmation.\n2. Rates are subject to change without prior notice.\n3. All disputes are subject to Noida Jurisdiction only.";
+  const terms =
+    "1. This is only a Quote. Availability is checked only on confirmation.\n2. Rates are subject to change without prior notice.\n3. All disputes are subject to Noida Jurisdiction only.";
 
   const footer = {
     contact: `${personalDetails.fullName || "N/A"} | ${personalDetails.mobile || "N/A"}`,
@@ -1200,7 +1273,8 @@ const VehicleQuotationPage = () => {
       mealPlan: "N/A",
       hotelType: basicsDetails.vehicleType || "N/A",
       destination: tourDetails.tourDestination || "N/A",
-      itinerary: "This is only tentative schedule for sightseeing and travel. The actual sequence might change depending on the local conditions.",
+      itinerary:
+        "This is only tentative schedule for sightseeing and travel. The actual sequence might change depending on the local conditions.",
     },
     quotationTitle: `Vehicle Quotation For ${basicsDetails.clientName || "N/A"}`,
     destinationSummary: tourDetails.tourDestination || "N/A",
@@ -1260,7 +1334,7 @@ const VehicleQuotationPage = () => {
   };
 
   return (
-    <Box sx={{ backgroundColor: 'white', minHeight: '100vh' }} >
+    <Box sx={{ backgroundColor: "white", minHeight: "100vh" }}>
       <Box
         display="flex"
         justifyContent="flex-end"
@@ -1281,7 +1355,7 @@ const VehicleQuotationPage = () => {
           );
         })}
 
-        {isFinalized && !invoiceGenerated && (
+        {/* {isFinalized && !invoiceGenerated && (
           <Button
             variant="contained"
             color="success"
@@ -1290,7 +1364,7 @@ const VehicleQuotationPage = () => {
           >
             Generate Invoice
           </Button>
-        )}
+        )} */}
 
         {invoiceGenerated && (
           <Button
@@ -1304,25 +1378,35 @@ const VehicleQuotationPage = () => {
         )}
       </Box>
 
-      {isFinalized && Array.isArray(vehicle?.finalizedVendorsWithAmounts) && vehicle.finalizedVendorsWithAmounts.length > 0 && (
-        <Card sx={{ mb: 2, borderLeft: "4px solid", borderColor: "success.main" }}>
-          <CardContent sx={{ py: 1.5 }}>
-            <Typography variant="subtitle2" fontWeight="bold" color="success.main" gutterBottom>
-              Finalized Vendors
-            </Typography>
-            {vehicle.finalizedVendorsWithAmounts.map((v, idx) => (
-              <Typography key={v?._id || idx} variant="body2">
-                {v?.vendorName || "Vendor"} ({v?.vendorType || "Other"}) - {formatCurrency(v?.amount || 0)}
+      {isFinalized &&
+        Array.isArray(vehicle?.finalizedVendorsWithAmounts) &&
+        vehicle.finalizedVendorsWithAmounts.length > 0 && (
+          <Card
+            sx={{ mb: 2, borderLeft: "4px solid", borderColor: "success.main" }}
+          >
+            <CardContent sx={{ py: 1.5 }}>
+              <Typography
+                variant="subtitle2"
+                fontWeight="bold"
+                color="success.main"
+                gutterBottom
+              >
+                Finalized Vendors
               </Typography>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+              {vehicle.finalizedVendorsWithAmounts.map((v, idx) => (
+                <Typography key={v?._id || idx} variant="body2">
+                  {v?.vendorName || "Vendor"} ({v?.vendorType || "Other"}) -{" "}
+                  {formatCurrency(v?.amount || 0)}
+                </Typography>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
       {/* Main Content */}
       <Box>
         <Grid container spacing={2}>
-          <Grid size={{xs: 12, md: 3}}>
+          <Grid size={{ xs: 12, md: 3 }}>
             <Box sx={{ position: "sticky", top: 0 }}>
               <Card>
                 <CardContent>
@@ -1376,35 +1460,52 @@ const VehicleQuotationPage = () => {
                       <AccordionDetails>
                         {a.title === "Vehicle Details" ? (
                           <Box>
-                            <Typography variant="h5" color="primary" gutterBottom>
+                            <Typography
+                              variant="h5"
+                              color="primary"
+                              gutterBottom
+                            >
                               {formatCurrency(finalTotal)}
                             </Typography>
 
                             <Typography variant="body1">
                               Pickup :{" "}
                               {pickupDropDetails.pickupDate
-                                ? new Date(pickupDropDetails.pickupDate).toLocaleDateString(
-                                  "en-GB",
-                                  { day: "2-digit", month: "2-digit", year: "numeric" }
-                                )
+                                ? new Date(
+                                    pickupDropDetails.pickupDate,
+                                  ).toLocaleDateString("en-GB", {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                  })
                                 : "N/A"}
                             </Typography>
 
                             <Typography variant="body1">
                               Drop :{" "}
                               {pickupDropDetails.dropDate
-                                ? new Date(pickupDropDetails.dropDate).toLocaleDateString(
-                                  "en-GB",
-                                  { day: "2-digit", month: "2-digit", year: "numeric" }
-                                )
+                                ? new Date(
+                                    pickupDropDetails.dropDate,
+                                  ).toLocaleDateString("en-GB", {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                  })
                                 : "N/A"}
                             </Typography>
-                            
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mt: 1 }}
+                            >
                               Base Cost: {formatCurrency(totalCost)}
                             </Typography>
                             {discountAmount > 0 && (
-                              <Typography variant="body2" color="text.secondary">
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
                                 Discount: -{formatCurrency(discountAmount)}
                               </Typography>
                             )}
@@ -1412,9 +1513,15 @@ const VehicleQuotationPage = () => {
                               Subtotal: {formatCurrency(amountAfterDiscount)}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              GST @ {gstPercentage}%: {formatCurrency(gstAmount)}
+                              GST @ {gstPercentage}%:{" "}
+                              {formatCurrency(gstAmount)}
                             </Typography>
-                            <Typography variant="body1" color="primary" fontWeight="bold" sx={{ mt: 1 }}>
+                            <Typography
+                              variant="body1"
+                              color="primary"
+                              fontWeight="bold"
+                              sx={{ mt: 1 }}
+                            >
                               Grand Total: {formatCurrency(finalTotal)}
                             </Typography>
                           </Box>
@@ -1423,7 +1530,9 @@ const VehicleQuotationPage = () => {
                             Company Margin details go here...
                           </Typography>
                         ) : (
-                          <Typography variant="body2">Details go here.</Typography>
+                          <Typography variant="body2">
+                            Details go here.
+                          </Typography>
                         )}
                       </AccordionDetails>
                     </Accordion>
@@ -1433,7 +1542,7 @@ const VehicleQuotationPage = () => {
             </Box>
           </Grid>
 
-          <Grid size={{xs: 12, md: 9}}>
+          <Grid size={{ xs: 12, md: 9 }}>
             <Card>
               <CardContent>
                 <Box
@@ -1512,7 +1621,7 @@ const VehicleQuotationPage = () => {
                               i.text,
                               i.nestedKey || i.field,
                               !!i.nestedKey,
-                              i.nestedKey
+                              i.nestedKey,
                             )
                           }
                         >
@@ -1526,7 +1635,11 @@ const VehicleQuotationPage = () => {
                 <Box mt={3}>
                   <Box display="flex" alignItems="center">
                     <DirectionsCar sx={{ mr: 1 }} />
-                    <Typography variant="h6" fontWeight="bold" color="warning.main">
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="warning.main"
+                    >
                       Vehicle Quotation For {basicsDetails.clientName || "N/A"}
                     </Typography>
                   </Box>
@@ -1539,7 +1652,9 @@ const VehicleQuotationPage = () => {
                   <Box display="flex" mt={1}>
                     <Warning sx={{ mr: 1, color: "warning.main", mt: 0.2 }} />
                     <Typography variant="body2">
-                      This is only tentative schedule for sightseeing and travel. The actual sequence might change depending on the local conditions.
+                      This is only tentative schedule for sightseeing and
+                      travel. The actual sequence might change depending on the
+                      local conditions.
                     </Typography>
                     <IconButton
                       size="small"
@@ -1547,7 +1662,7 @@ const VehicleQuotationPage = () => {
                         handleEditOpen(
                           "itineraryNote",
                           "This is only tentative schedule for sightseeing and travel. The actual sequence might change depending on the local conditions.",
-                          "Itinerary Note"
+                          "Itinerary Note",
                         )
                       }
                     >
@@ -1558,8 +1673,15 @@ const VehicleQuotationPage = () => {
                   <Box mt={2}>
                     <Card variant="outlined">
                       <CardContent>
-                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                          <Typography variant="h6">Itinerary Details</Typography>
+                        <Box
+                          display="flex"
+                          justifyContent="space-between"
+                          alignItems="center"
+                          mb={2}
+                        >
+                          <Typography variant="h6">
+                            Itinerary Details
+                          </Typography>
                           <Button
                             variant="outlined"
                             size="small"
@@ -1572,14 +1694,31 @@ const VehicleQuotationPage = () => {
 
                         {localItinerary.length > 0 ? (
                           localItinerary.map((item, index) => (
-                            <Box key={item._id || index} mb={2} p={1} sx={{ border: '1px dashed #ddd', borderRadius: 1 }}>
-                              <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                <Typography variant="subtitle1" fontWeight="bold">
+                            <Box
+                              key={item._id || index}
+                              mb={2}
+                              p={1}
+                              sx={{
+                                border: "1px dashed #ddd",
+                                borderRadius: 1,
+                              }}
+                            >
+                              <Box
+                                display="flex"
+                                justifyContent="space-between"
+                                alignItems="flex-start"
+                              >
+                                <Typography
+                                  variant="subtitle1"
+                                  fontWeight="bold"
+                                >
                                   {item.title}
                                 </Typography>
                                 <IconButton
                                   size="small"
-                                  onClick={() => handleEditItinerary(item, index)}
+                                  onClick={() =>
+                                    handleEditItinerary(item, index)
+                                  }
                                 >
                                   <Edit fontSize="small" />
                                 </IconButton>
@@ -1590,8 +1729,14 @@ const VehicleQuotationPage = () => {
                             </Box>
                           ))
                         ) : (
-                          <Typography variant="body2" color="textSecondary" textAlign="center" py={2}>
-                            No itinerary added yet. Click "Add Day" to create your itinerary.
+                          <Typography
+                            variant="body2"
+                            color="textSecondary"
+                            textAlign="center"
+                            py={2}
+                          >
+                            No itinerary added yet. Click "Add Day" to create
+                            your itinerary.
                           </Typography>
                         )}
                       </CardContent>
@@ -1624,17 +1769,39 @@ const VehicleQuotationPage = () => {
                           </TableCell>
                           <TableCell>
                             <CalendarToday sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.pickupDate ? new Date(pickupDropDetails.pickupDate).toLocaleDateString() : "N/A"}
+                            {pickupDropDetails.pickupDate
+                              ? new Date(
+                                  pickupDropDetails.pickupDate,
+                                ).toLocaleDateString()
+                              : "N/A"}
                             <br />
                             <AccessTime sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.pickupTime ? new Date(pickupDropDetails.pickupTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A"}
+                            {pickupDropDetails.pickupTime
+                              ? new Date(
+                                  pickupDropDetails.pickupTime,
+                                ).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "N/A"}
                           </TableCell>
                           <TableCell>
                             <CalendarToday sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.dropDate ? new Date(pickupDropDetails.dropDate).toLocaleDateString() : "N/A"}
+                            {pickupDropDetails.dropDate
+                              ? new Date(
+                                  pickupDropDetails.dropDate,
+                                ).toLocaleDateString()
+                              : "N/A"}
                             <br />
                             <AccessTime sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.dropTime ? new Date(pickupDropDetails.dropTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A"}
+                            {pickupDropDetails.dropTime
+                              ? new Date(
+                                  pickupDropDetails.dropTime,
+                                ).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "N/A"}
                           </TableCell>
                           <TableCell>
                             {formatCurrency(totalCost)}
@@ -1643,7 +1810,9 @@ const VehicleQuotationPage = () => {
                               onClick={() =>
                                 handleEditOpen(
                                   "costDetails.totalCost",
-                                  String(costDetails.totalCost || totalCost || ""),
+                                  String(
+                                    costDetails.totalCost || totalCost || "",
+                                  ),
                                   "Total Cost",
                                 )
                               }
@@ -1662,7 +1831,9 @@ const VehicleQuotationPage = () => {
                               onClick={() =>
                                 handleEditOpen(
                                   "discount",
-                                  String(vehicle.discount || discountAmount || ""),
+                                  String(
+                                    vehicle.discount || discountAmount || "",
+                                  ),
                                   "Discount",
                                 )
                               }
@@ -1674,7 +1845,9 @@ const VehicleQuotationPage = () => {
                         <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
                           <TableCell>Subtotal (After Discount)</TableCell>
                           <TableCell colSpan={2} />
-                          <TableCell sx={{ fontWeight: "bold", color: "#2e7d32" }}>
+                          <TableCell
+                            sx={{ fontWeight: "bold", color: "#2e7d32" }}
+                          >
                             {formatCurrency(amountAfterDiscount)}
                           </TableCell>
                         </TableRow>
@@ -1688,7 +1861,10 @@ const VehicleQuotationPage = () => {
                               onClick={() =>
                                 handleEditOpen(
                                   "tax.applyGst",
-                                  String(vehicle?.tax?.applyGst || `${gstPercentage}%`),
+                                  String(
+                                    vehicle?.tax?.applyGst ||
+                                      `${gstPercentage}%`,
+                                  ),
                                   "GST %",
                                 )
                               }
@@ -1705,7 +1881,9 @@ const VehicleQuotationPage = () => {
                           >
                             Total Quotation Cost
                           </TableCell>
-                          <TableCell sx={{ color: "white", fontWeight: "bold" }}>
+                          <TableCell
+                            sx={{ color: "white", fontWeight: "bold" }}
+                          >
                             {formatCurrency(finalTotal)}
                           </TableCell>
                         </TableRow>
@@ -1716,7 +1894,7 @@ const VehicleQuotationPage = () => {
 
                 <Grid container spacing={2} mt={1}>
                   {Policies.map((p, i) => (
-                    <Grid size={{xs: 12}} key={i}>
+                    <Grid size={{ xs: 12 }} key={i}>
                       <Card variant="outlined">
                         <CardContent>
                           <Box
@@ -1742,7 +1920,7 @@ const VehicleQuotationPage = () => {
                                   p.isArray
                                     ? JSON.stringify(p.content)
                                     : p.content,
-                                  p.title
+                                  p.title,
                                 )
                               }
                             >
@@ -1831,7 +2009,7 @@ const VehicleQuotationPage = () => {
                           footer.contact,
                           "Footer Contact",
                           true,
-                          "contact"
+                          "contact",
                         )
                       }
                     >
@@ -1893,7 +2071,7 @@ const VehicleQuotationPage = () => {
         open={snackbar.open}
         autoHideDuration={3000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
       >
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
           {snackbar.message}
@@ -1985,7 +2163,9 @@ const VehicleQuotationPage = () => {
         vehicle={q?.vehicle}
         vehicleQuotationId={q?.vehicle?.vehicleQuotationId}
         onSaved={async () => {
-          await dispatch(getVehicleQuotationById(q?.vehicle?.vehicleQuotationId));
+          await dispatch(
+            getVehicleQuotationById(q?.vehicle?.vehicleQuotationId),
+          );
           setSnackbar({
             open: true,
             message: "Vendor details saved",
@@ -2001,9 +2181,15 @@ const VehicleQuotationPage = () => {
       />
 
       {/* Itinerary Dialog */}
-      <Dialog open={itineraryDialog.open} onClose={handleCloseItineraryDialog} maxWidth="md" fullWidth>
+      <Dialog
+        open={itineraryDialog.open}
+        onClose={handleCloseItineraryDialog}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle>
-          {itineraryDialog.mode === 'add' ? 'Add' : 'Edit'} Itinerary - Day {itineraryDialog.day}
+          {itineraryDialog.mode === "add" ? "Add" : "Edit"} Itinerary - Day{" "}
+          {itineraryDialog.day}
         </DialogTitle>
         <DialogContent>
           <TextField
@@ -2013,7 +2199,9 @@ const VehicleQuotationPage = () => {
             fullWidth
             variant="outlined"
             value={itineraryDialog.title}
-            onChange={(e) => setItineraryDialog({ ...itineraryDialog, title: e.target.value })}
+            onChange={(e) =>
+              setItineraryDialog({ ...itineraryDialog, title: e.target.value })
+            }
             sx={{ mb: 2 }}
           />
           <TextField
@@ -2024,13 +2212,18 @@ const VehicleQuotationPage = () => {
             multiline
             rows={4}
             value={itineraryDialog.description}
-            onChange={(e) => setItineraryDialog({ ...itineraryDialog, description: e.target.value })}
+            onChange={(e) =>
+              setItineraryDialog({
+                ...itineraryDialog,
+                description: e.target.value,
+              })
+            }
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseItineraryDialog}>Cancel</Button>
           <Button onClick={handleSaveItinerary} variant="contained">
-            {itineraryDialog.mode === 'add' ? 'Add' : 'Save'}
+            {itineraryDialog.mode === "add" ? "Add" : "Save"}
           </Button>
         </DialogActions>
       </Dialog>
