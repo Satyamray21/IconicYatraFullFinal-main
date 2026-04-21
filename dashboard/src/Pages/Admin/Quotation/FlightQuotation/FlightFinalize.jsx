@@ -52,14 +52,18 @@ import {
   Visibility,
   FlightTakeoff,
   PictureAsPdf,
+  Edit,
 } from "@mui/icons-material";
 import { useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import axios from "../../../../utils/axios";
 import {
   getFlightQuotationById,
   confirmFlightQuotation,
+  updateFlightQuotationById,
 } from "../../../../features/quotation/flightQuotationSlice";
 import FlightQuotationPDFDialog from "./PDF/PreviewPdf";
+import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
 
 const FlightFinalize = () => {
   const [openDialog, setOpenDialog] = useState(false);
@@ -74,6 +78,24 @@ const FlightFinalize = () => {
   const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState("");
   const [emailContentType, setEmailContentType] = useState("short");
+  const [mailMode, setMailMode] = useState("normal");
+  const [openEmailDialog, setOpenEmailDialog] = useState(false);
+  const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailTemplateBodies, setEmailTemplateBodies] = useState({
+    normal: { subject: "", message: "" },
+    booking: { subject: "", message: "" },
+  });
+  const [emailTemplateType, setEmailTemplateType] = useState("normal");
+  const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
+  const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
+  const [autoGeneratePdfForMail, setAutoGeneratePdfForMail] = useState(false);
+  const [emailToPrefill, setEmailToPrefill] = useState("");
+  const [editDialog, setEditDialog] = useState({
+    open: false,
+    field: "",
+    title: "",
+    value: "",
+  });
   
   const { id } = useParams();
   const dispatch = useDispatch();
@@ -87,10 +109,16 @@ const FlightFinalize = () => {
     if (quotation) {
       setFlightData(quotation.flightDetails || []);
       setPnrList(quotation.pnrList || []);
-      setFinalFareList(
-        quotation.flightDetails?.map((f) => f.fare) || []
+      const sourceFareList =
+        Array.isArray(quotation.finalFareList) && quotation.finalFareList.length > 0
+          ? quotation.finalFareList
+          : quotation.flightDetails?.map((f) => f.fare) || [];
+      setFinalFareList(sourceFareList);
+      const computedTotal = sourceFareList.reduce(
+        (sum, fare) => sum + Number(fare || 0),
+        0,
       );
-      setTotalFinalFare(quotation.finalFare || 0);
+      setTotalFinalFare(Number(quotation.finalFare || 0) || computedTotal);
       setIsFinalized(quotation.status === "Confirmed");
       setInvoiceGenerated(quotation.status === "Confirmed");
     }
@@ -103,6 +131,18 @@ const FlightFinalize = () => {
     }
   }, [id, dispatch]);
 
+  useEffect(() => {
+    const loadMailCompanies = async () => {
+      try {
+        const res = await axios.get("/company");
+        setMailCompanies(Array.isArray(res?.data?.data) ? res.data.data : []);
+      } catch {
+        setMailCompanies([]);
+      }
+    };
+    loadMailCompanies();
+  }, []);
+
   if (!quotation || !quotation.flightDetails) {
     return (
       <Box sx={{ textAlign: "center", mt: 5 }}>
@@ -112,6 +152,9 @@ const FlightFinalize = () => {
   }
 
   // Handle Confirm Finalization
+  const getComputedFareTotal = (fareList = finalFareList) =>
+    (fareList || []).reduce((sum, fare) => sum + Number(fare || 0), 0);
+
   const handleConfirmFinalize = async () => {
     if (pnrList.some((pnr) => !pnr) || finalFareList.some((fare) => !fare)) {
       alert("Please enter PNR and Final Fare for all flights before confirming!");
@@ -124,7 +167,7 @@ const FlightFinalize = () => {
           flightQuotationId: quotation.flightQuotationId,
           pnrList,
           finalFareList,
-          finalFare: totalFinalFare,
+          finalFare: getComputedFareTotal(),
         })
       ).unwrap();
 
@@ -138,7 +181,7 @@ const FlightFinalize = () => {
         }))
       );
 
-      setTotalFinalFare(updatedQuotation?.finalFare || totalFinalFare);
+      setTotalFinalFare(updatedQuotation?.finalFare || getComputedFareTotal());
       setIsFinalized(true);
       setInvoiceGenerated(true);
       setOpenDialog(false);
@@ -148,14 +191,143 @@ const FlightFinalize = () => {
     }
   };
 
+  const handleSaveFinalizedEdits = async () => {
+    if (pnrList.some((pnr) => !pnr) || finalFareList.some((fare) => !fare)) {
+      alert("Please enter PNR and Final Fare for all flights before saving!");
+      return;
+    }
+    const computedTotal = getComputedFareTotal();
+    try {
+      await dispatch(
+        updateFlightQuotationById({
+          flightQuotationId: quotation.flightQuotationId,
+          formData: {
+            pnrList,
+            finalFareList,
+            finalFare: computedTotal,
+          },
+        }),
+      ).unwrap();
+      await dispatch(getFlightQuotationById(quotation.flightQuotationId));
+      setTotalFinalFare(computedTotal);
+      setOpenDialog(false);
+      setOpenSnackbar(true);
+    } catch (err) {
+      console.error("Failed to save finalized flight edits:", err);
+    }
+  };
+
   const handlePreviewPDF = () => {
     setSelectedCompany("");
-    setEmailContentType("short");
+    setEmailContentType(mailMode === "booking" ? "full" : "short");
     setOpenPreviewDialog(true);
   };
 
   const handlePreviewDialogClose = () => {
+    setAutoGeneratePdfForMail(false);
     setOpenPreviewDialog(false);
+  };
+
+  const refreshEmailTemplates = async (companyId) => {
+    if (!quotation?.flightQuotationId) return { normal: {}, booking: {} };
+    const selectedCompany = mailCompanies.find((c) => c?._id === companyId);
+    const res = await axios.get(`/flightQT/email/preview/${quotation.flightQuotationId}`, {
+      params: {
+        companyId: companyId || undefined,
+        companyName: selectedCompany?.companyName || undefined,
+      },
+    });
+    const data = res?.data?.data || {};
+    const nextTemplates = {
+      normal: {
+        subject: data?.normal?.subject || "",
+        message: data?.normal?.body || "",
+      },
+      booking: {
+        subject: data?.booking?.subject || "",
+        message: data?.booking?.body || "",
+      },
+    };
+    setEmailTemplateBodies(nextTemplates);
+    return nextTemplates;
+  };
+
+  const openEmailDialogWithTemplates = async (mailType = "normal") => {
+    const defaultCompany = mailCompanies?.[0];
+    setEmailTemplateType(mailType === "booking" ? "booking" : "normal");
+    try {
+      await refreshEmailTemplates(defaultCompany?._id);
+    } catch {}
+    setOpenEmailDialog(true);
+  };
+
+  const handleEmailOpen = async (mailType = "normal") => {
+    if (mailType === "booking") {
+      setAutoGeneratePdfForMail(false);
+      await openEmailDialogWithTemplates("booking");
+      return;
+    }
+    if (!pdfAttachmentForMail?.contentBase64) {
+      setAutoGeneratePdfForMail(true);
+      setMailMode("normal");
+      setEmailContentType("short");
+      setOpenPreviewDialog(true);
+      return;
+    }
+    await openEmailDialogWithTemplates("normal");
+  };
+
+  const handleEmailClose = () => {
+    setOpenEmailDialog(false);
+    setPdfAttachmentForMail(null);
+    setPreviewPdfModeForMail(false);
+    setEmailToPrefill("");
+  };
+
+  const handleEmailSend = async (values) => {
+    try {
+      const isBookingMail = values?.mailType === "booking";
+      const selectedCompany =
+        mailCompanies.find((c) => c?._id === values?.companyId) || null;
+
+      if (!isBookingMail && !pdfAttachmentForMail?.contentBase64) {
+        return false;
+      }
+
+      await axios.post(`/flightQT/${quotation.flightQuotationId}/email/send`, {
+        to: String(values?.to || "").trim(),
+        cc: String(values?.cc || "").trim() || undefined,
+        type: isBookingMail ? "booking" : "normal",
+        subject: values?.subject || undefined,
+        bodyHtml: isBookingMail ? undefined : values?.message || undefined,
+        senderAccount: values?.senderAccount || "gmail1",
+        companyId: values?.companyId || undefined,
+        companyName: selectedCompany?.companyName || undefined,
+        customText: isBookingMail
+          ? {
+              booking: {
+                ...(values?.nextPayableAmount
+                  ? { nextPayableAmount: Number(values.nextPayableAmount) }
+                  : {}),
+                ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+              },
+            }
+          : undefined,
+        previewPdfMode:
+          !isBookingMail &&
+          !!pdfAttachmentForMail?.contentBase64 &&
+          previewPdfModeForMail,
+        ...(!isBookingMail && pdfAttachmentForMail?.contentBase64
+          ? { pdfAttachment: pdfAttachmentForMail }
+          : {}),
+      });
+
+      setOpenSnackbar(true);
+      return true;
+    } catch (err) {
+      console.error("Failed to send flight quotation mail:", err);
+      return false;
+    }
   };
 
   const handleViewInvoice = () => {
@@ -215,6 +387,57 @@ const FlightFinalize = () => {
   return [city, state, country].filter(Boolean).join(", ");
 };
 
+  const linesToPolicyArray = (v) => {
+    if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean);
+    if (typeof v === "string") {
+      return v.split("\n").map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  const buildFlightUpdatePayload = (field, value) => {
+    switch (field) {
+      case "policies.inclusionPolicy":
+        return { policies: { ...(quotation?.policies || {}), inclusionPolicy: linesToPolicyArray(value) } };
+      case "policies.exclusionPolicy":
+        return { policies: { ...(quotation?.policies || {}), exclusionPolicy: linesToPolicyArray(value) } };
+      case "policies.paymentPolicy":
+        return { policies: { ...(quotation?.policies || {}), paymentPolicy: linesToPolicyArray(value) } };
+      case "policies.cancellationPolicy":
+        return { policies: { ...(quotation?.policies || {}), cancellationPolicy: linesToPolicyArray(value) } };
+      case "policies.termsAndConditions":
+        return { policies: { ...(quotation?.policies || {}), termsAndConditions: linesToPolicyArray(value) } };
+      default:
+        return null;
+    }
+  };
+
+  const handlePolicyEditOpen = (field, title, value) => {
+    setEditDialog({
+      open: true,
+      field,
+      title,
+      value: Array.isArray(value) ? value.join("\n") : String(value || ""),
+    });
+  };
+
+  const handlePolicyEditSave = async () => {
+    const payload = buildFlightUpdatePayload(editDialog.field, editDialog.value);
+    if (!payload) return setEditDialog({ open: false, field: "", title: "", value: "" });
+    try {
+      await dispatch(
+        updateFlightQuotationById({
+          flightQuotationId: quotation.flightQuotationId,
+          formData: payload,
+        }),
+      ).unwrap();
+      await dispatch(getFlightQuotationById(quotation.flightQuotationId));
+      setEditDialog({ open: false, field: "", title: "", value: "" });
+    } catch (err) {
+      console.error("Failed to update flight policy:", err);
+    }
+  };
+
   const infoMap = {
     call: `📞 ${getCustomerMobile()}`,
     email: `✉️ ${getCustomerEmail()}`,
@@ -235,12 +458,26 @@ const FlightFinalize = () => {
 
   const actions = [
     "Finalize Booking",
+    "Edit Finalized Booking",
+    "Normal Mail",
+    "Booking Mail",
   ];
 
   const handleActionClick = (action) => {
     switch (action) {
       case "Finalize Booking":
         setOpenDialog(true);
+        break;
+      case "Edit Finalized Booking":
+        setOpenDialog(true);
+        break;
+      case "Normal Mail":
+        setMailMode("normal");
+        handleEmailOpen("normal");
+        break;
+      case "Booking Mail":
+        setMailMode("booking");
+        handleEmailOpen("booking");
         break;
       default:
         console.log("Unknown action:", action);
@@ -279,48 +516,57 @@ const FlightFinalize = () => {
     website: "https://www.iconicyatra.com",
   };
 
+  const flightPolicies = quotation?.policies || {};
   const Policies = [
     {
       title: "Inclusion Policy",
       icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
-      content: [
+      content: (flightPolicies?.inclusionPolicy?.length ? flightPolicies.inclusionPolicy : [
         "All flights as per itinerary.",
         "Airport taxes and fees included.",
         "24/7 customer support during travel.",
         "Flight changes allowed as per airline policy."
-      ],
+      ]),
+      field: "policies.inclusionPolicy",
       isArray: true,
     },
     {
       title: "Exclusion Policy",
       icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
-      content: [
+      content: (flightPolicies?.exclusionPolicy?.length ? flightPolicies.exclusionPolicy : [
         "Meals on board (unless specified).",
         "Extra baggage charges.",
         "Travel insurance.",
         "Airport transfers."
-      ],
+      ]),
+      field: "policies.exclusionPolicy",
       isArray: true,
     },
     {
       title: "Payment Policy",
       icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
-      content: "100% payment required at the time of booking confirmation.",
+      content: (flightPolicies?.paymentPolicy?.length
+        ? flightPolicies.paymentPolicy.join("\n")
+        : "100% payment required at the time of booking confirmation."),
+      field: "policies.paymentPolicy",
       isArray: false,
     },
     {
       title: "Cancellation & Refund",
       icon: <Warning sx={{ mr: 0.5, color: "warning.main" }} />,
-      content: [
+      content: (flightPolicies?.cancellationPolicy?.length ? flightPolicies.cancellationPolicy : [
         "Cancellations before 15 days: 50% of the total fare will be deducted.",
         "Cancellations within 7 days: No refunds, 100% charges applicable.",
         "No-show: 100% cancellation charges apply."
-      ],
+      ]),
+      field: "policies.cancellationPolicy",
       isArray: true,
     },
   ];
 
-  const terms = "1. This is only a Quote. Availability is checked only on confirmation.\n2. Rates are subject to change without prior notice.\n3. All disputes are subject to Noida Jurisdiction only.\n4. Passengers must carry valid ID proof and booking reference.";
+  const terms = flightPolicies?.termsAndConditions?.length
+    ? flightPolicies.termsAndConditions.join("\n")
+    : "1. This is only a Quote. Availability is checked only on confirmation.\n2. Rates are subject to change without prior notice.\n3. All disputes are subject to Noida Jurisdiction only.\n4. Passengers must carry valid ID proof and booking reference.";
 
   // Prepare data for PDF dialog
   const quotationForPdf = {
@@ -362,6 +608,24 @@ const FlightFinalize = () => {
     footer: footer,
   };
 
+  const emailType = emailTemplateType === "booking" ? "booking" : "normal";
+  const emailTemplate = emailTemplateBodies[emailType];
+  const emailInitialValues = {
+    to: emailToPrefill || "",
+    cc: "",
+    recipientName: getCustomerName(),
+    salutation: "Dear",
+    subject: emailTemplate?.subject || "",
+    greetLine: "Please find below details:",
+    message: emailTemplate?.message || "",
+    signature: "Warm Regards,\nReservation Team\nIconic Travel",
+    mailType: emailType,
+    senderAccount: "gmail1",
+    companyId: mailCompanies?.[0]?._id || "",
+    nextPayableAmount: "",
+    paymentDueDate: "",
+  };
+
   return (
     <Box sx={{ backgroundColor: 'white', minHeight: '100vh' }} >
       <Box
@@ -373,6 +637,7 @@ const FlightFinalize = () => {
       >
         {actions.map((a, i) => {
           if (a === "Finalize Booking" && isFinalized) return null;
+          if (a === "Edit Finalized Booking" && !isFinalized) return null;
           return (
             <Button
               key={i}
@@ -679,6 +944,12 @@ const FlightFinalize = () => {
                               {p.icon}
                               {p.title}
                             </Typography>
+                            <IconButton
+                              size="small"
+                              onClick={() => handlePolicyEditOpen(p.field, p.title, p.content)}
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
                           </Box>
                           {p.isArray ? (
                             <List dense>
@@ -717,6 +988,18 @@ const FlightFinalize = () => {
                           <Description sx={{ mr: 0.5 }} />
                           Terms & Condition
                         </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={() =>
+                            handlePolicyEditOpen(
+                              "policies.termsAndConditions",
+                              "Terms & Conditions",
+                              terms,
+                            )
+                          }
+                        >
+                          <Edit fontSize="small" />
+                        </IconButton>
                       </Box>
                       <Typography variant="body2" whiteSpace="pre-line">
                         {terms}
@@ -783,10 +1066,34 @@ const FlightFinalize = () => {
         onClose={handlePreviewDialogClose}
         quotation={quotationForPdf}
         pdfHeading="FLIGHT QUOTATION"
+        initialEmailContentMode={emailContentType}
+        includePdfOnSend={mailMode !== "booking"}
+        autoSendForMail={autoGeneratePdfForMail}
         onSendMail={(payload) => {
-          console.log("Send mail with PDF attachment:", payload);
+          const attachment = payload?.pdfAttachment || payload || null;
+          setPdfAttachmentForMail(attachment);
+          setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
+          setEmailToPrefill(String(payload?.to || "").trim());
+          setAutoGeneratePdfForMail(false);
           setOpenPreviewDialog(false);
+          setEmailTemplateType("normal");
+          openEmailDialogWithTemplates(mailMode === "booking" ? "booking" : "normal");
         }}
+      />
+
+      <EmailQuotationDialog
+        open={openEmailDialog}
+        onClose={handleEmailClose}
+        onSend={handleEmailSend}
+        hasPdfAttachment={!!pdfAttachmentForMail?.contentBase64}
+        onCompanyChange={async (companyId, nextMailType) => {
+          const templates = await refreshEmailTemplates(companyId);
+          const type = nextMailType === "booking" ? "booking" : "normal";
+          return templates?.[type] || { subject: "", message: "" };
+        }}
+        initialValuesOverride={emailInitialValues}
+        templateBodies={emailTemplateBodies}
+        companyOptions={mailCompanies}
       />
 
       {/* Confirmation Dialog */}
@@ -847,13 +1154,13 @@ const FlightFinalize = () => {
             Cancel
           </Button>
           <Button
-            onClick={handleConfirmFinalize}
+            onClick={isFinalized ? handleSaveFinalizedEdits : handleConfirmFinalize}
             variant="contained"
             color="primary"
             startIcon={loading ? <CircularProgress size={18} /> : <CheckCircle />}
             disabled={loading}
           >
-            {loading ? "Confirming..." : "Confirm Booking"}
+            {loading ? "Saving..." : isFinalized ? "Save Changes" : "Confirm Booking"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -873,6 +1180,33 @@ const FlightFinalize = () => {
           Flight booking has been successfully confirmed!
         </Alert>
       </Snackbar>
+
+      <Dialog
+        open={editDialog.open}
+        onClose={() => setEditDialog({ open: false, field: "", title: "", value: "" })}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>{editDialog.title}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            multiline
+            minRows={8}
+            fullWidth
+            value={editDialog.value}
+            onChange={(e) => setEditDialog((prev) => ({ ...prev, value: e.target.value }))}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialog({ open: false, field: "", title: "", value: "" })}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handlePolicyEditSave}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

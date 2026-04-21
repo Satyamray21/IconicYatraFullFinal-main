@@ -3,6 +3,13 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { Lead } from "../../models/lead.model.js"
+import nodemailer from "nodemailer";
+import Company from "../../models/company.model.js";
+import ReceivedVoucher from "../../models/payment.model.js";
+import {
+    buildFlightQuotationNormalEmail,
+    buildFlightQuotationBookingEmail,
+} from "../../utils/flightQuotationMailerTemplates.js";
 const generateFlightQuotationId = async () => {
     const lastQuotation = await FlightQuotation.findOne({})
         .sort({ createdAt: -1 })
@@ -245,6 +252,188 @@ export const confirmFlightQuotation = asyncHandler(async (req, res) => {
 
     return res.status(200).json(
         new ApiResponse(200, quotation, "Flight quotation confirmed successfully")
+    );
+});
+
+const resolveCompanyForEmail = async ({ companyId, companyName }) => {
+    if (companyId) {
+        const byId = await Company.findById(companyId).lean();
+        if (byId) return byId;
+    }
+    if (companyName) {
+        const byName = await Company.findOne({
+            companyName: { $regex: `^${String(companyName).trim()}$`, $options: "i" },
+        }).lean();
+        if (byName) return byName;
+    }
+    return null;
+};
+
+const resolveMailAuth = (senderAccount) => {
+    const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
+    const user = useSecondary
+        ? process.env.gmail2 || process.env.EMAIL_USER2 || process.env.gmail || process.env.EMAIL_USER
+        : process.env.gmail || process.env.EMAIL_USER;
+    const pass = useSecondary
+        ? process.env.app_pass2 || process.env.EMAIL_PASS2 || process.env.app_pass || process.env.EMAIL_PASS
+        : process.env.app_pass || process.env.EMAIL_PASS;
+    return { user, pass };
+};
+
+const sumReceivedFromClient = (vouchers = []) => {
+    let total = 0;
+    for (const v of vouchers) {
+        const isReceive = v?.drCr === "Cr" || v?.paymentType === "Receive Voucher";
+        if (isReceive) total += Number(v?.amount) || 0;
+    }
+    return total;
+};
+
+export const previewFlightQuotationMail = asyncHandler(async (req, res) => {
+    const { flightQuotationId } = req.params;
+    const companyId = req.query.companyId;
+    const companyName = req.query.companyName;
+
+    const quotation = await FlightQuotation.findOne({ flightQuotationId }).lean();
+    if (!quotation) throw new ApiError(404, "Flight quotation not found");
+
+    const lead = await Lead.findOne({
+        "personalDetails.fullName": quotation?.clientDetails?.clientName,
+    }).lean();
+
+    const selectedCompany = await resolveCompanyForEmail({ companyId, companyName });
+    const vouchers = await ReceivedVoucher.find({ quotationRef: flightQuotationId }).lean();
+    const receivedAmount = sumReceivedFromClient(vouchers);
+
+    const companyMeta = {
+        companyName: selectedCompany?.companyName || "Iconic Travel",
+        companyWebsite: selectedCompany?.companyWebsite || "",
+        termsAndConditions: selectedCompany?.termsConditions || "",
+        cancellationPolicyUrl: selectedCompany?.cancellationPolicy || "",
+        paymentLink: selectedCompany?.paymentLink || "",
+        bankDetails: Array.isArray(selectedCompany?.bankDetails) ? selectedCompany.bankDetails : [],
+        receivedAmount,
+    };
+
+    const quotationData = { quotation, lead };
+    const normalBody = buildFlightQuotationNormalEmail(quotationData, companyMeta);
+    const bookingBody = buildFlightQuotationBookingEmail(quotationData, companyMeta);
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                flightQuotationId,
+                normal: {
+                    subject: `Quotation ${flightQuotationId} - ${quotation?.personalDetails?.fullName || "Guest"}`,
+                    body: normalBody,
+                },
+                booking: {
+                    subject: `Booking Confirmation ${flightQuotationId} - ${quotation?.personalDetails?.fullName || "Guest"}`,
+                    body: bookingBody,
+                },
+            },
+            "Flight quotation email preview generated",
+        ),
+    );
+});
+
+export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
+    const { flightQuotationId } = req.params;
+    const {
+        to,
+        cc,
+        type = "normal",
+        subject,
+        bodyHtml,
+        senderAccount,
+        companyId,
+        companyName,
+        customText = {},
+        pdfAttachment,
+    } = req.body || {};
+
+    if (!to || (Array.isArray(to) && to.length === 0)) {
+        throw new ApiError(400, "Receiver email is required");
+    }
+
+    const quotation = await FlightQuotation.findOne({ flightQuotationId }).lean();
+    if (!quotation) throw new ApiError(404, "Flight quotation not found");
+
+    const lead = await Lead.findOne({
+        "personalDetails.fullName": quotation?.clientDetails?.clientName,
+    }).lean();
+    const selectedCompany = await resolveCompanyForEmail({ companyId, companyName });
+    const auth = resolveMailAuth(senderAccount);
+    if (!auth.user || !auth.pass) {
+        throw new ApiError(500, "Sender email credentials are not configured for selected account");
+    }
+
+    const vouchers = await ReceivedVoucher.find({ quotationRef: flightQuotationId }).lean();
+    const receivedAmount = sumReceivedFromClient(vouchers);
+    const companyMeta = {
+        companyName: selectedCompany?.companyName || "Iconic Travel",
+        companyWebsite: selectedCompany?.companyWebsite || "",
+        termsAndConditions: selectedCompany?.termsConditions || "",
+        cancellationPolicyUrl: selectedCompany?.cancellationPolicy || "",
+        paymentLink: selectedCompany?.paymentLink || "",
+        bankDetails: Array.isArray(selectedCompany?.bankDetails) ? selectedCompany.bankDetails : [],
+        receivedAmount,
+        ...(customText?.booking || {}),
+    };
+
+    const quotationData = { quotation, lead };
+    const generatedBody =
+        type === "booking"
+            ? buildFlightQuotationBookingEmail(quotationData, companyMeta)
+            : buildFlightQuotationNormalEmail(quotationData, companyMeta);
+    const body = String(bodyHtml || "").trim() || generatedBody;
+    const finalSubject =
+        subject ||
+        (type === "booking"
+            ? `Booking Confirmation ${flightQuotationId} - ${quotation?.personalDetails?.fullName || "Guest"}`
+            : `Quotation ${flightQuotationId} - ${quotation?.personalDetails?.fullName || "Guest"}`);
+
+    const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: { user: auth.user, pass: auth.pass },
+    });
+
+    const providedPdfAttachment =
+        type !== "booking" &&
+            pdfAttachment &&
+            typeof pdfAttachment === "object" &&
+            String(pdfAttachment.contentBase64 || "").trim()
+            ? {
+                filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+                content: Buffer.from(String(pdfAttachment.contentBase64).trim(), "base64"),
+                contentType: String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+            }
+            : null;
+
+    await transporter.sendMail({
+        from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+        to,
+        cc: cc && String(cc).trim() ? cc : undefined,
+        replyTo: selectedCompany?.email || auth.user,
+        subject: finalSubject,
+        html: body,
+        text: body.replace(/<[^>]*>/g, ""),
+        attachments: providedPdfAttachment ? [providedPdfAttachment] : [],
+    });
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                flightQuotationId,
+                type,
+                senderAccount: senderAccount || "gmail1",
+            },
+            "Mail sent successfully",
+        ),
     );
 });
 
