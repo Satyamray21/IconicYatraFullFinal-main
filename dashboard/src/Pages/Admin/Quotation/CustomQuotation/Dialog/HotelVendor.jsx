@@ -17,10 +17,20 @@ import {
     MenuItem,
     ListItemIcon,
     ListItemText,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Paper,
+    IconButton,
 } from "@mui/material";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 
 import BankDetailsDialog from "./BankDetailsDialog"; // Update the import path as per your project structure
@@ -29,22 +39,46 @@ import AssociateDetailForm from "../../../Associates/Form/AssociatesForm";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllAssociates } from "../../../../../features/associate/associateSlice";
 
-const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
+const HotelVendorDialog = ({
+    open,
+    onClose,
+    onConfirm,
+    initialVendorDetails = {},
+    initialFinalizedVendorsWithAmounts = [],
+}) => {
     const dispatch = useDispatch();
     const { list: associateList = [], loading: associatesLoading } = useSelector(
         (state) => state.associate
     );
     const [vendorType, setVendorType] = useState("single");
     const [addVendorDialogOpen, setAddVendorDialogOpen] = useState(false);
-    const [vehicleVendorDialogOpen, setVehicleVendorDialogOpen] = useState(false);
     const [bankDetailsDialogOpen, setBankDetailsDialogOpen] = useState(false);
     const [addBankDialogOpen, setAddBankDialogOpen] = useState(false);
     const [vendors, setVendors] = useState([]);
     const [vehicleVendors, setVehicleVendors] = useState([]);
-    const [vehicleVendorForm, setVehicleVendorForm] = useState({
-        vehicleVendorName: "",
-        showAllVehicle: false,
-    });
+    const [vehicleVendorName, setVehicleVendorName] = useState("");
+    const [vehicleAmount, setVehicleAmount] = useState("");
+
+    // Vendor amounts tracking
+    const [finalizedVendorsWithAmounts, setFinalizedVendorsWithAmounts] = useState([]);
+    const [editingVendorId, setEditingVendorId] = useState(null);
+    const [editForm, setEditForm] = useState({ vendorName: "", amount: "", remarks: "", vendorType: "" });
+
+    useEffect(() => {
+        if (!open) return;
+        setVendorType(initialVendorDetails?.vendorType || "single");
+        setFinalizedVendorsWithAmounts(
+            Array.isArray(initialFinalizedVendorsWithAmounts)
+                ? initialFinalizedVendorsWithAmounts.map((v, i) => ({
+                    id: Date.now() + i,
+                    vendorName: v?.vendorName || "",
+                    vendorType: v?.vendorType || "Hotel",
+                    amount: Number(v?.amount) || 0,
+                    remarks: v?.remarks || "",
+                }))
+                : []
+        );
+    }, [open, initialVendorDetails, initialFinalizedVendorsWithAmounts]);
 
     // Bank Details Dialog States
     const [accountType, setAccountType] = useState("company");
@@ -121,9 +155,7 @@ const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
         }),
         onSubmit: (values) => {
             console.log("Hotel Vendor Form Data:", values);
-            // Close hotel vendor dialog and open vehicle vendor dialog
-            onClose();
-            setVehicleVendorDialogOpen(true);
+            setBankDetailsDialogOpen(true);
         },
     });
 
@@ -146,31 +178,9 @@ const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
         if (newVendorName && !vehicleVendors.includes(newVendorName)) {
             const updatedVendors = [...vehicleVendors, newVendorName];
             setVehicleVendors(updatedVendors);
-            setVehicleVendorForm(prev => ({
-                ...prev,
-                vehicleVendorName: newVendorName
-            }));
+            setVehicleVendorName(newVendorName);
         }
         setAddVendorDialogOpen(false);
-    };
-
-    const handleVehicleVendorChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        setVehicleVendorForm(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value
-        }));
-    };
-
-    const handleVehicleVendorConfirm = () => {
-        console.log("Vehicle Vendor Form Data:", vehicleVendorForm);
-        // Close vehicle vendor dialog and open bank details dialog
-        setVehicleVendorDialogOpen(false);
-        setBankDetailsDialogOpen(true);
-    };
-
-    const handleVehicleVendorCancel = () => {
-        setVehicleVendorDialogOpen(false);
     };
 
     const handleBankDetailsConfirm = () => {
@@ -179,13 +189,112 @@ const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
         console.log("Account Name:", accountName);
         onConfirm?.({
             vendorType,
-            hotelVendorName: formik.values.vendorName || "",
-            vehicleVendorName: vehicleVendorForm.vehicleVendorName || "",
+            hotelVendorName: finalizedVendorsWithAmounts
+                .filter((v) => String(v.vendorType).toLowerCase() === "hotel")
+                .map((v) => v.vendorName)
+                .join(", "),
+            vehicleVendorName: finalizedVendorsWithAmounts
+                .filter((v) => String(v.vendorType).toLowerCase() === "vehicle")
+                .map((v) => v.vendorName)
+                .join(", "),
             accountType,
             accountName,
+            finalizedVendorsWithAmounts, // Pass vendor amounts
         });
         setBankDetailsDialogOpen(false);
         // You can add additional logic here for what happens after bank details confirmation
+    };
+
+    // Handle adding vendor with amount
+    const handleAddVendorWithAmount = () => {
+        if (formik.values.vendorName && formik.values.amount) {
+            const newVendor = {
+                id: Date.now(),
+                vendorName: formik.values.vendorName,
+                vendorType: "Hotel",
+                amount: Number(formik.values.amount),
+                remarks: "",
+            };
+            setFinalizedVendorsWithAmounts((prev) => {
+                const otherRows = prev.filter((v) => v.vendorType !== "Hotel");
+                if (vendorType === "single") {
+                    return [...otherRows, newVendor];
+                }
+                return [...prev, newVendor];
+            });
+            formik.setFieldValue("vendorName", "");
+            formik.setFieldValue("amount", "");
+        }
+    };
+
+    const handleAddVehicleVendorWithAmount = () => {
+        if (vehicleVendorName && vehicleAmount) {
+            const newVendor = {
+                id: Date.now(),
+                vendorName: vehicleVendorName,
+                vendorType: "Vehicle",
+                amount: Number(vehicleAmount),
+                remarks: "",
+            };
+            setFinalizedVendorsWithAmounts((prev) => {
+                const otherRows = prev.filter((v) => v.vendorType !== "Vehicle");
+                if (vendorType === "single") {
+                    return [...otherRows, newVendor];
+                }
+                return [...prev, newVendor];
+            });
+            setVehicleVendorName("");
+            setVehicleAmount("");
+        }
+    };
+
+    // Handle editing vendor
+    const handleEditVendor = (vendor) => {
+        setEditingVendorId(vendor.id);
+        setEditForm({
+            vendorName: vendor.vendorName,
+            amount: vendor.amount.toString(),
+            remarks: vendor.remarks,
+            vendorType: vendor.vendorType,
+        });
+    };
+
+    // Handle saving edited vendor
+    const handleSaveEditedVendor = () => {
+        setFinalizedVendorsWithAmounts(
+            finalizedVendorsWithAmounts.map((v) =>
+                v.id === editingVendorId
+                    ? {
+                        ...v,
+                        vendorName: editForm.vendorName,
+                        amount: Number(editForm.amount),
+                        remarks: editForm.remarks,
+                    }
+                    : v
+            )
+        );
+        setEditingVendorId(null);
+        setEditForm({ vendorName: "", amount: "", remarks: "", vendorType: "" });
+    };
+
+    // Handle deleting vendor
+    const handleDeleteVendor = (vendorId) => {
+        setFinalizedVendorsWithAmounts(
+            finalizedVendorsWithAmounts.filter((v) => v.id !== vendorId)
+        );
+    };
+
+    const handleCancelEdit = () => {
+        setEditingVendorId(null);
+        setEditForm({ vendorName: "", amount: "", remarks: "", vendorType: "" });
+    };
+
+    const handlePrimaryConfirm = () => {
+        if (finalizedVendorsWithAmounts.length > 0) {
+            setBankDetailsDialogOpen(true);
+            return;
+        }
+        formik.handleSubmit();
     };
 
     const handleBankDetailsCancel = () => {
@@ -272,8 +381,8 @@ const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
     const renderVehicleVendorSelect = () => (
         <Select
             name="vehicleVendorName"
-            value={vehicleVendorForm.vehicleVendorName}
-            onChange={handleVehicleVendorChange}
+            value={vehicleVendorName}
+            onChange={(e) => setVehicleVendorName(e.target.value)}
             fullWidth
             displayEmpty
         >
@@ -336,61 +445,7 @@ const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
                             >
                                 *Hotel Vendor
                             </Typography>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                                {renderVendorSelect(
-                                    "vendorName",
-                                    formik.values.vendorName,
-                                    formik.handleChange
-                                )}
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            name="showAll"
-                                            checked={formik.values.showAll}
-                                            onChange={formik.handleChange}
-                                        />
-                                    }
-                                    label="Show All"
-                                />
-                            </Box>
-                        </>
-                    ) : (
-                        <>
-                            <Typography
-                                variant="body1"
-                                sx={{ color: "#f39c12", fontWeight: "bold", mb: 1 }}
-                            >
-                                Standard
-                            </Typography>
-                            <Typography
-                                variant="body2"
-                                sx={{ color: "#e74c3c", mb: 1, fontWeight: "bold" }}
-                            >
-                                Max Amount Limit ₹ 50,000
-                            </Typography>
-                            <Box
-                                sx={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                }}
-                            >
-                                <Typography sx={{ fontWeight: "bold", color: "#34495e" }}>
-                                    *Sikkim Resto Aritar (5N)
-                                </Typography>
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            name="same"
-                                            checked={formik.values.same}
-                                            onChange={formik.handleChange}
-                                        />
-                                    }
-                                    label="Same"
-                                />
-                            </Box>
-
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
                                 {renderVendorSelect(
                                     "vendorName",
                                     formik.values.vendorName,
@@ -398,12 +453,24 @@ const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
                                 )}
                                 <TextField
                                     name="amount"
-                                    label="Amount"
+                                    label="Amount (₹)"
                                     value={formik.values.amount}
                                     onChange={formik.handleChange}
                                     type="number"
-                                    sx={{ width: "40%" }}
+                                    sx={{ width: "200px" }}
                                 />
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    onClick={handleAddVendorWithAmount}
+                                    disabled={
+                                        vendorType === "single" &&
+                                        finalizedVendorsWithAmounts.some((v) => v.vendorType === "Hotel")
+                                    }
+                                    sx={{ background: "#4caf50" }}
+                                >
+                                    Add
+                                </Button>
                             </Box>
                             <FormControlLabel
                                 control={
@@ -414,10 +481,317 @@ const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
                                     />
                                 }
                                 label="Show All"
-                                sx={{ mt: 1 }}
                             />
+
+                            {/* Vendors with Amounts Table */}
+                            {finalizedVendorsWithAmounts.length > 0 && (
+                                <Box sx={{ mt: 3 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>
+                                        Finalized Vendors:
+                                    </Typography>
+                                    <TableContainer component={Paper}>
+                                        <Table size="small">
+                                            <TableHead>
+                                                <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
+                                                    <TableCell sx={{ fontWeight: "bold" }}>Vendor Name</TableCell>
+                                                    <TableCell sx={{ fontWeight: "bold" }}>Type</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: "bold" }}>Amount (₹)</TableCell>
+                                                    <TableCell sx={{ fontWeight: "bold" }}>Remarks</TableCell>
+                                                    <TableCell align="center" sx={{ fontWeight: "bold" }}>Actions</TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {finalizedVendorsWithAmounts.map((vendor) =>
+                                                    editingVendorId === vendor.id ? (
+                                                        <TableRow key={vendor.id}>
+                                                            <TableCell>
+                                                                <TextField
+                                                                    size="small"
+                                                                    value={editForm.vendorName}
+                                                                    onChange={(e) =>
+                                                                        setEditForm({ ...editForm, vendorName: e.target.value })
+                                                                    }
+                                                                    fullWidth
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell align="right">
+                                                                <TextField
+                                                                    size="small"
+                                                                    type="number"
+                                                                    value={editForm.amount}
+                                                                    onChange={(e) =>
+                                                                        setEditForm({ ...editForm, amount: e.target.value })
+                                                                    }
+                                                                    sx={{ width: "100px" }}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <TextField
+                                                                    size="small"
+                                                                    value={editForm.remarks}
+                                                                    onChange={(e) =>
+                                                                        setEditForm({ ...editForm, remarks: e.target.value })
+                                                                    }
+                                                                    fullWidth
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell align="center">
+                                                                <Button
+                                                                    size="small"
+                                                                    variant="contained"
+                                                                    color="success"
+                                                                    onClick={handleSaveEditedVendor}
+                                                                    sx={{ mr: 1 }}
+                                                                >
+                                                                    Save
+                                                                </Button>
+                                                                <Button
+                                                                    size="small"
+                                                                    variant="contained"
+                                                                    color="error"
+                                                                    onClick={handleCancelEdit}
+                                                                >
+                                                                    Cancel
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ) : (
+                                                        <TableRow key={vendor.id}>
+                                                            <TableCell>{vendor.vendorName}</TableCell>
+                                                            <TableCell>{vendor.vendorType}</TableCell>
+                                                            <TableCell align="right">
+                                                                ₹ {Number(vendor.amount).toLocaleString("en-IN")}
+                                                            </TableCell>
+                                                            <TableCell>{vendor.remarks}</TableCell>
+                                                            <TableCell align="center">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleEditVendor(vendor)}
+                                                                    color="primary"
+                                                                >
+                                                                    <EditIcon fontSize="small" />
+                                                                </IconButton>
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleDeleteVendor(vendor.id)}
+                                                                    color="error"
+                                                                >
+                                                                    <DeleteIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                </Box>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <Typography
+                                variant="body1"
+                                sx={{ color: "#f39c12", fontWeight: "bold", mb: 1 }}
+                            >
+                                Multiple Hotel Vendors
+                            </Typography>
+                            <Typography
+                                variant="body2"
+                                sx={{ color: "#e74c3c", mb: 2, fontWeight: "bold" }}
+                            >
+                                Add vendors with their respective amounts
+                            </Typography>
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    gap: 1,
+                                    mb: 2,
+                                }}
+                            >
+                                {renderVendorSelect(
+                                    "vendorName",
+                                    formik.values.vendorName,
+                                    formik.handleChange
+                                )}
+                                <TextField
+                                    name="amount"
+                                    label="Amount (₹)"
+                                    value={formik.values.amount}
+                                    onChange={formik.handleChange}
+                                    type="number"
+                                    sx={{ width: "150px" }}
+                                />
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    onClick={handleAddVendorWithAmount}
+                                    disabled={
+                                        vendorType === "single" &&
+                                        finalizedVendorsWithAmounts.some((v) => v.vendorType === "Hotel")
+                                    }
+                                    sx={{ background: "#4caf50", height: "56px" }}
+                                >
+                                    <AddIcon /> Add
+                                </Button>
+                            </Box>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        name="showAll"
+                                        checked={formik.values.showAll}
+                                        onChange={formik.handleChange}
+                                    />
+                                }
+                                label="Show All"
+                                sx={{ mb: 2 }}
+                            />
+
+                            {/* Vendors with Amounts Table */}
+                            {finalizedVendorsWithAmounts.length > 0 && (
+                                <Box sx={{ mt: 2 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>
+                                        Added Vendors:
+                                    </Typography>
+                                    <TableContainer component={Paper}>
+                                        <Table size="small">
+                                            <TableHead>
+                                                <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
+                                                    <TableCell sx={{ fontWeight: "bold" }}>Vendor Name</TableCell>
+                                                    <TableCell sx={{ fontWeight: "bold" }}>Type</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: "bold" }}>Amount (₹)</TableCell>
+                                                    <TableCell sx={{ fontWeight: "bold" }}>Remarks</TableCell>
+                                                    <TableCell align="center" sx={{ fontWeight: "bold" }}>Actions</TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {finalizedVendorsWithAmounts.map((vendor) =>
+                                                    editingVendorId === vendor.id ? (
+                                                        <TableRow key={vendor.id}>
+                                                            <TableCell>
+                                                                <TextField
+                                                                    size="small"
+                                                                    value={editForm.vendorName}
+                                                                    onChange={(e) =>
+                                                                        setEditForm({ ...editForm, vendorName: e.target.value })
+                                                                    }
+                                                                    fullWidth
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell align="right">
+                                                                <TextField
+                                                                    size="small"
+                                                                    type="number"
+                                                                    value={editForm.amount}
+                                                                    onChange={(e) =>
+                                                                        setEditForm({ ...editForm, amount: e.target.value })
+                                                                    }
+                                                                    sx={{ width: "100px" }}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <TextField
+                                                                    size="small"
+                                                                    value={editForm.remarks}
+                                                                    onChange={(e) =>
+                                                                        setEditForm({ ...editForm, remarks: e.target.value })
+                                                                    }
+                                                                    fullWidth
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell align="center">
+                                                                <Button
+                                                                    size="small"
+                                                                    variant="contained"
+                                                                    color="success"
+                                                                    onClick={handleSaveEditedVendor}
+                                                                    sx={{ mr: 1 }}
+                                                                >
+                                                                    Save
+                                                                </Button>
+                                                                <Button
+                                                                    size="small"
+                                                                    variant="contained"
+                                                                    color="error"
+                                                                    onClick={handleCancelEdit}
+                                                                >
+                                                                    Cancel
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ) : (
+                                                        <TableRow key={vendor.id}>
+                                                            <TableCell>{vendor.vendorName}</TableCell>
+                                                            <TableCell>{vendor.vendorType}</TableCell>
+                                                            <TableCell align="right">
+                                                                ₹ {Number(vendor.amount).toLocaleString("en-IN")}
+                                                            </TableCell>
+                                                            <TableCell>{vendor.remarks}</TableCell>
+                                                            <TableCell align="center">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleEditVendor(vendor)}
+                                                                    color="primary"
+                                                                >
+                                                                    <EditIcon fontSize="small" />
+                                                                </IconButton>
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleDeleteVendor(vendor.id)}
+                                                                    color="error"
+                                                                >
+                                                                    <DeleteIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                    {/* Total Amount */}
+                                    <Box sx={{ mt: 2, p: 1, backgroundColor: "#fff3e0", borderRadius: 1 }}>
+                                        <Typography sx={{ fontWeight: "bold", color: "#e65100" }}>
+                                            Total Amount: ₹ {finalizedVendorsWithAmounts.reduce((sum, v) => sum + Number(v.amount), 0).toLocaleString("en-IN")}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            )}
                         </>
                     )}
+
+                    <Divider sx={{ my: 2 }} />
+                    <Typography
+                        variant="body1"
+                        sx={{ fontWeight: 600, color: "#1976d2", mb: 1 }}
+                    >
+                        *Vehicle Vendor
+                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                        {renderVehicleVendorSelect()}
+                        <TextField
+                            name="vehicleAmount"
+                            label="Vehicle Amount (₹)"
+                            value={vehicleAmount}
+                            onChange={(e) => setVehicleAmount(e.target.value)}
+                            type="number"
+                            sx={{ width: "200px" }}
+                        />
+                        <Button
+                            variant="contained"
+                            size="small"
+                            onClick={handleAddVehicleVendorWithAmount}
+                            disabled={
+                                vendorType === "single" &&
+                                finalizedVendorsWithAmounts.some((v) => v.vendorType === "Vehicle")
+                            }
+                            sx={{ background: "#4caf50" }}
+                        >
+                            Add
+                        </Button>
+                    </Box>
 
                     {/* Buttons */}
                     <Box
@@ -431,8 +805,11 @@ const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
                         <Button
                             variant="contained"
                             sx={{ background: "#90caf9", color: "#fff" }}
-                            disabled={!formik.isValid}
-                            onClick={formik.handleSubmit}
+                            disabled={
+                                finalizedVendorsWithAmounts.length === 0 &&
+                                !formik.isValid
+                            }
+                            onClick={handlePrimaryConfirm}
                         >
                             Confirm
                         </Button>
@@ -457,87 +834,10 @@ const HotelVendorDialog = ({ open, onClose, onConfirm }) => {
                 <AssociateDetailForm
                     onClose={() => setAddVendorDialogOpen(false)}
                     onSuccess={(newVendor) => {
-                        // Determine which vendor list to update based on which dialog is open
-                        if (vehicleVendorDialogOpen) {
-                            handleAddVehicleVendor(newVendor.name || newVendor);
-                        } else {
-                            handleAddVendor(newVendor.name || newVendor);
-                        }
+                        handleAddVendor(newVendor.name || newVendor);
+                        handleAddVehicleVendor(newVendor.name || newVendor);
                     }}
                 />
-            </Dialog>
-
-            {/* Vehicle Vendor Dialog */}
-            <Dialog open={vehicleVendorDialogOpen} onClose={() => setVehicleVendorDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontWeight: "bold", color: "#1976d2", textAlign: "center" }}>
-                    Vehicle Vendor
-                </DialogTitle>
-                <DialogContent>
-                    <Typography
-                        variant="body1"
-                        sx={{
-                            fontWeight: "bold",
-                            color: "#e74c3c",
-                            mb: 2,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 1
-                        }}
-                    >
-                        ***Vehicle Vendor**
-                    </Typography>
-
-                    <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
-                        <Checkbox
-                            name="showAllVehicle"
-                            checked={vehicleVendorForm.showAllVehicle}
-                            onChange={handleVehicleVendorChange}
-                        />
-                        <Typography variant="body2" sx={{ fontWeight: "medium" }}>
-                            Show All
-                        </Typography>
-                    </Box>
-
-                    {renderVehicleVendorSelect()}
-
-                    <Divider sx={{ mb: 3, mt: 2 }} />
-
-                    {/* Buttons */}
-                    <Box
-                        sx={{
-                            display: "flex",
-                            justifyContent: "center",
-                            gap: 2,
-                        }}
-                    >
-                        <Button
-                            variant="contained"
-                            sx={{
-                                background: "#90caf9",
-                                color: "#fff",
-                                "&:hover": {
-                                    background: "#64b5f6",
-                                }
-                            }}
-                            onClick={handleVehicleVendorConfirm}
-                        >
-                            Confirm
-                        </Button>
-                        <Button
-                            variant="contained"
-                            sx={{
-                                background: "#e67e22",
-                                color: "#fff",
-                                "&:hover": {
-                                    background: "#d35400",
-                                }
-                            }}
-                            onClick={handleVehicleVendorCancel}
-                        >
-                            Cancel
-                        </Button>
-                    </Box>
-                </DialogContent>
             </Dialog>
 
             {/* Bank Details Dialog */}
