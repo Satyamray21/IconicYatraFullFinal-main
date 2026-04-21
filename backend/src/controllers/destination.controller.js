@@ -23,7 +23,7 @@ export const addDestination = async (req, res) => {
 // ✅ GET ALL DESTINATIONS
 export const getDestinations = async (req, res) => {
   try {
-    const { tourType, sector, country } = req.query;
+    const { tourType, sector, country, onlyUsed } = req.query;
 
     const filter = {};
     if (tourType) filter.tourType = tourType;
@@ -34,7 +34,31 @@ export const getDestinations = async (req, res) => {
       filter.country = new RegExp(`^${country.trim()}$`, "i");
     }
 
-    const data = await DestinationMaster.find(filter);
+    let data = await DestinationMaster.find(filter);
+
+    // Optional: return only destinations currently used by packages.
+    if (String(onlyUsed).toLowerCase() === "true" && ["Domestic", "International"].includes(tourType)) {
+      const packages = await Package.find({ tourType }).select(
+        tourType === "Domestic" ? "sector" : "destinationCountry"
+      );
+
+      const usedKeys = new Set(
+        packages
+          .map((p) =>
+            String(tourType === "Domestic" ? p?.sector : p?.destinationCountry || "")
+              .trim()
+              .toLowerCase()
+          )
+          .filter(Boolean)
+      );
+
+      data = data.filter((d) => {
+        const key = String(tourType === "Domestic" ? d?.sector : d?.country || "")
+          .trim()
+          .toLowerCase();
+        return usedKeys.has(key);
+      });
+    }
 
     res.json(data);
   } catch (err) {
