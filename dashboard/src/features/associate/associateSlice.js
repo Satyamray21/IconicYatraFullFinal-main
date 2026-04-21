@@ -13,6 +13,15 @@ export const fetchAssociateById = createAsyncThunk("associate/fetchById", async 
   return res.data;
 });
 
+// Fetch quotations assigned to a specific associate
+export const fetchAssociateQuotations = createAsyncThunk(
+  "associate/fetchQuotations",
+  async (id) => {
+    const res = await axios.get(`/associate/${id}/quotations`);
+    return res.data;
+  }
+);
+
 // Create new associate
 export const createAssociate = createAsyncThunk("associate/create", async (associateData) => {
   // Check if qrCode file exists in any nested form data
@@ -109,6 +118,11 @@ const associateSlice = createSlice({
     loading: false,
     deleting: false,
     error: null,
+    quotations: [],
+    quotationsLoading: false,
+    quotationsError: null,
+    quotationsTotal: 0,
+    quotationsForAssociate: null,
   },
   reducers: {
     clearSelectedAssociate: (state) => {
@@ -116,6 +130,12 @@ const associateSlice = createSlice({
     },
     clearError: (state) => {
       state.error = null;
+    },
+    clearAssociateQuotations: (state) => {
+      state.quotations = [];
+      state.quotationsTotal = 0;
+      state.quotationsForAssociate = null;
+      state.quotationsError = null;
     },
   },
   extraReducers: (builder) => {
@@ -170,9 +190,28 @@ const associateSlice = createSlice({
       .addCase(deleteAssociate.rejected, (state, action) => {
         state.deleting = false;
         state.error = action.error.message;
+      })
+      // Fetch associate quotations
+      .addCase(fetchAssociateQuotations.pending, (state, action) => {
+        state.quotationsLoading = true;
+        state.quotationsError = null;
+        state.quotationsForAssociate = action.meta.arg;
+      })
+      .addCase(fetchAssociateQuotations.fulfilled, (state, action) => {
+        state.quotationsLoading = false;
+        state.quotations = action.payload?.quotations || [];
+        state.quotationsTotal = action.payload?.totalAssignedAmount || 0;
+      })
+      .addCase(fetchAssociateQuotations.rejected, (state, action) => {
+        state.quotationsLoading = false;
+        state.quotationsError = action.error.message;
       });
   },
 });
 
-export const { clearSelectedAssociate, clearError } = associateSlice.actions;
+export const {
+  clearSelectedAssociate,
+  clearError,
+  clearAssociateQuotations,
+} = associateSlice.actions;
 export default associateSlice.reducer;

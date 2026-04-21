@@ -1,5 +1,9 @@
 import { Associate } from "../models/associates.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import QuickQuotation from "../models/quotation/quickQuotation.model.js";
+import { CustomQuotation } from "../models/quotation/customQuotation.model.js";
+import { FlightQuotation } from "../models/quotation/flightQuotation.model.js";
+import { Vehicle } from "../models/quotation/vehicle.model.js";
 
 // Helper function to convert flat object with dot notation to nested object
 const convertToNestedObject = (flatObj) => {
@@ -186,6 +190,159 @@ export const deleteAssociate = async (req, res, next) => {
     const deleted = await Associate.findOneAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Not found" });
     res.status(200).json({ message: "Deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Get all quotations assigned to an associate (matched via finalizedVendorsWithAmounts.vendorName)
+export const getAssociateQuotations = async (req, res, next) => {
+  try {
+    const associate = await Associate.findOne({ associateId: req.params.id });
+    if (!associate) {
+      return res.status(404).json({ message: "Associate not found" });
+    }
+
+    const fullName = associate?.personalDetails?.fullName || "";
+    const firmName = associate?.firm?.firmName || "";
+
+    // Candidate names to match vendorName against (case-insensitive, trimmed).
+    const candidateNames = [fullName, firmName]
+      .map((n) => String(n || "").trim())
+      .filter(Boolean);
+
+    if (candidateNames.length === 0) {
+      return res.status(200).json({ associate, quotations: [] });
+    }
+
+    // Build a case-insensitive regex that matches any of the candidate names exactly.
+    const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const nameRegex = new RegExp(
+      `^(?:${candidateNames.map(escape).join("|")})$`,
+      "i"
+    );
+
+    const vendorFilter = {
+      finalizedVendorsWithAmounts: {
+        $elemMatch: { vendorName: nameRegex },
+      },
+    };
+
+    const [quickList, customList, vehicleList, flightList] = await Promise.all([
+      QuickQuotation.find(vendorFilter).lean(),
+      CustomQuotation.find(vendorFilter).lean(),
+      Vehicle.find(vendorFilter).lean(),
+      // FlightQuotation does not currently track assigned vendors; return empty.
+      Promise.resolve([]),
+    ]);
+
+    const pickVendorEntry = (vendors = []) =>
+      vendors.find((v) =>
+        candidateNames.some(
+          (n) =>
+            String(v?.vendorName || "").trim().toLowerCase() ===
+            n.toLowerCase()
+        )
+      ) || null;
+
+    const quickMapped = quickList.map((q) => {
+      const vendor = pickVendorEntry(q.finalizedVendorsWithAmounts);
+      const assignedAmount = Number(vendor?.amount || 0);
+      return {
+        _id: q._id,
+        quotationType: "Quick",
+        quotationId: q._id?.toString(),
+        clientName: q.customerName || "",
+        amount: assignedAmount || Number(q.totalCost || 0),
+        assignedAmount,
+        totalAmount: Number(q.totalCost || 0),
+        date: q.finalizedAt || q.createdAt,
+        status: q.finalizeStatus || "",
+        vendorType: vendor?.vendorType || "",
+        remarks: vendor?.remarks || "",
+      };
+    });
+
+    const customMapped = customList.map((q) => {
+      const vendor = pickVendorEntry(q.finalizedVendorsWithAmounts);
+      const assignedAmount = Number(vendor?.amount || 0);
+      const packageKey = String(q.finalizedPackage || "").toLowerCase();
+      const packageCalc =
+        q?.clientDetails?.tourDetails?.quotationDetails?.packageCalculations ||
+        {};
+      const totalAmount =
+        Number(packageCalc?.[packageKey]?.finalTotal || 0) ||
+        Number(packageCalc?.standard?.finalTotal || 0) ||
+        Number(packageCalc?.deluxe?.finalTotal || 0) ||
+        Number(packageCalc?.superior?.finalTotal || 0) ||
+        0;
+      return {
+        _id: q._id,
+        quotationType: "Custom",
+        quotationId: q.quotationId || q._id?.toString(),
+        clientName: q?.clientDetails?.clientName || "",
+        amount: assignedAmount || totalAmount,
+        assignedAmount,
+        totalAmount,
+        date: q.finalizedAt || q.createdAt,
+        status: q.finalizeStatus || "",
+        vendorType: vendor?.vendorType || "",
+        remarks: vendor?.remarks || "",
+      };
+    });
+
+    const vehicleMapped = vehicleList.map((q) => {
+      const vendor = pickVendorEntry(q.finalizedVendorsWithAmounts);
+      const assignedAmount = Number(vendor?.amount || 0);
+      const totalAmount = Number(q?.costDetails?.totalCost || 0);
+      return {
+        _id: q._id,
+        quotationType: "Vehicle",
+        quotationId: q.vehicleQuotationId || q._id?.toString(),
+        clientName: q?.basicsDetails?.clientName || "",
+        amount: assignedAmount || totalAmount,
+        assignedAmount,
+        totalAmount,
+        date: q.finalizedAt || q.createdAt,
+        status: q.finalizeStatus || "",
+        vendorType: vendor?.vendorType || "",
+        remarks: vendor?.remarks || "",
+      };
+    });
+
+    const flightMapped = flightList.map((q) => ({
+      _id: q._id,
+      quotationType: "Flight",
+      quotationId: q.flightQuotationId || q._id?.toString(),
+      clientName:
+        q?.clientDetails?.clientName || q?.personalDetails?.fullName || "",
+      amount: Number(q.finalFare || q.totalFare || 0),
+      assignedAmount: 0,
+      totalAmount: Number(q.finalFare || q.totalFare || 0),
+      date: q.createdAt,
+      status: q.status || "",
+      vendorType: "",
+      remarks: "",
+    }));
+
+    const quotations = [
+      ...quickMapped,
+      ...customMapped,
+      ...vehicleMapped,
+      ...flightMapped,
+    ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+    const totalAssignedAmount = quotations.reduce(
+      (sum, q) => sum + Number(q.assignedAmount || 0),
+      0
+    );
+
+    res.status(200).json({
+      associate,
+      count: quotations.length,
+      totalAssignedAmount,
+      quotations,
+    });
   } catch (err) {
     next(err);
   }
