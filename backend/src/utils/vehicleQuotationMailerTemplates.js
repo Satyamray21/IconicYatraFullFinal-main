@@ -23,6 +23,17 @@ const fmtDate = (iso) => {
   });
 };
 
+const fmtTime = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
 const summarizeGuests = (lead = {}) => {
   const members = lead?.tourDetails?.members || {};
   const adults = toNum(members.adults);
@@ -211,6 +222,19 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
   const pickupDrop = vehicle?.pickupDropDetails || {};
   const totals = vehicleTotals(vehicle);
   const companyName = safe(customText?.companyName, "Iconic Travel");
+  const policies = vehicle?.policies || {};
+  const inclusionWithAdditional = [
+    ...toPolicyArray(policies?.inclusionPolicy),
+    ...includedAdditionalServiceLines(vehicle?.additionalServices),
+  ];
+  const exclusionCombined = toPolicyArray(policies?.exclusionPolicy);
+  const paymentCombined = toPolicyArray(policies?.paymentPolicy);
+  const termsValue = policies?.termsAndConditions || customText?.termsAndConditions;
+  const cancellationPolicyUrl = customText?.cancellationPolicyUrl;
+  const bankDetails = Array.isArray(customText?.bankDetails)
+    ? customText.bankDetails
+    : [];
+  const paymentLink = customText?.paymentLink || "";
   const receivedAmount = toNum(customText.receivedAmount);
   const dueAmount =
     customText.dueAmount !== undefined
@@ -242,8 +266,8 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
       <p><b>Trip Type:</b> ${safe(basics?.tripType, "-")}</p>
       <p><b>No. of Days:</b> ${safe(basics?.noOfDays, "-")}</p>
       <p><b>No. of Pax:</b> ${summarizeGuests(lead)}</p>
-      <p><b>Arrival Date:</b> ${fmtDate(pickupDrop?.pickupDate)} ${pickupDrop?.pickupTime ? `, Time: ${pickupDrop.pickupTime}` : ""}</p>
-      <p><b>Departure Date:</b> ${fmtDate(pickupDrop?.dropDate)} ${pickupDrop?.dropTime ? `, Time: ${pickupDrop.dropTime}` : ""}</p>
+      <p><b>Arrival Date:</b> ${fmtDate(pickupDrop?.pickupDate)} ${pickupDrop?.pickupTime ? `, Time: ${fmtTime(pickupDrop.pickupTime)}` : ""}</p>
+      <p><b>Departure Date:</b> ${fmtDate(pickupDrop?.dropDate)} ${pickupDrop?.dropTime ? `, Time: ${fmtTime(pickupDrop.dropTime)}` : ""}</p>
       <p><b>Pick Up Point:</b> ${safe(pickupDrop?.pickupLocation, "As per itinerary")}</p>
       <p><b>Drop Point:</b> ${safe(pickupDrop?.dropLocation, "As per itinerary")}</p>
       <br/>
@@ -259,6 +283,28 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
           ? `<p><b>Payment Due Date:</b> ${safe(customText.dueDate)}</p>`
           : ""
       }
+      <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
+      <p>${policyLines(inclusionWithAdditional).replace(/\n/g, "<br/>")}</p>
+      <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
+      <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
+      <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+      ${termsAndConditionsLine(termsValue)}
+      <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
+      ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
+      <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+      <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
+      ${bankHtmlSection(bankDetails, paymentLink)}
+      <p>
+        ${safe(
+          customText.signature,
+          `Warm Regards<br/>Reservation Team<br/>${companyName}`,
+        ).replace(/\n/g, "<br/>")}
+      </p>
     </div>
   `;
 }
