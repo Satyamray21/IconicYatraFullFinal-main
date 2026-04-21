@@ -125,11 +125,52 @@ function linesToPolicyArray(v) {
 }
 
 function buildQuickMongoSetFromEditDialog(editDialog, newValue) {
+  const parseDateTimeFromText = (value) => {
+    const raw = String(value || "");
+    const m = raw.match(
+      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2}))?\)/i,
+    );
+    if (!m) return { dateIso: "", time: "" };
+    const dd = String(m[1]).padStart(2, "0");
+    const mm = String(m[2]).padStart(2, "0");
+    const yyyy = String(m[3]).length === 2 ? `20${m[3]}` : String(m[3]);
+    const hh = m[4] ? String(m[4]).padStart(2, "0") : "";
+    const min = m[5] ? String(m[5]).padStart(2, "0") : "";
+    const dateIso = `${yyyy}-${mm}-${dd}T00:00:00.000Z`;
+    return {
+      dateIso: Number.isNaN(new Date(dateIso).getTime()) ? "" : dateIso,
+      time: hh && min ? `${hh}:${min}` : "",
+    };
+  };
+  const cleanPoint = (value) =>
+    String(value || "")
+      .replace(/\(([^)]*)\)/g, "")
+      .replace(/^((arrival|departure)\s*:\s*)+/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
   if (editDialog.field === "pickup" && editDialog.nestedKey === "arrival") {
-    return { pickupPoint: String(newValue) };
+    const parsed = parseDateTimeFromText(newValue);
+    return {
+      pickupPoint: cleanPoint(newValue),
+      packageSnapshot: {
+        quotationDetails: {
+          ...(parsed.dateIso ? { arrivalDate: parsed.dateIso } : {}),
+          ...(parsed.time ? { pickupTime: parsed.time } : {}),
+        },
+      },
+    };
   }
   if (editDialog.field === "pickup" && editDialog.nestedKey === "departure") {
-    return { dropPoint: String(newValue) };
+    const parsed = parseDateTimeFromText(newValue);
+    return {
+      dropPoint: cleanPoint(newValue),
+      packageSnapshot: {
+        quotationDetails: {
+          ...(parsed.dateIso ? { departureDate: parsed.dateIso } : {}),
+          ...(parsed.time ? { dropTime: parsed.time } : {}),
+        },
+      },
+    };
   }
   switch (editDialog.field) {
     case "policies.inclusions":
@@ -549,9 +590,20 @@ const formatDateWithOptionalTime = (dateValue, timeValue) => {
 const normalizePointLabel = (text) => {
   const raw = String(text || "").trim();
   if (!raw) return "—";
-  const parts = raw.split("-").map((x) => x.trim()).filter(Boolean);
-  return parts.length >= 2 ? parts[parts.length - 1] : raw;
+  const normalized = raw
+    .replace(/\(([^)]*)\)/g, "")
+    .replace(/^(arrival|departure)\s*:\s*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const parts = normalized.split("-").map((x) => x.trim()).filter(Boolean);
+  return parts.length >= 2 ? parts[parts.length - 1] : normalized || "—";
 };
+
+const editablePickupDropPoint = (value) =>
+  String(value || "")
+    .replace(/^((arrival|departure)\s*:\s*)+/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 
 /** True when `days` is a list of day objects (not a night-count number from snapshot). */
 function isQuickPackageDayObjectArray(days) {
@@ -2906,7 +2958,9 @@ const QuickFinalize = () => {
                             ? openGuestCountsDialog()
                             : handleEditOpen(
                                 i.field,
-                                i.text,
+                                i.field === "pickup"
+                                  ? editablePickupDropPoint(i.text)
+                                  : i.text,
                                 i.nestedKey || i.field,
                                 !!i.nestedKey,
                                 i.nestedKey,
