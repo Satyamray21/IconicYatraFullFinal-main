@@ -43,8 +43,12 @@ const FlightQuotationPDFDialog = ({
   quotation,
   pdfHeading = "FLIGHT QUOTATION",
   onSendMail,
+  initialEmailContentMode = "short",
+  includePdfOnSend = true,
+  autoSendForMail = false,
 }) => {
   const printRef = useRef();
+  const autoSendTriggeredRef = useRef(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [renderComplete, setRenderComplete] = useState(false);
@@ -339,13 +343,14 @@ const FlightQuotationPDFDialog = ({
 
   useEffect(() => {
     if (open) {
+      setEmailContentMode(initialEmailContentMode === "full" ? "full" : "short");
       setRenderComplete(false);
       const timer = setTimeout(() => {
         setRenderComplete(true);
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [open]);
+  }, [open, initialEmailContentMode]);
 
   const handleDownloadPDF = async ({ shouldDownload = true } = {}) => {
   try {
@@ -432,6 +437,12 @@ const FlightQuotationPDFDialog = ({
 
   const handleSendMailWithPdf = async () => {
     if (typeof onSendMail !== "function") return;
+    if (!includePdfOnSend) {
+      onSendMail({
+        previewPdfMode: false,
+      });
+      return;
+    }
     const payload = await handleDownloadPDF({ shouldDownload: false });
     if (!payload?.contentBase64) return;
     onSendMail({
@@ -439,6 +450,18 @@ const FlightQuotationPDFDialog = ({
       previewPdfMode: emailContentMode === "short",
     });
   };
+
+  useEffect(() => {
+    if (!open) {
+      autoSendTriggeredRef.current = false;
+      return;
+    }
+    if (!autoSendForMail) return;
+    if (autoSendTriggeredRef.current) return;
+    if (!renderComplete || !imagesLoaded || loading) return;
+    autoSendTriggeredRef.current = true;
+    handleSendMailWithPdf();
+  }, [open, autoSendForMail, renderComplete, imagesLoaded, loading]);
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");

@@ -1385,14 +1385,29 @@ const VehicleQuotationPage = () => {
             sx={{ mb: 2, borderLeft: "4px solid", borderColor: "success.main" }}
           >
             <CardContent sx={{ py: 1.5 }}>
-              <Typography
-                variant="subtitle2"
-                fontWeight="bold"
-                color="success.main"
-                gutterBottom
+              <Box
+                display="flex"
+                alignItems="center"
+                justifyContent="space-between"
+                mb={0.5}
               >
-                Finalized Vendors
-              </Typography>
+                <Typography
+                  variant="subtitle2"
+                  fontWeight="bold"
+                  color="success.main"
+                  gutterBottom
+                >
+                  Finalized Vendors
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Edit />}
+                  onClick={() => setOpenVendorDialog(true)}
+                >
+                  Edit Vendors
+                </Button>
+              </Box>
               {vehicle.finalizedVendorsWithAmounts.map((v, idx) => (
                 <Typography key={v?._id || idx} variant="body2">
                   {v?.vendorName || "Vendor"} ({v?.vendorType || "Other"}) -{" "}
