@@ -853,7 +853,7 @@ export const finalizeQuickQuotation = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const mongoId = await resolveQuickQuotationMongoId(id);
   if (!mongoId) throw new ApiError(404, "Quotation not found");
-  const { finalizedPackage } = req.body || {};
+  const { finalizedPackage, finalizedVendorsWithAmounts } = req.body || {};
   const quotation = await QuickQuotation.findById(mongoId);
   if (!quotation) throw new ApiError(404, "Quotation not found");
 
@@ -861,6 +861,19 @@ export const finalizeQuickQuotation = asyncHandler(async (req, res) => {
   quotation.finalizedAt = new Date();
   if (finalizedPackage != null && String(finalizedPackage).trim()) {
     quotation.finalizedPackage = String(finalizedPackage).trim();
+  }
+  if (
+    Array.isArray(finalizedVendorsWithAmounts) &&
+    finalizedVendorsWithAmounts.length > 0
+  ) {
+    quotation.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts.map(
+      (vendor) => ({
+        vendorName: vendor.vendorName || "",
+        vendorType: vendor.vendorType || "Other",
+        amount: Number(vendor.amount) || 0,
+        remarks: vendor.remarks || "",
+      }),
+    );
   }
   await quotation.save();
 

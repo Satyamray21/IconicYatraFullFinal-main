@@ -152,6 +152,22 @@ const customQuotationSchema = new mongoose.Schema(
             type: String,
             enum: ["Standard", "Deluxe", "Superior"],
         },
+        /** Multiple selected packages during finalization */
+        finalizedPackages: [
+            {
+                type: String,
+                enum: ["Standard", "Deluxe", "Superior"],
+            },
+        ],
+        /** Vendor details with amounts for each finalized vendor */
+        finalizedVendorsWithAmounts: [
+            {
+                vendorName: { type: String, required: true },
+                vendorType: { type: String, enum: ["Hotel", "Vehicle", "Other"], required: true },
+                amount: { type: Number, default: 0 },
+                remarks: { type: String, default: "" },
+            },
+        ],
         finalizedAt: {
             type: Date,
         },

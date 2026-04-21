@@ -68,6 +68,18 @@ const quickQuotationSchema = new mongoose.Schema(
             hotelVendorName: { type: String, default: "" },
             vehicleVendorName: { type: String, default: "" },
         },
+        finalizedVendorsWithAmounts: [
+            {
+                vendorName: { type: String, trim: true, default: "" },
+                vendorType: {
+                    type: String,
+                    enum: ["Hotel", "Vehicle", "Other"],
+                    default: "Other",
+                },
+                amount: { type: Number, default: 0, min: 0 },
+                remarks: { type: String, trim: true, default: "" },
+            },
+        ],
     },
     { timestamps: true }
 );
