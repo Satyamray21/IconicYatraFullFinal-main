@@ -51,13 +51,23 @@ const policyLines = (arr = []) =>
     .filter(Boolean)
     .join("\n");
 
+const normalizeTermsValue = (value) => {
+  if (Array.isArray(value)) {
+    const cleaned = value.map((x) => safe(x)).filter(Boolean);
+    if (cleaned.length === 0) return "";
+    const firstUrl = cleaned.find((x) => /^https?:\/\//i.test(x));
+    return firstUrl || cleaned.join("\n");
+  }
+  return safe(value, "");
+};
+
 const isHttpUrlString = (v) => {
   const s = safe(v, "");
   return s.length > 0 && /^https?:\/\//i.test(s);
 };
 
 const termsAndConditionsLine = (value) => {
-  const t = safe(value, "");
+  const t = normalizeTermsValue(value);
   if (!t) return "";
   if (!isHttpUrlString(t)) return `<p style="margin-bottom:10px;">${t}</p>`;
   return `<p style="margin-bottom:10px;">
@@ -123,6 +133,11 @@ const flightTotals = (quotation = {}) => {
   return { total };
 };
 
+const resolveTermsValue = (policies = {}, customText = {}) => {
+  const policyTerms = toPolicyArray(policies?.termsAndConditions);
+  if (policyTerms.length > 0) return policyTerms;
+  return customText?.termsAndConditions || "";
+};
 export function buildFlightQuotationNormalEmail(data, customText = {}) {
   const quotation = data?.quotation || {};
   const policies = quotation?.policies || {};
@@ -132,8 +147,7 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
   const inclusionPolicy = toPolicyArray(policies?.inclusionPolicy);
   const exclusionPolicy = toPolicyArray(policies?.exclusionPolicy);
   const paymentPolicy = toPolicyArray(policies?.paymentPolicy);
-  const termsandCondition =
-    policies?.termsAndConditions || customText?.termsAndConditions;
+  const termsandCondition = resolveTermsValue(policies, customText);
 
   return `
      <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
@@ -160,7 +174,21 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
       <p><b>Trip Type:</b> ${safe(quotation?.tripType, "-")}</p>
       <p><b>Total Fare(May vary on the time/date of booking):</b> INR ${INR.format(totals.total)}</p>
       <br/>
-      
+      <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
+      <p>${policyLines(inclusionPolicy.length ? inclusionPolicy : ["As per confirmed inclusions."]).replace(/\n/g, "<br/>")}</p>
+      <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
+      <p>${policyLines(exclusionPolicy.length ? exclusionPolicy : ["As per company exclusion policy."]).replace(/\n/g, "<br/>")}</p>
+      <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+      ${termsAndConditionsLine(termsandCondition)}
+      <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
+      ${cancellationPolicyUrlLine(customText?.cancellationPolicyUrl)}
+      <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+      <p>${policyLines(paymentPolicy.length ? paymentPolicy : ["Payment policy as per confirmation."]).replace(/\n/g, "<br/>")}</p>
+      ${bankHtmlSection(customText?.bankDetails || [], customText?.paymentLink || "")}
       <p>${safe(customText.signature, `Warm Regards<br/>Reservation Team<br/>${companyName}`)}</p>
     </div>
   `;
@@ -176,8 +204,7 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
   const inclusionPolicy = toPolicyArray(policies?.inclusionPolicy);
   const exclusionPolicy = toPolicyArray(policies?.exclusionPolicy);
   const paymentPolicy = toPolicyArray(policies?.paymentPolicy);
-  const termsandCondition =
-    policies?.termsAndConditions || customText?.termsAndConditions;
+  const termsandCondition = resolveTermsValue(policies, customText);
 
   return `
     <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
