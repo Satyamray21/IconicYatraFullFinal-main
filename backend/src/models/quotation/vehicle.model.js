@@ -1,4 +1,5 @@
 import mongoose from "mongoose"
+import { policySchema } from "../../common/policy.js";
 
 const vehicleSchema = mongoose.Schema({
     basicsDetails: {
@@ -55,7 +56,10 @@ const vehicleSchema = mongoose.Schema({
         dropLocation: {
             type: String,
             required: true
-        }
+        },
+        /** Optional display overrides edited from VehicleFinalize pickup section */
+        pickupArrivalNote: { type: String },
+        pickupDepartureNote: { type: String },
     },
     discount: {
         type: String,
@@ -78,6 +82,24 @@ const vehicleSchema = mongoose.Schema({
             type: String
         }
     },
+    vendorDetails: {
+        vendorType: { type: String, default: "" },
+        hotelVendorName: { type: String, default: "" },
+        vehicleVendorName: { type: String, default: "" },
+    },
+    finalizedVendorsWithAmounts: [
+        {
+            vendorName: { type: String, trim: true, default: "" },
+            vendorType: {
+                type: String,
+                enum: ["Hotel", "Vehicle", "Other"],
+                default: "Other",
+            },
+            amount: { type: Number, default: 0, min: 0 },
+            remarks: { type: String, trim: true, default: "" },
+        },
+    ],
+    policies: policySchema,
     itinerary: [
         {
             title: {
@@ -93,7 +115,18 @@ const vehicleSchema = mongoose.Schema({
     vehicleQuotationId: {
         type: String,
         unique: true
-    }
+    },
+    /** Finalization status */
+    finalizeStatus: {
+        type: String,
+        enum: ["draft", "finalized"],
+        default: "draft",
+    },
+    finalizedAt: {
+        type: Date,
+    },
+    quotationTitle: { type: String },
+    destinationSummary: { type: String },
 }, {
     timestamps: true
 })

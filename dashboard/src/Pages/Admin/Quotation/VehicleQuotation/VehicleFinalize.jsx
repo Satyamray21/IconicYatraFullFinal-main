@@ -67,21 +67,90 @@ import AddBankDialog from "./Dialog/AddBankDialog";
 import EditDialog from "./Dialog/EditDialog";
 import AddServiceDialog from "./Dialog/AddServiceDialog";
 import VehicleQuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
+import TransactionHistoryDialog from "./Dialog/TransactionHistoryDialog";
+import VendorManagementDialog from "./Dialog/VendorManagementDialog";
 import { getVehicleQuotationById, addItinerary, editItinerary } from "../../../../features/quotation/vehicleQuotationSlice";
 import { useDispatch, useSelector } from "react-redux";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import axios from "../../../../utils/axios";
 import logo from "../../../../assets/Logo/logoiconic.jpg";
 
-// Placeholder functions for PDF generation - remove the problematic import
-const generateInvoicePDF = (data, logoBase64) => {
-  console.log("Generate Invoice PDF called", data, logoBase64);
-  alert("Invoice PDF generation - Implement your logic here");
+// Helper function to normalize policy for editor
+const normalizePolicyForEditor = (value) => {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "";
+    const merged = value.join("\n").trim();
+    if (!merged) return "";
+    return merged;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    return trimmed.replace(/<[^>]*>/g, '');
+  }
+
+  return "";
 };
 
-const generateClientPDF = (data, logoBase64) => {
-  console.log("Generate Client PDF called", data, logoBase64);
-  alert("Client PDF generation - Implement your logic here");
+// Helper function to normalize policy state from source
+const normalizePolicyState = (source = {}) => {
+  const policySource = source?.policy || source || {};
+  return {
+    inclusionPolicy: normalizePolicyForEditor(
+      policySource?.inclusionPolicy ?? policySource?.inclusions
+    ),
+    exclusionPolicy: normalizePolicyForEditor(
+      policySource?.exclusionPolicy ?? policySource?.exclusions
+    ),
+    paymentPolicy: normalizePolicyForEditor(policySource?.paymentPolicy),
+    cancellationPolicy: normalizePolicyForEditor(policySource?.cancellationPolicy),
+    termsAndConditions: normalizePolicyForEditor(policySource?.termsAndConditions),
+  };
 };
+
+// Helper to convert lines to policy array
+function linesToPolicyArray(v) {
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v === "string") {
+    return v.split("\n").map((s) => s.trim()).filter(Boolean);
+  }
+  return [String(v)];
+}
+
+// Maps UI field paths to Mongo $set keys
+function buildMongoSetFromDisplayField(field, value) {
+  const P = "policies";
+  switch (field) {
+    case "policies.inclusions":
+      return { [`${P}.inclusionPolicy`]: linesToPolicyArray(value) };
+    case "policies.exclusions":
+      return { [`${P}.exclusionPolicy`]: linesToPolicyArray(value) };
+    case "policies.paymentPolicy":
+      return { [`${P}.paymentPolicy`]: linesToPolicyArray(value) };
+    case "policies.cancellationPolicy":
+      return { [`${P}.cancellationPolicy`]: linesToPolicyArray(value) };
+    case "policies.terms":
+      return { [`${P}.termsAndConditions`]: linesToPolicyArray(value) };
+    case "quotationTitle":
+      return { "quotationTitle": String(value) };
+    case "destinationSummary":
+      return { "destinationSummary": String(value) };
+    default:
+      return null;
+  }
+}
+
+// Resolves $set payload including nested pickup (arrival / departure) edits
+function buildMongoSetFromEditDialog(editDialog, newValue) {
+  if (editDialog.field === "pickup" && editDialog.nestedKey === "arrival") {
+    return { "pickupDropDetails.pickupArrivalNote": String(newValue) };
+  }
+  if (editDialog.field === "pickup" && editDialog.nestedKey === "departure") {
+    return { "pickupDropDetails.pickupDepartureNote": String(newValue) };
+  }
+  return buildMongoSetFromDisplayField(editDialog.field, newValue);
+}
 
 const VehicleQuotationPage = () => {
   const [logoBase64, setLogoBase64] = useState(null);
@@ -91,7 +160,6 @@ const VehicleQuotationPage = () => {
   const [isFinalized, setIsFinalized] = useState(false);
   const [invoiceGenerated, setInvoiceGenerated] = useState(false);
   const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState("Iconic Travel");
   const [emailContentType, setEmailContentType] = useState("short");
   const [itineraryDialog, setItineraryDialog] = useState({
     open: false,
@@ -108,8 +176,28 @@ const VehicleQuotationPage = () => {
   });
   const [localItinerary, setLocalItinerary] = useState([]);
 
+  // Policy states for editing
+  const [policyInputs, setPolicyInputs] = useState({
+    inclusionPolicy: "",
+    exclusionPolicy: "",
+    paymentPolicy: "",
+    cancellationPolicy: "",
+    termsAndConditions: "",
+  });
+
+  const [globalSettings, setGlobalSettings] = useState({
+    inclusionPolicy: "",
+    exclusionPolicy: "",
+    paymentPolicy: "",
+    cancellationPolicy: "",
+    termsAndConditions: ""
+  });
+
+  const [isLoadingGlobalSettings, setIsLoadingGlobalSettings] = useState(false);
+
   const dispatch = useDispatch();
   const { id } = useParams();
+  const navigate = useNavigate();
   const { viewedVehicleQuotation: q, loading } = useSelector(
     (state) => state.vehicleQuotation
   );
@@ -140,6 +228,20 @@ const VehicleQuotationPage = () => {
   });
   const [openEmailDialog, setOpenEmailDialog] = useState(false);
   const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
+  const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
+  const [openVendorDialog, setOpenVendorDialog] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
+  const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailTemplateBodies, setEmailTemplateBodies] = useState({
+    normal: { subject: "", message: "" },
+    booking: { subject: "", message: "" },
+  });
+  const [emailTemplateType, setEmailTemplateType] = useState("normal");
+  const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
+  const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
+  const [autoGeneratePdfForMail, setAutoGeneratePdfForMail] = useState(false);
+  const [emailToPrefill, setEmailToPrefill] = useState("");
 
   const [openBankDialog, setOpenBankDialog] = useState(false);
   const [accountType, setAccountType] = useState("company");
@@ -177,6 +279,28 @@ const VehicleQuotationPage = () => {
     }
   }, [dispatch, id]);
 
+  const loadPaymentHistory = async () => {
+    if (!id) return;
+    setPaymentHistoryLoading(true);
+    try {
+      const res = await axios.get(`/payment/by-quotation/${encodeURIComponent(id)}`);
+      setPaymentHistory(res.data?.data || []);
+    } catch (e) {
+      setPaymentHistory([]);
+    } finally {
+      setPaymentHistoryLoading(false);
+    }
+  };
+
+  const loadMailCompanies = async () => {
+    try {
+      const res = await axios.get("/company");
+      setMailCompanies(Array.isArray(res?.data?.data) ? res.data.data : []);
+    } catch {
+      setMailCompanies([]);
+    }
+  };
+
   useEffect(() => {
     const convertImageToBase64 = (img) => {
       const canvas = document.createElement('canvas');
@@ -194,8 +318,42 @@ const VehicleQuotationPage = () => {
     img.src = logo;
   }, []);
 
+  // Fetch global settings for policy defaults
+  const fetchGlobalSettings = async () => {
+    try {
+      setIsLoadingGlobalSettings(true);
+      const res = await axios.get("/global-settings");
+      const settings = normalizePolicyState(res.data);
+      setGlobalSettings(settings);
+      
+      // Update policyInputs with global defaults if not already set
+      setPolicyInputs(prev => ({
+        inclusionPolicy: prev.inclusionPolicy || settings.inclusionPolicy,
+        exclusionPolicy: prev.exclusionPolicy || settings.exclusionPolicy,
+        paymentPolicy: prev.paymentPolicy || settings.paymentPolicy,
+        cancellationPolicy: prev.cancellationPolicy || settings.cancellationPolicy,
+        termsAndConditions: prev.termsAndConditions || settings.termsAndConditions
+      }));
+    } catch (err) {
+      console.error("Failed to fetch global settings:", err);
+    } finally {
+      setIsLoadingGlobalSettings(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGlobalSettings();
+  }, []);
+
+  useEffect(() => {
+    loadPaymentHistory();
+    loadMailCompanies();
+  }, [id]);
+
   const actions = [
     "Finalize",
+    "Transaction History",
+    "Vendor Management",
     "Add Service",
     "Email Quotation",
     "Preview PDF",
@@ -204,10 +362,73 @@ const VehicleQuotationPage = () => {
   ];
 
   // Dialog handlers
-  const handleEmailOpen = () => setOpenEmailDialog(true);
-  const handleEmailClose = () => setOpenEmailDialog(false);
+  const refreshEmailTemplates = async (companyId) => {
+  if (!id) return { normal: {}, booking: {} };
+  const selectedCompany = mailCompanies.find((c) => c?._id === companyId);
+  const res = await axios.get(`/vehicleQT/email/preview/${id}`, {
+    params: {
+      companyId: companyId || undefined,
+      companyName: selectedCompany?.companyName || undefined,
+    }
+  });
+  const data = res?.data?.data || {};
+  const nextTemplates = {
+    normal: {
+      subject: data?.normal?.subject || "",
+      message: data?.normal?.body || "",
+    },
+    booking: {
+      subject: data?.booking?.subject || "",
+      message: data?.booking?.body || "",
+    },
+  };
+  setEmailTemplateBodies(nextTemplates);
+  return nextTemplates;
+};
 
-  const handlePaymentOpen = () => setOpenPaymentDialog(true);
+  const openEmailDialogWithTemplates = async () => {
+    const defaultCompany = mailCompanies?.[0];
+    setEmailTemplateType("normal");
+    try {
+      await refreshEmailTemplates(defaultCompany?._id);
+    } catch {
+      // keep dialog usable with defaults
+    }
+    setOpenEmailDialog(true);
+  };
+
+  const handleEmailOpen = async () => {
+    if (!pdfAttachmentForMail?.contentBase64) {
+      setAutoGeneratePdfForMail(true);
+      setEmailContentType("short");
+      setOpenPreviewDialog(true);
+      return;
+    }
+    await openEmailDialogWithTemplates();
+  };
+  const handleEmailClose = () => {
+    setOpenEmailDialog(false);
+    setPdfAttachmentForMail(null);
+    setPreviewPdfModeForMail(false);
+    setEmailToPrefill("");
+  };
+
+  const handlePaymentOpen = () => {
+    const clientName = q?.vehicle?.basicsDetails?.clientName?.trim() || "";
+    try {
+      sessionStorage.setItem(
+        "paymentFormPartyPrefill",
+        JSON.stringify({
+          quotationRef: id,
+          partyName: clientName,
+        }),
+      );
+    } catch {
+      // ignore browser storage errors
+    }
+    const party = encodeURIComponent(clientName);
+    navigate(`/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`);
+  };
   const handlePaymentClose = () => setOpenPaymentDialog(false);
 
   const handleFinalizeOpen = () => setOpenFinalize(true);
@@ -245,7 +466,57 @@ const VehicleQuotationPage = () => {
     });
   };
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
+    let newValue = editDialog.value;
+
+    if (editDialog.field === "policies.inclusions") {
+      try {
+        const parsed = JSON.parse(editDialog.value);
+        newValue = Array.isArray(parsed) ? parsed : [String(parsed)];
+      } catch {
+        newValue = linesToPolicyArray(editDialog.value);
+      }
+    } else if (editDialog.field.startsWith("policies.")) {
+      newValue = linesToPolicyArray(editDialog.value);
+    }
+
+    // Update local policyInputs state
+    if (editDialog.field.startsWith("policies.")) {
+      const policyKey = editDialog.field.split(".")[1];
+      setPolicyInputs(prev => ({
+        ...prev,
+        [policyKey === "inclusions" ? "inclusionPolicy" : 
+         policyKey === "exclusions" ? "exclusionPolicy" :
+         policyKey]: newValue
+      }));
+    }
+
+    // Build mongo set and update backend
+    const mongoSet = buildMongoSetFromEditDialog(editDialog, newValue);
+    if (mongoSet && q?.vehicle?.vehicleQuotationId) {
+      try {
+        await axios.patch(
+          `/vehicleQT/${q.vehicle.vehicleQuotationId}`,
+          mongoSet
+        );
+        
+        // Refresh the data
+        await dispatch(getVehicleQuotationById(q.vehicle.vehicleQuotationId));
+        
+        setSnackbar({
+          open: true,
+          message: "Saved successfully",
+          severity: "success",
+        });
+      } catch (e) {
+        setSnackbar({
+          open: true,
+          message: typeof e === "string" ? e : e?.message || "Failed to save",
+          severity: "error",
+        });
+      }
+    }
+
     handleEditClose();
   };
 
@@ -253,7 +524,46 @@ const VehicleQuotationPage = () => {
     setEditDialog({ ...editDialog, value: e.target.value });
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (q?.vehicle?.vehicleQuotationId) {
+      try {
+        const selectedVendorName = String(vendor || "").trim();
+        const existingVendors = Array.isArray(q?.vehicle?.finalizedVendorsWithAmounts)
+          ? q.vehicle.finalizedVendorsWithAmounts
+          : [];
+
+        const hasSelectedVendor = existingVendors.some(
+          (item) =>
+            String(item?.vendorName || "").trim().toLowerCase() ===
+            selectedVendorName.toLowerCase(),
+        );
+
+        const finalizedVendorsWithAmounts =
+          selectedVendorName && !hasSelectedVendor
+            ? [
+                ...existingVendors,
+                {
+                  vendorName: selectedVendorName,
+                  vendorType: "Vehicle",
+                  amount: 0,
+                  remarks: "Finalized from quotation screen",
+                },
+              ]
+            : existingVendors;
+
+        await axios.post(`/vehicleQT/${q.vehicle.vehicleQuotationId}/finalize`, {
+          finalizedVendorsWithAmounts,
+        });
+        await dispatch(getVehicleQuotationById(q.vehicle.vehicleQuotationId));
+      } catch {
+        setSnackbar({
+          open: true,
+          message: "Could not finalize quotation",
+          severity: "error",
+        });
+        return;
+      }
+    }
     setIsFinalized(true);
     setOpenFinalize(false);
     setOpenBankDialog(true);
@@ -288,12 +598,13 @@ const VehicleQuotationPage = () => {
   };
 
   const handlePreviewDialogOpen = () => {
-    setSelectedCompany("Iconic Travel");
+    setAutoGeneratePdfForMail(false);
     setEmailContentType("short");
     setOpenPreviewDialog(true);
   };
 
   const handlePreviewDialogClose = () => {
+    setAutoGeneratePdfForMail(false);
     setOpenPreviewDialog(false);
   };
 
@@ -413,6 +724,12 @@ const VehicleQuotationPage = () => {
       case "Finalize":
         handleFinalizeOpen();
         break;
+      case "Transaction History":
+        setOpenTransactionDialog(true);
+        break;
+      case "Vendor Management":
+        setOpenVendorDialog(true);
+        break;
       case "Add Service":
         handleAddServiceOpen();
         break;
@@ -473,6 +790,62 @@ const VehicleQuotationPage = () => {
     };
     
     generateClientPDF(data, logoBase64);
+  };
+
+  const handleEmailSend = async (values) => {
+    try {
+      const isBookingMail = values?.mailType === "booking";
+      if (!isBookingMail && !pdfAttachmentForMail?.contentBase64) {
+        setSnackbar({
+          open: true,
+          message: "PDF not attached. Use Preview PDF > Send Mail to attach PDF.",
+          severity: "warning",
+        });
+        return false;
+      }
+      const selectedCompany =
+        mailCompanies.find((c) => c?._id === values?.companyId) || null;
+      await axios.post(`/vehicleQT/${encodeURIComponent(id)}/email/send`, {
+        to: String(values?.to || "").trim(),
+        cc: String(values?.cc || "").trim() || undefined,
+        type: isBookingMail ? "booking" : "normal",
+        subject: values?.subject || undefined,
+        bodyHtml: isBookingMail ? undefined : values?.message || undefined,
+        senderAccount: values?.senderAccount || "gmail1",
+        companyId: values?.companyId || undefined,
+        companyName: selectedCompany?.companyName || undefined,
+        customText: isBookingMail
+          ? {
+              booking: {
+                ...(values?.nextPayableAmount
+                  ? { nextPayableAmount: Number(values.nextPayableAmount) }
+                  : {}),
+                ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+              },
+            }
+          : undefined,
+        previewPdfMode:
+          !isBookingMail &&
+          !!pdfAttachmentForMail?.contentBase64 &&
+          previewPdfModeForMail,
+        ...(pdfAttachmentForMail?.contentBase64
+          ? { pdfAttachment: pdfAttachmentForMail }
+          : {}),
+      });
+      setSnackbar({
+        open: true,
+        message: "Email sent successfully",
+        severity: "success",
+      });
+      return true;
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: e?.response?.data?.message || "Failed to send email",
+        severity: "error",
+      });
+      return false;
+    }
   };
 
   const handleAddItinerary = () => {
@@ -571,10 +944,25 @@ const VehicleQuotationPage = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // Get email content
-  const getEmailContent = () => {
-    return "Short Intro Content";
-  };
+  const emailInitialValues = React.useMemo(() => {
+    const type = emailTemplateType === "booking" ? "booking" : "normal";
+    const tpl = emailTemplateBodies[type];
+    return {
+      to: emailToPrefill || "",
+      cc: "",
+      recipientName: q?.vehicle?.basicsDetails?.clientName || "",
+      salutation: "Dear",
+      subject: tpl?.subject || "",
+      greetLine: "Please find below details:",
+      message: tpl?.message || "",
+      signature: "Warm Regards,\nReservation Team\nIconic Travel",
+      mailType: type,
+      senderAccount: "gmail1",
+      companyId: mailCompanies?.[0]?._id || "",
+      nextPayableAmount: "",
+      paymentDueDate: "",
+    };
+  }, [emailTemplateType, emailTemplateBodies, mailCompanies, q, emailToPrefill]);
 
   // Helper function to extract GST percentage
   const extractGstPercentage = (gstValue) => {
@@ -1384,10 +1772,16 @@ const VehicleQuotationPage = () => {
         onClose={handlePreviewDialogClose}
         quotation={quotationForPdf}
         pdfHeading="VEHICLE QUOTATION"
+        autoSendForMail={autoGeneratePdfForMail}
         onSendMail={(payload) => {
-          console.log("Send mail with PDF attachment:", payload);
+          const attachment = payload?.pdfAttachment || payload || null;
+          setPdfAttachmentForMail(attachment);
+          setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
+          setEmailToPrefill(String(payload?.to || "").trim());
+          setAutoGeneratePdfForMail(false);
           setOpenPreviewDialog(false);
-          handleEmailOpen();
+          setEmailTemplateType("normal");
+          openEmailDialogWithTemplates();
         }}
       />
 
@@ -1462,9 +1856,39 @@ const VehicleQuotationPage = () => {
       <EmailQuotationDialog
         open={openEmailDialog}
         onClose={handleEmailClose}
-        customer={{ name: basicsDetails.clientName || "N/A" }}
-        emailContent={getEmailContent()}
-        companyName={selectedCompany}
+        onSend={handleEmailSend}
+        hasPdfAttachment={!!pdfAttachmentForMail?.contentBase64}
+        onCompanyChange={async (companyId, mailType) => {
+          const templates = await refreshEmailTemplates(companyId);
+          const type = mailType === "booking" ? "booking" : "normal";
+          return templates?.[type] || { subject: "", message: "" };
+        }}
+        initialValuesOverride={emailInitialValues}
+        templateBodies={emailTemplateBodies}
+        companyOptions={mailCompanies}
+      />
+
+      <TransactionHistoryDialog
+        open={openTransactionDialog}
+        onClose={() => setOpenTransactionDialog(false)}
+        loading={paymentHistoryLoading}
+        rows={paymentHistory}
+        quotationRef={id}
+      />
+
+      <VendorManagementDialog
+        open={openVendorDialog}
+        onClose={() => setOpenVendorDialog(false)}
+        vehicle={q?.vehicle}
+        vehicleQuotationId={q?.vehicle?.vehicleQuotationId}
+        onSaved={async () => {
+          await dispatch(getVehicleQuotationById(q?.vehicle?.vehicleQuotationId));
+          setSnackbar({
+            open: true,
+            message: "Vendor details saved",
+            severity: "success",
+          });
+        }}
       />
 
       {/* Payment Dialog */}

@@ -11,6 +11,7 @@ import {
   Paper,
   Typography,
   Box,
+  Alert,
 } from "@mui/material";
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
@@ -23,6 +24,7 @@ const EmailQuotationDialog = ({
   initialValuesOverride,
   templateBodies,
   companyOptions = [],
+  hasPdfAttachment = false,
 }) => {
   const validationSchema = Yup.object({
     to: Yup.string().email("Invalid email").required("Required"),
@@ -53,9 +55,15 @@ const EmailQuotationDialog = ({
   };
   const initialValues = { ...baseInitialValues, ...(initialValuesOverride || {}) };
 
-  const handleSubmit = (values) => {
-    onSend(values); 
-    onClose();
+  const handleSubmit = async (values, { setSubmitting }) => {
+    try {
+      const result = await onSend(values);
+      if (result !== false) {
+        onClose();
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -93,6 +101,14 @@ const EmailQuotationDialog = ({
             return (
           <Form>
             <DialogContent dividers>
+              <Alert
+                severity={hasPdfAttachment ? "success" : "warning"}
+                sx={{ mb: 2 }}
+              >
+                {hasPdfAttachment
+                  ? "PDF attachment is ready and will be sent with normal quotation mail."
+                  : "No PDF attachment found. Open Preview PDF and click Send Mail to attach the PDF."}
+              </Alert>
               <Grid container spacing={2}>
                 {!!templateBodies && (
                   <Grid size={{xs:12, sm:6}}>
