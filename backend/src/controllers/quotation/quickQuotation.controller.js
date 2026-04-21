@@ -794,6 +794,7 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
     auth: { user: auth.user, pass: auth.pass },
   });
 
+  const shouldAttachPdf = type !== "booking";
   const providedPdfAttachment =
     pdfAttachment &&
     typeof pdfAttachment === "object" &&
@@ -810,7 +811,8 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
       : null;
 
   try {
-    const generatedPdfAttachment = providedPdfAttachment
+    const generatedPdfAttachment =
+      !shouldAttachPdf || providedPdfAttachment
       ? null
       : await buildPdfAttachment({
           subject: finalSubject,
@@ -825,9 +827,9 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
       subject: finalSubject,
       html: body,
       text: body.replace(/<[^>]*>/g, ""),
-      attachments: [providedPdfAttachment || generatedPdfAttachment].filter(
-        Boolean,
-      ),
+      attachments: shouldAttachPdf
+        ? [providedPdfAttachment || generatedPdfAttachment].filter(Boolean)
+        : [],
     });
   } catch (error) {
     console.error("Quick QT mail error:", error);

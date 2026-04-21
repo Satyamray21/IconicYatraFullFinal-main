@@ -763,10 +763,21 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
       : Array.isArray(snap.itinerary)
         ? snap.itinerary
         : [];
-  const itinerary = itinerarySource.map((day) => ({
-    dayTitle: safe(day.title, "Day"),
-    dayNote: safe(day.notes || day.description || day.aboutCity, ""),
-  }));
+  const itinerary = itinerarySource.map((day, index) => {
+    const rawTitle = safe(day.dayTitle || day.title, "");
+    const hasDayPrefix = /^day\s*\d+/i.test(rawTitle);
+    const dayPrefix = `Day ${index + 1}`;
+    const dayTitle = rawTitle
+      ? hasDayPrefix
+        ? rawTitle
+        : `${dayPrefix}: ${rawTitle}`
+      : dayPrefix;
+
+    return {
+      dayTitle,
+      dayNote: safe(day.notes || day.description || day.aboutCity, ""),
+    };
+  });
 
   return {
     quotationId: String(quick._id || ""),
