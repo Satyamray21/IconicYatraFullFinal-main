@@ -131,6 +131,16 @@ const FlightFinalize = () => {
     }
   }, [id, dispatch]);
 
+  // Keep total fare in sync with per-flight fare edits.
+  useEffect(() => {
+    if (!quotation) return;
+    const computedTotal = (finalFareList || []).reduce(
+      (sum, fare) => sum + Number(fare || 0),
+      0,
+    );
+    setTotalFinalFare(computedTotal);
+  }, [finalFareList, quotation]);
+
   useEffect(() => {
     const loadMailCompanies = async () => {
       try {
@@ -1142,7 +1152,7 @@ const FlightFinalize = () => {
                 type="number"
                 fullWidth
                 value={totalFinalFare}
-                onChange={(e) => setTotalFinalFare(e.target.value)}
+                InputProps={{ readOnly: true }}
                 variant="outlined"
                 size="small"
               />
