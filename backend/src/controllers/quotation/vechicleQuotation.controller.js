@@ -439,6 +439,12 @@ export const previewVehicleQuotationMail = asyncHandler(async (req, res) => {
   const companyMeta = {
     companyName: selectedCompany?.companyName || "Iconic Travel",
     companyWebsite: selectedCompany?.companyWebsite || "",
+    termsAndConditions: selectedCompany?.termsConditions || "",
+    cancellationPolicyUrl: selectedCompany?.cancellationPolicy || "",
+    paymentLink: selectedCompany?.paymentLink || "",
+    bankDetails: Array.isArray(selectedCompany?.bankDetails)
+      ? selectedCompany.bankDetails
+      : [],
   };
 
   const quotationData = { vehicle, lead };
@@ -513,6 +519,12 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
   const companyMeta = {
     companyName: selectedCompany?.companyName || "Iconic Travel",
     companyWebsite: selectedCompany?.companyWebsite || "",
+    termsAndConditions: selectedCompany?.termsConditions || "",
+    cancellationPolicyUrl: selectedCompany?.cancellationPolicy || "",
+    paymentLink: selectedCompany?.paymentLink || "",
+    bankDetails: Array.isArray(selectedCompany?.bankDetails)
+      ? selectedCompany.bankDetails
+      : [],
   };
   const quotationData = { vehicle, lead };
   const vouchers = await ReceivedVoucher.find({
