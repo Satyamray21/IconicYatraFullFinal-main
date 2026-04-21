@@ -13,6 +13,7 @@ import {
   MenuItem,
   Divider,
   Grid,
+  Link,
 } from "@mui/material";
 import {
   Download,
@@ -96,7 +97,13 @@ const FlightQuotationPDFDialog = ({
     }
     return result;
   };
-
+   const normalizeWebUrl = (value) => {
+    if (value === undefined || value === null) return "";
+    const s = String(value).trim();
+    if (!s || s === "N/A") return "";
+    if (/^https?:\/\//i.test(s)) return s;
+    return "";
+  };
   const formatCurrency = (amount) => {
     if (!amount && amount !== 0) return "₹ 0";
     let numAmount = amount;
@@ -251,7 +258,7 @@ const FlightQuotationPDFDialog = ({
 
   const quotationData = quotation || {};
   const selectedCompany = companyOptions.find((c) => c?._id === selectedCompanyId) || null;
-
+  
   const customerName = getValue(quotationData, "customer.name", "Guest");
   const customerLocation = getValue(quotationData, "customer.location");
   const customerPhone = getValue(quotationData, "customer.phone");
@@ -299,7 +306,13 @@ const FlightQuotationPDFDialog = ({
 
   const companyWebsiteUrl = selectedCompany?.companyWebsite || footerWebsite || "https://www.iconicyatra.com";
   const companyCancellationUrl = selectedCompany?.cancellationPolicy || "https://www.iconicyatra.com/cancellationandrefundpolicy";
-
+ const companyTermsUrl = normalizeWebUrl(selectedCompany?.termsConditions) || companyWebsiteUrl;
+  const companyPaymentLink = normalizeWebUrl(selectedCompany?.paymentLink);
+  const netBankingPayeeName =
+    String(selectedCompany?.companyName || "").trim() ||
+    (footerCompany && footerCompany !== "N/A"
+      ? String(footerCompany).trim()
+      : "");
   const getTripTypeText = (type) => {
     if (type === "oneway") return "One Way Trip";
     if (type === "roundtrip") return "Round Trip";
@@ -749,7 +762,56 @@ const FlightQuotationPDFDialog = ({
                 </div>
               </div>
             )}
-
+   {netBankingPayeeName && (
+                    <div style={{ marginBottom: "35px" }}>
+                      <div
+                        style={{
+                          fontWeight: "bold",
+                          fontSize: "20px",
+                          marginBottom: "16px",
+                          borderBottom: "3px solid #667eea",
+                          paddingBottom: "10px",
+                          color: "#333",
+                        }}
+                      >
+                        🏦 Net Banking / NEFT / RTGS
+                      </div>
+                      <div
+                        style={{
+                          padding: "18px",
+                          background: "#f3f6ff",
+                          borderRadius: "12px",
+                          borderLeft: "4px solid #667eea",
+                          fontSize: "14px",
+                          lineHeight: "1.7",
+                          color: "#333",
+                        }}
+                      >
+                        <div style={{ marginBottom: "10px" }}>
+                          Please transfer funds in favor of{" "}
+                          <strong style={{ color: "#667eea" }}>
+                            {netBankingPayeeName}
+                          </strong>
+                          . Use this name exactly as the account / beneficiary name when
+                          paying via net banking, NEFT, RTGS, or IMPS.
+                        </div>
+                        {companyPaymentLink && (
+                          <div style={{ marginTop: "12px" }}>
+                            <span style={{ fontWeight: "600" }}>Online payment: </span>
+                            <Link
+                              href={companyPaymentLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              underline="hover"
+                              sx={{ fontWeight: "bold", wordBreak: "break-all" }}
+                            >
+                              {companyPaymentLink}
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
             {/* Cancellation & Refund Policy with Link */}
             <div style={{ marginBottom: "25px", breakInside: "avoid", pageBreakInside: "avoid" }}>
               <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2, color: "#e65100", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -783,14 +845,26 @@ const FlightQuotationPDFDialog = ({
               <div style={{ padding: "15px", background: "#fafafa", borderRadius: "12px", border: "1px solid #e0e0e0", textAlign: "center" }}>
                 <div style={{ fontSize: "14px", color: "#555", lineHeight: "1.6", padding: "8px" }}>
                   As per company website{" "}
-                  <a 
-                    href={companyWebsiteUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "#667eea", textDecoration: "underline", fontWeight: "bold" }}
-                  >
-                    {companyWebsiteUrl}
-                  </a>
+                  <a
+              data-pdf-link="terms"
+              href={
+                companyTermsUrl !== "#" ? companyTermsUrl : companyWebsiteUrl
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: "#667eea",
+                textDecoration: "underline",
+                fontWeight: "bold",
+                wordBreak: "break-all",
+              }}
+            >
+              {companyTermsUrl !== "#"
+                ? companyTermsUrl
+                : companyWebsiteUrl !== "#"
+                  ? companyWebsiteUrl
+                  : "www.iconicyatra.com"}
+            </a>
                 </div>
               </div>
             </div>

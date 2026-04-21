@@ -74,14 +74,14 @@ const FlightFinalize = () => {
   const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState("");
   const [emailContentType, setEmailContentType] = useState("short");
-
+  
   const { id } = useParams();
   const dispatch = useDispatch();
   const { quotationDetails, loading } = useSelector(
     (state) => state.flightQuotation
   );
   const quotation = quotationDetails?.quotation || null;
-
+  const lead = quotationDetails?.lead || null; 
   // Load flight data whenever quotation changes
   useEffect(() => {
     if (quotation) {
@@ -205,14 +205,15 @@ const FlightFinalize = () => {
            "N/A";
   };
 
-  // Get customer location - fetch from all possible locations
   const getCustomerLocation = () => {
-    return quotation?.country ||
-           quotation?.lead?.location?.state ||
-           quotation?.lead?.location?.city ||
-           quotation?.location ||
-           "N/A";
-  };
+  const location = lead?.location; // ✅ FIXED
+
+  if (!location) return "N/A";
+
+  const { city, state, country } = location;
+
+  return [city, state, country].filter(Boolean).join(", ");
+};
 
   const infoMap = {
     call: `📞 ${getCustomerMobile()}`,
