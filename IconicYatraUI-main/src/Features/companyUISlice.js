@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { companyUIAxios } from "../Utils/axiosInstance";
 
-
 // ==========================================
 // GET COMPANY (Auto Create If Not Exists)
 // ==========================================
@@ -12,22 +11,16 @@ export const getCompany = createAsyncThunk(
       const res = await companyUIAxios.get("/");
       return res.data;
     } catch (err) {
-      return thunkApi.rejectWithValue(
-        err?.response?.data?.message
-      );
+      return thunkApi.rejectWithValue(err?.response?.data?.message);
     }
-  }
+  },
 );
-
-
-
 
 const initialState = {
   data: null,
   status: "idle",
   error: null,
 };
-
 
 const companyUISlice = createSlice({
   name: "companyUI",
@@ -53,13 +46,9 @@ const companyUISlice = createSlice({
       .addCase(getCompany.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload;
-      })
-
-      
-      
+      });
   },
 });
-
 
 export const { clearCompanyError } = companyUISlice.actions;
 

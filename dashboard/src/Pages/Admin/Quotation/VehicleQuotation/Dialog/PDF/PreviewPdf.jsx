@@ -14,6 +14,7 @@ import {
   Divider,
   Grid,
   Link,
+  TextField,
 } from "@mui/material";
 import {
   Download,
@@ -40,6 +41,7 @@ const VehicleQuotationPDFDialog = ({
   quotation,
   pdfHeading = "VEHICLE QUOTATION",
   onSendMail,
+  autoSendForMail = false,
 }) => {
   const printRef = useRef();
   const [error, setError] = useState("");
@@ -49,6 +51,7 @@ const VehicleQuotationPDFDialog = ({
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [emailContentMode, setEmailContentMode] = useState("short");
+  const [recipientEmail, setRecipientEmail] = useState("");
   const [imageElements, setImageElements] = useState({});
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const [globalPolicyDefaults, setGlobalPolicyDefaults] = useState({
@@ -58,6 +61,7 @@ const VehicleQuotationPDFDialog = ({
     cancellationPolicy: "",
     termsAndConditions: "",
   });
+  const autoSendTriggeredRef = useRef(false);
 
   const blobToBase64 = (blob) =>
     new Promise((resolve, reject) => {
@@ -440,15 +444,52 @@ const VehicleQuotationPDFDialog = ({
 
         document.body.removeChild(tempContainer);
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.95);
         const imgWidth = pageWidth;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const pageHeightPx = (pageHeight * canvas.width) / imgWidth;
+        const sliceCount = Math.max(1, Math.ceil(canvas.height / pageHeightPx));
 
-        if (i > 0) {
-          pdf.addPage();
+        for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex++) {
+          const startY = Math.floor(sliceIndex * pageHeightPx);
+          const sliceHeightPx = Math.min(
+            Math.floor(pageHeightPx),
+            canvas.height - startY,
+          );
+
+          const sliceCanvas = document.createElement("canvas");
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = sliceHeightPx;
+          const sliceCtx = sliceCanvas.getContext("2d");
+          sliceCtx.drawImage(
+            canvas,
+            0,
+            startY,
+            canvas.width,
+            sliceHeightPx,
+            0,
+            0,
+            canvas.width,
+            sliceHeightPx,
+          );
+
+          const sliceImgData = sliceCanvas.toDataURL("image/jpeg", 0.95);
+          const sliceHeightMm = (sliceHeightPx * imgWidth) / canvas.width;
+
+          if (i > 0 || sliceIndex > 0) {
+            pdf.addPage();
+          }
+
+          pdf.addImage(
+            sliceImgData,
+            "JPEG",
+            0,
+            0,
+            imgWidth,
+            sliceHeightMm,
+            undefined,
+            "FAST",
+          );
         }
-
-        pdf.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight, undefined, "FAST");
       }
 
       for (let i = 1; i <= pageElements.length; i++) {
@@ -495,8 +536,22 @@ const VehicleQuotationPDFDialog = ({
     onSendMail({
       pdfAttachment: payload,
       previewPdfMode: emailContentMode === "short",
+      to: String(recipientEmail || "").trim(),
     });
   };
+
+  useEffect(() => {
+    if (!open) {
+      autoSendTriggeredRef.current = false;
+      return;
+    }
+    if (!autoSendForMail) return;
+    if (autoSendTriggeredRef.current) return;
+    if (!renderComplete || !imagesLoaded || loading) return;
+
+    autoSendTriggeredRef.current = true;
+    handleSendMailWithPdf();
+  }, [open, autoSendForMail, renderComplete, imagesLoaded, loading]);
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
@@ -662,6 +717,14 @@ const VehicleQuotationPDFDialog = ({
             </Button>
             {typeof onSendMail === "function" && (
               <>
+                <TextField
+                  size="small"
+                  label="Email ID"
+                  type="email"
+                  value={recipientEmail}
+                  onChange={(e) => setRecipientEmail(e.target.value)}
+                  sx={{ minWidth: 240 }}
+                />
                 <FormControl size="small" sx={{ minWidth: 150 }}>
                   <InputLabel>Email Content</InputLabel>
                   <Select value={emailContentMode} onChange={(e) => setEmailContentMode(e.target.value)}>
@@ -669,7 +732,9 @@ const VehicleQuotationPDFDialog = ({
                     <MenuItem value="full">Full Content</MenuItem>
                   </Select>
                 </FormControl>
-                <Button onClick={handleSendMailWithPdf} startIcon={<Email />} variant="outlined" size="small" disabled={!renderComplete || loading}>Send Mail</Button>
+                <Button onClick={handleSendMailWithPdf} startIcon={<Email />} variant="outlined" size="small" disabled={!renderComplete || loading}>
+                  {autoSendForMail && loading ? "Preparing..." : "Send Mail"}
+                </Button>
               </>
             )}
             <Button onClick={onClose} startIcon={<Close />} color="inherit" size="small">Close</Button>

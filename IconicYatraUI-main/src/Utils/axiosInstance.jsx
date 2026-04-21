@@ -5,64 +5,64 @@ export const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 // User APIs
 export const axiosInstance = axios.create({
-    baseURL: `${BASE_URL}/api/v1/user`,
-    headers: { "Content-Type": "application/json" },
+  baseURL: `${BASE_URL}/api/v1/user`,
+  headers: { "Content-Type": "application/json" },
 });
 
 // Payment APIs
 export const paymentAxios = axios.create({
-    baseURL: `${BASE_URL}/api/v1/easebusspayment`,
-    headers: { "Content-Type": "application/json" },
+  baseURL: `${BASE_URL}/api/v1/easebusspayment`,
+  headers: { "Content-Type": "application/json" },
 });
 
 // Inquiry APIs
 export const inquiryAxios = axios.create({
-    baseURL: `${BASE_URL}/api/v1`,
-    headers: { "Content-Type": "application/json" },
+  baseURL: `${BASE_URL}/api/v1`,
+  headers: { "Content-Type": "application/json" },
 });
 
 export const packagesAxios = axios.create({
-    baseURL: `${BASE_URL}/api/v1/packages`,
-    headers: { "Content-Type": "application/json" },
+  baseURL: `${BASE_URL}/api/v1/packages`,
+  headers: { "Content-Type": "application/json" },
 });
 export const destinationAxios = axios.create({
-    baseURL: `${BASE_URL}/api/v1/destinations`,
-    headers: { "Content-Type": "application/json" },
+  baseURL: `${BASE_URL}/api/v1/destinations`,
+  headers: { "Content-Type": "application/json" },
 });
 export const companyUIAxios = axios.create({
-    baseURL: `${BASE_URL}/api/v1/companyUI`,
-    headers: { "Content-Type": "application/json" },
+  baseURL: `${BASE_URL}/api/v1/companyUI`,
+  headers: { "Content-Type": "application/json" },
 });
 export const enquiryAxios = axios.create({
-    baseURL: `${BASE_URL}/api/v1`,
-    headers: { "Content-Type": "application/json" },
+  baseURL: `${BASE_URL}/api/v1`,
+  headers: { "Content-Type": "application/json" },
 });
 export const GalleryAxios = axios.create({
-    baseURL: `${BASE_URL}/api/v1`,
-    headers: { "Content-Type": "application/json" },
+  baseURL: `${BASE_URL}/api/v1`,
+  headers: { "Content-Type": "application/json" },
 });
 
 export const googleAds = axios.create({
-    baseURL: `${BASE_URL}/api/v1`,
-    headers: { "Content-Type": "application/json" },
-})
+  baseURL: `${BASE_URL}/api/v1`,
+  headers: { "Content-Type": "application/json" },
+});
 
 export const blogsAxios = axios.create({
-    baseURL: `${BASE_URL}/api/v1`,
-    headers: { "Content-Type": "application/json" },
-})
+  baseURL: `${BASE_URL}/api/v1`,
+  headers: { "Content-Type": "application/json" },
+});
 
-export const homePageAxios=axios.create({
-     baseURL: `${BASE_URL}/api/v1/home`,
-    headers: { "Content-Type": "application/json" },
-})
+export const homePageAxios = axios.create({
+  baseURL: `${BASE_URL}/api/v1/home`,
+  headers: { "Content-Type": "application/json" },
+});
 // Token interceptor
 const attachToken = (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 };
 
 axiosInstance.interceptors.request.use(attachToken);

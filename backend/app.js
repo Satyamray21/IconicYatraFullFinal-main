@@ -2,8 +2,8 @@ import dotenv from "dotenv";
 import dns from "dns";
 
 // Force IPv4 (Node.js v17+ issue fix)
-dns.setDefaultResultOrder('ipv4first');
-dns.setServers(['1.1.1.1', '8.8.8.8']);
+dns.setDefaultResultOrder("ipv4first");
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
 dotenv.config();
 import express from "express";
@@ -23,10 +23,12 @@ const __dirname = dirname(__filename);
 const app = express();
 
 // Middleware
-app.use(cors({
-  origin: process.env.CORS_ORIGIN,
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN,
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "500mb" }));
 app.use(cookieParser());
@@ -159,7 +161,9 @@ import homePageRoutes from "./src/routers/homePage.routes.js";
 app.use("/api/v1/home", homePageRoutes);
 // ==========================================
 // ✅ Fix: Load JSON without import
-const swaggerDocument = JSON.parse(fs.readFileSync("./swagger-output.json", "utf-8"));
+const swaggerDocument = JSON.parse(
+  fs.readFileSync("./swagger-output.json", "utf-8"),
+);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // email send slip
@@ -171,7 +175,5 @@ app.use("/api/v1", inquiryRoutes);
 
 import hotelRoutes from "./src/routers/hotel.router.js";
 app.use("/api/v1", verifyToken, hotelRoutes);
-
-
 
 export { app };
