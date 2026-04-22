@@ -24,6 +24,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
@@ -34,13 +38,16 @@ import {
   renumberCompanyAdvancedReceipts,
   backfillInvoiceSerials,
 } from "../../../features/invoice/invoiceSlice";
+import { fetchCompanies } from "../../../features/company/InsideCompany";
 
 const InvoiceCard = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { invoices, loading, error } = useSelector((state) => state.invoice);
+  const { companies = [] } = useSelector((state) => state.company || {});
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState("all");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
@@ -74,6 +81,7 @@ const InvoiceCard = () => {
   // 📦 Fetch invoices
   useEffect(() => {
     dispatch(getInvoices());
+    dispatch(fetchCompanies());
   }, [dispatch]);
 
   // ➕ Add invoice
@@ -174,12 +182,22 @@ const InvoiceCard = () => {
   const filteredData = useMemo(() => {
     let source = Array.isArray(invoices) ? invoices : [];
 
+    if (selectedCompanyId !== "all") {
+      source = source.filter((item) => {
+        const invoiceCompanyId =
+          typeof item?.companyId === "object"
+            ? String(item?.companyId?._id || "")
+            : String(item?.companyId || "");
+        return invoiceCompanyId === String(selectedCompanyId);
+      });
+    }
+
     if (!searchQuery.trim()) return source;
 
     return source.filter((item) =>
       item.partyName?.toLowerCase().includes(searchQuery.toLowerCase()),
     );
-  }, [invoices, searchQuery]);
+  }, [invoices, searchQuery, selectedCompanyId]);
 
   // 📄 Pagination
   const paginatedData = useMemo(() => {
@@ -262,19 +280,44 @@ const InvoiceCard = () => {
             </Button>
           </Box>
 
-          <TextField
-            size="small"
-            placeholder="Search by party name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
+          <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel id="invoice-company-filter-label">Company</InputLabel>
+              <Select
+                labelId="invoice-company-filter-label"
+                label="Company"
+                value={selectedCompanyId}
+                onChange={(e) => {
+                  setSelectedCompanyId(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="all">All Companies</MenuItem>
+                {(Array.isArray(companies) ? companies : []).map((company) => (
+                  <MenuItem key={company._id} value={String(company._id)}>
+                    {company.companyName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              size="small"
+              placeholder="Search by party name..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(0);
+              }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
         </Box>
 
         {/* Table */}
