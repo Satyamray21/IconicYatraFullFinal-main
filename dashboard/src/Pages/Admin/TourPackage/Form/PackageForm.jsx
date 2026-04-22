@@ -31,9 +31,13 @@ import {
   clearStates,
   clearCities,
   fetchDomesticCities,
-  fetchInternationalCities
+  fetchInternationalCities,
 } from "../../../../features/location/locationSlice";
-import { getLeadOptions, addLeadOption, deleteLeadOption } from "../../../../features/leads/leadSlice";
+import {
+  getLeadOptions,
+  addLeadOption,
+  deleteLeadOption,
+} from "../../../../features/leads/leadSlice";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 // ✅ NEW: Tour Type Constants
@@ -48,10 +52,10 @@ const TOUR_TYPES = [
 
 // ✅ NEW: Package Category Constants
 const PACKAGE_CATEGORIES = [
-  "Yatra",
-  "Holidays",
-  "Special",
-  "Latest"
+  { label: "Spiritual Tour", value: "Yatra" },
+  { label: "Holidays", value: "Holidays" },
+  { label: "Special", value: "Special" },
+  { label: "Latest", value: "Latest" },
 ];
 
 // ✅ NEW: Domestic Tour Types (India specific)
@@ -61,8 +65,12 @@ const PackageEntryForm = ({ onNext, initialData }) => {
   const [tourType, setTourType] = useState(initialData?.tourType || "Domestic");
   const [allCities, setAllCities] = useState([]);
   const [locationList, setLocationList] = useState([]);
-  const [stayLocationList, setStayLocationList] = useState(initialData?.stayLocations || []);
-  const [selectedCountry, setSelectedCountry] = useState(initialData?.destinationCountry || "");
+  const [stayLocationList, setStayLocationList] = useState(
+    initialData?.stayLocations || [],
+  );
+  const [selectedCountry, setSelectedCountry] = useState(
+    initialData?.destinationCountry || "",
+  );
   const [searchText, setSearchText] = useState("");
   const [currentState, setCurrentState] = useState(""); // ✅ NEW: Track current state
   const BOX_HEIGHT = 220;
@@ -100,7 +108,9 @@ const PackageEntryForm = ({ onNext, initialData }) => {
       packageSubType: initialData?.packageSubType || [],
     },
     validationSchema: Yup.object({
-      tourType: Yup.string().oneOf(TOUR_TYPES, "Invalid tour type").required("Tour type is required"),
+      tourType: Yup.string()
+        .oneOf(TOUR_TYPES, "Invalid tour type")
+        .required("Tour type is required"),
       destinationCountry: Yup.string().when("tourType", {
         is: "International",
         then: (schema) => schema.required("Destination country is required"),
@@ -121,8 +131,10 @@ const PackageEntryForm = ({ onNext, initialData }) => {
       const payload = {
         ...values,
         stayLocations: stayLocationList,
-        destinationCountry: DOMESTIC_TOUR_TYPES.includes(values.tourType) ? "India" : values.destinationCountry,
-        status: "active"
+        destinationCountry: DOMESTIC_TOUR_TYPES.includes(values.tourType)
+          ? "India"
+          : values.destinationCountry,
+        status: "active",
       };
 
       onNext(payload, stayLocationList);
@@ -198,10 +210,12 @@ const PackageEntryForm = ({ onNext, initialData }) => {
         });
     } else {
       // For international tours
-      dispatch(fetchInternationalCities({
-        countryName: selectedCountry,
-        stateName: selectedStateName
-      }))
+      dispatch(
+        fetchInternationalCities({
+          countryName: selectedCountry,
+          stateName: selectedStateName,
+        }),
+      )
         .unwrap()
         .then((cityList) => {
           console.log("International cities received:", cityList);
@@ -232,20 +246,31 @@ const PackageEntryForm = ({ onNext, initialData }) => {
     const cityWithState = {
       city,
       state: currentState, // ✅ Store which state this city belongs to
-      country: selectedCountry || (DOMESTIC_TOUR_TYPES.includes(tourType) ? "India" : ""),
-      nights: ""
+      country:
+        selectedCountry ||
+        (DOMESTIC_TOUR_TYPES.includes(tourType) ? "India" : ""),
+      nights: "",
     };
 
     // Check if city already exists (from any state)
-    if (!stayLocationList.find((item) => item.city === city && item.state === currentState)) {
+    if (
+      !stayLocationList.find(
+        (item) => item.city === city && item.state === currentState,
+      )
+    ) {
       setStayLocationList([...stayLocationList, cityWithState]);
     }
   };
 
   const handleRemoveCity = (cityToRemove) => {
-    setStayLocationList(stayLocationList.filter((item) =>
-      !(item.city === cityToRemove.city && item.state === cityToRemove.state)
-    ));
+    setStayLocationList(
+      stayLocationList.filter(
+        (item) =>
+          !(
+            item.city === cityToRemove.city && item.state === cityToRemove.state
+          ),
+      ),
+    );
   };
 
   // ===== Add New Option Logic =====
@@ -266,9 +291,14 @@ const PackageEntryForm = ({ onNext, initialData }) => {
       const newValue = addMore.trim();
       const backendField = currentField;
 
-      await dispatch(addLeadOption({ fieldName: backendField, value: newValue })).unwrap();
+      await dispatch(
+        addLeadOption({ fieldName: backendField, value: newValue }),
+      ).unwrap();
       await dispatch(getLeadOptions()).unwrap();
-      formik.setFieldValue(backendField, [...formik.values[backendField], newValue]);
+      formik.setFieldValue(backendField, [
+        ...formik.values[backendField],
+        newValue,
+      ]);
 
       handleCloseDialog();
     } catch (error) {
@@ -292,8 +322,8 @@ const PackageEntryForm = ({ onNext, initialData }) => {
     const locationName = newLocation.trim();
 
     // Add to all cities and location list
-    setAllCities(prev => [...prev, locationName]);
-    setLocationList(prev => [...prev, locationName]);
+    setAllCities((prev) => [...prev, locationName]);
+    setLocationList((prev) => [...prev, locationName]);
 
     handleCloseLocationDialog();
   };
@@ -303,19 +333,26 @@ const PackageEntryForm = ({ onNext, initialData }) => {
     e.stopPropagation();
 
     // Remove from all arrays
-    setAllCities(prev => prev.filter(location => location !== locationToDelete));
-    setLocationList(prev => prev.filter(location => location !== locationToDelete));
+    setAllCities((prev) =>
+      prev.filter((location) => location !== locationToDelete),
+    );
+    setLocationList((prev) =>
+      prev.filter((location) => location !== locationToDelete),
+    );
 
     // Also remove from stay locations if present (with current state)
-    setStayLocationList(prev => prev.filter(item =>
-      !(item.city === locationToDelete && item.state === currentState)
-    ));
+    setStayLocationList((prev) =>
+      prev.filter(
+        (item) =>
+          !(item.city === locationToDelete && item.state === currentState),
+      ),
+    );
   };
 
   // ✅ NEW: Group stay locations by state for better display
   const getStayLocationsByState = () => {
     const grouped = {};
-    stayLocationList.forEach(item => {
+    stayLocationList.forEach((item) => {
       if (!grouped[item.state]) {
         grouped[item.state] = [];
       }
@@ -339,7 +376,13 @@ const PackageEntryForm = ({ onNext, initialData }) => {
 
   return (
     <Box border={1} borderColor="grey.300" borderRadius={2} p={3} boxShadow={2}>
-      <Typography variant="h6" fontWeight="bold" gutterBottom mb={3} color="primary">
+      <Typography
+        variant="h6"
+        fontWeight="bold"
+        gutterBottom
+        mb={3}
+        color="primary"
+      >
         Package Entry Form
       </Typography>
 
@@ -389,8 +432,14 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                   <TextField
                     {...params}
                     label="Destination Country *"
-                    error={formik.touched.destinationCountry && Boolean(formik.errors.destinationCountry)}
-                    helperText={formik.touched.destinationCountry && formik.errors.destinationCountry}
+                    error={
+                      formik.touched.destinationCountry &&
+                      Boolean(formik.errors.destinationCountry)
+                    }
+                    helperText={
+                      formik.touched.destinationCountry &&
+                      formik.errors.destinationCountry
+                    }
                   />
                 )}
               />
@@ -410,10 +459,18 @@ const PackageEntryForm = ({ onNext, initialData }) => {
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label={DOMESTIC_TOUR_TYPES.includes(tourType) ? "State *" : "State/Province *"}
+                  label={
+                    DOMESTIC_TOUR_TYPES.includes(tourType)
+                      ? "State *"
+                      : "State/Province *"
+                  }
                   error={formik.touched.sector && Boolean(formik.errors.sector)}
                   helperText={formik.touched.sector && formik.errors.sector}
-                  placeholder={states.length === 0 ? "Loading..." : `Select ${DOMESTIC_TOUR_TYPES.includes(tourType) ? "Indian" : ""} state`}
+                  placeholder={
+                    states.length === 0
+                      ? "Loading..."
+                      : `Select ${DOMESTIC_TOUR_TYPES.includes(tourType) ? "Indian" : ""} state`
+                  }
                 />
               )}
               disabled={states.length === 0}
@@ -422,10 +479,10 @@ const PackageEntryForm = ({ onNext, initialData }) => {
               <Typography variant="caption" color="text.secondary">
                 {DOMESTIC_TOUR_TYPES.includes(tourType)
                   ? "Loading Indian states..."
-                  : tourType === "International" && formik.values.destinationCountry
+                  : tourType === "International" &&
+                      formik.values.destinationCountry
                     ? `Loading states for ${formik.values.destinationCountry}...`
-                    : "Select country first"
-                }
+                    : "Select country first"}
               </Typography>
             )}
           </Grid>
@@ -436,16 +493,30 @@ const PackageEntryForm = ({ onNext, initialData }) => {
               <Autocomplete
                 fullWidth
                 options={PACKAGE_CATEGORIES}
-                value={formik.values.packageCategory || ""}
+                getOptionLabel={(option) => option.label}
+                value={
+                  PACKAGE_CATEGORIES.find(
+                    (opt) => opt.value === formik.values.packageCategory,
+                  ) || null
+                }
                 onChange={(e, newValue) => {
-                  formik.setFieldValue("packageCategory", newValue || "");
+                  formik.setFieldValue(
+                    "packageCategory",
+                    newValue?.value || "",
+                  );
                 }}
                 renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Package Category *"
-                    error={formik.touched.packageCategory && Boolean(formik.errors.packageCategory)}
-                    helperText={formik.touched.packageCategory && formik.errors.packageCategory}
+                    error={
+                      formik.touched.packageCategory &&
+                      Boolean(formik.errors.packageCategory)
+                    }
+                    helperText={
+                      formik.touched.packageCategory &&
+                      formik.errors.packageCategory
+                    }
                     placeholder="Select package category"
                   />
                 )}
@@ -458,7 +529,9 @@ const PackageEntryForm = ({ onNext, initialData }) => {
             <Autocomplete
               multiple
               fullWidth
-              options={getOptionsForField("packageSubType").map((opt) => opt.value)}
+              options={getOptionsForField("packageSubType").map(
+                (opt) => opt.value,
+              )}
               value={formik.values.packageSubType || []}
               onChange={(e, newValue) => {
                 if (newValue.includes("__add_new")) {
@@ -473,21 +546,31 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                 <TextField
                   {...params}
                   label="Package Sub Type *"
-                  error={formik.touched.packageSubType && Boolean(formik.errors.packageSubType)}
-                  helperText={formik.touched.packageSubType && formik.errors.packageSubType}
+                  error={
+                    formik.touched.packageSubType &&
+                    Boolean(formik.errors.packageSubType)
+                  }
+                  helperText={
+                    formik.touched.packageSubType &&
+                    formik.errors.packageSubType
+                  }
                 />
               )}
               renderOption={(props, option) => {
                 if (option === "__add_new") {
                   return (
-                    <li {...props} key="add_new" style={{ color: "#1976d2", fontWeight: 500 }}>
+                    <li
+                      {...props}
+                      key="add_new"
+                      style={{ color: "#1976d2", fontWeight: 500 }}
+                    >
                       + Add New
                     </li>
                   );
                 }
 
                 const optData = options.find(
-                  (o) => o.fieldName === "packageSubType" && o.value === option
+                  (o) => o.fieldName === "packageSubType" && o.value === option,
                 );
 
                 return (
@@ -526,8 +609,22 @@ const PackageEntryForm = ({ onNext, initialData }) => {
             <Grid container spacing={2}>
               {/* Available Locations */}
               <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="subtitle1" sx={{ display: "flex", alignItems: "center", fontWeight: "bold" }} color="primary">
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      fontWeight: "bold",
+                    }}
+                    color="primary"
+                  >
                     <LocationOnIcon sx={{ mr: 1, color: "red" }} />
                     Available Locations {currentState && `- ${currentState}`}
                   </Typography>
@@ -579,7 +676,10 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                         onClick={() => handleSelectCity(city)}
                       >
                         <Box sx={{ display: "flex", alignItems: "center" }}>
-                          <LocationOnIcon fontSize="small" sx={{ mr: 1, color: "grey.600" }} />
+                          <LocationOnIcon
+                            fontSize="small"
+                            sx={{ mr: 1, color: "grey.600" }}
+                          />
                           {city}
                           <Chip
                             label={currentState}
@@ -594,9 +694,9 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                           color="error"
                           onClick={(e) => handleDeleteLocation(city, e)}
                           sx={{
-                            '&:hover': {
-                              backgroundColor: 'rgba(211, 47, 47, 0.04)'
-                            }
+                            "&:hover": {
+                              backgroundColor: "rgba(211, 47, 47, 0.04)",
+                            },
                           }}
                         >
                           <DeleteIcon fontSize="small" />
@@ -604,8 +704,15 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                       </Box>
                     ))
                   ) : (
-                    <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
-                      {formik.values.sector ? "No cities found" : "Select a state to see cities"}
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      textAlign="center"
+                      py={2}
+                    >
+                      {formik.values.sector
+                        ? "No cities found"
+                        : "Select a state to see cities"}
                     </Typography>
                   )}
                 </Box>
@@ -615,7 +722,11 @@ const PackageEntryForm = ({ onNext, initialData }) => {
               <Grid size={{ xs: 12, md: 6 }}>
                 <Typography
                   variant="subtitle1"
-                  sx={{ display: "flex", alignItems: "center", fontWeight: "bold" }}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    fontWeight: "bold",
+                  }}
                   color="primary"
                 >
                   <HomeWorkIcon sx={{ mr: 1, color: "#1976d2" }} />
@@ -633,107 +744,155 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                   }}
                 >
                   {stayLocationList.length > 0 ? (
-                    Object.entries(groupedStayLocations).map(([state, cities]) => (
-                      <Box key={state} sx={{ mb: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main', mb: 1 }}>
-                          {state}
-                        </Typography>
-                        {cities.map((item, i) => {
-                          const globalIndex = stayLocationList.findIndex(
-                            stayItem => stayItem.city === item.city && stayItem.state === item.state
-                          );
+                    Object.entries(groupedStayLocations).map(
+                      ([state, cities]) => (
+                        <Box key={state} sx={{ mb: 2 }}>
+                          <Typography
+                            variant="subtitle2"
+                            sx={{
+                              fontWeight: "bold",
+                              color: "primary.main",
+                              mb: 1,
+                            }}
+                          >
+                            {state}
+                          </Typography>
+                          {cities.map((item, i) => {
+                            const globalIndex = stayLocationList.findIndex(
+                              (stayItem) =>
+                                stayItem.city === item.city &&
+                                stayItem.state === item.state,
+                            );
 
-                          return (
-                            <Box
-                              key={`${item.city}-${item.state}`}
-                              sx={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "flex-start",
-                                p: 1,
-                                mb: 1,
-                                borderRadius: 1,
-                                background: "#e3f2fd",
-                                flexDirection: "column",
-                              }}
-                            >
+                            return (
                               <Box
+                                key={`${item.city}-${item.state}`}
                                 sx={{
                                   display: "flex",
                                   justifyContent: "space-between",
-                                  alignItems: "center",
-                                  width: "100%",
+                                  alignItems: "flex-start",
+                                  p: 1,
+                                  mb: 1,
+                                  borderRadius: 1,
+                                  background: "#e3f2fd",
+                                  flexDirection: "column",
                                 }}
                               >
-                                <Box sx={{ display: "flex", alignItems: "center" }}>
-                                  <HomeWorkIcon fontSize="small" sx={{ mr: 1, color: "#1976d2" }} />
-                                  {item.city}
-                                </Box>
-
-                                <Box>
-                                  <IconButton
-                                    size="small"
-                                    disabled={globalIndex === 0}
-                                    onClick={() => {
-                                      if (globalIndex === 0) return;
-                                      const newList = [...stayLocationList];
-                                      const [moved] = newList.splice(globalIndex, 1);
-                                      newList.splice(globalIndex - 1, 0, moved);
-                                      setStayLocationList(newList);
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    width: "100%",
+                                  }}
+                                >
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
                                     }}
                                   >
-                                    ⬆️
-                                  </IconButton>
+                                    <HomeWorkIcon
+                                      fontSize="small"
+                                      sx={{ mr: 1, color: "#1976d2" }}
+                                    />
+                                    {item.city}
+                                  </Box>
 
-                                  <IconButton
-                                    size="small"
-                                    disabled={globalIndex === stayLocationList.length - 1}
-                                    onClick={() => {
-                                      if (globalIndex === stayLocationList.length - 1) return;
-                                      const newList = [...stayLocationList];
-                                      const [moved] = newList.splice(globalIndex, 1);
-                                      newList.splice(globalIndex + 1, 0, moved);
-                                      setStayLocationList(newList);
-                                    }}
-                                  >
-                                    ⬇️
-                                  </IconButton>
+                                  <Box>
+                                    <IconButton
+                                      size="small"
+                                      disabled={globalIndex === 0}
+                                      onClick={() => {
+                                        if (globalIndex === 0) return;
+                                        const newList = [...stayLocationList];
+                                        const [moved] = newList.splice(
+                                          globalIndex,
+                                          1,
+                                        );
+                                        newList.splice(
+                                          globalIndex - 1,
+                                          0,
+                                          moved,
+                                        );
+                                        setStayLocationList(newList);
+                                      }}
+                                    >
+                                      ⬆️
+                                    </IconButton>
 
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleRemoveCity(item)}
-                                  >
-                                    <DeleteIcon fontSize="small" />
-                                  </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      disabled={
+                                        globalIndex ===
+                                        stayLocationList.length - 1
+                                      }
+                                      onClick={() => {
+                                        if (
+                                          globalIndex ===
+                                          stayLocationList.length - 1
+                                        )
+                                          return;
+                                        const newList = [...stayLocationList];
+                                        const [moved] = newList.splice(
+                                          globalIndex,
+                                          1,
+                                        );
+                                        newList.splice(
+                                          globalIndex + 1,
+                                          0,
+                                          moved,
+                                        );
+                                        setStayLocationList(newList);
+                                      }}
+                                    >
+                                      ⬇️
+                                    </IconButton>
+
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => handleRemoveCity(item)}
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </Box>
                                 </Box>
+
+                                <TextField
+                                  type="number"
+                                  size="small"
+                                  label="Number of Nights"
+                                  value={item.nights}
+                                  onChange={(e) => {
+                                    const newList = [...stayLocationList];
+                                    const itemIndex = newList.findIndex(
+                                      (stayItem) =>
+                                        stayItem.city === item.city &&
+                                        stayItem.state === item.state,
+                                    );
+                                    if (itemIndex !== -1) {
+                                      newList[itemIndex].nights =
+                                        e.target.value;
+                                      setStayLocationList(newList);
+                                    }
+                                  }}
+                                  sx={{ mt: 1, width: "50%" }}
+                                  inputProps={{ min: 1 }}
+                                />
                               </Box>
-
-                              <TextField
-                                type="number"
-                                size="small"
-                                label="Number of Nights"
-                                value={item.nights}
-                                onChange={(e) => {
-                                  const newList = [...stayLocationList];
-                                  const itemIndex = newList.findIndex(
-                                    stayItem => stayItem.city === item.city && stayItem.state === item.state
-                                  );
-                                  if (itemIndex !== -1) {
-                                    newList[itemIndex].nights = e.target.value;
-                                    setStayLocationList(newList);
-                                  }
-                                }}
-                                sx={{ mt: 1, width: "50%" }}
-                                inputProps={{ min: 1 }}
-                              />
-                            </Box>
-                          );
-                        })}
-                      </Box>
-                    ))
+                            );
+                          })}
+                        </Box>
+                      ),
+                    )
                   ) : (
-                    <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      textAlign="center"
+                      py={2}
+                    >
                       No stay locations selected
                     </Typography>
                   )}
@@ -771,7 +930,9 @@ const PackageEntryForm = ({ onNext, initialData }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleAddNewItem} variant="contained">Add</Button>
+          <Button onClick={handleAddNewItem} variant="contained">
+            Add
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -791,7 +952,9 @@ const PackageEntryForm = ({ onNext, initialData }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseLocationDialog}>Cancel</Button>
-          <Button onClick={handleAddNewLocation} variant="contained">Add Location</Button>
+          <Button onClick={handleAddNewLocation} variant="contained">
+            Add Location
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
