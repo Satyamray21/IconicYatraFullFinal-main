@@ -551,7 +551,15 @@ const InvoicePdfDialog = ({ open, onClose, quotation, invoiceData }) => {
 const formatDate = (dateString) => {
   if (!dateString) return "";
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString("en-IN");
+};
+
+const formatSequentialDayDate = (startDateValue, index) => {
+  const base = new Date(startDateValue);
+  if (Number.isNaN(base.getTime())) return "";
+  base.setDate(base.getDate() + (Number(index) || 0));
+  return base.toLocaleDateString("en-IN");
 };
 
 const formatDateTime = (dateString) => {
@@ -911,10 +919,14 @@ function transformQuickApiToDisplay(apiData, company) {
   }
 
   const itineraryDays = (() => {
+    const itineraryStartDate =
+      apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
+      apiData?.packageSnapshot?.arrivalDate ||
+      apiData?.createdAt;
     if (isQuickPackageDayObjectArray(pkg.days)) {
       return pkg.days.map((day, index) => ({
         id: index + 1,
-        date: formatDate(apiData.createdAt),
+        date: formatSequentialDayDate(itineraryStartDate, index),
         title: day.title || `Day ${index + 1}`,
         description: day.notes || day.aboutCity || "",
         image: day.dayImage
@@ -930,7 +942,7 @@ function transformQuickApiToDisplay(apiData, company) {
     if (itin.length) {
       return itin.map((row, index) => ({
         id: index + 1,
-        date: formatDate(apiData.createdAt),
+        date: formatSequentialDayDate(itineraryStartDate, index),
         title: row.title || `Day ${index + 1}`,
         description: [row.description, row.activities].filter(Boolean).join("\n\n"),
         image: null,
@@ -940,7 +952,11 @@ function transformQuickApiToDisplay(apiData, company) {
   })();
 
   return {
-    date: formatDate(apiData.createdAt),
+    date: formatDate(
+      apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
+        apiData?.packageSnapshot?.arrivalDate ||
+        apiData.createdAt,
+    ),
     reference: String(apiData._id || ""),
     actions: [
       "Finalize",
@@ -1051,6 +1067,8 @@ function transformQuickApiToDisplay(apiData, company) {
         (policy.termsAndConditions || []).join("\n") ||
         "No terms and conditions specified",
     },
+    additionalServices:
+      apiData?.packageSnapshot?.quotationDetails?.additionalServices || [],
     footer: {
       contact:
         pkg.quotationDetails?.signatureDetails?.signedBy ||
@@ -1232,7 +1250,11 @@ const QuickFinalize = () => {
   /** Keep PDF preview aligned with the itinerary editor (`days` may update before `quotation` is refreshed). */
   const quotationForPdf = useMemo(() => {
     const payable = effectiveQuickPayableTotal(currentQuotation, services);
-    const base = { ...quotation, days };
+    const base = {
+      ...quotation,
+      days,
+      additionalServices: serializeAdditionalServicesForApi(services),
+    };
     if (!Number.isFinite(payable) || payable <= 0) return base;
     const hpd = [...(base.hotelPricingData || [])];
     const idx = hpd.findIndex((r) => {
@@ -1591,8 +1613,6 @@ const QuickFinalize = () => {
       currentQuotation?.packageSnapshot || currentQuotation?.packageId || {};
     const title = pkg.packageName || pkg.title || "Package";
     const qd = currentQuotation?.packageSnapshot?.quotationDetails || {};
-    const transport =
-      Number(qd.transportationCost ?? pkg.transportationCost ?? 0) || 0;
     const std = Number(qd.standardCost ?? pkg.standardCost ?? 0) || 0;
     const del = Number(qd.deluxeCost ?? pkg.deluxeCost ?? 0) || 0;
     const sup = Number(qd.superiorCost ?? pkg.superiorCost ?? 0) || 0;
@@ -1604,7 +1624,9 @@ const QuickFinalize = () => {
       n > 0 ? `₹ ${Math.round(n).toLocaleString("en-IN")}` : "—";
     const tierPayable = (tierBase) => {
       if (!tierBase || tierBase <= 0) return 0;
-      return tierBase + transport + addOns;
+      // standard/deluxe/superior costs in quick quotation are already final tier totals.
+      // Add only extra billable services (included = "no"), do not add transport again.
+      return tierBase + addOns;
     };
     return [
       { label: "Standard", hotel: String(title), cost: fmt(tierPayable(std)) },
@@ -1688,6 +1710,18 @@ const QuickFinalize = () => {
     emailTemplateBodies,
     mailCompanies,
   ]);
+  const includedAdditionalServiceLines = useMemo(() => {
+    const source =
+      Array.isArray(services) && services.length
+        ? services
+        : mapApiAdditionalServicesToState(
+            currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices,
+          );
+    return source
+      .filter((s) => String(s?.included || "").toLowerCase() === "yes")
+      .map((s) => String(s?.particulars || "").trim())
+      .filter(Boolean);
+  }, [services, currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices]);
 
   if (reduxLoading && !currentQuotation) {
     return (
@@ -2010,6 +2044,14 @@ const QuickFinalize = () => {
       return;
     }
     try {
+      if (Number(values?.selectedAmount) > 0) {
+        await dispatch(
+          updateQuickQuotation({
+            id: apiEntityId,
+            formData: { totalCost: Number(values.selectedAmount) },
+          }),
+        ).unwrap();
+      }
       await dispatch(
         finalizeQuickQuotation({
           id: apiEntityId,
@@ -2149,11 +2191,11 @@ const QuickFinalize = () => {
   const handleAddService = () => {
     if (
       !currentService.particulars ||
-      (currentService.included === "yes" &&
+      (currentService.included === "no" &&
         (!currentService.amount || !currentService.taxType))
     ) {
       alert(
-        "Please fill in all required fields (amount and tax when included)",
+        "Please fill in all required fields (amount and tax for extra service)",
       );
       return;
     }
@@ -2164,7 +2206,7 @@ const QuickFinalize = () => {
     const taxRate = selectedTax ? selectedTax.rate : 0;
 
     const amount =
-      currentService.included === "yes" ? parseFloat(currentService.amount) : 0;
+      currentService.included === "no" ? parseFloat(currentService.amount) : 0;
     const taxAmount = amount * (taxRate / 100) || 0;
 
     const newService = {
@@ -2204,7 +2246,39 @@ const QuickFinalize = () => {
       alert("Quotation not loaded");
       return;
     }
-    const payload = serializeAdditionalServicesForApi(services);
+    const hasDraft =
+      String(currentService?.particulars || "").trim().length > 0 &&
+      (currentService.included !== "no" ||
+        (String(currentService.amount || "").trim() &&
+          String(currentService.taxType || "").trim()));
+
+    const servicesToSave = hasDraft
+      ? (() => {
+          const selectedTax = taxOptions.find(
+            (option) => option.value === currentService.taxType,
+          );
+          const taxRate = selectedTax ? selectedTax.rate : 0;
+          const amount =
+            currentService.included === "no"
+              ? Number.parseFloat(currentService.amount || 0)
+              : 0;
+          const taxAmount = amount * (taxRate / 100) || 0;
+          return [
+            ...services,
+            {
+              ...currentService,
+              id: Date.now(),
+              amount,
+              taxRate,
+              taxAmount,
+              totalAmount: amount + taxAmount,
+              taxLabel: selectedTax ? selectedTax.label : "Non",
+            },
+          ];
+        })()
+      : services;
+
+    const payload = serializeAdditionalServicesForApi(servicesToSave);
     try {
       await dispatch(
         updateQuickQuotation({
@@ -2219,6 +2293,7 @@ const QuickFinalize = () => {
         }),
       ).unwrap();
       await dispatch(fetchQuickQuotationById(id)).unwrap();
+      setServices(mapApiAdditionalServicesToState(payload));
       setSnackbar({
         open: true,
         message: "Services saved",
@@ -2528,7 +2603,6 @@ const QuickFinalize = () => {
   const showSuperiorCol = detailRows.some((row) =>
     hasDisplayHotelName(row?.superior),
   );
-
   const Accordions = [
     { title: "Hotel Details" },
     { title: "Vehicle Details" },
@@ -3491,6 +3565,14 @@ const QuickFinalize = () => {
                                 <ListItemText primary={line} />
                               </ListItem>
                             ))}
+                            {p.field === "policies.inclusions" &&
+                              includedAdditionalServiceLines.map((line, k) => (
+                                <ListItem key={`add-svc-${k}`}>
+                                  <ListItemText
+                                    primary={`${line} (Additional Service Included)`}
+                                  />
+                                </ListItem>
+                              ))}
                           </List>
                         ) : (
                           <Typography variant="body2" whiteSpace="pre-line">
@@ -3723,6 +3805,7 @@ const QuickFinalize = () => {
         onConfirm={handleConfirm}
         packageOptionsOverride={finalizePackageOptions}
         preselectedPackageLabel={currentQuotation?.finalizedPackage}
+        allowEditableAmount
       />
       <HotelVendorDialog
         open={openBankDialog}
