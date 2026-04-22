@@ -1551,6 +1551,13 @@ const QuickFinalize = () => {
     ),
   ]);
 
+  // Ensure Received/Balance is hydrated as soon as quotation data is available,
+  // without waiting for Transaction dialog open.
+  useEffect(() => {
+    if (!currentQuotation?._id) return;
+    loadPaymentHistory();
+  }, [currentQuotation?._id, loadPaymentHistory]);
+
   useEffect(() => {
     loadPaymentHistory();
   }, [loadPaymentHistory]);
@@ -1710,7 +1717,7 @@ const QuickFinalize = () => {
     emailTemplateBodies,
     mailCompanies,
   ]);
-  const includedAdditionalServiceLines = useMemo(() => {
+  const additionalServiceLinesForInclusions = useMemo(() => {
     const source =
       Array.isArray(services) && services.length
         ? services
@@ -1718,8 +1725,14 @@ const QuickFinalize = () => {
             currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices,
           );
     return source
-      .filter((s) => String(s?.included || "").toLowerCase() === "yes")
-      .map((s) => String(s?.particulars || "").trim())
+      .map((s) => {
+        const particulars = String(s?.particulars || "").trim();
+        if (!particulars) return "";
+        const included = String(s?.included || "").toLowerCase() === "yes";
+        return included
+          ? `${particulars} (Additional Service Included)`
+          : `${particulars} (Additional Service - Extra Charge)`;
+      })
       .filter(Boolean);
   }, [services, currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices]);
 
@@ -3566,10 +3579,10 @@ const QuickFinalize = () => {
                               </ListItem>
                             ))}
                             {p.field === "policies.inclusions" &&
-                              includedAdditionalServiceLines.map((line, k) => (
+                              additionalServiceLinesForInclusions.map((line, k) => (
                                 <ListItem key={`add-svc-${k}`}>
                                   <ListItemText
-                                    primary={`${line} (Additional Service Included)`}
+                                    primary={line}
                                   />
                                 </ListItem>
                               ))}
