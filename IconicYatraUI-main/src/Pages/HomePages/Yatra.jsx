@@ -7,7 +7,7 @@ import {
   Divider,
   Button,
   CircularProgress,
-  Alert
+  Alert,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -22,7 +22,11 @@ const Yatra = () => {
   const dispatch = useDispatch();
 
   // Get yatra packages from Redux store
-  const { yatra: yatraPackages, loading, error } = useSelector((state) => state.packages);
+  const {
+    yatra: yatraPackages,
+    loading,
+    error,
+  } = useSelector((state) => state.packages);
 
   useEffect(() => {
     // Fetch yatra packages when component mounts
@@ -59,7 +63,7 @@ const Yatra = () => {
 
     // Find standard hotel category
     const standardHotel = firstDestination.hotels.find(
-      hotel => hotel.category === "standard"
+      (hotel) => hotel.category === "standard",
     );
 
     if (standardHotel && standardHotel.pricePerPerson > 0) {
@@ -83,16 +87,23 @@ const Yatra = () => {
 
   // ✅ UPDATED: Check if price is available
   const hasPrice = (pkg) => {
-    return pkg?.startingPrice || pkg?.price ||
-      (pkg.destinationNights && pkg.destinationNights[0]?.hotels?.some(hotel =>
-        hotel.category === "standard" && hotel.pricePerPerson > 0
-      ));
+    return (
+      pkg?.startingPrice ||
+      pkg?.price ||
+      (pkg.destinationNights &&
+        pkg.destinationNights[0]?.hotels?.some(
+          (hotel) => hotel.category === "standard" && hotel.pricePerPerson > 0,
+        ))
+    );
   };
 
   // ✅ UPDATED: Format duration function
   const formatDuration = (pkg) => {
     if (pkg?.stayLocations && pkg.stayLocations.length > 0) {
-      const totalNights = pkg.stayLocations.reduce((sum, location) => sum + (location.nights || 0), 0);
+      const totalNights = pkg.stayLocations.reduce(
+        (sum, location) => sum + (location.nights || 0),
+        0,
+      );
       const totalDays = totalNights + 1;
       return `${totalDays}D/${totalNights}N`;
     }
@@ -108,10 +119,10 @@ const Yatra = () => {
     return (
       <Box
         sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '50vh'
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "50vh",
         }}
       >
         <CircularProgress />
@@ -123,9 +134,7 @@ const Yatra = () => {
   if (error && yatraPackages.length === 0) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          Error loading packages: {error}
-        </Alert>
+        <Alert severity="error">Error loading packages: {error}</Alert>
       </Box>
     );
   }
@@ -165,7 +174,7 @@ const Yatra = () => {
             fontWeight="bold"
             sx={{ fontSize: { xs: "1.8rem", md: "2rem" } }}
           >
-            YATRA PACKAGES
+            SPIRITUAL TOUR PACKAGES
           </Typography>
           <Typography
             variant="subtitle1"
@@ -187,7 +196,7 @@ const Yatra = () => {
 
         {/* Show loading while fetching more data */}
         {loading && yatraPackages.length > 0 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
             <CircularProgress size={24} />
           </Box>
         )}
@@ -242,7 +251,7 @@ const Yatra = () => {
           </Grid>
         ) : (
           // No packages found
-          <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Box sx={{ textAlign: "center", py: 4 }}>
             <Typography variant="h6" color="textSecondary">
               No yatra packages found
             </Typography>
@@ -268,7 +277,7 @@ const Yatra = () => {
                 borderRadius: 3,
                 py: 1.5,
                 "&:hover": { backgroundColor: "#43a047" },
-                "&:disabled": { backgroundColor: "#cccccc" }
+                "&:disabled": { backgroundColor: "#cccccc" },
               }}
             >
               {loading ? "Loading..." : "Load More"}
