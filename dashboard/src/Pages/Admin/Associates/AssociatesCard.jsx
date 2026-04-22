@@ -274,7 +274,7 @@ const AssociateDashboard = () => {
     quotationType: q.quotationType || "-",
     clientName: q.clientName || "-",
     amount: q.amount || 0,
-    date: q.date,
+    date: q.arrivalDate || q.date,
     status: q.status || "-",
   }));
 

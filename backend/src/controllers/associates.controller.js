@@ -248,6 +248,7 @@ export const getAssociateQuotations = async (req, res, next) => {
     const quickMapped = quickList.map((q) => {
       const vendor = pickVendorEntry(q.finalizedVendorsWithAmounts);
       const assignedAmount = Number(vendor?.amount || 0);
+      const arrivalDate = q?.packageSnapshot?.quotationDetails?.arrivalDate || q?.pickupDrop?.arrivalDate || null;
       return {
         _id: q._id,
         quotationType: "Quick",
@@ -256,7 +257,9 @@ export const getAssociateQuotations = async (req, res, next) => {
         amount: assignedAmount || Number(q.totalCost || 0),
         assignedAmount,
         totalAmount: Number(q.totalCost || 0),
-        date: q.finalizedAt || q.createdAt,
+        date: arrivalDate || q.finalizedAt || q.createdAt,
+        arrivalDate,
+        finalizationDate: q.finalizedAt || q.createdAt,
         status: q.finalizeStatus || "",
         vendorType: vendor?.vendorType || "",
         remarks: vendor?.remarks || "",
@@ -276,6 +279,7 @@ export const getAssociateQuotations = async (req, res, next) => {
         Number(packageCalc?.deluxe?.finalTotal || 0) ||
         Number(packageCalc?.superior?.finalTotal || 0) ||
         0;
+      const arrivalDate = q?.clientDetails?.tourDetails?.arrivalDate || null;
       return {
         _id: q._id,
         quotationType: "Custom",
@@ -284,7 +288,9 @@ export const getAssociateQuotations = async (req, res, next) => {
         amount: assignedAmount || totalAmount,
         assignedAmount,
         totalAmount,
-        date: q.finalizedAt || q.createdAt,
+        date: arrivalDate || q.finalizedAt || q.createdAt,
+        arrivalDate,
+        finalizationDate: q.finalizedAt || q.createdAt,
         status: q.finalizeStatus || "",
         vendorType: vendor?.vendorType || "",
         remarks: vendor?.remarks || "",
@@ -292,15 +298,18 @@ export const getAssociateQuotations = async (req, res, next) => {
     });
 
     const vehicleMapped = vehicleList.map((q) => {
-      const vendor = pickVendorEntry(q.finalizedVendorsWithAmounts);
-      const assignedAmount = Number(vendor?.amount || 0);
-      const totalAmount = Number(q?.costDetails?.totalCost || 0);
+      const arrivalDate = q?.pickupDrop?.arrivalDate || null;
       return {
         _id: q._id,
         quotationType: "Vehicle",
         quotationId: q.vehicleQuotationId || q._id?.toString(),
         clientName: q?.basicsDetails?.clientName || "",
         amount: assignedAmount || totalAmount,
+        assignedAmount,
+        totalAmount,
+        date: arrivalDate || q.finalizedAt || q.createdAt,
+        arrivalDate,
+        finalizationDmount: assignedAmount || totalAmount,
         assignedAmount,
         totalAmount,
         date: q.finalizedAt || q.createdAt,
