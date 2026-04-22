@@ -705,6 +705,14 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   const additionalServicesFromSnapshot = Array.isArray(qdSnap.additionalServices)
     ? qdSnap.additionalServices
     : [];
+  const finalizedPackage = safe(quick.finalizedPackage, "Standard");
+  const finalizedKey = ["standard", "deluxe", "superior"].includes(
+    String(finalizedPackage).toLowerCase(),
+  )
+    ? String(finalizedPackage).toLowerCase()
+    : "standard";
+  const finalizedKeyCap =
+    finalizedKey.charAt(0).toUpperCase() + finalizedKey.slice(1);
   const resolvedArrivalDate =
     qdSnap.arrivalDate ||
     snap.arrivalDate ||
@@ -752,6 +760,59 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     };
   };
   const calcSnap = qdSnap.packageCalculations || {};
+  const billableExtras = sumBillableAdditionalServices(additionalServicesFromSnapshot);
+  const tierFromCalc = Number(calcSnap?.[finalizedKey]?.finalTotal);
+  const tierFromQuotedCost = Number(
+    qdSnap?.[`${finalizedKey}Cost`] ?? pkg?.[`final${finalizedKeyCap}Cost`],
+  );
+  const quickTotal = toNum(quick.totalCost);
+  const resolvedTierFinalTotal =
+    quickTotal > 0
+      ? Math.max(0, quickTotal - billableExtras)
+      : Number.isFinite(tierFromCalc) && tierFromCalc > 0
+        ? tierFromCalc
+        : Number.isFinite(tierFromQuotedCost) && tierFromQuotedCost > 0
+          ? tierFromQuotedCost
+          : 0;
+  const resolvedTierAfterDiscount =
+    resolvedTierFinalTotal > 0
+      ? Math.round((resolvedTierFinalTotal / 1.05) * 100) / 100
+      : 0;
+  const normalizedCalcSnap = {
+    standard: {
+      ...(calcSnap?.standard || {}),
+      finalTotal:
+        finalizedKey === "standard"
+          ? resolvedTierFinalTotal
+          : toNum(calcSnap?.standard?.finalTotal),
+      afterDiscount:
+        finalizedKey === "standard"
+          ? toNum(calcSnap?.standard?.afterDiscount) || resolvedTierAfterDiscount
+          : toNum(calcSnap?.standard?.afterDiscount),
+    },
+    deluxe: {
+      ...(calcSnap?.deluxe || {}),
+      finalTotal:
+        finalizedKey === "deluxe"
+          ? resolvedTierFinalTotal
+          : toNum(calcSnap?.deluxe?.finalTotal),
+      afterDiscount:
+        finalizedKey === "deluxe"
+          ? toNum(calcSnap?.deluxe?.afterDiscount) || resolvedTierAfterDiscount
+          : toNum(calcSnap?.deluxe?.afterDiscount),
+    },
+    superior: {
+      ...(calcSnap?.superior || {}),
+      finalTotal:
+        finalizedKey === "superior"
+          ? resolvedTierFinalTotal
+          : toNum(calcSnap?.superior?.finalTotal),
+      afterDiscount:
+        finalizedKey === "superior"
+          ? toNum(calcSnap?.superior?.afterDiscount) || resolvedTierAfterDiscount
+          : toNum(calcSnap?.superior?.afterDiscount),
+    },
+  };
   const stdSnap = Number(calcSnap.standard?.finalTotal);
   const hasDetailedPricing =
     Number.isFinite(stdSnap) ||
@@ -824,7 +885,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   return {
     quotationId: String(quick._id || ""),
     clientDetails: { clientName: safe(quick.customerName, "Guest") },
-    finalizedPackage: "Standard",
+    finalizedPackage,
     tourDetails: {
       quotationTitle: safe(
         pkg.displayTitle,
@@ -861,7 +922,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
               qdSnap.taxes && typeof qdSnap.taxes === "object"
                 ? qdSnap.taxes
                 : { taxPercent: 5, applyGST: true, gstOn: "Full" },
-            packageCalculations: calcSnap,
+            packageCalculations: normalizedCalcSnap,
             additionalServices: additionalServicesFromSnapshot,
           }
         : {
@@ -872,14 +933,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
             mealPlan: safe(pkg.mealPlan?.planType, "CP"),
             rooms: { numberOfRooms: 1, sharingType: "Double sharing" },
             destinations,
-            packageCalculations: {
-              standard: {
-                finalTotal: total,
-                afterDiscount: approxBeforeTax,
-              },
-              deluxe: { finalTotal: 0, afterDiscount: 0 },
-              superior: { finalTotal: 0, afterDiscount: 0 },
-            },
+            packageCalculations: normalizedCalcSnap,
             taxes: { taxPercent: 5, applyGST: true, gstOn: "package" },
             additionalServices: additionalServicesFromSnapshot,
           },

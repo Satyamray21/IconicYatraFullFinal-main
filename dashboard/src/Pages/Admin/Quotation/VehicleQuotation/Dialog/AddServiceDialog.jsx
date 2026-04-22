@@ -40,7 +40,10 @@ const AddServiceDialog = ({
   taxOptions,
 }) => {
   const calculateTotalAmount = () => {
-    return services.reduce((total, service) => total + service.totalAmount, 0);
+    return services.reduce((total, service) => {
+      if (String(service?.included || "").toLowerCase() !== "no") return total;
+      return total + (Number(service?.totalAmount) || 0);
+    }, 0);
   };
 
   return (
@@ -60,8 +63,16 @@ const AddServiceDialog = ({
               value={currentService.included}
               onChange={(e) => onServiceChange("included", e.target.value)}
             >
-              <FormControlLabel value="yes" control={<Radio />} label="Yes" />
-              <FormControlLabel value="no" control={<Radio />} label="No" />
+              <FormControlLabel
+                value="yes"
+                control={<Radio />}
+                label="Yes (no extra charge)"
+              />
+              <FormControlLabel
+                value="no"
+                control={<Radio />}
+                label="No (add as extra)"
+              />
             </RadioGroup>
           </FormControl>
 
@@ -81,10 +92,10 @@ const AddServiceDialog = ({
               value={currentService.amount}
               onChange={(e) => onServiceChange("amount", e.target.value)}
               margin="normal"
-              disabled={currentService.included === "no"}
+              disabled={currentService.included === "yes"}
               placeholder={
-                currentService.included === "no"
-                  ? "Not included in quotation"
+                currentService.included === "yes"
+                  ? "Included in quotation (no extra charge)"
                   : ""
               }
             />
@@ -94,6 +105,7 @@ const AddServiceDialog = ({
                 value={currentService.taxType}
                 onChange={(e) => onServiceChange("taxType", e.target.value)}
                 label="*Tax %"
+                disabled={currentService.included === "yes"}
               >
                 {taxOptions.map((option) => (
                   <MenuItem key={option.value} value={option.value}>
@@ -129,14 +141,16 @@ const AddServiceDialog = ({
                         </TableCell>
                         <TableCell>{service.particulars}</TableCell>
                         <TableCell align="right">
-                          {service.included === "no" ? "Excluded" : `₹${service.amount}`}
+                          {service.included === "yes"
+                            ? "Included"
+                            : `₹${service.amount}`}
                         </TableCell>
                         <TableCell align="right">
                           {service.taxLabel}
                         </TableCell>
                         <TableCell align="right">
-                          {service.included === "no"
-                            ? "Excluded"
+                          {service.included === "yes"
+                            ? "Included"
                             : `₹${service.totalAmount.toFixed(2)}`}
                         </TableCell>
                         <TableCell>

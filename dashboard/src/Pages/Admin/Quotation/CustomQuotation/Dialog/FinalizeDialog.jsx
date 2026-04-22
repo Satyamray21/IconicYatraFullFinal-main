@@ -10,6 +10,7 @@ import {
     Button,
     Divider,
     Checkbox,
+    TextField,
 } from "@mui/material";
 import { Formik, Form } from "formik";
 import { useSelector } from "react-redux";
@@ -29,8 +30,10 @@ const FinalizeDialog = ({
     preselectedPackageLabel,
     /** Billable add-on services (amount + line tax) to add to each package total in the dialog */
     additionalServicesSum = 0,
+    allowEditableAmount = false,
 }) => {
     const [selectedOptions, setSelectedOptions] = useState([]);
+    const [packageAmountOverrides, setPackageAmountOverrides] = useState({});
 
     const { selectedQuotation } = useSelector(
         (state) => state.customQuotation
@@ -109,6 +112,12 @@ const FinalizeDialog = ({
             ? packageOptionsOverride
             : quotationOptionsFromRedux;
 
+    const parseAmountFromCost = (value) => {
+        const cleaned = String(value ?? "").replace(/[^0-9.-]/g, "");
+        const parsed = Number(cleaned);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
     const handlePackageToggle = (packageLabel) => {
         setSelectedOptions((prev) => {
             if (prev.includes(packageLabel)) {
@@ -120,15 +129,30 @@ const FinalizeDialog = ({
     };
 
     const handleSubmit = (values) => {
+        const selectedPackageAmounts = selectedOptions.reduce((acc, label) => {
+            const raw = Number(packageAmountOverrides[label]);
+            acc[label] = Number.isFinite(raw) ? raw : 0;
+            return acc;
+        }, {});
         onConfirm({
             quotations: selectedOptions,
             // For backward compatibility, also send single package
             quotation: selectedOptions.length > 0 ? selectedOptions[0] : "",
+            selectedPackageAmounts,
+            selectedAmount:
+                selectedOptions.length > 0
+                    ? selectedPackageAmounts[selectedOptions[0]]
+                    : 0,
         });
     };
 
     React.useEffect(() => {
         if (open) {
+            const initialAmounts = quotationOptions.reduce((acc, option) => {
+                acc[option.label] = parseAmountFromCost(option.cost);
+                return acc;
+            }, {});
+            setPackageAmountOverrides(initialAmounts);
             const preselect =
                 preselectedPackageLabel != null && String(preselectedPackageLabel).trim()
                     ? String(preselectedPackageLabel).trim()
@@ -138,8 +162,11 @@ const FinalizeDialog = ({
                 setSelectedOptions([preselect]);
             }
         }
-        if (!open) setSelectedOptions([]);
-    }, [open, preselectedPackageLabel, selectedQuotation?.finalizedPackage]);
+        if (!open) {
+            setSelectedOptions([]);
+            setPackageAmountOverrides({});
+        }
+    }, [open, preselectedPackageLabel, selectedQuotation?.finalizedPackage, quotationOptions]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -213,6 +240,24 @@ const FinalizeDialog = ({
                                         Total Cost:{" "}
                                         <span style={{ fontWeight: 600 }}>{option.cost}</span>
                                     </Typography>
+                                    {allowEditableAmount && (
+                                        <TextField
+                                            size="small"
+                                            type="number"
+                                            label="Finalize amount"
+                                            value={packageAmountOverrides[option.label] ?? ""}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) =>
+                                                setPackageAmountOverrides((prev) => ({
+                                                    ...prev,
+                                                    [option.label]: Number(e.target.value || 0),
+                                                }))
+                                            }
+                                            inputProps={{ min: 0 }}
+                                            sx={{ mt: 1 }}
+                                            fullWidth
+                                        />
+                                    )}
                                 </Box>
                             </Grid>
                         );
