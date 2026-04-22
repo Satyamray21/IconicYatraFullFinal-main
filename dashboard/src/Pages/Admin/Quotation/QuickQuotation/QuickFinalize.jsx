@@ -957,7 +957,7 @@ function transformQuickApiToDisplay(apiData, company) {
         apiData?.packageSnapshot?.arrivalDate ||
         apiData.createdAt,
     ),
-    reference: String(apiData._id || ""),
+    reference: String(apiData.quickQuotationId || apiData._id || ""),
     actions: [
       "Finalize",
       "Add Service",
