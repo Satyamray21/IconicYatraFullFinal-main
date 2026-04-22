@@ -13,6 +13,11 @@ const quickQuotationSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Package",
         },
+        quickQuotationId: {
+            type: String,
+            unique: true,
+            trim: true,
+        },
 
         adults: { type: Number, required: true },
         children: { type: Number, default: 0 },
@@ -90,6 +95,26 @@ const quickQuotationSchema = new mongoose.Schema(
 // FIXED pre-save hook
 // =============================
 quickQuotationSchema.pre("save", async function (next) {
+    if (this.isNew && !this.quickQuotationId) {
+        const lastQuotation = await mongoose
+            .model("QuickQuotation")
+            .findOne({ quickQuotationId: { $exists: true, $ne: null } })
+            .sort({ createdAt: -1 })
+            .select("quickQuotationId")
+            .lean();
+
+        let nextNumber = 1;
+        if (lastQuotation?.quickQuotationId) {
+            const m = String(lastQuotation.quickQuotationId).match(
+                /^ICYR_Q_(\d+)$/
+            );
+            if (m) {
+                nextNumber = Number(m[1]) + 1;
+            }
+        }
+        this.quickQuotationId = `ICYR_Q_${String(nextNumber).padStart(4, "0")}`;
+    }
+
     if (this.isNew && this.packageId) {
         const pkg = await Package.findById(this.packageId).lean();
 
