@@ -134,9 +134,9 @@ function buildMongoSetFromDisplayField(field, value) {
   const P = "policies";
   switch (field) {
     case "policies.inclusions":
-      return { [`${P}.inclusionPolicy`]: linesToPolicyArray(value) };
-    case "policies.exclusions":
-      return { [`${P}.exclusionPolicy`]: linesToPolicyArray(value) };
+  return { inclusions: linesToPolicyArray(value) };
+case "policies.exclusions":
+  return { exclusions: linesToPolicyArray(value) };
     case "policies.paymentPolicy":
       return { [`${P}.paymentPolicy`]: linesToPolicyArray(value) };
     case "policies.cancellationPolicy":
@@ -1167,7 +1167,9 @@ const VehicleQuotationPage = () => {
       title: "Inclusion Policy",
       icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
       content:
-        linesToPolicyArray(policyInputs.inclusionPolicy).length > 0
+        Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
+          ? vehicle.inclusions
+          : linesToPolicyArray(policyInputs.inclusionPolicy).length > 0
           ? linesToPolicyArray(policyInputs.inclusionPolicy)
           : defaultPolicies.inclusions,
       field: "policies.inclusions",
@@ -1177,7 +1179,9 @@ const VehicleQuotationPage = () => {
       title: "Exclusion Policy",
       icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
       content:
-        linesToPolicyArray(policyInputs.exclusionPolicy).length > 0
+        Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
+          ? vehicle.exclusions
+          : linesToPolicyArray(policyInputs.exclusionPolicy).length > 0
           ? linesToPolicyArray(policyInputs.exclusionPolicy)
           : defaultPolicies.exclusions,
       field: "policies.exclusions",

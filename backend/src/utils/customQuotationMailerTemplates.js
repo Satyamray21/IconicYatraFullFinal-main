@@ -151,6 +151,31 @@ const toPolicyArray = (value) => {
 
 const mergePolicies = (...items) => [...new Set(items.flat().filter(Boolean))];
 
+const decodeBasicHtmlEntities = (text = "") =>
+  String(text)
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+
+/** Convert HTML policy blocks (<p>..</p>) into plain text lines for robust email rendering. */
+const normalizePolicyLinesForEmail = (arr = []) =>
+  (Array.isArray(arr) ? arr : [])
+    .flatMap((item) =>
+      String(item || "")
+        .replace(/<\/p>\s*<p[^>]*>/gi, "\n")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/li>\s*<li[^>]*>/gi, "\n")
+        .replace(/<li[^>]*>/gi, "")
+        .replace(/<\/li>/gi, "\n")
+        .replace(/<[^>]+>/g, " ")
+        .split("\n"),
+    )
+    .map((line) => decodeBasicHtmlEntities(line).replace(/\s{2,}/g, " ").trim())
+    .filter(Boolean);
+
 /** Prefer quotation policies when set; avoids repeating the same HTML as global defaults (common for quick quotations). */
 const quotationPoliciesOrGlobal = (quotationValue, globalValue) => {
   const q = toPolicyArray(quotationValue);
@@ -297,7 +322,7 @@ export const buildCustomQuotationNormalEmail = (
     options?.globalInclusions,
   );
   const inclusionWithAdditional = [
-    ...inclusionCombined,
+    ...normalizePolicyLinesForEmail(inclusionCombined),
     ...additionalInclusionLines,
   ];
   const exclusionCombined = quotationPoliciesOrGlobal(
@@ -547,7 +572,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
     customText.globalInclusions,
   );
   const inclusionWithAdditional = [
-    ...inclusionCombined,
+    ...normalizePolicyLinesForEmail(inclusionCombined),
     ...additionalInclusionLines,
   ];
   const exclusionCombined = quotationPoliciesOrGlobal(

@@ -11,6 +11,30 @@ import {
   buildVehicleQuotationPdfPreviewEmail,
 } from "../../utils/vehicleQuotationMailerTemplates.js";
 
+// Default exclusions for vehicle quotations
+const DEFAULT_EXCLUSIONS = [
+  "Travel insurance",
+  "Emergency evacuation",
+  "Trip cancellation costs",
+  "Personal Expenses: Laundry, Room service, Tips, Shopping, Medical expenses",
+  "Nathula Pass permit fee",
+  "Additional vehicle cost for Nathula visit",
+  "Special permits for restricted areas",
+  "Flight / Train tickets",
+  "Entry fees to sightseeing places",
+  "Camera / video charges",
+  "Ropeway / boating / adventure activities",
+  "Meals: Lunch/Dinner/Snacks / beverages",
+];
+
+// Default inclusions for vehicle quotations
+const DEFAULT_INCLUSIONS = [
+  "Welcome drink on Arrival at the hotel",
+  "Accommodation in well equipped standard Rooms",
+  "5 Nights hotel stay given as per tour plan",
+  "Standard category hotels (or similar) include this also",
+];
+
 const generateVehicleQuotationId = async () => {
   const lastVehicle = await Vehicle.findOne({})
     .sort({ createdAt: -1 })
@@ -93,6 +117,8 @@ export const createVehicle = asyncHandler(async (req, res) => {
     signatureDetails: {
       contactDetails,
     },
+    exclusions: DEFAULT_EXCLUSIONS,
+    inclusions: DEFAULT_INCLUSIONS,
     vehicleQuotationId,
   });
 

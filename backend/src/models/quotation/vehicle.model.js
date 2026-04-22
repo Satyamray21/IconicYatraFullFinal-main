@@ -112,6 +112,18 @@ const vehicleSchema = mongoose.Schema({
         },
     ],
     policies: policySchema,
+    exclusions: [
+        {
+            type: String,
+            default: null,
+        },
+    ],
+    inclusions: [
+        {
+            type: String,
+            default: null,
+        },
+    ],
     itinerary: [
         {
             title: {
