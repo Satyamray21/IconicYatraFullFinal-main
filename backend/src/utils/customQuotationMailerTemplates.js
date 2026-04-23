@@ -116,10 +116,11 @@ const policyLines = (arr = []) =>
 
 const includedAdditionalServiceLines = (additionalServices = []) => {
   return (Array.isArray(additionalServices) ? additionalServices : [])
-    .filter((s) => String(s?.included || "").toLowerCase() === "yes")
     .map((s) => {
       const particulars = safe(s?.particulars, "Additional Service");
+      const included = String(s?.included || "").toLowerCase() === "yes";
       const totalAmount = toNum(s?.totalAmount || s?.amount);
+      if (included) return `${particulars}: Included`;
       return `${particulars}: INR ${INR.format(totalAmount)}`;
     });
 };
@@ -314,9 +315,18 @@ export const buildCustomQuotationNormalEmail = (
     td?.policies?.paymentPolicy,
     options?.globalPaymentPolicy,
   );
-  const additionalInclusionLines = includedAdditionalServiceLines(
-    qd?.additionalServices,
-  );
+  const additionalInclusionLines = (Array.isArray(qd?.additionalServices)
+    ? qd.additionalServices
+    : []
+  )
+    .map((s) => {
+      const particulars = safe(s?.particulars, "Additional Service");
+      const included = String(s?.included || "").toLowerCase() === "yes";
+      const totalAmount = toNum(s?.totalAmount || s?.amount);
+      if (included) return `${particulars}: Included`;
+      return `${particulars}: INR ${INR.format(totalAmount)}`;
+    })
+    .filter(Boolean);
   const inclusionCombined = quotationPoliciesOrGlobal(
     td?.policies?.inclusionPolicy,
     options?.globalInclusions,
