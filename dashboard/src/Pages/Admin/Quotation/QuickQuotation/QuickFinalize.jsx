@@ -1208,6 +1208,7 @@ const QuickFinalize = () => {
     amount: "",
     taxType: "",
   });
+  const [editingServiceId, setEditingServiceId] = useState(null);
   const [openEmailDialog, setOpenEmailDialog] = useState(false);
   const [emailTemplateType, setEmailTemplateType] = useState("normal");
   const [emailTemplateBodies, setEmailTemplateBodies] = useState({
@@ -1921,6 +1922,7 @@ const QuickFinalize = () => {
   const handleAddServiceOpen = () => setOpenAddService(true);
   const handleAddServiceClose = () => {
     setOpenAddService(false);
+    setEditingServiceId(null);
     setCurrentService({
       included: "no",
       particulars: "",
@@ -2224,7 +2226,7 @@ const QuickFinalize = () => {
 
     const newService = {
       ...currentService,
-      id: Date.now(),
+      id: editingServiceId || Date.now(),
       amount: amount,
       taxRate,
       taxAmount,
@@ -2232,7 +2234,14 @@ const QuickFinalize = () => {
       taxLabel: selectedTax ? selectedTax.label : "Non",
     };
 
-    setServices((prev) => [...prev, newService]);
+    setServices((prev) =>
+      editingServiceId
+        ? prev.map((service) =>
+            service.id === editingServiceId ? newService : service,
+          )
+        : [...prev, newService],
+    );
+    setEditingServiceId(null);
     setCurrentService({
       included: "no",
       particulars: "",
@@ -2242,6 +2251,7 @@ const QuickFinalize = () => {
   };
 
   const handleClearService = () => {
+    setEditingServiceId(null);
     setCurrentService({
       included: "no",
       particulars: "",
@@ -2250,8 +2260,25 @@ const QuickFinalize = () => {
     });
   };
 
+  const handleEditService = (serviceId) => {
+    const row = services.find((service) => service.id === serviceId);
+    if (!row) return;
+    setEditingServiceId(serviceId);
+    setCurrentService({
+      included: String(row.included || "no").toLowerCase() === "yes" ? "yes" : "no",
+      particulars: row.particulars || "",
+      amount: row.included === "no" ? String(row.amount ?? "") : "",
+      taxType:
+        row.taxType ||
+        (row.taxRate === 5 ? "gst5" : row.taxRate === 18 ? "gst18" : "non"),
+    });
+  };
+
   const handleRemoveService = (id) => {
     setServices((prev) => prev.filter((service) => service.id !== id));
+    if (editingServiceId === id) {
+      handleClearService();
+    }
   };
 
   const handleSaveServices = async () => {
@@ -3851,8 +3878,10 @@ const QuickFinalize = () => {
         onAddService={handleAddService}
         onClearService={handleClearService}
         onRemoveService={handleRemoveService}
+        onEditService={handleEditService}
         onSaveServices={handleSaveServices}
         taxOptions={taxOptions}
+        isEditingService={Boolean(editingServiceId)}
       />
       <AddFlightDialog
         open={openAddFlight}

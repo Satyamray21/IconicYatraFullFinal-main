@@ -663,6 +663,7 @@ useEffect(() => {
         amount: "",
         taxType: "",
     });
+    const [editingServiceId, setEditingServiceId] = useState(null);
     const [openEmailDialog, setOpenEmailDialog] = useState(false);
     const [emailTemplateType, setEmailTemplateType] = useState("normal");
     const [emailTemplateBodies, setEmailTemplateBodies] = useState({
@@ -1080,6 +1081,7 @@ useEffect(() => {
                 total: `₹ ${quotationCostNumber.toLocaleString("en-IN")}`,
             },
             packageCalculations: quotationDetails.packageCalculations || {},
+            additionalServices: quotationDetails.additionalServices || [],
             policies: {
                 inclusions: policies.inclusionPolicy || [],
                 exclusions: policies.exclusionPolicy?.join('\n') || "No exclusions specified",
@@ -1477,6 +1479,7 @@ useEffect(() => {
     const handleAddServiceOpen = () => setOpenAddService(true);
     const handleAddServiceClose = () => {
         setOpenAddService(false);
+        setEditingServiceId(null);
         setCurrentService({
             included: "no",
             particulars: "",
@@ -1932,7 +1935,7 @@ useEffect(() => {
 
         const newService = {
             ...currentService,
-            id: Date.now(),
+            id: editingServiceId || Date.now(),
             amount: amount,
             taxRate,
             taxAmount,
@@ -1940,7 +1943,14 @@ useEffect(() => {
             taxLabel: selectedTax ? selectedTax.label : "Non",
         };
 
-        setServices((prev) => [...prev, newService]);
+        setServices((prev) =>
+            editingServiceId
+                ? prev.map((service) =>
+                      service.id === editingServiceId ? newService : service
+                  )
+                : [...prev, newService]
+        );
+        setEditingServiceId(null);
         setCurrentService({
             included: "no",
             particulars: "",
@@ -1950,6 +1960,7 @@ useEffect(() => {
     };
 
     const handleClearService = () => {
+        setEditingServiceId(null);
         setCurrentService({
             included: "no",
             particulars: "",
@@ -1958,8 +1969,25 @@ useEffect(() => {
         });
     };
 
+    const handleEditService = (serviceId) => {
+        const row = services.find((service) => service.id === serviceId);
+        if (!row) return;
+        setEditingServiceId(serviceId);
+        setCurrentService({
+            included: String(row.included || "no").toLowerCase() === "yes" ? "yes" : "no",
+            particulars: row.particulars || "",
+            amount: row.included === "no" ? String(row.amount ?? "") : "",
+            taxType:
+                row.taxType ||
+                (row.taxRate === 5 ? "gst5" : row.taxRate === 18 ? "gst18" : "non"),
+        });
+    };
+
     const handleRemoveService = (id) => {
         setServices((prev) => prev.filter((service) => service.id !== id));
+        if (editingServiceId === id) {
+            handleClearService();
+        }
     };
 
     const handleSaveServices = async () => {
@@ -3464,8 +3492,10 @@ useEffect(() => {
                 onAddService={handleAddService}
                 onClearService={handleClearService}
                 onRemoveService={handleRemoveService}
+                onEditService={handleEditService}
                 onSaveServices={handleSaveServices}
                 taxOptions={taxOptions}
+                isEditingService={Boolean(editingServiceId)}
             />
             <AddFlightDialog
                 open={openAddFlight}

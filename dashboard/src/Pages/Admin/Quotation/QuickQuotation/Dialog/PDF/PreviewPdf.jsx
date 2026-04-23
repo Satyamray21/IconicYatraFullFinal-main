@@ -447,9 +447,15 @@ const QuotationPDFDialog = ({
   )
     ? getRawValue(quotationData, "additionalServices")
     : [];
-  const includedAdditionalServiceLines = additionalServices
-    .filter((s) => String(s?.included || "").toLowerCase() === "yes")
-    .map((s) => String(s?.particulars || "").trim())
+  const additionalServiceLines = additionalServices
+    .map((s) => {
+      const particulars = String(s?.particulars || "").trim();
+      if (!particulars) return "";
+      const included = String(s?.included || "").toLowerCase() === "yes";
+      const total = toNumber(s?.totalAmount);
+      if (included) return `${particulars}: Included`;
+      return `${particulars}: INR ${(Number.isFinite(total) ? total : 0).toLocaleString("en-IN")}`;
+    })
     .filter(Boolean);
   const policiesCancellationPolicy = getValue(
     quotationData,
@@ -601,9 +607,7 @@ const QuotationPDFDialog = ({
       : fallbackInclusions;
   const finalInclusionArrayWithServices = [
     ...finalInclusionArray,
-    ...includedAdditionalServiceLines.map(
-      (line) => `${line} (Additional Service Included)`,
-    ),
+    ...additionalServiceLines,
   ];
   const finalExclusionArray = exclusionArray.filter((item) =>
     String(item || "").trim(),

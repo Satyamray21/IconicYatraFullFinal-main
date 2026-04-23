@@ -460,6 +460,23 @@ const QuotationPDFDialog = ({
   ];
 
   const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
+  const additionalServices = Array.isArray(
+    getRawValue(quotationData, "additionalServices"),
+  )
+    ? getRawValue(quotationData, "additionalServices")
+    : [];
+  const additionalServiceLines = additionalServices
+    .map((s) => {
+      const particulars = String(s?.particulars || "").trim();
+      if (!particulars) return "";
+      const included = String(s?.included || "").toLowerCase() === "yes";
+      const total = toNumber(s?.totalAmount);
+      if (included) {
+        return `${particulars}: Included`;
+      }
+      return `${particulars}: INR ${(Number.isFinite(total) ? total : 0).toLocaleString("en-IN")}`;
+    })
+    .filter(Boolean);
   const policiesCancellationPolicy = getValue(
     quotationData,
     "policies.cancellationPolicy",
@@ -527,6 +544,10 @@ const QuotationPDFDialog = ({
     globalPolicyDefaults.inclusions?.length > 0
       ? globalPolicyDefaults.inclusions
       : fallbackInclusions;
+  const finalInclusionArrayWithServices = [
+    ...finalInclusionArray,
+    ...additionalServiceLines,
+  ];
   const finalExclusionArray = exclusionArray.filter((item) =>
     String(item || "").trim(),
   );
@@ -1643,7 +1664,7 @@ const QuotationPDFDialog = ({
         </div>
       )}
       {/* Inclusion Policy Section */}
-      {finalInclusionArray.length > 0 && (
+      {finalInclusionArrayWithServices.length > 0 && (
         <div>
           <div
             style={{
@@ -1665,7 +1686,7 @@ const QuotationPDFDialog = ({
               borderLeft: "4px solid #2e7d32",
             }}
           >
-            {finalInclusionArray.map(
+            {finalInclusionArrayWithServices.map(
               (item, idx) =>
                 item &&
                 item !== "" && (
