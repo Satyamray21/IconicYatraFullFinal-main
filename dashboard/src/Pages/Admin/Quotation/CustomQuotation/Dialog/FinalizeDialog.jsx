@@ -11,6 +11,9 @@ import {
     Divider,
     Checkbox,
     TextField,
+    RadioGroup,
+    FormControlLabel,
+    Radio,
 } from "@mui/material";
 import { Formik, Form } from "formik";
 import { useSelector } from "react-redux";
@@ -34,6 +37,8 @@ const FinalizeDialog = ({
 }) => {
     const [selectedOptions, setSelectedOptions] = useState([]);
     const [packageAmountOverrides, setPackageAmountOverrides] = useState({});
+    const [gstMode, setGstMode] = useState("with_gst");
+    const [taxPercent, setTaxPercent] = useState(5);
 
     const { selectedQuotation } = useSelector(
         (state) => state.customQuotation
@@ -134,15 +139,22 @@ const FinalizeDialog = ({
             acc[label] = Number.isFinite(raw) ? raw : 0;
             return acc;
         }, {});
+        const selectedBaseAmount =
+            selectedOptions.length > 0 ? selectedPackageAmounts[selectedOptions[0]] : 0;
+        const gstPct = Math.max(0, Number(taxPercent) || 0);
+        const isWithoutGst = gstMode === "without_gst";
+        const selectedAmountWithTax = isWithoutGst
+            ? selectedBaseAmount + (selectedBaseAmount * gstPct) / 100
+            : selectedBaseAmount;
         onConfirm({
             quotations: selectedOptions,
             // For backward compatibility, also send single package
             quotation: selectedOptions.length > 0 ? selectedOptions[0] : "",
             selectedPackageAmounts,
-            selectedAmount:
-                selectedOptions.length > 0
-                    ? selectedPackageAmounts[selectedOptions[0]]
-                    : 0,
+            selectedAmount: selectedBaseAmount,
+            selectedAmountWithTax,
+            gstMode,
+            taxPercent: gstPct,
         });
     };
 
@@ -165,6 +177,8 @@ const FinalizeDialog = ({
         if (!open) {
             setSelectedOptions([]);
             setPackageAmountOverrides({});
+            setGstMode("with_gst");
+            setTaxPercent(5);
         }
     }, [open, preselectedPackageLabel, selectedQuotation?.finalizedPackage, quotationOptions]);
 
@@ -269,6 +283,41 @@ const FinalizeDialog = ({
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             Selected Packages: {selectedOptions.join(", ")}
                         </Typography>
+                    </Box>
+                )}
+
+                {allowEditableAmount && (
+                    <Box sx={{ mt: 2, p: 2, border: "1px solid #e0e0e0", borderRadius: 1 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                            Finalize Amount Type
+                        </Typography>
+                        <RadioGroup
+                            row
+                            value={gstMode}
+                            onChange={(e) => setGstMode(e.target.value)}
+                        >
+                            <FormControlLabel
+                                value="with_gst"
+                                control={<Radio />}
+                                label="With GST (amount already includes tax)"
+                            />
+                            <FormControlLabel
+                                value="without_gst"
+                                control={<Radio />}
+                                label="Without GST (add tax on top)"
+                            />
+                        </RadioGroup>
+                        {gstMode === "without_gst" && (
+                            <TextField
+                                size="small"
+                                type="number"
+                                label="Tax %"
+                                value={taxPercent}
+                                onChange={(e) => setTaxPercent(Number(e.target.value || 0))}
+                                inputProps={{ min: 0 }}
+                                sx={{ mt: 1, maxWidth: 180 }}
+                            />
+                        )}
                     </Box>
                 )}
             </DialogContent>
