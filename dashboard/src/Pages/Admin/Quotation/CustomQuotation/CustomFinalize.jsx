@@ -1000,7 +1000,7 @@ useEffect(() => {
         const transformedDays = itinerary?.map((day, index) => ({
             id: index,
             dayDate: day.dayDate || "",
-            date: day.dayDate || formatDate(arrivalDate),
+            date: day.dayDate || "",
             title: day.dayTitle || `Day ${index + 1}`,
             description: day.dayNote || "",
             image: day.image ? { preview: day.image, name: "Itinerary Image" } : null,
@@ -1034,6 +1034,7 @@ useEffect(() => {
 
         return {
             date: formatDate(createdAt),
+            arrivalDate,
             reference: quotationId,
             quotationTitle: tourDetails.quotationTitle || "",
             destinationSummary: tourDetails.destinationSummary || "",
@@ -1078,6 +1079,7 @@ useEffect(() => {
                 gst: `₹ ${quotationDetails.taxes?.applyGST ? 'Calculated' : 0}`,
                 total: `₹ ${quotationCostNumber.toLocaleString("en-IN")}`,
             },
+            packageCalculations: quotationDetails.packageCalculations || {},
             policies: {
                 inclusions: policies.inclusionPolicy || [],
                 exclusions: policies.exclusionPolicy?.join('\n') || "No exclusions specified",
@@ -1912,10 +1914,10 @@ useEffect(() => {
     const handleAddService = () => {
         if (
             !currentService.particulars ||
-            (currentService.included === "yes" &&
+            (currentService.included === "no" &&
                 (!currentService.amount || !currentService.taxType))
         ) {
-            alert("Please fill in all required fields (amount and tax when included)");
+            alert("Please fill in all required fields (amount and tax for extra services)");
             return;
         }
 
@@ -1925,7 +1927,7 @@ useEffect(() => {
         const taxRate = selectedTax ? selectedTax.rate : 0;
 
         const amount =
-            currentService.included === "yes" ? parseFloat(currentService.amount) : 0;
+            currentService.included === "no" ? parseFloat(currentService.amount) : 0;
         const taxAmount = amount * (taxRate / 100) || 0;
 
         const newService = {
