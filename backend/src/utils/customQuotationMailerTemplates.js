@@ -149,13 +149,18 @@ const removeGstExtraExclusionLine = (lines = [], quotation = {}) => {
   const gstIncludedInFinalAmount =
     taxes?.gstIncludedInFinalAmount === true ||
     String(taxes?.gstMode || "").toLowerCase() === "with_gst";
-  if (!gstIncludedInFinalAmount) return Array.isArray(lines) ? lines : [];
-  return (Array.isArray(lines) ? lines : []).filter((line) => {
-    const s = stripHtmlText(line).toLowerCase();
-    return !(
-      s.includes("gst") &&
-      s.includes("extra") &&
-      s.includes("package cost")
+  const normalized = normalizePolicyLinesForEmail(
+    Array.isArray(lines) ? lines : [],
+  );
+  if (!gstIncludedInFinalAmount) return normalized;
+  return normalized.filter((line) => {
+    const s = stripHtmlText(line)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    // Remove only the specific "GST is extra on total package cost" exclusion sentence.
+    return !/govt\.?\s*tax\s*gst\s*5%?\s*is\s*extra\s*on\s*total\s*package\s*cost/.test(
+      s,
     );
   });
 };
