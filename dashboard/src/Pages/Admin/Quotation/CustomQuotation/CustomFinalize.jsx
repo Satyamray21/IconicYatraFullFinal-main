@@ -765,6 +765,25 @@ useEffect(() => {
         loadPaymentHistory();
     }, [loadPaymentHistory]);
 
+    // Keep received/balance fresh without requiring manual Transaction click.
+    useEffect(() => {
+        if (!id) return undefined;
+        const refresh = () => {
+            loadPaymentHistory();
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                refresh();
+            }
+        };
+        window.addEventListener("focus", refresh);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("focus", refresh);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, [id, loadPaymentHistory]);
+
     useEffect(() => {
         if (selectedQuotation?.finalizeStatus === "finalized") {
             setIsFinalized(true);
