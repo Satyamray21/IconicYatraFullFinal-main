@@ -44,6 +44,7 @@ const Domestic = () => {
   const [domesticDescriptionsBySlug, setDomesticDescriptionsBySlug] = useState(
     {},
   );
+  const [domesticSectorLabelBySlug, setDomesticSectorLabelBySlug] = useState({});
   const [domesticAllDescription, setDomesticAllDescription] = useState("");
 
   const {
@@ -54,7 +55,10 @@ const Domestic = () => {
     totalPackages = 0,
   } = useSelector((state) => state.packages);
 
-  const [selectedDestination, setSelectedDestination] = useState("All");
+  const routeSlug =
+    destination && destination !== "All"
+      ? String(destination).toLowerCase().trim()
+      : "";
 
   // ✅ Fetch packages (fetch more when filtering by sector to show all matches)
   useEffect(() => {
@@ -70,7 +74,8 @@ const Domestic = () => {
         const res = await destinationAxios.get("/?tourType=Domestic");
         if (!isMounted) return;
 
-        const map = (Array.isArray(res.data) ? res.data : []).reduce(
+        const list = Array.isArray(res.data) ? res.data : [];
+        const map = list.reduce(
           (acc, item) => {
             const sector = item?.sector?.trim();
             if (!sector) return acc;
@@ -79,17 +84,23 @@ const Domestic = () => {
           },
           {},
         );
+        const labelMap = list.reduce((acc, item) => {
+          const sector = item?.sector?.trim();
+          if (!sector) return acc;
+          acc[slugifyValue(sector)] = sector;
+          return acc;
+        }, {});
 
         setDomesticDescriptionsBySlug(map);
-        const allDescriptionItem = (
-          Array.isArray(res.data) ? res.data : []
-        ).find((item) => !item?.sector);
+        setDomesticSectorLabelBySlug(labelMap);
+        const allDescriptionItem = list.find((item) => !item?.sector);
         setDomesticAllDescription(
           allDescriptionItem?.tourTypeDescription?.trim() || "",
         );
       } catch (error) {
         if (isMounted) {
           setDomesticDescriptionsBySlug({});
+          setDomesticSectorLabelBySlug({});
           setDomesticAllDescription("");
         }
       }
@@ -102,31 +113,8 @@ const Domestic = () => {
     };
   }, []);
 
-  // ✅ Handle destination/sector filter from route
-  // Reset page only when route changes, not when package data updates.
+  // ✅ Reset page only when route changes
   useEffect(() => {
-    if (destination && destination !== "All") {
-      const routeSlug = String(destination).toLowerCase().trim();
-
-      const matchedBySector = packages?.find(
-        (pkg) => slugifyValue(pkg.sector) === routeSlug,
-      );
-
-      if (matchedBySector?.sector) {
-        setSelectedDestination(matchedBySector.sector);
-      } else {
-        const matchedByTitle = packages?.find(
-          (pkg) =>
-            slugifyValue(pkg.title) === routeSlug ||
-            normalizeText(pkg.title) ===
-              normalizeText(routeSlug.replace(/-/g, " ")),
-        );
-        setSelectedDestination(matchedByTitle ? matchedByTitle.title : "All");
-      }
-    } else {
-      setSelectedDestination("All");
-    }
-
     setPage(1);
   }, [destination]);
   useEffect(() => {
@@ -143,20 +131,27 @@ const Domestic = () => {
     fetchRates();
   }, []);
   // ✅ Filter packages
-  const filteredPackages =
-    selectedDestination === "All"
-      ? packages
-      : packages.filter(
-          (pkg) =>
-            slugifyValue(pkg.sector) === slugifyValue(selectedDestination) ||
-            normalizeText(pkg.title) === normalizeText(selectedDestination),
-        );
+  const filteredPackages = !routeSlug
+    ? packages
+    : packages.filter(
+        (pkg) =>
+          slugifyValue(pkg.sector) === routeSlug ||
+          slugifyValue(pkg.title) === routeSlug ||
+          normalizeText(pkg.title) === normalizeText(routeSlug.replace(/-/g, " ")),
+      );
 
   const currentPackages = filteredPackages || [];
+  const selectedDestination = !routeSlug
+    ? "All"
+    : domesticSectorLabelBySlug[routeSlug] ||
+      routeSlug
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
   const selectedDescription =
-    selectedDestination === "All"
+    !routeSlug
       ? domesticAllDescription || DEFAULT_DOMESTIC_DESCRIPTION
-      : domesticDescriptionsBySlug[slugifyValue(selectedDestination)] ||
+      : domesticDescriptionsBySlug[routeSlug] ||
         DEFAULT_DOMESTIC_DESCRIPTION;
 
   // ✅ Navigate to details page (pass package data)
@@ -374,7 +369,7 @@ const Domestic = () => {
               </Grid>
 
               {/* Pagination */}
-              {selectedDestination === "All" && totalPages > 1 && (
+              {!routeSlug && totalPages > 1 && (
                 <Box display="flex" justifyContent="center" mt={5}>
                   <Pagination
                     count={totalPages}
