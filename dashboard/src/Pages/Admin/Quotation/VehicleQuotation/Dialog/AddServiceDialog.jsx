@@ -25,7 +25,7 @@ import {
   TableBody,
   IconButton,
 } from "@mui/material";
-import { Add, Delete } from "@mui/icons-material";
+import { Add, Delete, Edit } from "@mui/icons-material";
 
 const AddServiceDialog = ({
   open,
@@ -36,8 +36,10 @@ const AddServiceDialog = ({
   onAddService,
   onClearService,
   onRemoveService,
+  onEditService,
   onSaveServices,
   taxOptions,
+  isEditingService = false,
 }) => {
   const calculateTotalAmount = () => {
     return services.reduce((total, service) => {
@@ -156,6 +158,13 @@ const AddServiceDialog = ({
                         <TableCell>
                           <IconButton
                             size="small"
+                            onClick={() => onEditService?.(service.id)}
+                            color="primary"
+                          >
+                            <Edit fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
                             onClick={() => onRemoveService(service.id)}
                             color="error"
                           >
@@ -185,7 +194,7 @@ const AddServiceDialog = ({
           variant="outlined"
           startIcon={<Add />}
         >
-          Add More
+          {isEditingService ? "Update Service" : "Add More"}
         </Button>
         <Button
           onClick={onClearService}
