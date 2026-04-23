@@ -125,6 +125,41 @@ const includedAdditionalServiceLines = (additionalServices = []) => {
     });
 };
 
+const splitAdditionalServicePolicyLines = (additionalServices = []) => {
+  const services = Array.isArray(additionalServices) ? additionalServices : [];
+  const inclusionLines = [];
+  const exclusionLines = [];
+  services.forEach((s) => {
+    const particulars = safe(s?.particulars, "Additional Service");
+    if (!particulars) return;
+    const included = String(s?.included || "").toLowerCase() === "yes";
+    const totalAmount = toNum(s?.totalAmount || s?.amount);
+    if (included) inclusionLines.push(`${particulars}: Included`);
+    else exclusionLines.push(`${particulars}: INR ${INR.format(totalAmount)}`);
+  });
+  return { inclusionLines, exclusionLines };
+};
+
+const stripHtmlText = (value = "") =>
+  decodeBasicHtmlEntities(String(value || "")).replace(/<[^>]+>/g, " ");
+
+const removeGstExtraExclusionLine = (lines = [], quotation = {}) => {
+  const qd = quotation?.tourDetails?.quotationDetails || {};
+  const taxes = qd?.taxes || {};
+  const gstIncludedInFinalAmount =
+    taxes?.gstIncludedInFinalAmount === true ||
+    String(taxes?.gstMode || "").toLowerCase() === "with_gst";
+  if (!gstIncludedInFinalAmount) return Array.isArray(lines) ? lines : [];
+  return (Array.isArray(lines) ? lines : []).filter((line) => {
+    const s = stripHtmlText(line).toLowerCase();
+    return !(
+      s.includes("gst") &&
+      s.includes("extra") &&
+      s.includes("package cost")
+    );
+  });
+};
+
 /** No http(s) URLs or <a> tags in PAYMENT POLICY email body (clients should not get clickable payment links there). */
 const sanitizePaymentPolicyLine = (text) => {
   let t = safe(text, "");
@@ -315,18 +350,10 @@ export const buildCustomQuotationNormalEmail = (
     td?.policies?.paymentPolicy,
     options?.globalPaymentPolicy,
   );
-  const additionalInclusionLines = (Array.isArray(qd?.additionalServices)
-    ? qd.additionalServices
-    : []
-  )
-    .map((s) => {
-      const particulars = safe(s?.particulars, "Additional Service");
-      const included = String(s?.included || "").toLowerCase() === "yes";
-      const totalAmount = toNum(s?.totalAmount || s?.amount);
-      if (included) return `${particulars}: Included`;
-      return `${particulars}: INR ${INR.format(totalAmount)}`;
-    })
-    .filter(Boolean);
+  const {
+    inclusionLines: additionalInclusionLines,
+    exclusionLines: additionalExclusionLines,
+  } = splitAdditionalServicePolicyLines(qd?.additionalServices);
   const inclusionCombined = quotationPoliciesOrGlobal(
     td?.policies?.inclusionPolicy,
     options?.globalInclusions,
@@ -335,10 +362,14 @@ export const buildCustomQuotationNormalEmail = (
     ...normalizePolicyLinesForEmail(inclusionCombined),
     ...additionalInclusionLines,
   ];
-  const exclusionCombined = quotationPoliciesOrGlobal(
+  const exclusionCombinedBase = quotationPoliciesOrGlobal(
     td?.policies?.exclusionPolicy,
     options?.globalExclusions,
   );
+  const exclusionCombined = [
+    ...removeGstExtraExclusionLine(exclusionCombinedBase, quotation),
+    ...additionalExclusionLines,
+  ];
   const cancellationCombined = quotationPoliciesOrGlobal(
     td?.policies?.cancellationPolicy,
     options?.globalCancellationPolicy,
@@ -574,9 +605,11 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
     td?.policies?.paymentPolicy,
     customText.globalPaymentPolicy,
   );
-  const additionalInclusionLines = includedAdditionalServiceLines(
-    qd?.additionalServices,
-  );
+  const {
+    inclusionLines: additionalInclusionLines,
+    exclusionLines: additionalExclusionLinesForBooking,
+  } =
+    splitAdditionalServicePolicyLines(qd?.additionalServices);
   const inclusionCombined = quotationPoliciesOrGlobal(
     td?.policies?.inclusionPolicy,
     customText.globalInclusions,
@@ -585,10 +618,14 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
     ...normalizePolicyLinesForEmail(inclusionCombined),
     ...additionalInclusionLines,
   ];
-  const exclusionCombined = quotationPoliciesOrGlobal(
+  const exclusionCombinedBase = quotationPoliciesOrGlobal(
     td?.policies?.exclusionPolicy,
     customText.globalExclusions,
   );
+  const exclusionCombined = [
+    ...removeGstExtraExclusionLine(exclusionCombinedBase, quotation),
+    ...additionalExclusionLinesForBooking,
+  ];
   const cancellationCombined = quotationPoliciesOrGlobal(
     td?.policies?.cancellationPolicy,
     customText.globalCancellationPolicy,
@@ -617,7 +654,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p style="color:#00FF00; font-weight:bold;"> ${td.quotationTitle}</p>
         <p style="color:#d32f2f; font-weight:bold;">DETAILS OF TOUR PACKAGE:</p>
          <p style="color:#d32f2f; font-weight:bold;">
-            BOOKING ID: ${safe(customText.bookingId, quotation?.quotationId)}
+            BOOKING ID: ${safe(customText.bookingId, quotation?.quickQuotationId || quotation?.quotationId)}
         </p>
         
         <p><b>No. of Pax:</b> ${guests}</p>
@@ -918,7 +955,8 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   );
 
   return {
-    quotationId: String(quick._id || ""),
+    quotationId: String(quick.quickQuotationId || quick._id || ""),
+    quickQuotationId: String(quick.quickQuotationId || ""),
     clientDetails: { clientName: safe(quick.customerName, "Guest") },
     finalizedPackage,
     tourDetails: {

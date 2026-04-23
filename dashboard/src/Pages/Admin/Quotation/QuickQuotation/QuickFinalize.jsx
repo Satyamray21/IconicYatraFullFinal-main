@@ -2059,11 +2059,50 @@ const QuickFinalize = () => {
       return;
     }
     try {
-      if (Number(values?.selectedAmount) > 0) {
+      const selectedBaseAmount = Number(values?.selectedAmount) || 0;
+      const selectedAmountWithTax =
+        Number(values?.selectedAmountWithTax) || selectedBaseAmount;
+      const taxPercent = Math.max(0, Number(values?.taxPercent) || 0);
+      const gstMode = values?.gstMode === "without_gst" ? "without_gst" : "with_gst";
+      const isWithoutGst = gstMode === "without_gst";
+      const selectedPackageKey = String(pkg).toLowerCase();
+      const qd = currentQuotation?.packageSnapshot?.quotationDetails || {};
+      const existingCalc =
+        qd.packageCalculations && typeof qd.packageCalculations === "object"
+          ? qd.packageCalculations
+          : {};
+      const beforeTaxAmount = selectedBaseAmount;
+      const gstAmount = Math.max(0, selectedAmountWithTax - selectedBaseAmount);
+      const nextCalc = {
+        ...existingCalc,
+        [selectedPackageKey]: {
+          ...(existingCalc?.[selectedPackageKey] || {}),
+          afterDiscount: beforeTaxAmount,
+          gstAmount,
+          gstPercentage: taxPercent,
+          finalTotal: selectedAmountWithTax,
+        },
+      };
+
+      if (selectedAmountWithTax > 0) {
         await dispatch(
           updateQuickQuotation({
             id: apiEntityId,
-            formData: { totalCost: Number(values.selectedAmount) },
+            formData: {
+              totalCost: selectedAmountWithTax,
+              packageSnapshot: {
+                quotationDetails: {
+                  taxes: {
+                    ...(qd?.taxes || {}),
+                    applyGST: true,
+                    gstOn: "Full",
+                    taxPercent,
+                    gstIncludedInFinalAmount: !isWithoutGst,
+                  },
+                  packageCalculations: nextCalc,
+                },
+              },
+            },
           }),
         ).unwrap();
       }
