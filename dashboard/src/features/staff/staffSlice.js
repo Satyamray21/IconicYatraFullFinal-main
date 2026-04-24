@@ -11,59 +11,67 @@ export const fetchStaffById = createAsyncThunk("staff/fetchById", async (id) => 
   return res.data.data;
 });
 
-export const createStaff = createAsyncThunk("staff/create", async (staffData) => {
-  const res = await axios.post("/staff", staffData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
-  return res.data.data;
+export const createStaff = createAsyncThunk("staff/create", async (staffData, { rejectWithValue }) => {
+  try {
+    const res = await axios.post("/staff", staffData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.data.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || err.message || "Failed to create staff");
+  }
 });
 
 export const updateStaff = createAsyncThunk(
   "staff/update",
-  async ({ id, data }) => {
-    let payload = data;
-    
-    if (!(data instanceof FormData)) {
-      payload = {
-        personalDetails: {
-          title: data.title,
-          fullName: data.fullName,
-          mobileNumber: data.mobile,
-          alternateContact: data.alternateContact,
-          designation: data.designation,
-          userRole: data.userRole,
-          email: data.email,
-          dob: data.dob,
-          aadharNumber: data.aadharNumber,
-          panNumber: data.panNumber,
-        },
-        staffLocation: {
-          country: data.country,
-          state: data.state,
-          city: data.city,
-        },
-        address: {
-          addressLine1: data.address1,
-          addressLine2: data.address2,
-          addressLine3: data.address3,
-          pincode: data.pincode,
-        },
-        bank: {
-          bankName: data.bankName,
-          branchName: data.branchName,
-          accountHolderName: data.accountHolderName,
-          accountNumber: data.accountNumber,
-          ifscCode: data.ifscCode,
-        },
-      };
+  async ({ id, data }, { rejectWithValue }) => {
+    try {
+      let payload = data;
+      
+      if (!(data instanceof FormData)) {
+        payload = {
+          personalDetails: {
+            title: data.title,
+            fullName: data.fullName,
+            mobileNumber: data.mobile,
+            alternateContact: data.alternateContact,
+            designation: data.designation,
+            userRole: data.userRole,
+            email: data.email,
+            dob: data.dob,
+            aadharNumber: data.aadharNumber,
+            panNumber: data.panNumber,
+          },
+          staffLocation: {
+            country: data.country,
+            state: data.state,
+            city: data.city,
+          },
+          address: {
+            addressLine1: data.address1,
+            addressLine2: data.address2,
+            addressLine3: data.address3,
+            pincode: data.pincode,
+          },
+          bank: {
+            bankName: data.bankName,
+            branchName: data.branchName,
+            accountHolderName: data.accountHolderName,
+            accountNumber: data.accountNumber,
+            ifscCode: data.ifscCode,
+          },
+        };
+      }
+      
+      const res = await axios.put(`/staff/${id}`, payload, {
+        headers: data instanceof FormData ? { "Content-Type": "multipart/form-data" } : {},
+      });
+      return res.data.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message || "Failed to update staff");
     }
-    
-    const res = await axios.put(`/staff/${id}`, payload, {
-      headers: data instanceof FormData ? { "Content-Type": "multipart/form-data" } : {},
-    });
-    return res.data.data;
   }
 );
 
@@ -167,7 +175,7 @@ const staffSlice = createSlice({
       })
       .addCase(createStaff.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message;
+        state.error = action.payload || action.error.message;
       })
       
       .addCase(updateStaff.pending, (state) => {
@@ -214,7 +222,7 @@ const staffSlice = createSlice({
       })
       .addCase(updateStaff.rejected, (state, action) => {
         state.updating = false;
-        state.error = action.error.message;
+        state.error = action.payload || action.error.message;
       })
 
       .addCase(deleteStaff.fulfilled, (state, action) => {
