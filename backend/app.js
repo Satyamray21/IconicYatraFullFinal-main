@@ -176,4 +176,28 @@ app.use("/api/v1", inquiryRoutes);
 import hotelRoutes from "./src/routers/hotel.router.js";
 app.use("/api/v1", verifyToken, hotelRoutes);
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+  let statusCode = err.statusCode || 500;
+  let message = err.message || "Internal Server Error";
+  let errors = err.errors || [];
+
+  // Handle MongoDB Duplicate Key Error (E11000)
+  if (err.code === 11000) {
+    statusCode = 409;
+    const field = Object.keys(err.keyPattern || {})[0] || "field";
+    // Clean up field name (e.g. "personalDetails.panNumber" -> "PAN Number")
+    const cleanField = field.split('.').pop().replace(/([A-Z])/g, ' $1').trim();
+    message = `${cleanField.charAt(0).toUpperCase() + cleanField.slice(1)} already exists`;
+  }
+
+  return res.status(statusCode).json({
+    success: false,
+    statusCode,
+    message,
+    errors,
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+  });
+});
+
 export { app };
