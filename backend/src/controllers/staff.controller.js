@@ -102,6 +102,8 @@ export const createStaff = asyncHandler(async (req, res) => {
     staffId,
     personalDetails: {
       ...parsedPersonalDetails,
+      aadharNumber: parsedPersonalDetails?.aadharNumber || undefined,
+      panNumber: parsedPersonalDetails?.panNumber || undefined,
       staffPhoto: staffPhotoData,
       aadharPhoto: aadharPhotoData,
       panPhoto: panPhotoData,
@@ -189,6 +191,16 @@ async function runStaffUpdateById(id, req, res) {
   }
   if (typeof parsedUpdate.bank === "string") {
     parsedUpdate.bank = JSON.parse(parsedUpdate.bank);
+  }
+
+  // Handle optional unique fields: set to undefined if empty string to avoid unique index collision
+  if (parsedUpdate.personalDetails) {
+    if (parsedUpdate.personalDetails.aadharNumber === "") {
+      parsedUpdate.personalDetails.aadharNumber = undefined;
+    }
+    if (parsedUpdate.personalDetails.panNumber === "") {
+      parsedUpdate.personalDetails.panNumber = undefined;
+    }
   }
 
   const files = req.files || {};
