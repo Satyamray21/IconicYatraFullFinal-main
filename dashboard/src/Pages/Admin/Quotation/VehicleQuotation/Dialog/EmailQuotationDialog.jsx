@@ -12,6 +12,7 @@ import {
   Typography,
   Box,
   Alert,
+  CircularProgress,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -87,7 +88,7 @@ const EmailQuotationDialog = ({
           validationSchema={validationSchema}
           onSubmit={handleSubmit}
         >
-          {({ errors, touched, values, setFieldValue }) => (
+          {({ errors, touched, values, setFieldValue, isSubmitting }) => (
             (() => {
               const appendToMessage = (snippet) => {
                 const current = values.message || "";
@@ -339,8 +340,14 @@ const EmailQuotationDialog = ({
                     <Button onClick={onClose} color="secondary">
                       Cancel
                     </Button>
-                    <Button type="submit" variant="contained" color="primary">
-                      Send
+                    <Button 
+                      type="submit" 
+                      variant="contained" 
+                      color="primary" 
+                      disabled={isSubmitting}
+                      startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : null}
+                    >
+                      {isSubmitting ? "Sending..." : "Send"}
                     </Button>
                   </DialogActions>
                 </Form>

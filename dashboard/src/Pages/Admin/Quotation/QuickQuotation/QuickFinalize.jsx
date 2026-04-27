@@ -599,20 +599,30 @@ const formatDateWithOptionalTime = (dateValue, timeValue) => {
 const normalizePointLabel = (text) => {
   const raw = String(text || "").trim();
   if (!raw) return "—";
-  const normalized = raw
+  
+  // Basic cleanup: remove Arrival/Departure prefix and everything in parentheses
+  let clean = raw
     .replace(/\(([^)]*)\)/g, "")
-    .replace(/^(arrival|departure)\s*:\s*/i, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-  const parts = normalized.split("-").map((x) => x.trim()).filter(Boolean);
-  return parts.length >= 2 ? parts[parts.length - 1] : normalized || "—";
-};
-
-const editablePickupDropPoint = (value) =>
-  String(value || "")
     .replace(/^((arrival|departure)\s*:\s*)+/i, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+
+  if (!clean) return "—";
+
+  // Deduplicate: "Srinagar - Srinagar - At Airport" -> "Srinagar - At Airport"
+  const parts = clean.split("-").map(p => p.trim()).filter(Boolean);
+  const uniqueParts = [];
+  for (let i = 0; i < parts.length; i++) {
+    const current = parts[i];
+    const next = parts[i + 1];
+    if (next && current.toLowerCase() === next.toLowerCase()) continue;
+    uniqueParts.push(current);
+  }
+  
+  return uniqueParts.join(" - ") || "—";
+};
+
+const editablePickupDropPoint = (value) => normalizePointLabel(value);
 
 /** True when `days` is a list of day objects (not a night-count number from snapshot). */
 function isQuickPackageDayObjectArray(days) {
@@ -988,7 +998,35 @@ function transformQuickApiToDisplay(apiData, company) {
           apiData?.packageSnapshot?.arrivalTime ||
           apiData?.pickupTime;
         const dt = formatDateWithOptionalTime(arrivalRawDate, arrivalRawTime);
-        const point = normalizePointLabel(apiData.pickupPoint);
+        const rawPoint = String(apiData.pickupPoint || "").trim();
+        const city = String(
+          apiData?.packageSnapshot?.arrivalCity ||
+            apiData?.packageSnapshot?.stayLocations?.[0]?.city ||
+            "",
+        ).trim();
+
+        const point = (() => {
+          const base = normalizePointLabel(rawPoint);
+          if (!city || base === "—") return base;
+          
+          const lowerBase = base.toLowerCase();
+          const lowerCity = city.toLowerCase();
+          
+          // If the base already contains a dash, assume the user has provided their own "City - Point" format
+          // and we should not override or prepend anything.
+          if (base.includes(" - ")) return base;
+
+          const firstPart = base.split("-")[0].trim().toLowerCase();
+          if (
+            lowerBase.includes(lowerCity) || 
+            lowerCity.includes(firstPart) ||
+            firstPart.includes(lowerCity)
+          ) {
+            return base;
+          }
+          return `${city} - ${base}`;
+        })();
+
         return dt ? `Arrival: ${point} (${dt})` : `Arrival: ${point}`;
       })(),
       departure: (() => {
@@ -1002,8 +1040,40 @@ function transformQuickApiToDisplay(apiData, company) {
           apiData?.packageSnapshot?.dropTime ||
           apiData?.packageSnapshot?.departureTime ||
           apiData?.dropTime;
-        const dt = formatDateWithOptionalTime(departureRawDate, departureRawTime);
-        const point = normalizePointLabel(apiData.dropPoint);
+        const dt = formatDateWithOptionalTime(
+          departureRawDate,
+          departureRawTime,
+        );
+        const rawPoint = String(apiData.dropPoint || "").trim();
+        const city = String(
+          apiData?.packageSnapshot?.departureCity ||
+            apiData?.packageSnapshot?.stayLocations?.[
+              apiData?.packageSnapshot?.stayLocations?.length - 1
+            ]?.city ||
+            "",
+        ).trim();
+
+        const point = (() => {
+          const base = normalizePointLabel(rawPoint);
+          if (!city || base === "—") return base;
+          
+          const lowerBase = base.toLowerCase();
+          const lowerCity = city.toLowerCase();
+          
+          // If the base already contains a dash, assume the user has provided their own "City - Point" format
+          if (base.includes(" - ")) return base;
+
+          const firstPart = base.split("-")[0].trim().toLowerCase();
+          if (
+            lowerBase.includes(lowerCity) || 
+            lowerCity.includes(firstPart) ||
+            firstPart.includes(lowerCity)
+          ) {
+            return base;
+          }
+          return `${city} - ${base}`;
+        })();
+
         return dt ? `Departure: ${point} (${dt})` : `Departure: ${point}`;
       })(),
     },

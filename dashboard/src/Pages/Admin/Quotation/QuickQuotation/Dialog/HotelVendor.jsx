@@ -200,7 +200,7 @@ const HotelVendorDialog = ({ open, onClose }) => {
             fullWidth
             displayEmpty
         >
-            <MenuItem value="">Hotel Vendor Name</MenuItem>
+            {/* <MenuItem value="">Hotel Vendor Name</MenuItem> */}
             {vendors.map((vendor) => (
                 <MenuItem key={vendor} value={vendor}>
                     {vendor}
