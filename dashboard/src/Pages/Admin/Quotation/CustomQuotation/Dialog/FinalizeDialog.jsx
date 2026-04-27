@@ -16,7 +16,8 @@ import {
     Radio,
 } from "@mui/material";
 import { Formik, Form } from "formik";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { getCompany } from "../../../../../features/companyUI/companyUISlice";
 
 const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
 
@@ -39,6 +40,16 @@ const FinalizeDialog = ({
     const [packageAmountOverrides, setPackageAmountOverrides] = useState({});
     const [gstMode, setGstMode] = useState("with_gst");
     const [taxPercent, setTaxPercent] = useState(5);
+    const [selectedBankId, setSelectedBankId] = useState("");
+
+    const dispatch = useDispatch();
+    const { data: company, status } = useSelector((state) => state.companyUI);
+
+    React.useEffect(() => {
+        if (!company && status === "idle") {
+            dispatch(getCompany());
+        }
+    }, [company, status, dispatch]);
 
     const { selectedQuotation } = useSelector(
         (state) => state.customQuotation
@@ -155,6 +166,7 @@ const FinalizeDialog = ({
             selectedAmountWithTax,
             gstMode,
             taxPercent: gstPct,
+            selectedBank: company?.bankDetails?.find(b => b._id === selectedBankId),
         });
     };
 
@@ -179,8 +191,9 @@ const FinalizeDialog = ({
             setPackageAmountOverrides({});
             setGstMode("with_gst");
             setTaxPercent(5);
+            setSelectedBankId("");
         }
-    }, [open, preselectedPackageLabel, selectedQuotation?.finalizedPackage, quotationOptions]);
+    }, [open, preselectedPackageLabel, selectedQuotation?.finalizedPackage, quotationOptions, company]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -320,6 +333,66 @@ const FinalizeDialog = ({
                         )}
                     </Box>
                 )}
+
+                <Divider sx={{ my: 3 }} />
+                
+                <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 600, mb: 2 }}
+                    color="text.primary"
+                >
+                    🏦 Select Bank Account
+                </Typography>
+
+                <Grid container spacing={2}>
+                    {company?.bankDetails && company.bankDetails.length > 0 ? (
+                        company.bankDetails.map((bank) => (
+                            <Grid size={{ xs: 12, md: 6 }} key={bank._id}>
+                                <Box
+                                    onClick={() => setSelectedBankId(bank._id)}
+                                    sx={{
+                                        border: selectedBankId === bank._id
+                                            ? "2px solid #4caf50"
+                                            : "1px solid #ccc",
+                                        borderRadius: 1,
+                                        p: 2,
+                                        cursor: "pointer",
+                                        transition: "0.2s",
+                                        backgroundColor: selectedBankId === bank._id ? "#e8f5e9" : "transparent",
+                                        "&:hover": { borderColor: "#4caf50", backgroundColor: "#f1f8e9" },
+                                    }}
+                                >
+                                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                                        <Radio
+                                            checked={selectedBankId === bank._id}
+                                            sx={{
+                                                color: "#4caf50",
+                                                "&.Mui-checked": { color: "#4caf50" },
+                                            }}
+                                        />
+                                        <Box>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                                {bank.bankName} - {bank.accountHolderName}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary" display="block">
+                                                A/C: {bank.accountNumber}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                IFSC: {bank.ifscCode}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                </Box>
+                            </Grid>
+                        ))
+                    ) : (
+                        <Grid size={{ xs: 12 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                No bank details found in company settings.
+                            </Typography>
+                        </Grid>
+                    )}
+                </Grid>
             </DialogContent>
 
             <DialogActions sx={{ justifyContent: "center", pb: 2 }}>

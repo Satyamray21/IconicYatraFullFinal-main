@@ -1788,8 +1788,15 @@ useEffect(() => {
                     quotationId: id,
                     finalizedPackage: packages[0], // Keep for backward compatibility
                     finalizedPackages: packages, // New field for multiple packages
+                    selectedBank: values?.selectedBank,
                 })
             ).unwrap();
+
+            // Set the bank in state so the next dialog (HotelVendor) sees it
+            if (values?.selectedBank) {
+                setAccountName(values.selectedBank.accountNumber);
+            }
+
             await dispatch(getCustomQuotationById(id)).unwrap();
             setIsFinalized(true);
             setOpenFinalize(false);
@@ -3429,7 +3436,7 @@ useEffect(() => {
                 accountType={accountType}
                 setAccountType={setAccountType}
                 accountName={accountName}
-                setAccountName={accountName}
+                setAccountName={setAccountName}
                 accountOptions={accountOptions}
                 onAddBankOpen={handleAddBankOpen}
                 onConfirm={handleBankConfirm}
