@@ -59,6 +59,8 @@ const HotelVendorDialog = ({
     const [vehicleVendorName, setVehicleVendorName] = useState("");
     const [vehicleAmount, setVehicleAmount] = useState("");
 
+    const { data: company } = useSelector((state) => state.companyUI);
+
     // Vendor amounts tracking
     const [finalizedVendorsWithAmounts, setFinalizedVendorsWithAmounts] = useState([]);
     const [editingVendorId, setEditingVendorId] = useState(null);
@@ -83,11 +85,18 @@ const HotelVendorDialog = ({
     // Bank Details Dialog States
     const [accountType, setAccountType] = useState("company");
     const [accountName, setAccountName] = useState("");
-    const [accountOptions, setAccountOptions] = useState([
-        { value: "account1", label: "Account 1" },
-        { value: "account2", label: "Account 2" },
-        { value: "account3", label: "Account 3" },
-    ]);
+    
+    const accountOptions = useMemo(() => {
+        if (!company?.bankDetails) return [];
+        return company.bankDetails.map(b => ({
+            value: b.accountNumber,
+            label: `${b.bankName} - ${b.accountHolderName}`,
+            bankName: b.bankName,
+            accountHolderName: b.accountHolderName,
+            ifscCode: b.ifscCode,
+            branchName: b.branchName
+        }));
+    }, [company]);
 
     // Add Bank Dialog States
     const [newBankDetails, setNewBankDetails] = useState({
@@ -314,30 +323,6 @@ const HotelVendorDialog = ({
     };
 
     const handleAddBank = () => {
-        console.log("New Bank Details:", newBankDetails);
-
-        // Create a new account option from the bank details
-        const newAccountOption = {
-            value: newBankDetails.accountNumber,
-            label: `${newBankDetails.bankName} - ${newBankDetails.accountHolderName}`
-        };
-
-        // Add the new account to the options
-        setAccountOptions(prev => [...prev, newAccountOption]);
-
-        // Set the newly added account as selected
-        setAccountName(newAccountOption.value);
-
-        // Reset the form and close the dialog
-        setNewBankDetails({
-            bankName: "",
-            branchName: "",
-            accountHolderName: "",
-            accountNumber: "",
-            ifscCode: "",
-            openingBalance: "",
-        });
-
         setAddBankDialogOpen(false);
     };
 
