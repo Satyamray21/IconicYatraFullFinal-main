@@ -392,8 +392,9 @@ const ContactUs = () => {
       <Box mt={4}>
         <iframe
           title="Google Map"
-          src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3502.4992636520133!2d77.37238817349676!3d28.614795131144554!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x390ce56012bbdd9b%3A0x20e3b9eb57378bd9!2s38%2C%20B%20Block%20Rd%2C%20B%20Block%2C%20Sector%2064%2C%20Noida%2C%20Uttar%20Pradesh%20201307!5e0!3m2!1sen!2sin!4v1759315939359!5m2!1sen!2sin"
-          width="100%"
+         //src="https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d3502.580945763495!2d77.37502127550009!3d28.!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2zMjjCsDM2JzQ0LjQiTiA3N8KwMjInMzkuNCJF!5e0!3m2!1sen!2sin!4v1777132695072!5m2!1sen!2sin"
+         src="https://www.google.com/maps?q=B%20Block%2C%2038%2C%20B%20Block%20Rd%2C%20Sector%2064%2C%20Noida&z=17&output=embed"
+         width="100%"
           height="450"
           style={{ border: 0, display: "block" }}
           loading="lazy"

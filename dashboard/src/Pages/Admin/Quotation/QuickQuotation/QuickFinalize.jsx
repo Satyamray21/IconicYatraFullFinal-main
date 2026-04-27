@@ -88,6 +88,7 @@ import AddBankDialog from "../VehicleQuotation/Dialog/AddBankDialog";
 import EditDialog from "../VehicleQuotation/Dialog/EditDialog";
 import AddServiceDialog from "../VehicleQuotation/Dialog/AddServiceDialog";
 import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
+import QuickEditAllDialog from "./Dialog/QuickEditAllDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 import {
@@ -631,8 +632,8 @@ function mergeQuickPackageForDisplay(apiData) {
       : {};
   const pid =
     apiData?.packageId &&
-    typeof apiData.packageId === "object" &&
-    !Array.isArray(apiData.packageId)
+      typeof apiData.packageId === "object" &&
+      !Array.isArray(apiData.packageId)
       ? apiData.packageId
       : {};
   const snapDays = snap.days;
@@ -748,9 +749,9 @@ function inclusionPolicyTextBlob(pkg, policy) {
 function inferQuickHotelType(pkg, policy) {
   const explicit = String(
     pkg?.quotationDetails?.hotelType ||
-      pkg?.hotelType ||
-      pkg?.packageDetails?.hotelType ||
-      "",
+    pkg?.hotelType ||
+    pkg?.packageDetails?.hotelType ||
+    "",
   ).trim();
   if (explicit) return explicit;
   const blob = inclusionPolicyTextBlob(pkg, policy);
@@ -788,9 +789,9 @@ function transformQuickApiToDisplay(apiData, company) {
   const pricingSource = pkg?.quotationDetails || {};
   const transportationCost = Number(
     pricingSource.transportationCost ??
-      pkg.transportationCost ??
-      pkg.transportationTotalCost ??
-      0,
+    pkg.transportationCost ??
+    pkg.transportationTotalCost ??
+    0,
   );
   const hotelTotalCost = Number(
     pricingSource.hotelTotalCost ?? pkg.hotelTotalCost ?? 0,
@@ -931,10 +932,10 @@ function transformQuickApiToDisplay(apiData, company) {
         description: day.notes || day.aboutCity || "",
         image: day.dayImage
           ? {
-              preview: day.dayImage,
-              url: day.dayImage,
-              name: "Itinerary",
-            }
+            preview: day.dayImage,
+            url: day.dayImage,
+            name: "Itinerary",
+          }
           : null,
       }));
     }
@@ -954,8 +955,8 @@ function transformQuickApiToDisplay(apiData, company) {
   return {
     date: formatDate(
       apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
-        apiData?.packageSnapshot?.arrivalDate ||
-        apiData.createdAt,
+      apiData?.packageSnapshot?.arrivalDate ||
+      apiData.createdAt,
     ),
     reference: String(apiData.quickQuotationId || apiData._id || ""),
     actions: [
@@ -1229,10 +1230,7 @@ const QuickFinalize = () => {
   const [flights, setFlights] = useState([]);
   const [openAddBankDialog, setOpenAddBankDialog] = useState(false);
   const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
-  const [openCostingEdit, setOpenCostingEdit] = useState(false);
-  const [openVehicleFinalizeDialog, setOpenVehicleFinalizeDialog] =
-    useState(false);
-  const [openHotelsPricingDialog, setOpenHotelsPricingDialog] = useState(false);
+  const [openQuickEditAll, setOpenQuickEditAll] = useState(false);
   const [guestCountsDialog, setGuestCountsDialog] = useState({
     open: false,
     adults: 0,
@@ -1548,7 +1546,7 @@ const QuickFinalize = () => {
     currentQuotation?._id,
     JSON.stringify(
       currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices ||
-        [],
+      [],
     ),
   ]);
 
@@ -1570,11 +1568,11 @@ const QuickFinalize = () => {
   const finalizedVendors = React.useMemo(() => {
     const vendorAmountRows = Array.isArray(quotation?.finalizedVendorsWithAmounts)
       ? quotation.finalizedVendorsWithAmounts
-          .map((v) => ({
-            name: String(v?.vendorName || "").trim(),
-            amount: Number(v?.amount) || 0,
-          }))
-          .filter((v) => Boolean(v.name))
+        .map((v) => ({
+          name: String(v?.vendorName || "").trim(),
+          amount: Number(v?.amount) || 0,
+        }))
+        .filter((v) => Boolean(v.name))
       : [];
     const savedNames = [
       quotation?.finalizedVendorDetails?.hotelVendorName,
@@ -1723,8 +1721,8 @@ const QuickFinalize = () => {
       Array.isArray(services) && services.length
         ? services
         : mapApiAdditionalServicesToState(
-            currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices,
-          );
+          currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices,
+        );
     return source
       .map((s) => {
         const particulars = String(s?.particulars || "").trim();
@@ -1844,6 +1842,15 @@ const QuickFinalize = () => {
           companyName: selectedCompany?.companyName || undefined,
           customText: isBookingMail
             ? {
+              booking: {
+                ...(Number.isFinite(nextPayableAmount)
+                  ? { nextPayableAmount }
+                  : {}),
+                ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
+              },
+            }
+            : hasBookingOverrides
+              ? {
                 booking: {
                   ...(Number.isFinite(nextPayableAmount)
                     ? { nextPayableAmount }
@@ -1851,15 +1858,6 @@ const QuickFinalize = () => {
                   ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
                 },
               }
-            : hasBookingOverrides
-              ? {
-                  booking: {
-                    ...(Number.isFinite(nextPayableAmount)
-                      ? { nextPayableAmount }
-                      : {}),
-                    ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
-                  },
-                }
               : undefined,
           previewPdfMode:
             !isBookingMail &&
@@ -2100,7 +2098,33 @@ const QuickFinalize = () => {
                     gstIncludedInFinalAmount: !isWithoutGst,
                   },
                   packageCalculations: nextCalc,
+                  // Also update the flat cost fields to stay in sync with the finalized amount
+                  standardCost:
+                    selectedPackageKey === "standard"
+                      ? selectedAmountWithTax
+                      : qd.standardCost,
+                  deluxeCost:
+                    selectedPackageKey === "deluxe"
+                      ? selectedAmountWithTax
+                      : qd.deluxeCost,
+                  superiorCost:
+                    selectedPackageKey === "superior"
+                      ? selectedAmountWithTax
+                      : qd.superiorCost,
                 },
+                // Update root final costs as well
+                finalStandardCost:
+                  selectedPackageKey === "standard"
+                    ? selectedAmountWithTax
+                    : snap.finalStandardCost,
+                finalDeluxeCost:
+                  selectedPackageKey === "deluxe"
+                    ? selectedAmountWithTax
+                    : snap.finalDeluxeCost,
+                finalSuperiorCost:
+                  selectedPackageKey === "superior"
+                    ? selectedAmountWithTax
+                    : snap.finalSuperiorCost,
               },
             },
           }),
@@ -2276,8 +2300,8 @@ const QuickFinalize = () => {
     setServices((prev) =>
       editingServiceId
         ? prev.map((service) =>
-            service.id === editingServiceId ? newService : service,
-          )
+          service.id === editingServiceId ? newService : service,
+        )
         : [...prev, newService],
     );
     setEditingServiceId(null);
@@ -2333,28 +2357,28 @@ const QuickFinalize = () => {
 
     const servicesToSave = hasDraft
       ? (() => {
-          const selectedTax = taxOptions.find(
-            (option) => option.value === currentService.taxType,
-          );
-          const taxRate = selectedTax ? selectedTax.rate : 0;
-          const amount =
-            currentService.included === "no"
-              ? Number.parseFloat(currentService.amount || 0)
-              : 0;
-          const taxAmount = amount * (taxRate / 100) || 0;
-          return [
-            ...services,
-            {
-              ...currentService,
-              id: Date.now(),
-              amount,
-              taxRate,
-              taxAmount,
-              totalAmount: amount + taxAmount,
-              taxLabel: selectedTax ? selectedTax.label : "Non",
-            },
-          ];
-        })()
+        const selectedTax = taxOptions.find(
+          (option) => option.value === currentService.taxType,
+        );
+        const taxRate = selectedTax ? selectedTax.rate : 0;
+        const amount =
+          currentService.included === "no"
+            ? Number.parseFloat(currentService.amount || 0)
+            : 0;
+        const taxAmount = amount * (taxRate / 100) || 0;
+        return [
+          ...services,
+          {
+            ...currentService,
+            id: Date.now(),
+            amount,
+            taxRate,
+            taxAmount,
+            totalAmount: amount + taxAmount,
+            taxLabel: selectedTax ? selectedTax.label : "Non",
+          },
+        ];
+      })()
       : services;
 
     const payload = serializeAdditionalServicesForApi(servicesToSave);
@@ -2424,13 +2448,13 @@ const QuickFinalize = () => {
       const next = days.map((day) =>
         day.id === dayId
           ? {
-              ...day,
-              image: {
-                preview: url,
-                url,
-                name: file.name,
-              },
-            }
+            ...day,
+            image: {
+              preview: url,
+              url,
+              name: file.name,
+            },
+          }
           : day,
       );
       setDays(next);
@@ -2770,29 +2794,11 @@ const QuickFinalize = () => {
         <Button
           variant="outlined"
           color="secondary"
-          startIcon={<Calculate />}
+          startIcon={<Edit />}
           disabled={!currentQuotation}
-          onClick={() => setOpenCostingEdit(true)}
+          onClick={() => setOpenQuickEditAll(true)}
         >
-          Edit costing
-        </Button>
-        <Button
-          variant="outlined"
-          color="secondary"
-          startIcon={<Route />}
-          disabled={!currentQuotation || !apiEntityId}
-          onClick={() => setOpenVehicleFinalizeDialog(true)}
-        >
-          Edit vehicle & pickup
-        </Button>
-        <Button
-          variant="outlined"
-          color="secondary"
-          startIcon={<Business />}
-          disabled={!currentQuotation || !apiEntityId}
-          onClick={() => setOpenHotelsPricingDialog(true)}
-        >
-          Edit hotels & pricing
+          Edit Quotation
         </Button>
         {isFinalized && !invoiceGenerated && (
           <Button
@@ -3110,14 +3116,14 @@ const QuickFinalize = () => {
                           i.editGuestCounts
                             ? openGuestCountsDialog()
                             : handleEditOpen(
-                                i.field,
-                                i.field === "pickup"
-                                  ? editablePickupDropPoint(i.text)
-                                  : i.text,
-                                i.nestedKey || i.field,
-                                !!i.nestedKey,
-                                i.nestedKey,
-                              )
+                              i.field,
+                              i.field === "pickup"
+                                ? editablePickupDropPoint(i.text)
+                                : i.text,
+                              i.nestedKey || i.field,
+                              !!i.nestedKey,
+                              i.nestedKey,
+                            )
                         }
                       >
                         <Edit fontSize="small" />
@@ -3211,7 +3217,7 @@ const QuickFinalize = () => {
                       handleEditOpen(
                         "quotationHeaderTitle",
                         quotation.quotationTitle?.trim() ||
-                          `Quick Quotation For ${quotation.customer.name}`,
+                        `Quick Quotation For ${quotation.customer.name}`,
                         "Quotation title (shown in header)",
                       )
                     }
@@ -3782,52 +3788,14 @@ const QuickFinalize = () => {
       </Snackbar>
 
       {/* Dialogs */}
-      <CostingEditDialog
-        open={openCostingEdit}
-        onClose={() => setOpenCostingEdit(false)}
-        quotation={costingQuotation}
-        quotationId={apiEntityId}
-        onSaved={handleStep5Or6Saved}
-        saveCostingOverride={async (body) => {
-          if (!apiEntityId || !currentQuotation) return;
-          const formData = costingBodyToQuickUpdate(currentQuotation, body);
-          await dispatch(
-            updateQuickQuotation({ id: apiEntityId, formData }),
-          ).unwrap();
-        }}
-      />
-      <FinalizeVehicleDialog
-        open={openVehicleFinalizeDialog}
-        onClose={() => setOpenVehicleFinalizeDialog(false)}
-        quotation={hotelsDialogQuotation}
-        quotationId={apiEntityId}
-        onSaved={handleStep5Or6Saved}
-        onSaveVehicle={async (vehiclePayload) => {
-          if (!apiEntityId || !currentQuotation) return;
-          const formData = vehicleStepPayloadToQuickUpdate(
-            currentQuotation,
-            vehiclePayload,
-          );
-          await dispatch(
-            updateQuickQuotation({ id: apiEntityId, formData }),
-          ).unwrap();
-        }}
-      />
-      <FinalizeHotelsPricingDialog
-        open={openHotelsPricingDialog}
-        onClose={() => setOpenHotelsPricingDialog(false)}
-        quotation={hotelsDialogQuotation}
-        quotationId={apiEntityId}
-        onSaved={handleStep5Or6Saved}
-        onSaveHotelsPricing={async (finalData) => {
-          if (!apiEntityId || !currentQuotation) return;
-          const formData = finalizeHotelsFormDataToQuickUpdate(
-            currentQuotation,
-            finalData,
-          );
-          await dispatch(
-            updateQuickQuotation({ id: apiEntityId, formData }),
-          ).unwrap();
+      <QuickEditAllDialog
+        open={openQuickEditAll}
+        onClose={() => setOpenQuickEditAll(false)}
+        quotation={currentQuotation}
+        onSave={async (formData) => {
+          if (!apiEntityId) return;
+          await dispatch(updateQuickQuotation({ id: apiEntityId, formData })).unwrap();
+          await refreshQuotationFromApi();
         }}
       />
       <Dialog
