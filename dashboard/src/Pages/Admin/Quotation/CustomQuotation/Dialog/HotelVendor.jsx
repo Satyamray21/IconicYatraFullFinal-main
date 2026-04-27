@@ -362,7 +362,7 @@ const HotelVendorDialog = ({
             fullWidth
             displayEmpty
         >
-            <MenuItem value="">Hotel Vendor Name</MenuItem>
+            {/* <MenuItem value="">Hotel Vendor Name</MenuItem> */}
             {associatesLoading && <MenuItem disabled>Loading vendors...</MenuItem>}
             {vendors.map((vendor) => (
                 <MenuItem key={vendor} value={vendor}>
@@ -386,7 +386,7 @@ const HotelVendorDialog = ({
             fullWidth
             displayEmpty
         >
-            <MenuItem value="">Vehicle Vendor</MenuItem>
+            {/* <MenuItem value="">Vehicle Vendor</MenuItem> */}
             {associatesLoading && <MenuItem disabled>Loading vendors...</MenuItem>}
             {vehicleVendors.map((vendor) => (
                 <MenuItem key={vendor} value={vendor}>
