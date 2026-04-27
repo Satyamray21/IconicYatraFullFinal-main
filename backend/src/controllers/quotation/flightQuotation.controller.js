@@ -401,8 +401,9 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
         auth: { user: auth.user, pass: auth.pass },
     });
 
+    const isBooking = String(type || "").trim().toLowerCase() === "booking";
     const providedPdfAttachment =
-        type !== "booking" &&
+        !isBooking &&
             pdfAttachment &&
             typeof pdfAttachment === "object" &&
             String(pdfAttachment.contentBase64 || "").trim()

@@ -602,6 +602,8 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
         }
       : null;
 
+  const isBooking = String(type || "").trim().toLowerCase() === "booking";
+
   await transporter.sendMail({
     from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
     to,
@@ -610,7 +612,7 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
     subject: finalSubject,
     html: body,
     text: body.replace(/<[^>]*>/g, ""),
-    attachments: providedPdfAttachment ? [providedPdfAttachment] : [],
+    attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
   });
 
   return res.status(200).json(

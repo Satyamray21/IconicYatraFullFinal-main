@@ -794,7 +794,8 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
     auth: { user: auth.user, pass: auth.pass },
   });
 
-  const shouldAttachPdf = type !== "booking";
+  const isBooking = String(type || "").trim().toLowerCase() === "booking";
+  const shouldAttachPdf = !isBooking;
   const providedPdfAttachment =
     pdfAttachment &&
     typeof pdfAttachment === "object" &&

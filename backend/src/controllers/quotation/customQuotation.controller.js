@@ -822,21 +822,23 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
         }
       : null;
 
-  try {
-    await transporter.sendMail({
-      from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
-      to,
-      cc: cc && cc.length ? cc : undefined,
-      replyTo: selectedCompany?.email || auth.user,
-      subject: finalSubject,
-      html: body,
-      text: body.replace(/<[^>]*>/g, ""), // fallback
-      attachments: providedPdfAttachment ? [providedPdfAttachment] : [],
-    });
-  } catch (error) {
-    console.error("Mail Error:", error);
-    throw new ApiError(500, "Failed to send email");
-  }
+    const isBooking = String(type || "").trim().toLowerCase() === "booking";
+
+    try {
+      await transporter.sendMail({
+        from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+        to,
+        cc: cc && cc.length ? cc : undefined,
+        replyTo: selectedCompany?.email || auth.user,
+        subject: finalSubject,
+        html: body,
+        text: body.replace(/<[^>]*>/g, ""), // fallback
+        attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
+      });
+    } catch (error) {
+      console.error("Mail Error:", error);
+      throw new ApiError(500, "Failed to send email");
+    }
 
   return res.status(200).json(
     new ApiResponse(
