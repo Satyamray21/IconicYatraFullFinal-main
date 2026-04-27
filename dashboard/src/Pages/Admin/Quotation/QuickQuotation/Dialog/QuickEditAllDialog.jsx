@@ -26,6 +26,7 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
         transportationCost: 0,
         taxPercent: 5,
         gstOn: "Full",
+        gstIncluded: true,
         destinations: [],
     });
 
@@ -42,6 +43,7 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
                 transportationCost: qd.transportationCost ?? snap.transportationTotalCost ?? 0,
                 taxPercent: tx.taxPercent ?? 5,
                 gstOn: tx.gstOn || "Full",
+                gstIncluded: tx.gstIncludedInFinalAmount ?? true,
                 destinations: (snap.destinationNights || []).map(dn => ({
                     destination: dn.destination,
                     standardHotel: dn.hotels?.find(h => h.category === "standard")?.hotelName || "",
@@ -62,15 +64,35 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
         setFormData(prev => ({ ...prev, destinations: newDestinations }));
     };
 
+    const getCalculatedValues = (baseAmount) => {
+        const amount = Number(baseAmount) || 0;
+        const taxRate = Number(formData.taxPercent) || 0;
+        if (formData.gstOn === "None" || taxRate === 0) {
+            return { base: amount, gst: 0, total: amount };
+        }
+        
+        if (formData.gstIncluded) {
+            const base = amount / (1 + taxRate / 100);
+            return { base, gst: amount - base, total: amount };
+        } else {
+            const gst = (amount * taxRate) / 100;
+            return { base: amount, gst, total: amount + gst };
+        }
+    };
+
     const handleSave = () => {
-        // Construct the update payload
         const snap = quotation.packageSnapshot || {};
         const finalizedTier = String(quotation.finalizedPackage || "Standard").toLowerCase();
         
+        const standardVals = getCalculatedValues(formData.standardCost);
+        const deluxeVals = getCalculatedValues(formData.deluxeCost);
+        const superiorVals = getCalculatedValues(formData.superiorCost);
+        const transportVals = getCalculatedValues(formData.transportationCost);
+
         let newTotalCost = 0;
-        if (finalizedTier === "standard") newTotalCost = Number(formData.standardCost);
-        else if (finalizedTier === "deluxe") newTotalCost = Number(formData.deluxeCost);
-        else if (finalizedTier === "superior") newTotalCost = Number(formData.superiorCost);
+        if (finalizedTier === "standard") newTotalCost = standardVals.total;
+        else if (finalizedTier === "deluxe") newTotalCost = deluxeVals.total;
+        else if (finalizedTier === "superior") newTotalCost = superiorVals.total;
 
         // Update hotel names in destinationNights
         const updatedDestinationNights = (snap.destinationNights || []).map((dn, idx) => {
@@ -88,39 +110,38 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
         });
 
         const updatePayload = {
-            totalCost: newTotalCost,
+            totalCost: Math.round(newTotalCost),
             packageSnapshot: {
                 ...snap,
                 destinationNights: updatedDestinationNights,
-                // Root snapshot fields also used by transformQuickApiToDisplay
-                finalStandardCost: Number(formData.standardCost),
-                finalDeluxeCost: Number(formData.deluxeCost),
-                finalSuperiorCost: Number(formData.superiorCost),
+                finalStandardCost: Math.round(standardVals.total),
+                finalDeluxeCost: Math.round(deluxeVals.total),
+                finalSuperiorCost: Math.round(superiorVals.total),
                 quotationDetails: {
                     ...(snap.quotationDetails || {}),
-                    standardCost: Number(formData.standardCost),
-                    deluxeCost: Number(formData.deluxeCost),
-                    superiorCost: Number(formData.superiorCost),
-                    transportationCost: Number(formData.transportationCost),
+                    standardCost: Math.round(standardVals.total),
+                    deluxeCost: Math.round(deluxeVals.total),
+                    superiorCost: Math.round(superiorVals.total),
+                    transportationCost: Math.round(transportVals.total),
                     taxes: {
                         ...(snap.quotationDetails?.taxes || {}),
                         taxPercent: Number(formData.taxPercent),
                         gstOn: formData.gstOn,
+                        gstIncludedInFinalAmount: formData.gstIncluded,
                     },
-                    // We should also update packageCalculations to match the new totals
                     packageCalculations: {
                         ...(snap.quotationDetails?.packageCalculations || {}),
                         standard: { 
                             ...(snap.quotationDetails?.packageCalculations?.standard || {}),
-                            finalTotal: Number(formData.standardCost) 
+                            finalTotal: Math.round(standardVals.total) 
                         },
                         deluxe: { 
                             ...(snap.quotationDetails?.packageCalculations?.deluxe || {}),
-                            finalTotal: Number(formData.deluxeCost) 
+                            finalTotal: Math.round(deluxeVals.total) 
                         },
                         superior: { 
                             ...(snap.quotationDetails?.packageCalculations?.superior || {}),
-                            finalTotal: Number(formData.superiorCost) 
+                            finalTotal: Math.round(superiorVals.total) 
                         },
                     }
                 }
@@ -144,44 +165,22 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
                 </IconButton>
             </DialogTitle>
             <DialogContent dividers>
-                <Typography variant="h6" gutterBottom>Pricing & Costs</Typography>
+                <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                    <Typography variant="h6">Pricing & Costs</Typography>
+                    <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <InputLabel>GST Mode</InputLabel>
+                        <Select
+                            value={formData.gstIncluded ? "included" : "excluded"}
+                            label="GST Mode"
+                            onChange={(e) => handleChange("gstIncluded", e.target.value === "included")}
+                        >
+                            <MenuItem value="included">GST Included</MenuItem>
+                            <MenuItem value="excluded">GST Excluded</MenuItem>
+                        </Select>
+                    </FormControl>
+                </Box>
+                
                 <Grid container spacing={2} sx={{ mb: 4 }}>
-                    <Grid size={{ xs: 12, sm: 3 }}>
-                        <TextField
-                            fullWidth
-                            label="Standard Cost"
-                            type="number"
-                            value={formData.standardCost}
-                            onChange={(e) => handleChange("standardCost", e.target.value)}
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
-                        <TextField
-                            fullWidth
-                            label="Deluxe Cost"
-                            type="number"
-                            value={formData.deluxeCost}
-                            onChange={(e) => handleChange("deluxeCost", e.target.value)}
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
-                        <TextField
-                            fullWidth
-                            label="Superior Cost"
-                            type="number"
-                            value={formData.superiorCost}
-                            onChange={(e) => handleChange("superiorCost", e.target.value)}
-                        />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
-                        <TextField
-                            fullWidth
-                            label="Transport Cost"
-                            type="number"
-                            value={formData.transportationCost}
-                            onChange={(e) => handleChange("transportationCost", e.target.value)}
-                        />
-                    </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                             fullWidth
@@ -205,9 +204,39 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
                             </Select>
                         </FormControl>
                     </Grid>
+                    
+                    {[
+                        { key: "standardCost", label: "Standard Cost" },
+                        { key: "deluxeCost", label: "Deluxe Cost" },
+                        { key: "superiorCost", label: "Superior Cost" },
+                        { key: "transportationCost", label: "Transport Cost" },
+                    ].map(({ key, label }) => {
+                        const { base, gst, total } = getCalculatedValues(formData[key]);
+
+                        return (
+                            <Grid size={{ xs: 12, sm: 3 }} key={key}>
+                                <TextField
+                                    fullWidth
+                                    label={label}
+                                    type="number"
+                                    value={formData[key]}
+                                    onChange={(e) => handleChange(key, e.target.value)}
+                                    helperText={
+                                        Number(formData.taxPercent) > 0 && formData.gstOn !== "None" ? (
+                                            <Box component="span" sx={{ display: "block", fontSize: "0.75rem", mt: 0.5, color: "text.secondary" }}>
+                                                Base: ₹{Math.round(base).toLocaleString("en-IN")} <br/>
+                                                GST: ₹{Math.round(gst).toLocaleString("en-IN")} <br/>
+                                                <strong>Total: ₹{Math.round(total).toLocaleString("en-IN")}</strong>
+                                            </Box>
+                                        ) : null
+                                    }
+                                />
+                            </Grid>
+                        );
+                    })}
                 </Grid>
 
-                <Typography variant="h6" gutterBottom>Hotel Names</Typography>
+                <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Hotel Names</Typography>
                 {formData.destinations.map((dest, idx) => (
                     <Box key={idx} sx={{ mb: 3, p: 2, bgcolor: "grey.50", borderRadius: 1 }}>
                         <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
@@ -245,9 +274,9 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
                     </Box>
                 ))}
             </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Cancel</Button>
-                <Button variant="contained" onClick={handleSave}>Save All Changes</Button>
+            <DialogActions sx={{ px: 3, pb: 3 }}>
+                <Button onClick={onClose} color="inherit">Cancel</Button>
+                <Button variant="contained" onClick={handleSave} size="large">Save All Changes</Button>
             </DialogActions>
         </Dialog>
     );
