@@ -1251,14 +1251,14 @@ const QuotationPDFDialog = ({
           </div>
           {pickupArrival && pickupArrival !== "N/A" ? (
             <div style={{ fontSize: "14px", marginBottom: "8px" }}>
-              🛬 Arrival: {pickupArrival}
+              🛬 Arrival: {String(pickupArrival).replace(/^arrival\s*:\s*/i, "")}
             </div>
           ) : (
             <div style={{ fontSize: "14px", color: "#999" }}>Not specified</div>
           )}
           {pickupDeparture && pickupDeparture !== "N/A" ? (
             <div style={{ fontSize: "14px" }}>
-              🛫 Departure: {pickupDeparture}
+              🛫 Departure: {String(pickupDeparture).replace(/^departure\s*:\s*/i, "")}
             </div>
           ) : (
             <div style={{ fontSize: "14px", color: "#999" }}>
@@ -1556,36 +1556,6 @@ const QuotationPDFDialog = ({
                   </tr>
                 )
               )}
-              {visiblePackageColumns <= 1 &&
-                pricingDiscount &&
-                pricingDiscount !== "N/A" &&
-                pricingDiscount !== "₹ 0" &&
-                pricingDiscount !== 0 && (
-                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>Discount</td>
-                    <td
-                      style={{
-                        padding: "12px",
-                        textAlign: "right",
-                        color: "#2e7d32",
-                      }}
-                    >
-                      -{formatCurrency(pricingDiscount)}
-                    </td>
-                  </tr>
-                )}
-              {visiblePackageColumns <= 1 &&
-                pricingGst &&
-                pricingGst !== "N/A" &&
-                pricingGst !== "₹ 0" &&
-                pricingGst !== 0 && (
-                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>GST</td>
-                    <td style={{ padding: "12px", textAlign: "right" }}>
-                      {formatCurrency(pricingGst)}
-                    </td>
-                  </tr>
-                )}
               {visiblePackageColumns <= 1 && (
                 <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
                   <td style={{ padding: "14px", fontSize: "16px" }}>
