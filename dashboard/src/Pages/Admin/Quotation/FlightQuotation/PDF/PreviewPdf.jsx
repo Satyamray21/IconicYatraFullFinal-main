@@ -68,13 +68,22 @@ const FlightQuotationPDFDialog = ({
 
   const blobToBase64 = (blob) =>
     new Promise((resolve, reject) => {
+      if (!blob) {
+        console.warn("blobToBase64: No blob provided");
+        resolve("");
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = String(reader.result || "");
-        const base64 = result.includes(",") ? result.split(",")[1] : "";
+        const base64 = result.includes(",") ? result.split(",")[1] : result;
+        console.log("blobToBase64: Generated base64 length:", base64.length);
         resolve(base64);
       };
-      reader.onerror = reject;
+      reader.onerror = (err) => {
+        console.error("blobToBase64 error:", err);
+        reject(err);
+      };
       reader.readAsDataURL(blob);
     });
 
@@ -353,87 +362,103 @@ const FlightQuotationPDFDialog = ({
   }, [open, initialEmailContentMode]);
 
   const handleDownloadPDF = async ({ shouldDownload = true } = {}) => {
-  try {
-    setLoading(true);
-    setError("");
+    try {
+      setLoading(true);
+      setError("");
 
-    const html2pdf = (await import("html2pdf.js")).default;
-
-    const element = printRef.current;
-
-    if (!element) {
-      throw new Error("Content not found");
-    }
-
-    const clone = element.cloneNode(true);
-
-    const images = clone.querySelectorAll("img");
-    for (const img of images) {
-      const alt = img.getAttribute("alt");
-      if (alt === "Company Logo" && imageElements.logo) {
-        img.src = imageElements.logo;
+      if (!renderComplete || !imagesLoaded) {
+        // Wait a bit more if not ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
+
+      const html2pdf = (await import("html2pdf.js")).default;
+      const element = printRef.current;
+
+      if (!element) {
+        throw new Error("Content not found");
+      }
+
+      // Create a temporary container to ensure visibility and proper rendering
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "fixed";
+      tempContainer.style.left = "0";
+      tempContainer.style.top = "0";
+      tempContainer.style.width = "210mm"; // A4 width
+      tempContainer.style.backgroundColor = "#ffffff";
+      tempContainer.style.zIndex = "-1000";
+      tempContainer.style.visibility = "hidden";
+      document.body.appendChild(tempContainer);
+
+      const clone = element.cloneNode(true);
+      clone.style.display = "block"; // Force display
+      tempContainer.appendChild(clone);
+
+      const images = clone.querySelectorAll("img");
+      for (const img of images) {
+        const alt = img.getAttribute("alt");
+        if (alt === "Company Logo" && imageElements.logo) {
+          img.src = imageElements.logo;
+        }
+      }
+
+      // prevent bad splits
+      const avoidBreakElements = clone.querySelectorAll(
+        "table, tr, td, .no-break"
+      );
+      avoidBreakElements.forEach((el) => {
+        el.style.pageBreakInside = "avoid";
+        el.style.breakInside = "avoid";
+      });
+
+      const opt = {
+        margin: [10, 5, 10, 5],
+        filename: `${customerName.replace(/\s/g, "_")}_Flight_Quotation_${reference || Date.now()}.pdf`,
+        image: { type: "jpeg", quality: 0.8 }, 
+        html2canvas: {
+          scale: 2, // Reverting to 2 for better quality/reliability
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+        },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "portrait",
+          compress: true,
+        },
+        pagebreak: {
+          mode: ["css", "legacy"],
+        },
+      };
+
+      // Generate PDF
+      console.log("Starting html2pdf generation...");
+      const pdfBlob = await html2pdf().set(opt).from(clone).output("blob");
+      console.log("PDF generation complete. Blob size:", pdfBlob?.size);
+      
+      if (shouldDownload) {
+        await html2pdf().set(opt).from(clone).save();
+      }
+
+      const contentBase64 = await blobToBase64(pdfBlob);
+
+      // Clean up
+      document.body.removeChild(tempContainer);
+
+      return {
+        filename: opt.filename,
+        contentBase64,
+        mimeType: "application/pdf",
+        size: pdfBlob.size,
+      };
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      setError("PDF generation failed: " + (err.message || "Please try again"));
+      return null;
+    } finally {
+      setLoading(false);
     }
-
-    // remove forced page breaks
-    const forcedPages = clone.querySelectorAll(".pdf-page");
-    forcedPages.forEach((el) => {
-      el.style.pageBreakAfter = "auto";
-      el.style.breakAfter = "auto";
-    });
-
-    // prevent bad splits
-    const avoidBreakElements = clone.querySelectorAll(
-      "table, tr, td, .no-break"
-    );
-    avoidBreakElements.forEach((el) => {
-      el.style.pageBreakInside = "avoid";
-      el.style.breakInside = "avoid";
-    });
-
-    const opt = {
-      margin: [5, 5, 15, 5], // ✅ reduced top margin
-      filename: `${customerName.replace(/\s/g, "_")}_Flight_Quotation_${reference || Date.now()}.pdf`,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-      },
-      jsPDF: {
-        unit: "mm",
-        format: "a4",
-        orientation: "portrait",
-      },
-      pagebreak: {
-        mode: ["css", "legacy"],
-      },
-    };
-
-    const worker = html2pdf().set(opt).from(clone);
-
-    const pdfBlob = await worker.outputPdf("blob");
-
-    if (shouldDownload) {
-      await worker.save();
-    }
-
-    const contentBase64 = await blobToBase64(pdfBlob);
-
-    return {
-      filename: opt.filename,
-      contentBase64,
-      mimeType: "application/pdf",
-      size: pdfBlob.size,
-    };
-  } catch (err) {
-    console.error("PDF generation error:", err);
-    setError("PDF generation failed: " + (err.message || "Please try again"));
-    return null;
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleSendMailWithPdf = async () => {
     if (typeof onSendMail !== "function") return;
@@ -444,10 +469,18 @@ const FlightQuotationPDFDialog = ({
       return;
     }
     const payload = await handleDownloadPDF({ shouldDownload: false });
-    if (!payload?.contentBase64) return;
+    if (!payload?.contentBase64) {
+      console.error("handleSendMailWithPdf: PDF content is missing!");
+      return;
+    }
     onSendMail({
       pdfAttachment: payload,
+      to: String(quotationData?.customer?.email || "").trim(),
       previewPdfMode: emailContentMode === "short",
+    });
+    console.log("handleSendMailWithPdf: onSendMail called with payload", { 
+      hasAttachment: !!payload?.contentBase64,
+      to: quotationData?.customer?.email 
     });
   };
 

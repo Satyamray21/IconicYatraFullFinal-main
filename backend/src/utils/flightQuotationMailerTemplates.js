@@ -174,6 +174,14 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
       <p><b>Trip Type:</b> ${safe(quotation?.tripType, "-")}</p>
       <p><b>Total Fare(May vary on the time/date of booking):</b> INR ${INR.format(totals.total)}</p>
       <br/>
+      <p style="color:#d32f2f; font-weight:bold;"><b>FLIGHT DETAILS:</b></p>
+      ${(quotation?.flightDetails || [])
+        .map(
+          (f, idx) =>
+            `<p><b>Flight ${idx + 1}:</b> ${safe(f?.from)} to ${safe(f?.to)} | ${safe(f?.preferredAirline)} ${f?.flightNo ? `(${f.flightNo})` : ""} | ${fmtDate(f?.departureDate)} ${fmtTime(f?.departureTime)}</p>`,
+        )
+        .join("")}
+      <br/>
       <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
       <p>${policyLines(inclusionPolicy.length ? inclusionPolicy : ["As per confirmed inclusions."]).replace(/\n/g, "<br/>")}</p>
       <br/>
@@ -226,14 +234,16 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
       <br/>
       <p style="color:#d32f2f; font-weight:bold;"><b>FLIGHT DETAILS:</b></p>
       ${(quotation?.flightDetails || [])
-        .map(
-          (f, idx) =>
-            `<p><b>Flight ${idx + 1}:</b> ${safe(f?.from)} to ${safe(
-              f?.to,
-            )} | ${safe(f?.preferredAirline)} | ${fmtDate(f?.departureDate)} ${fmtTime(
-              f?.departureTime,
-            )}</p>`,
-        )
+        .map((f, idx) => {
+          const pnr = quotation?.pnrList?.[idx];
+          return `<p><b>Flight ${idx + 1}:</b> ${safe(f?.from)} to ${safe(
+            f?.to,
+          )} | ${safe(f?.preferredAirline)} ${f?.flightNo ? `(${f.flightNo})` : ""} | ${fmtDate(
+            f?.departureDate,
+          )} ${fmtTime(f?.departureTime)}${
+            pnr ? ` | <span style="color:#d32f2f;"><b>PNR: ${pnr}</b></span>` : ""
+          }</p>`;
+        })
         .join("")}
       <br/>
       <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
