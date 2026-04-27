@@ -278,13 +278,13 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
   if (!hasBanks && !paymentLinkHtml) return "";
   return `
         <br/>
-        <p style="color:#d32f2f; font-weight:bold; text-align:center;">NET BANKING PAYMENT DETAILS:</p>
+        <p style="color:#d32f2f; font-weight:bold;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
         <div style="text-align:center;">
         ${(bankDetails || [])
           .map(
             (b, i) => `
-                    <div style="margin-bottom:12px; display:inline-block; text-align:left; min-width:250px; border:1px solid #eee; padding:10px; border-radius:5px;">
+                    <div style="margin-bottom:12px;">
                         <b>${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
                           b?.branchName,
                           "Branch",
