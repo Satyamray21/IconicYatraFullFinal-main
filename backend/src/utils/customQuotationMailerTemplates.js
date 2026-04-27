@@ -95,7 +95,7 @@ const itineraryLines = (itinerary = []) =>
       (d) => `
                 <div style="margin-bottom:12px;">
                     
-                    <div style="color:#2e7d32; font-weight:600;">
+                    <div style="color:#000; font-weight:bold;">
                         ${safe(d?.dayTitle, "")}
                     </div>
 
@@ -278,12 +278,13 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
   if (!hasBanks && !paymentLinkHtml) return "";
   return `
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">NET BANKING PAYMENT DETAILS:</p>
+        <p style="color:#d32f2f; font-weight:bold; text-align:center;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
+        <div style="text-align:center;">
         ${(bankDetails || [])
           .map(
             (b, i) => `
-                    <div style="margin-bottom:8px;">
+                    <div style="margin-bottom:12px; display:inline-block; text-align:left; min-width:250px; border:1px solid #eee; padding:10px; border-radius:5px;">
                         <b>${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
                           b?.branchName,
                           "Branch",
@@ -295,6 +296,7 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
                 `,
           )
           .join("")}
+        </div>
     `;
 };
 
@@ -320,7 +322,7 @@ const bankTextSection = (bankDetails = []) => {
     // ✅ FIXED (HTML as string)
     `<p>
             <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
-            <span style="color:#2e7d32;">
+            <span style="color:#000; font-weight:bold;">
                 All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
                 For more details, contact your Tour Expert.
             </span>
@@ -503,7 +505,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         ${bankHtmlSection(bankDetails, paymentLink)}
         <p>
     <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
-    <span style="color:#2e7d32;">
+    <span style="color:#000; font-weight:bold;">
         All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
         For more details, contact your Tour Expert.
     </span>
@@ -656,7 +658,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         
         
        
-        <p style="color:#00FF00; font-weight:bold;"> ${td.quotationTitle}</p>
+        <p style="color:#000; font-weight:bold;"> ${td.quotationTitle}</p>
         <p style="color:#d32f2f; font-weight:bold;">DETAILS OF TOUR PACKAGE:</p>
          <p style="color:#d32f2f; font-weight:bold;">
             BOOKING ID: ${safe(customText.bookingId, quotation?.quickQuotationId || quotation?.quotationId)}
@@ -681,7 +683,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p><b>Next Payable Amount:</b> INR ${INR.format(nextPayableAmount)}</p>
         ${paymentDueDate ? `<p><b>Payment Due Date:</b> ${paymentDueDate}</p>` : ""}
         <p style="color:#d32f2f; font-weight:bold;">Please clear your all dues as per the payment policy.</p>
-        <p style="color:#2e7d32; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>
+        <p style="color:#000; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
         <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p>
@@ -708,7 +710,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         ${bankHtmlSection(bankDetails, paymentLink)}
         <p>
             <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
-            <span style="color:#2e7d32;">
+            <span style="color:#000; font-weight:bold;">
                 All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
                 For more details, contact your Tour Expert.
             </span>
