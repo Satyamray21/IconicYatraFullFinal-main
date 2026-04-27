@@ -21,6 +21,9 @@ import {
   DialogActions,
   Card,
   CardContent,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -110,6 +113,16 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   const [hotelOptions, setHotelOptions] = useState({});
   const [allIndianCities, setAllIndianCities] = useState([]);
 
+  // Snackbar state
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+
+  // Loading state for save button
+  const [saving, setSaving] = useState(false);
+
   // Search states
   const [arrivalSearch, setArrivalSearch] = useState("");
   const [departureSearch, setDepartureSearch] = useState("");
@@ -196,23 +209,23 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     days:
       initialData?.days && initialData.days.length > 0
         ? initialData.days.map((d) => ({
-            title: d.title || "",
-            notes: d.notes || "",
-            aboutCity: d.aboutCity || "",
-            dayImage: d.dayImage || null,
-            sightseeing: d.sightseeing || [],
-            selectedSightseeing: d.selectedSightseeing || [],
-          }))
+          title: d.title || "",
+          notes: d.notes || "",
+          aboutCity: d.aboutCity || "",
+          dayImage: d.dayImage || null,
+          sightseeing: d.sightseeing || [],
+          selectedSightseeing: d.selectedSightseeing || [],
+        }))
         : [
-            {
-              title: "",
-              notes: "",
-              aboutCity: "",
-              dayImage: null,
-              sightseeing: [],
-              selectedSightseeing: [],
-            },
-          ],
+          {
+            title: "",
+            notes: "",
+            aboutCity: "",
+            dayImage: null,
+            sightseeing: [],
+            selectedSightseeing: [],
+          },
+        ],
     perPerson: initialData?.perPerson || 1,
     numberOfRooms: Number(initialData?.numberOfRooms) || 1,
     transportationCostPerDay:
@@ -886,6 +899,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   };
 
   const handleSubmit = async () => {
+    setSaving(true);
     let textUpdateSuccess = false;
 
     let bannerImageUrl =
@@ -913,10 +927,11 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
           "⚠️ Banner upload failed:",
           err.response?.data || err.message,
         );
-        alert(
-          "Banner image failed to upload. Please try again or upload from edit screen. " +
-            (err.response?.data?.message || err.message || ""),
-        );
+        setSnackbar({
+          open: true,
+          message: `Banner upload failed: ${err.response?.data?.message || err.message}`,
+          severity: "warning",
+        });
       }
     }
 
@@ -1017,7 +1032,13 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
         "❌ Failed to update textual details:",
         err.response?.data || err.message,
       );
-      alert("❌ Failed to save textual tour details");
+      setSnackbar({
+        open: true,
+        message: `Failed to save tour details: ${err.response?.data?.message || err.message}`,
+        severity: "error",
+      });
+      setSaving(false);
+      return;
     }
 
     for (let i = 0; i < tourDetails.days.length; i++) {
@@ -1034,14 +1055,26 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
             `⚠️ Day ${i + 1} image upload failed:`,
             err.response?.data || err.message,
           );
+          setSnackbar({
+            open: true,
+            message: `Day ${i + 1} image upload failed, but other details saved`,
+            severity: "warning",
+          });
         }
       }
     }
 
     if (textUpdateSuccess) {
-      alert("✅ Tour details saved!");
-      navigate("/tourpackage");
+      setSnackbar({
+        open: true,
+        message: "✅ Tour details saved successfully!",
+        severity: "success",
+      });
+      setTimeout(() => {
+        navigate("/tourpackage");
+      }, 1500);
     }
+    setSaving(false);
   };
 
   const handleHotelChange = (destIndex, category, hotelName) => {
@@ -2024,8 +2057,14 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       </Grid>
 
       <Box textAlign="center" mt={3}>
-        <Button variant="contained" color="primary" onClick={handleSubmit}>
-          Save Tour Details
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleSubmit}
+          disabled={saving}
+          startIcon={saving && <CircularProgress size={20} color="inherit" />}
+        >
+          {saving ? "Saving..." : "Save Tour Details"}
         </Button>
       </Box>
 
@@ -2076,6 +2115,22 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Paper>
   );
 };

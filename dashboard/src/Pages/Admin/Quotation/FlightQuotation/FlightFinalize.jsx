@@ -300,7 +300,14 @@ const FlightFinalize = () => {
       const selectedCompany =
         mailCompanies.find((c) => c?._id === values?.companyId) || null;
 
+      console.log("Sending flight quotation email...", { 
+        quotationId: quotation.flightQuotationId, 
+        isBookingMail, 
+        hasAttachment: !!pdfAttachmentForMail?.contentBase64 
+      });
+
       if (!isBookingMail && !pdfAttachmentForMail?.contentBase64) {
+        alert("PDF attachment is missing. Please try generating it again.");
         return false;
       }
 
@@ -1080,7 +1087,12 @@ const FlightFinalize = () => {
         includePdfOnSend={mailMode !== "booking"}
         autoSendForMail={autoGeneratePdfForMail}
         onSendMail={(payload) => {
-          const attachment = payload?.pdfAttachment || payload || null;
+          console.log("onSendMail triggered in FlightFinalize", payload);
+          const attachment = payload?.pdfAttachment || (payload?.contentBase64 ? payload : null);
+          console.log("Attachment resolved in onSendMail:", { 
+            hasAttachment: !!attachment, 
+            hasContent: !!attachment?.contentBase64 
+          });
           setPdfAttachmentForMail(attachment);
           setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
           setEmailToPrefill(String(payload?.to || "").trim());

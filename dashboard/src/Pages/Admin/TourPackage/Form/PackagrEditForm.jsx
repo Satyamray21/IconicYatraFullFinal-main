@@ -716,7 +716,7 @@ const PackageEditView = () => {
         console.error("❌ Error uploading day image:", error);
         alert(
           "❌ Failed to update day image: " +
-            (error.message || "Unknown error"),
+          (error.message || "Unknown error"),
         );
       });
   };
@@ -837,7 +837,7 @@ const PackageEditView = () => {
           console.error("❌ Error updating package:", err);
           alert(
             "❌ Failed to update package: " +
-              (err.message || "Please try again"),
+            (err.message || "Please try again"),
           );
         });
     } catch (err) {
@@ -1424,7 +1424,7 @@ const PackageEditView = () => {
                     </Box>
 
                     <Grid container spacing={2} sx={{ mt: 1 }}>
-                      <Grid size={{ xs: 12, md: 6 }}>
+                      <Grid size={{ xs: 12, md: 12 }}>
                         <TextField
                           fullWidth
                           label="Day Title"
@@ -1434,9 +1434,11 @@ const PackageEditView = () => {
                           }
                         />
                       </Grid>
-                      <Grid size={{ xs: 12, md: 6 }}>
+                      <Grid size={{ xs: 12, md: 12 }}>
                         <TextField
                           fullWidth
+                          multiline
+                          rows={10}
                           label="Day Notes"
                           value={day?.notes || ""}
                           onChange={(e) =>
@@ -1617,29 +1619,29 @@ const PackageEditView = () => {
 
                 <TableBody>
                   {Array.isArray(pkg.destinationNights) &&
-                  pkg.destinationNights.length > 0 ? (
+                    pkg.destinationNights.length > 0 ? (
                     pkg.destinationNights.map((dest, index) => {
                       // Ensure hotels array exists with proper structure
                       const hotels =
                         dest.hotels && dest.hotels.length === 3
                           ? dest.hotels
                           : [
-                              {
-                                category: "standard",
-                                hotelName: "",
-                                pricePerPerson: 0,
-                              },
-                              {
-                                category: "deluxe",
-                                hotelName: "",
-                                pricePerPerson: 0,
-                              },
-                              {
-                                category: "superior",
-                                hotelName: "",
-                                pricePerPerson: 0,
-                              },
-                            ];
+                            {
+                              category: "standard",
+                              hotelName: "",
+                              pricePerPerson: 0,
+                            },
+                            {
+                              category: "deluxe",
+                              hotelName: "",
+                              pricePerPerson: 0,
+                            },
+                            {
+                              category: "superior",
+                              hotelName: "",
+                              pricePerPerson: 0,
+                            },
+                          ];
 
                       return (
                         <TableRow key={index}>
