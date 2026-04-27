@@ -597,8 +597,8 @@ const QuotationPDFDialog = ({
   const globalCancellationArray =
     typeof globalPolicyDefaults.cancellationPolicy === "string"
       ? globalPolicyDefaults.cancellationPolicy
-          .split("\n")
-          .filter((s) => s.trim())
+        .split("\n")
+        .filter((s) => s.trim())
       : [];
 
   const finalInclusionArray =
@@ -1423,40 +1423,40 @@ const QuotationPDFDialog = ({
               </thead>
               <tbody>
                 {hotelPricingData
-                .filter(
-    (row) =>
-      !isTransportationCostRow(row) &&
-      !isHotelCostRow(row)
-  ).map((row, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>
-                      {(() => {
-                        const txt = String(row?.destination || "-").trim();
-                        return txt
-                          ? txt.charAt(0).toUpperCase() + txt.slice(1)
-                          : "-";
-                      })()}
-                    </td>
-                    <td style={{ padding: "12px" }}>
-                      {getNightsCellValue(row)}
-                    </td>
-                    {showStandardCol && (
+                  .filter(
+                    (row) =>
+                      !isTransportationCostRow(row) &&
+                      !isHotelCostRow(row)
+                  ).map((row, idx) => (
+                    <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        {renderHotelCellValue(row, "standard")}
+                        {(() => {
+                          const txt = String(row?.destination || "-").trim();
+                          return txt
+                            ? txt.charAt(0).toUpperCase() + txt.slice(1)
+                            : "-";
+                        })()}
                       </td>
-                    )}
-                    {showDeluxeCol && (
                       <td style={{ padding: "12px" }}>
-                        {renderHotelCellValue(row, "deluxe")}
+                        {getNightsCellValue(row)}
                       </td>
-                    )}
-                    {showSuperiorCol && (
-                      <td style={{ padding: "12px" }}>
-                        {renderHotelCellValue(row, "superior")}
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                      {showStandardCol && (
+                        <td style={{ padding: "12px" }}>
+                          {renderHotelCellValue(row, "standard")}
+                        </td>
+                      )}
+                      {showDeluxeCol && (
+                        <td style={{ padding: "12px" }}>
+                          {renderHotelCellValue(row, "deluxe")}
+                        </td>
+                      )}
+                      {showSuperiorCol && (
+                        <td style={{ padding: "12px" }}>
+                          {renderHotelCellValue(row, "superior")}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -1518,7 +1518,7 @@ const QuotationPDFDialog = ({
                   {showStandardCol && standardTotal > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Standard)
+                        Package Cost (Standard)
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(standardTotal)}
@@ -1528,7 +1528,7 @@ const QuotationPDFDialog = ({
                   {showDeluxeCol && deluxeTotal > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Deluxe)
+                        Package Cost (Deluxe)
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(deluxeTotal)}
@@ -1538,7 +1538,7 @@ const QuotationPDFDialog = ({
                   {showSuperiorCol && superiorTotal > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Superior)
+                        Package Cost (Superior)
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(superiorTotal)}
@@ -1549,7 +1549,7 @@ const QuotationPDFDialog = ({
               ) : (
                 effectiveTotal > 0 && (
                   <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>Total Package Cost</td>
+                    <td style={{ padding: "12px" }}>Package Cost</td>
                     <td style={{ padding: "12px", textAlign: "right" }}>
                       {formatCurrency(effectiveTotal)}
                     </td>
