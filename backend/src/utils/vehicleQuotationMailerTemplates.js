@@ -94,8 +94,17 @@ const includedAdditionalServiceLines = (additionalServices = []) => {
     .filter((s) => String(s?.included || "").toLowerCase() === "yes")
     .map((s) => {
       const particulars = safe(s?.particulars, "Additional Service");
+      return `${particulars}`;
+    });
+};
+
+const excludedAdditionalServiceLines = (additionalServices = []) => {
+  return (Array.isArray(additionalServices) ? additionalServices : [])
+    .filter((s) => String(s?.included || "").toLowerCase() === "no")
+    .map((s) => {
+      const particulars = safe(s?.particulars, "Additional Service");
       const totalAmount = toNum(s?.totalAmount || s?.amount);
-      return `${particulars}: INR ${INR.format(totalAmount)}`;
+      return `${particulars} (Extra: INR ${INR.format(totalAmount)})`;
     });
 };
 
@@ -199,11 +208,15 @@ export function buildVehicleQuotationPdfPreviewEmail(vehicleData, customText = {
   ];
   const exclusionFromPolicies = toPolicyArray(policies?.exclusionPolicy);
   const exclusionFromVehicle = Array.isArray(vehicle?.exclusions) ? vehicle.exclusions.map(String).filter(Boolean) : [];
-  const exclusionCombined = exclusionFromPolicies.length > 0
+  const baseExclusions = exclusionFromPolicies.length > 0
     ? exclusionFromPolicies
     : exclusionFromVehicle.length > 0
     ? exclusionFromVehicle
     : DEFAULT_EXCLUSIONS;
+  const exclusionCombined = [
+    ...baseExclusions,
+    ...excludedAdditionalServiceLines(vehicle?.additionalServices),
+  ];
   const paymentCombinedRaw = toPolicyArray(policies?.paymentPolicy);
   const paymentCombined = paymentCombinedRaw.length > 0 ? paymentCombinedRaw : DEFAULT_PAYMENT_POLICY;
   const termsFromPolicies = toPolicyArray(policies?.termsAndConditions);
@@ -293,11 +306,15 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
   ];
   const exclusionFromPolicies2 = toPolicyArray(policies?.exclusionPolicy);
   const exclusionFromVehicle2 = Array.isArray(vehicle?.exclusions) ? vehicle.exclusions.map(String).filter(Boolean) : [];
-  const exclusionCombined = exclusionFromPolicies2.length > 0
+  const baseExclusions2 = exclusionFromPolicies2.length > 0
     ? exclusionFromPolicies2
     : exclusionFromVehicle2.length > 0
     ? exclusionFromVehicle2
     : DEFAULT_EXCLUSIONS;
+  const exclusionCombined = [
+    ...baseExclusions2,
+    ...excludedAdditionalServiceLines(vehicle?.additionalServices),
+  ];
   const paymentCombinedRaw = toPolicyArray(policies?.paymentPolicy);
   const paymentCombined = paymentCombinedRaw.length > 0 ? paymentCombinedRaw : DEFAULT_PAYMENT_POLICY;
   const termsFromPolicies2 = toPolicyArray(policies?.termsAndConditions);

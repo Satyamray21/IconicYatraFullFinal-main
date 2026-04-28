@@ -30,6 +30,10 @@ const vehicleSchema = mongoose.Schema({
         totalCost: {
             type: String,
             required: true
+        },
+        additionalServicesTotal: {
+            type: String,
+            default: "0"
         }
     },
     pickupDropDetails: {
