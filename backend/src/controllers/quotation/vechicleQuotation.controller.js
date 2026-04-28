@@ -44,6 +44,9 @@ const DEFAULT_PAYMENT_POLICY = [
   "Balance before departure",
 ];
 
+// Default Terms and Conditions URL
+const DEFAULT_TERMS_AND_CONDITIONS = "https://www.iconicyatra.com/terms-conditions";
+
 const generateVehicleQuotationId = async () => {
   const lastVehicle = await Vehicle.findOne({})
     .sort({ createdAt: -1 })
@@ -132,6 +135,7 @@ export const createVehicle = asyncHandler(async (req, res) => {
       inclusionPolicy: DEFAULT_INCLUSIONS,
       exclusionPolicy: DEFAULT_EXCLUSIONS,
       paymentPolicy: DEFAULT_PAYMENT_POLICY,
+      termsAndConditions: [DEFAULT_TERMS_AND_CONDITIONS],
     },
     vehicleQuotationId,
   });

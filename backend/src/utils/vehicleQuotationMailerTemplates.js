@@ -29,6 +29,8 @@ const DEFAULT_EXCLUSIONS = [
   "Anything not mentioned in Inclusions",
 ];
 
+const DEFAULT_TERMS_AND_CONDITIONS = ["https://www.iconicyatra.com/terms-conditions"];
+
 const safe = (v, fallback = "") =>
   v === undefined || v === null || String(v).trim() === ""
     ? fallback
@@ -103,15 +105,20 @@ const isHttpUrlString = (v) => {
 };
 
 const termsAndConditionsLine = (value) => {
-  const t = safe(value, "");
-  if (!t) return "";
-  if (!isHttpUrlString(t)) return `<p style="margin-bottom:10px;">${t}</p>`;
-  return `<p style="margin-bottom:10px;">
-    <b>As per company terms and conditions - </b>
-    <a href="${t}" target="_blank" rel="noopener noreferrer" style="color:#1976d2; font-weight:bold; word-break:break-all;">
-      View Terms & Conditions
-    </a>
-  </p>`;
+  const arr = Array.isArray(value) ? value : [value].filter(Boolean);
+  if (arr.length === 0) return "";
+  
+  const first = safe(arr[0], "");
+  if (isHttpUrlString(first)) {
+    return `<p style="margin-bottom:10px;">
+      <b>As per company terms and conditions - </b><br/>
+      <a href="${first}" target="_blank" rel="noopener noreferrer" style="color:#1976d2; font-weight:bold; word-break:break-all;">
+        ${first}
+      </a>
+    </p>`;
+  }
+  
+  return `<p style="margin-bottom:10px;">${arr.join("<br/>")}</p>`;
 };
 
 const cancellationPolicyUrlLine = (url) => {
@@ -199,7 +206,13 @@ export function buildVehicleQuotationPdfPreviewEmail(vehicleData, customText = {
     : DEFAULT_EXCLUSIONS;
   const paymentCombinedRaw = toPolicyArray(policies?.paymentPolicy);
   const paymentCombined = paymentCombinedRaw.length > 0 ? paymentCombinedRaw : DEFAULT_PAYMENT_POLICY;
-  const termsValue = policies?.termsAndConditions || customText?.termsAndConditions;
+  const termsFromPolicies = toPolicyArray(policies?.termsAndConditions);
+  const termsFromCompany = toPolicyArray(customText?.termsAndConditions);
+  const termsValue = termsFromPolicies.length > 0 
+    ? termsFromPolicies 
+    : termsFromCompany.length > 0 
+      ? termsFromCompany 
+      : DEFAULT_TERMS_AND_CONDITIONS;
   const cancellationPolicyUrl = customText?.cancellationPolicyUrl;
   const bankDetails = Array.isArray(customText?.bankDetails)
     ? customText.bankDetails
@@ -287,7 +300,13 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
     : DEFAULT_EXCLUSIONS;
   const paymentCombinedRaw = toPolicyArray(policies?.paymentPolicy);
   const paymentCombined = paymentCombinedRaw.length > 0 ? paymentCombinedRaw : DEFAULT_PAYMENT_POLICY;
-  const termsValue = policies?.termsAndConditions || customText?.termsAndConditions;
+  const termsFromPolicies2 = toPolicyArray(policies?.termsAndConditions);
+  const termsFromCompany2 = toPolicyArray(customText?.termsAndConditions);
+  const termsValue = termsFromPolicies2.length > 0 
+    ? termsFromPolicies2 
+    : termsFromCompany2.length > 0 
+      ? termsFromCompany2 
+      : DEFAULT_TERMS_AND_CONDITIONS;
   const cancellationPolicyUrl = customText?.cancellationPolicyUrl;
   const bankDetails = Array.isArray(customText?.bankDetails)
     ? customText.bankDetails
