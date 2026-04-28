@@ -263,6 +263,7 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
   const lead = vehicleData?.lead || {};
   const basics = vehicle?.basicsDetails || {};
   const pickupDrop = vehicle?.pickupDropDetails || {};
+  const tourPickupDrop = lead?.tourDetails?.pickupDrop || {};
   const totals = vehicleTotals(vehicle);
   const companyName = safe(customText?.companyName, "Iconic Travel");
   const policies = vehicle?.policies || {};
@@ -323,10 +324,8 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
       <p><b>Trip Type:</b> ${safe(basics?.tripType, "-")}</p>
       <p><b>No. of Days:</b> ${safe(basics?.noOfDays, "-")}</p>
       <p><b>No. of Pax:</b> ${summarizeGuests(lead)}</p>
-      <p><b>Arrival Date:</b> ${fmtDate(pickupDrop?.pickupDate)} ${pickupDrop?.pickupTime ? `, Time: ${fmtTime(pickupDrop.pickupTime)}` : ""}</p>
-      <p><b>Departure Date:</b> ${fmtDate(pickupDrop?.dropDate)} ${pickupDrop?.dropTime ? `, Time: ${fmtTime(pickupDrop.dropTime)}` : ""}</p>
-      <p><b>Pick Up Point:</b> ${safe(pickupDrop?.pickupLocation, "As per itinerary")}</p>
-      <p><b>Drop Point:</b> ${safe(pickupDrop?.dropLocation, "As per itinerary")}</p>
+      <p><b>Arrival Date:</b> ${safe(tourPickupDrop?.arrivalCity)} ${safe(pickupDrop?.pickupLocation)} (${fmtDate(pickupDrop?.pickupDate)}) ${pickupDrop?.pickupTime ? `, Time: ${fmtTime(pickupDrop.pickupTime)}` : ""}</p>
+      <p><b>Departure Date:</b> ${safe(tourPickupDrop?.departureCity)} ${safe(pickupDrop?.dropLocation)} (${fmtDate(pickupDrop?.dropDate)}) ${pickupDrop?.dropTime ? `, Time: ${fmtTime(pickupDrop.dropTime)}` : ""}</p>
       <br/>
       <p style="color:#d32f2f; font-weight:bold;">PAYMENT STATUS:</p>
       <p><b>Package Cost (excluding GST):</b> INR ${INR.format(totals.beforeTax)}</p>
