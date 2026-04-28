@@ -67,6 +67,7 @@ import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialo
 
 const FlightFinalize = () => {
   const [openDialog, setOpenDialog] = useState(false);
+  const { data: company, status } = useSelector((state) => state.companyUI);
   const [pnrList, setPnrList] = useState([]);
   const [finalFareList, setFinalFareList] = useState([]);
   const [totalFinalFare, setTotalFinalFare] = useState(0);
@@ -96,14 +97,14 @@ const FlightFinalize = () => {
     title: "",
     value: "",
   });
-  
+
   const { id } = useParams();
   const dispatch = useDispatch();
   const { quotationDetails, loading } = useSelector(
     (state) => state.flightQuotation
   );
   const quotation = quotationDetails?.quotation || null;
-  const lead = quotationDetails?.lead || null; 
+  const lead = quotationDetails?.lead || null;
   // Load flight data whenever quotation changes
   useEffect(() => {
     if (quotation) {
@@ -267,7 +268,7 @@ const FlightFinalize = () => {
     setEmailTemplateType(mailType === "booking" ? "booking" : "normal");
     try {
       await refreshEmailTemplates(defaultCompany?._id);
-    } catch {}
+    } catch { }
     setOpenEmailDialog(true);
   };
 
@@ -300,10 +301,10 @@ const FlightFinalize = () => {
       const selectedCompany =
         mailCompanies.find((c) => c?._id === values?.companyId) || null;
 
-      console.log("Sending flight quotation email...", { 
-        quotationId: quotation.flightQuotationId, 
-        isBookingMail, 
-        hasAttachment: !!pdfAttachmentForMail?.contentBase64 
+      console.log("Sending flight quotation email...", {
+        quotationId: quotation.flightQuotationId,
+        isBookingMail,
+        hasAttachment: !!pdfAttachmentForMail?.contentBase64
       });
 
       if (!isBookingMail && !pdfAttachmentForMail?.contentBase64) {
@@ -322,13 +323,13 @@ const FlightFinalize = () => {
         companyName: selectedCompany?.companyName || undefined,
         customText: isBookingMail
           ? {
-              booking: {
-                ...(values?.nextPayableAmount
-                  ? { nextPayableAmount: Number(values.nextPayableAmount) }
-                  : {}),
-                ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
-              },
-            }
+            booking: {
+              ...(values?.nextPayableAmount
+                ? { nextPayableAmount: Number(values.nextPayableAmount) }
+                : {}),
+              ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+            },
+          }
           : undefined,
         previewPdfMode:
           !isBookingMail &&
@@ -372,37 +373,37 @@ const FlightFinalize = () => {
 
   // Get customer mobile number - using the correct field name 'mobileNumber'
   const getCustomerMobile = () => {
-    return quotation?.personalDetails?.mobileNumber || 
-           quotation?.clientDetails?.mobileNumber ||
-           quotation?.lead?.personalDetails?.mobileNumber ||
-           "N/A";
+    return quotation?.personalDetails?.mobileNumber ||
+      quotation?.clientDetails?.mobileNumber ||
+      quotation?.lead?.personalDetails?.mobileNumber ||
+      "N/A";
   };
 
   // Get customer email - using the correct field name 'emailId'
   const getCustomerEmail = () => {
-    return quotation?.personalDetails?.emailId || 
-           quotation?.clientDetails?.email ||
-           quotation?.lead?.personalDetails?.emailId ||
-           "N/A";
+    return quotation?.personalDetails?.emailId ||
+      quotation?.clientDetails?.email ||
+      quotation?.lead?.personalDetails?.emailId ||
+      "N/A";
   };
 
   // Get customer name - using the correct field names
   const getCustomerName = () => {
     return quotation?.personalDetails?.fullName ||
-           quotation?.clientDetails?.clientName || 
-           quotation?.lead?.personalDetails?.fullName ||
-           "N/A";
+      quotation?.clientDetails?.clientName ||
+      quotation?.lead?.personalDetails?.fullName ||
+      "N/A";
   };
 
   const getCustomerLocation = () => {
-  const location = lead?.location; // ✅ FIXED
+    const location = lead?.location; // ✅ FIXED
 
-  if (!location) return "N/A";
+    if (!location) return "N/A";
 
-  const { city, state, country } = location;
+    const { city, state, country } = location;
 
-  return [city, state, country].filter(Boolean).join(", ");
-};
+    return [city, state, country].filter(Boolean).join(", ");
+  };
 
   const linesToPolicyArray = (v) => {
     if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean);
@@ -523,14 +524,15 @@ const FlightFinalize = () => {
   const tableHeaders = ["Flight", "From", "To", "Airline", "Flight No", "PNR", "Departure Date", "Departure Time", "Fare"];
 
   const footer = {
-    contact: `${getCustomerName()} | ${getCustomerMobile()}`,
-    phone: getCustomerMobile(),
-    email: getCustomerEmail(),
+    contact: company?.company?.contactPerson ||
+      company?.company?.call,
+    phone: company?.company?.call,
+    email: company?.company?.emailId,
     received: "₹ 0",
     balance: formatCurrency(totalFinalFare),
-    company: "Iconic Yatra",
-    address: "B-38 2nd floor, Sector 64, Noida, Uttar Pradesh – 201301",
-    website: "https://www.iconicyatra.com",
+    company: company?.company?.companyName,
+    address: company?.company?.address,
+    website: company?.company?.website,
   };
 
   const flightPolicies = quotation?.policies || {};
@@ -920,7 +922,7 @@ const FlightFinalize = () => {
                                 {flight.departureTime ? new Date(flight.departureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A"}
                               </TableCell>
                               <TableCell>{formatCurrency(finalFareList[index] || flight.fare)}</TableCell>
-                              
+
                             </TableRow>
                           ))}
                         </TableBody>
@@ -1067,7 +1069,7 @@ const FlightFinalize = () => {
                       {footer.website}
                     </a>
                     <Typography variant="subtitle1" sx={{ ml: 2 }}>
-                      GST : 09EYCPK8832C1ZC
+                      GST : {company?.company?.gst}
                     </Typography>
                   </Box>
                 </Box>
@@ -1089,9 +1091,9 @@ const FlightFinalize = () => {
         onSendMail={(payload) => {
           console.log("onSendMail triggered in FlightFinalize", payload);
           const attachment = payload?.pdfAttachment || (payload?.contentBase64 ? payload : null);
-          console.log("Attachment resolved in onSendMail:", { 
-            hasAttachment: !!attachment, 
-            hasContent: !!attachment?.contentBase64 
+          console.log("Attachment resolved in onSendMail:", {
+            hasAttachment: !!attachment,
+            hasContent: !!attachment?.contentBase64
           });
           setPdfAttachmentForMail(attachment);
           setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
