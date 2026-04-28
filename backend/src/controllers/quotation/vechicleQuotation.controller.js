@@ -217,7 +217,7 @@ export const updateVehicle = asyncHandler(async (req, res) => {
     contactDetails,
   } = req.body;
 
-  const updatedVehicle = await Vehicle.findByOneAndUpdate(
+  const updatedVehicle = await Vehicle.findOneAndUpdate(
     { vehicleQuotationId },
     {
       basicsDetails: {
