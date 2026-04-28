@@ -374,16 +374,16 @@ export const updateVehicleQuotationByQuotationId = asyncHandler(
       { new: true, runValidators: true },
     );
 
-    if (!updatedVehicle) {
-      throw new ApiError(404, "Vehicle quotation not found");
-    }
+    const lead = await Lead.findOne({
+      "personalDetails.fullName": updatedVehicle.basicsDetails.clientName,
+    });
 
     return res
       .status(200)
       .json(
         new ApiResponse(
           200,
-          updatedVehicle,
+          { vehicle: updatedVehicle, lead },
           "Vehicle quotation updated successfully",
         ),
       );

@@ -734,8 +734,7 @@ const VehicleQuotationPage = () => {
     );
     const taxRate = selectedTax ? selectedTax.rate : 0;
 
-    const amount =
-      currentService.included === "yes" ? parseFloat(currentService.amount) : 0;
+    const amount = parseFloat(currentService.amount) || 0;
     const taxAmount = amount * (taxRate / 100) || 0;
 
     const newService = {
@@ -771,12 +770,19 @@ const VehicleQuotationPage = () => {
   };
 
   const handleSaveServices = async () => {
-    if (!q?.vehicle?.vehicleQuotationId) return;
+    if (!id) return;
     try {
-      await axios.patch(`/vehicleQT/${q.vehicle.vehicleQuotationId}`, {
+      // Calculate the services total for the database
+      const servicesTotal = services
+        .filter((s) => s.included === "yes")
+        .reduce((sum, s) => sum + (parseFloat(s.totalAmount) || 0), 0);
+
+      await axios.patch(`/vehicleQT/${encodeURIComponent(id)}`, {
         additionalServices: services.map(({ id: _id, ...rest }) => rest),
+        "costDetails.additionalServicesTotal": String(servicesTotal),
       });
-      await dispatch(getVehicleQuotationById(q.vehicle.vehicleQuotationId));
+
+      await dispatch(getVehicleQuotationById(id));
       setSnackbar({
         open: true,
         message: "Services saved successfully",
@@ -1177,14 +1183,21 @@ const VehicleQuotationPage = () => {
       : "N/A";
 
   // Calculate correct amounts with GST percentage
+  // Note: totalCost from DB is the BASE cost. additionalServicesTotal is stored separately.
   const totalCost = parseFloat(costDetails.totalCost) || 0;
+  const dbServicesTotal = parseFloat(costDetails.additionalServicesTotal) || 0;
   const discountAmount = parseFloat(vehicle.discount) || 0;
   const amountAfterDiscount = totalCost - discountAmount;
 
   // Get GST percentage from tax.applyGst
   const gstPercentage = extractGstPercentage(vehicle.tax?.applyGst || "5%");
   const gstAmount = (amountAfterDiscount * gstPercentage) / 100;
-  const finalTotal = amountAfterDiscount + gstAmount;
+
+  // Grand Total = (Base - Discount + GST) + Additional Services
+  const finalTotal = amountAfterDiscount + gstAmount + dbServicesTotal;
+
+  // For display in breakdown only
+  const additionalServicesTotal = dbServicesTotal;
 
   // Calculate total received from payment history
   const totalReceived = paymentHistory.reduce((acc, v) => {
@@ -1261,28 +1274,42 @@ const VehicleQuotationPage = () => {
     {
       title: "Inclusion Policy",
       icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
-      content:
-        Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
+      content: [
+        ...(Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
           ? vehicle.inclusions
-          : Array.isArray(vehicle.policies?.inclusionPolicy) && vehicle.policies.inclusionPolicy.length > 0
+          : Array.isArray(vehicle.policies?.inclusionPolicy) &&
+            vehicle.policies.inclusionPolicy.length > 0
           ? vehicle.policies.inclusionPolicy
           : linesToPolicyArray(policyInputs.inclusionPolicy).length > 0
           ? linesToPolicyArray(policyInputs.inclusionPolicy)
-          : defaultPolicies.inclusions,
+          : defaultPolicies.inclusions),
+        ...(Array.isArray(vehicle.additionalServices)
+          ? vehicle.additionalServices
+              .filter((s) => s.included === "yes")
+              .map((s) => s.particulars)
+          : []),
+      ],
       field: "policies.inclusions",
       isArray: true,
     },
     {
       title: "Exclusion Policy",
       icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
-      content:
-        Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
+      content: [
+        ...(Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
           ? vehicle.exclusions
-          : Array.isArray(vehicle.policies?.exclusionPolicy) && vehicle.policies.exclusionPolicy.length > 0
+          : Array.isArray(vehicle.policies?.exclusionPolicy) &&
+            vehicle.policies.exclusionPolicy.length > 0
           ? vehicle.policies.exclusionPolicy
           : linesToPolicyArray(policyInputs.exclusionPolicy).length > 0
           ? linesToPolicyArray(policyInputs.exclusionPolicy)
-          : defaultPolicies.exclusions,
+          : defaultPolicies.exclusions),
+        ...(Array.isArray(vehicle.additionalServices)
+          ? vehicle.additionalServices
+              .filter((s) => s.included === "no")
+              .map((s) => `${s.particulars} (Extra: ${formatCurrency(s.totalAmount)})`)
+          : []),
+      ],
       field: "policies.exclusions",
       isArray: true,
     },
@@ -1405,23 +1432,37 @@ const VehicleQuotationPage = () => {
     reference: vehicle.vehicleQuotationId || "N/A",
     date: new Date().toLocaleDateString(),
     pricing: {
-      total: totalCost,
+      total: finalTotal,
       discount: discountAmount,
       gst: `${gstPercentage}%`,
     },
     policies: {
-      inclusions:
-        Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
+      inclusions: [
+        ...(Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
           ? vehicle.inclusions
-          : Array.isArray(vehicle.policies?.inclusionPolicy) && vehicle.policies.inclusionPolicy.length > 0
+          : Array.isArray(vehicle.policies?.inclusionPolicy) &&
+            vehicle.policies.inclusionPolicy.length > 0
           ? vehicle.policies.inclusionPolicy
-          : defaultPolicies.inclusions,
-      exclusions:
-        Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
+          : defaultPolicies.inclusions),
+        ...(Array.isArray(vehicle.additionalServices)
+          ? vehicle.additionalServices
+              .filter((s) => s.included === "yes")
+              .map((s) => s.particulars)
+          : []),
+      ],
+      exclusions: [
+        ...(Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
           ? vehicle.exclusions
-          : Array.isArray(vehicle.policies?.exclusionPolicy) && vehicle.policies.exclusionPolicy.length > 0
+          : Array.isArray(vehicle.policies?.exclusionPolicy) &&
+            vehicle.policies.exclusionPolicy.length > 0
           ? vehicle.policies.exclusionPolicy
-          : defaultPolicies.exclusions,
+          : defaultPolicies.exclusions),
+        ...(Array.isArray(vehicle.additionalServices)
+          ? vehicle.additionalServices
+              .filter((s) => s.included === "no")
+              .map((s) => `${s.particulars} (Extra: ${formatCurrency(s.totalAmount)})`)
+          : []),
+      ],
       paymentPolicy: (() => {
         const fromVehicle = toPolicyArray(vehicle.policies?.paymentPolicy);
         if (fromVehicle.length > 0) return fromVehicle.join("\n");
@@ -1661,6 +1702,11 @@ const VehicleQuotationPage = () => {
                               GST @ {gstPercentage}%:{" "}
                               {formatCurrency(gstAmount)}
                             </Typography>
+                            {additionalServicesTotal > 0 && (
+                              <Typography variant="body2" color="text.secondary">
+                                Additional Services: {formatCurrency(additionalServicesTotal)}
+                              </Typography>
+                            )}
                             <Typography
                               variant="body1"
                               color="primary"
