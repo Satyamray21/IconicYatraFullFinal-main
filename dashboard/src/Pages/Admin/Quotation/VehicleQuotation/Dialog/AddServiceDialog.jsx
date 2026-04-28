@@ -94,12 +94,7 @@ const AddServiceDialog = ({
               value={currentService.amount}
               onChange={(e) => onServiceChange("amount", e.target.value)}
               margin="normal"
-              disabled={currentService.included === "yes"}
-              placeholder={
-                currentService.included === "yes"
-                  ? "Included in quotation (no extra charge)"
-                  : ""
-              }
+              placeholder="Enter service amount"
             />
             <FormControl fullWidth margin="normal">
               <InputLabel>*Tax %</InputLabel>
@@ -107,7 +102,6 @@ const AddServiceDialog = ({
                 value={currentService.taxType}
                 onChange={(e) => onServiceChange("taxType", e.target.value)}
                 label="*Tax %"
-                disabled={currentService.included === "yes"}
               >
                 {taxOptions.map((option) => (
                   <MenuItem key={option.value} value={option.value}>

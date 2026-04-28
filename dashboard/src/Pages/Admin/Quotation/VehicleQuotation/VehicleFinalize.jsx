@@ -263,6 +263,7 @@ const VehicleQuotationPage = () => {
   });
 
   const [openAddService, setOpenAddService] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState(null);
   const [services, setServices] = useState([]);
   const [currentService, setCurrentService] = useState({
     included: "no",
@@ -739,7 +740,7 @@ const VehicleQuotationPage = () => {
 
     const newService = {
       ...currentService,
-      id: Date.now(),
+      id: editingServiceId || Date.now(),
       amount: amount,
       taxRate,
       taxAmount,
@@ -747,13 +748,29 @@ const VehicleQuotationPage = () => {
       taxLabel: selectedTax ? selectedTax.label : "Non",
     };
 
-    setServices((prev) => [...prev, newService]);
-    setCurrentService({
-      included: "yes",
-      particulars: "",
-      amount: "",
-      taxType: "",
-    });
+    if (editingServiceId) {
+      setServices((prev) =>
+        prev.map((s) => (s.id === editingServiceId ? newService : s)),
+      );
+      setEditingServiceId(null);
+    } else {
+      setServices((prev) => [...prev, newService]);
+    }
+
+    handleClearService();
+  };
+
+  const handleEditService = (serviceId) => {
+    const service = services.find((s) => s.id === serviceId);
+    if (service) {
+      setCurrentService({
+        included: service.included,
+        particulars: service.particulars,
+        amount: String(service.amount || ""),
+        taxType: service.taxType || "",
+      });
+      setEditingServiceId(serviceId);
+    }
   };
 
   const handleClearService = () => {
@@ -763,6 +780,7 @@ const VehicleQuotationPage = () => {
       amount: "",
       taxType: "",
     });
+    setEditingServiceId(null);
   };
 
   const handleRemoveService = (id) => {
@@ -2334,10 +2352,12 @@ const VehicleQuotationPage = () => {
         onServiceChange={handleServiceChange}
         services={services}
         onAddService={handleAddService}
+        onEditService={handleEditService}
         onClearService={handleClearService}
         onRemoveService={handleRemoveService}
         onSaveServices={handleSaveServices}
         taxOptions={taxOptions}
+        isEditingService={!!editingServiceId}
       />
 
       {/* Email Quotation Dialog */}
