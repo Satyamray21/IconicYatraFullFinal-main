@@ -999,8 +999,20 @@ const VehicleQuotationPage = () => {
         setLocalItinerary((prev) => [...prev, newItineraryItem]);
 
         if (keepOpen) {
+          const maxDays = parseInt(q?.vehicle?.basicsDetails?.noOfDays) || 0;
+          const nextDay = localItinerary.length + 2; // +1 for added, +1 for next
+
+          if (maxDays > 0 && nextDay > maxDays) {
+            handleCloseItineraryDialog();
+            setSnackbar({
+              open: true,
+              message: `Day ${nextDay - 1} added locally. Day limit reached (${maxDays} days).`,
+              severity: "success",
+            });
+            return;
+          }
+
           // Open next day automatically
-          const nextDay = (localItinerary.length + 1) + 1;
           setItineraryDialog({
             open: true,
             mode: "add",
@@ -1014,7 +1026,7 @@ const VehicleQuotationPage = () => {
             message: `Day ${nextDay - 1} added locally. Enter Day ${nextDay} details.`,
             severity: "success",
           });
-          return; // Exit early to keep dialog open
+          return;
         }
       } else if (mode === "edit") {
         setLocalItinerary((prev) =>
@@ -1036,21 +1048,21 @@ const VehicleQuotationPage = () => {
   };
 
   const handleBulkSaveItinerary = async () => {
-    if (!q?.vehicle?.vehicleQuotationId) return;
+    if (!id) return;
 
     try {
-      // Remove temp IDs before saving
-      const cleanedItinerary = localItinerary.map(({ _id, ...rest }) => ({
-        ...rest,
-        ...(_id?.startsWith?.("temp_") ? {} : { _id }),
+      // Simplify itinerary payload to avoid validation issues
+      const cleanedItinerary = localItinerary.map((item) => ({
+        title: item.title,
+        description: item.description,
       }));
 
-      await axios.patch(`/vehicleQT/${q.vehicle.vehicleQuotationId}`, {
+      await axios.patch(`/vehicleQT/${encodeURIComponent(id)}`, {
         itinerary: cleanedItinerary,
       });
 
       // Refresh the data
-      await dispatch(getVehicleQuotationById(q.vehicle.vehicleQuotationId));
+      await dispatch(getVehicleQuotationById(id));
 
       setSnackbar({
         open: true,
@@ -2373,13 +2385,22 @@ const VehicleQuotationPage = () => {
           <Button onClick={handleCloseItineraryDialog}>Cancel</Button>
           {itineraryDialog.mode === "add" ? (
             <>
-              <Button
-                onClick={() => handleSaveItinerary(true)}
-                variant="outlined"
-                color="primary"
-              >
-                Add & Next
-              </Button>
+              {(() => {
+                const maxDays = parseInt(q?.vehicle?.basicsDetails?.noOfDays) || 0;
+                const isLastDay = maxDays > 0 && (localItinerary.length + 1) >= maxDays;
+                
+                if (isLastDay) return null;
+                
+                return (
+                  <Button
+                    onClick={() => handleSaveItinerary(true)}
+                    variant="outlined"
+                    color="primary"
+                  >
+                    Add & Next
+                  </Button>
+                );
+              })()}
               <Button
                 onClick={() => handleSaveItinerary(false)}
                 variant="contained"
