@@ -17,22 +17,31 @@ const DEFAULT_EXCLUSIONS = [
   "Emergency evacuation",
   "Trip cancellation costs",
   "Personal Expenses: Laundry, Room service, Tips, Shopping, Medical expenses",
-  "Nathula Pass permit fee",
-  "Additional vehicle cost for Nathula visit",
-  "Special permits for restricted areas",
   "Flight / Train tickets",
   "Entry fees to sightseeing places",
   "Camera / video charges",
   "Ropeway / boating / adventure activities",
-  "Meals: Lunch/Dinner/Snacks / beverages",
+  "Meals: Lunch / Dinner / Snacks / Beverages (unless specifically mentioned)",
+  "Any extra costs due to unavoidable circumstances (natural calamities, strikes, lockdowns, bad weather, etc.)",
+  "Any sightseeing missed / cancelled due to factors beyond our control",
+  "Anything not mentioned in Inclusions",
 ];
 
 // Default inclusions for vehicle quotations
 const DEFAULT_INCLUSIONS = [
-  "Welcome drink on Arrival at the hotel",
-  "Accommodation in well equipped standard Rooms",
-  "5 Nights hotel stay given as per tour plan",
-  "Standard category hotels (or similar) include this also",
+  "Pick-up & drop from / to the airport or railway station as per the itinerary",
+  "All sightseeing & transfers in a well-maintained Private AC/Non-AC vehicle (sedan / SUV / tempo traveller/similar as per group size)",
+  "Driver's batta (allowance), fuel charges, parking fees, toll taxes & state permit charges",
+  "Vehicle available from 08:00 AM to 08:00 PM daily (extended hours on extra charges)",
+  "Note: AC will be switched off in hilly areas & during steep ascents/descents for safety",
+]
+
+// Default payment policy for vehicle quotations
+const DEFAULT_PAYMENT_POLICY = [
+  "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.",
+  "20% at reservation + 100% Flight / Train cost",
+  "60% after booking confirmation",
+  "Balance before departure",
 ];
 
 const generateVehicleQuotationId = async () => {
@@ -119,6 +128,11 @@ export const createVehicle = asyncHandler(async (req, res) => {
     },
     exclusions: DEFAULT_EXCLUSIONS,
     inclusions: DEFAULT_INCLUSIONS,
+    policies: {
+      inclusionPolicy: DEFAULT_INCLUSIONS,
+      exclusionPolicy: DEFAULT_EXCLUSIONS,
+      paymentPolicy: DEFAULT_PAYMENT_POLICY,
+    },
     vehicleQuotationId,
   });
 
@@ -425,15 +439,15 @@ const resolveMailAuth = (senderAccount) => {
   const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
   const user = useSecondary
     ? process.env.gmail2 ||
-      process.env.EMAIL_USER2 ||
-      process.env.gmail ||
-      process.env.EMAIL_USER
+    process.env.EMAIL_USER2 ||
+    process.env.gmail ||
+    process.env.EMAIL_USER
     : process.env.gmail || process.env.EMAIL_USER;
   const pass = useSecondary
     ? process.env.app_pass2 ||
-      process.env.EMAIL_PASS2 ||
-      process.env.app_pass ||
-      process.env.EMAIL_PASS
+    process.env.EMAIL_PASS2 ||
+    process.env.app_pass ||
+    process.env.EMAIL_PASS
     : process.env.app_pass || process.env.EMAIL_PASS;
   return { user, pass };
 };
@@ -449,7 +463,7 @@ const sumReceivedFromClient = (vouchers = []) => {
 
 export const previewVehicleQuotationMail = asyncHandler(async (req, res) => {
   const { vehicleQuotationId } = req.params;
-   const companyId = req.query.companyId;
+  const companyId = req.query.companyId;
   const companyName = req.query.companyName;
   const vehicle = await Vehicle.findOne({ vehicleQuotationId }).lean();
   if (!vehicle) throw new ApiError(404, "Vehicle quotation not found");
@@ -561,10 +575,10 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
   const generatedBody =
     type === "booking"
       ? buildVehicleQuotationBookingEmail(quotationData, {
-          ...companyMeta,
-          ...(customText?.booking || {}),
-          receivedAmount,
-        })
+        ...companyMeta,
+        ...(customText?.booking || {}),
+        receivedAmount,
+      })
       : buildVehicleQuotationPdfPreviewEmail(quotationData, companyMeta);
 
   const body =
@@ -589,17 +603,17 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
 
   const providedPdfAttachment =
     pdfAttachment &&
-    typeof pdfAttachment === "object" &&
-    String(pdfAttachment.contentBase64 || "").trim()
+      typeof pdfAttachment === "object" &&
+      String(pdfAttachment.contentBase64 || "").trim()
       ? {
-          filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
-          content: Buffer.from(
-            String(pdfAttachment.contentBase64).trim(),
-            "base64",
-          ),
-          contentType:
-            String(pdfAttachment.mimeType || "").trim() || "application/pdf",
-        }
+        filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+        content: Buffer.from(
+          String(pdfAttachment.contentBase64).trim(),
+          "base64",
+        ),
+        contentType:
+          String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+      }
       : null;
 
   const isBooking = String(type || "").trim().toLowerCase() === "booking";

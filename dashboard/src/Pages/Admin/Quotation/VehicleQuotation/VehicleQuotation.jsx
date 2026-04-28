@@ -86,6 +86,14 @@ const VehicleQuotationStep1 = () => {
 
   }, [dispatch]);
 
+  const recalculateTotal = (days, rate) => {
+    const d = parseFloat(days);
+    const r = parseFloat(rate);
+    if (!isNaN(d) && !isNaN(r) && d > 0) {
+      formik.setFieldValue("totalCost", String(d * r));
+    }
+  };
+
   const handleClientChange = (event) => {
     event.preventDefault();
     const selectedClientName = event.target.value;
@@ -99,18 +107,15 @@ const VehicleQuotationStep1 = () => {
 
     formik.handleChange(event);
 
-    // Find selected client details from API data
     const selectedLead = leadList.find(
       (lead) => lead.personalDetails.fullName === selectedClientName
     );
 
     if (selectedLead) {
       const { tourDetails } = selectedLead;
+      const days = (tourDetails?.accommodation?.noOfNights || 0) + 1;
 
-      formik.setFieldValue(
-        "noOfDays",
-        (tourDetails?.accommodation?.noOfNights || 0) + 1
-      );
+      formik.setFieldValue("noOfDays", days);
       formik.setFieldValue(
         "pickupDate",
         tourDetails?.pickupDrop?.arrivalDate
@@ -131,9 +136,23 @@ const VehicleQuotationStep1 = () => {
         "dropLocation",
         tourDetails?.pickupDrop?.departureLocation || ""
       );
+
+      // Trigger auto-calc if rate is already present
+      if (formik.values.perDayCost) {
+        recalculateTotal(days, formik.values.perDayCost);
+      }
     }
   };
 
+  const handleNoOfDaysChange = (e) => {
+    formik.handleChange(e);
+    recalculateTotal(e.target.value, formik.values.perDayCost);
+  };
+
+  const handlePerDayCostChange = (e) => {
+    formik.handleChange(e);
+    recalculateTotal(formik.values.noOfDays, e.target.value);
+  };
 
   const handleVehicleChange = (event) => {
     event.preventDefault();
@@ -149,7 +168,6 @@ const VehicleQuotationStep1 = () => {
   const handleDialogSave = async () => {
     if (newValue.trim() === "") return;
     if (fieldType === "client") {
-
       formik.setFieldValue("clientName", newValue);
     } else if (fieldType === "vehicle") {
       try {
@@ -250,17 +268,21 @@ const VehicleQuotationStep1 = () => {
                     fullWidth
                     label="No Of Days"
                     name="noOfDays"
+                    type="number"
+                    inputProps={{ min: 1 }}
                     value={formik.values.noOfDays}
-                    onChange={formik.handleChange}
+                    onChange={handleNoOfDaysChange}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField
                     fullWidth
-                    label="Per Day Cost"
+                    label="Per Day Cost (₹)"
                     name="perDayCost"
+                    type="number"
+                    inputProps={{ min: 0 }}
                     value={formik.values.perDayCost}
-                    onChange={formik.handleChange}
+                    onChange={handlePerDayCostChange}
                   />
                 </Grid>
               </Grid>
@@ -276,8 +298,10 @@ const VehicleQuotationStep1 = () => {
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField
                     fullWidth
-                    label="Total Costing"
+                    label="Total Costing (₹)"
                     name="totalCost"
+                    type="number"
+                    inputProps={{ min: 0 }}
                     value={formik.values.totalCost}
                     onChange={formik.handleChange}
                     error={formik.touched.totalCost && Boolean(formik.errors.totalCost)}

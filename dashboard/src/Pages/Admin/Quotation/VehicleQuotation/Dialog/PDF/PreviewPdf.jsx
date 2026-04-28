@@ -15,6 +15,9 @@ import {
   Grid,
   Link,
   TextField,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
 import {
   Download,
@@ -46,6 +49,7 @@ const VehicleQuotationPDFDialog = ({
   const printRef = useRef();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sendingMail, setSendingMail] = useState(false);
   const [renderComplete, setRenderComplete] = useState(false);
   const [companyOptions, setCompanyOptions] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
@@ -351,15 +355,18 @@ const VehicleQuotationPDFDialog = ({
     policiesExclusions.length > 0
       ? policiesExclusions
       : globalPolicyDefaults.exclusions;
+  const DEFAULT_PAYMENT_POLICY_TEXT =
+    "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.\n20% at reservation + 100% Flight / Train cost\n60% after booking confirmation\nBalance before departure";
+
   const finalPaymentPolicy =
-    paymentPolicy || globalPolicyDefaults.paymentPolicy;
+    paymentPolicy || globalPolicyDefaults.paymentPolicy || DEFAULT_PAYMENT_POLICY_TEXT;
   const finalCancellationArray =
     cancellationPolicyFromQuot.length > 0
       ? cancellationPolicyFromQuot
       : globalPolicyDefaults.cancellationPolicy
         ? globalPolicyDefaults.cancellationPolicy
-            .split("\n")
-            .filter((line) => line.trim())
+          .split("\n")
+          .filter((line) => line.trim())
         : [];
   const finalTermsConditions =
     termsConditions || globalPolicyDefaults.termsAndConditions;
@@ -453,6 +460,11 @@ const VehicleQuotationPDFDialog = ({
       for (let i = 0; i < pageElements.length; i++) {
         const page = pageElements[i];
 
+        // Skip empty pages
+        if (!page || page.innerHTML.trim() === "") {
+          continue;
+        }
+
         const tempContainer = document.createElement("div");
         tempContainer.style.position = "absolute";
         tempContainer.style.left = "-9999px";
@@ -487,6 +499,8 @@ const VehicleQuotationPDFDialog = ({
         const imgWidth = pageWidth;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
         const pageHeightPx = (pageHeight * canvas.width) / imgWidth;
+
+        // Only slice if content exceeds page height
         const sliceCount = Math.max(1, Math.ceil(canvas.height / pageHeightPx));
 
         for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex++) {
@@ -495,6 +509,9 @@ const VehicleQuotationPDFDialog = ({
             Math.floor(pageHeightPx),
             canvas.height - startY,
           );
+
+          // Skip empty slices
+          if (sliceHeightPx <= 0) continue;
 
           const sliceCanvas = document.createElement("canvas");
           sliceCanvas.width = canvas.width;
@@ -515,7 +532,8 @@ const VehicleQuotationPDFDialog = ({
           const sliceImgData = sliceCanvas.toDataURL("image/jpeg", 0.95);
           const sliceHeightMm = (sliceHeightPx * imgWidth) / canvas.width;
 
-          if (i > 0 || sliceIndex > 0) {
+          // Add new page for subsequent slices
+          if (pdf.internal.getNumberOfPages() > 0 && (i > 0 || sliceIndex > 0)) {
             pdf.addPage();
           }
 
@@ -532,15 +550,16 @@ const VehicleQuotationPDFDialog = ({
         }
       }
 
-      for (let i = 1; i <= pageElements.length; i++) {
+      // Remove any blank pages and add page numbers
+      const totalPages = pdf.internal.getNumberOfPages();
+      const pagesToKeep = [];
+
+      for (let i = 1; i <= totalPages; i++) {
         pdf.setPage(i);
         pdf.setFontSize(8);
         pdf.setTextColor(150, 150, 150);
-        pdf.text(
-          `Page ${i} of ${pageElements.length}`,
-          pageWidth - 30,
-          pageHeight - 10,
-        );
+        pdf.text(`Page ${i} of ${totalPages}`, pageWidth - 30, pageHeight - 10);
+        pagesToKeep.push(i);
       }
 
       pdf.setProperties({
@@ -575,13 +594,61 @@ const VehicleQuotationPDFDialog = ({
 
   const handleSendMailWithPdf = async () => {
     if (typeof onSendMail !== "function") return;
-    const payload = await handleDownloadPDF({ shouldDownload: false });
-    if (!payload?.contentBase64) return;
-    onSendMail({
-      pdfAttachment: payload,
-      previewPdfMode: emailContentMode === "short",
-      to: String(recipientEmail || "").trim(),
-    });
+
+    try {
+      setSendingMail(true);
+      setError("");
+
+      const payload = await handleDownloadPDF({ shouldDownload: false });
+      if (!payload?.contentBase64) {
+        setError("Failed to generate PDF for email");
+        return;
+      }
+
+      // Auto-fetch email content based on selected mode
+      let emailContent = null;
+      try {
+        if (emailContentMode === "short") {
+          const shortResponse = await axios.post("/get-short-vehicle-email-content", {
+            quotationId: quotationData._id,
+            customerName,
+            reference,
+            finalTotal,
+            vehicleType: hotelType,
+          });
+          emailContent = shortResponse?.data?.content || null;
+        } else {
+          const fullResponse = await axios.post("/get-full-vehicle-email-content", {
+            quotationId: quotationData._id,
+            customerName,
+            reference,
+            finalTotal,
+            destinationSummary,
+            quotationTitle,
+            pickupArrival,
+            pickupDeparture,
+            hotelType,
+            hotelGuests,
+          });
+          emailContent = fullResponse?.data?.content || null;
+        }
+      } catch (emailErr) {
+        console.error("Failed to auto-fetch email content:", emailErr);
+        // Continue without email content if fetch fails
+      }
+
+      onSendMail({
+        pdfAttachment: payload,
+        previewPdfMode: emailContentMode === "short",
+        to: String(recipientEmail || "").trim(),
+        autoEmailContent: emailContent,
+      });
+    } catch (err) {
+      console.error("Email sending error:", err);
+      setError("Failed to send email: " + (err.message || "Please try again"));
+    } finally {
+      setSendingMail(false);
+    }
   };
 
   useEffect(() => {
@@ -591,11 +658,11 @@ const VehicleQuotationPDFDialog = ({
     }
     if (!autoSendForMail) return;
     if (autoSendTriggeredRef.current) return;
-    if (!renderComplete || !imagesLoaded || loading) return;
+    if (!renderComplete || !imagesLoaded || loading || sendingMail) return;
 
     autoSendTriggeredRef.current = true;
     handleSendMailWithPdf();
-  }, [open, autoSendForMail, renderComplete, imagesLoaded, loading]);
+  }, [open, autoSendForMail, renderComplete, imagesLoaded, loading, sendingMail]);
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
@@ -934,7 +1001,7 @@ const VehicleQuotationPDFDialog = ({
             <Button
               onClick={() => handleDownloadPDF({ shouldDownload: true })}
               startIcon={
-                loading ? <span style={{ width: 20 }}>⏳</span> : <Download />
+                loading ? <CircularProgress size={20} /> : <Download />
               }
               variant="contained"
               size="small"
@@ -965,12 +1032,14 @@ const VehicleQuotationPDFDialog = ({
                 </FormControl>
                 <Button
                   onClick={handleSendMailWithPdf}
-                  startIcon={<Email />}
+                  startIcon={
+                    sendingMail ? <CircularProgress size={20} /> : <Email />
+                  }
                   variant="outlined"
                   size="small"
-                  disabled={!renderComplete || loading}
+                  disabled={!renderComplete || loading || sendingMail}
                 >
-                  {autoSendForMail && loading ? "Preparing..." : "Send Mail"}
+                  {sendingMail ? "Sending Mail..." : (autoSendForMail && loading ? "Preparing..." : "Send Mail")}
                 </Button>
               </>
             )}
@@ -986,6 +1055,17 @@ const VehicleQuotationPDFDialog = ({
         </div>
       </DialogTitle>
       <DialogContent dividers sx={{ p: 0, bgcolor: "#f0f0f0" }}>
+        <Snackbar
+          open={!!error}
+          autoHideDuration={6000}
+          onClose={() => setError("")}
+          anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        >
+          <Alert severity="error" onClose={() => setError("")}>
+            {error}
+          </Alert>
+        </Snackbar>
+
         {(!imagesLoaded || !renderComplete) && open && (
           <div
             style={{
@@ -1013,8 +1093,10 @@ const VehicleQuotationPDFDialog = ({
             style={{
               padding: "30px",
               background: "#fff",
-              minHeight: "297mm",
+              minHeight: "100%",
+              pageBreakAfter: "always",
               breakAfter: "page",
+              position: "relative",
             }}
           >
             {/* Header with Logo */}
@@ -1297,14 +1379,16 @@ const VehicleQuotationPDFDialog = ({
             )}
           </div>
 
-          {/* PAGE 2: Itinerary Plan + Cost Summary (Inclusion Policy removed from here) */}
+          {/* PAGE 2: Itinerary Plan + Cost Summary */}
           <div
             className="pdf-page"
             style={{
               padding: "30px",
               background: "#fff",
-              minHeight: "297mm",
+              minHeight: "100%",
+              pageBreakAfter: "always",
               breakAfter: "page",
+              position: "relative",
             }}
           >
             <div
@@ -1346,10 +1430,17 @@ const VehicleQuotationPDFDialog = ({
             </div>
           </div>
 
-          {/* PAGE 3 (LAST PAGE): Inclusion Policy + Exclusion Policy + Payment Policy + Cancellation & Refund Policy + Terms & Conditions + Footer */}
+          {/* PAGE 3: All Policies (Inclusion, Exclusion, Payment, Cancellation) - NO Terms & Conditions */}
           <div
             className="pdf-page"
-            style={{ padding: "30px", background: "#fff" }}
+            style={{
+              padding: "30px",
+              background: "#fff",
+              minHeight: "100%",
+              pageBreakAfter: "always",
+              breakAfter: "page",
+              position: "relative",
+            }}
           >
             <div
               style={{
@@ -1364,10 +1455,10 @@ const VehicleQuotationPDFDialog = ({
                 gap: "10px",
               }}
             >
-              <Description /> Policies & Terms
+              <Description /> Policies
             </div>
 
-            {/* Inclusion Policy - Now on PAGE 3 */}
+            {/* Inclusion Policy */}
             <InclusionPolicyComponent />
 
             {/* Exclusion Policy */}
@@ -1476,6 +1567,8 @@ const VehicleQuotationPDFDialog = ({
                 </div>
               </div>
             )}
+
+            {/* Net Banking Section */}
             {netBankingPayeeName && (
               <div style={{ marginBottom: "35px" }}>
                 <div
@@ -1529,6 +1622,7 @@ const VehicleQuotationPDFDialog = ({
               </div>
             )}
 
+            {/* Cancellation & Refund Policy */}
             {(finalCancellationArray.length > 0 || companyCancellationUrl) && (
               <div style={{ marginBottom: "25px" }}>
                 <div
@@ -1583,82 +1677,95 @@ const VehicleQuotationPDFDialog = ({
                 </div>
               </div>
             )}
+          </div>
 
-            {/* Terms & Conditions */}
-            <div
-              style={{
-                marginBottom: "10px",
-                breakInside: "avoid",
-                pageBreakInside: "avoid",
-              }}
-            >
+          {/* PAGE 4: Terms & Conditions + Footer (Footer forced to bottom) */}
+          <div
+            className="pdf-page"
+            style={{
+              padding: "30px",
+              background: "#fff",
+              minHeight: "100%",
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+            }}
+          >
+            {/* Terms & Conditions Section - Always at TOP */}
+            <div>
               <div
                 style={{
-                  marginBottom: "16px",
+                  fontWeight: "bold",
+                  fontSize: "22px",
+                  marginBottom: "25px",
+                  borderBottom: "3px solid #667eea",
+                  paddingBottom: "10px",
+                  color: "#333",
                   display: "flex",
                   alignItems: "center",
-                  gap: "8px",
+                  gap: "10px",
                 }}
               >
-                <Description style={{ color: "#333" }} />
-                <span
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: "bold",
-                    color: "#333",
-                  }}
-                >
-                  Terms & Conditions
-                </span>
+                <Description /> Terms & Conditions
               </div>
+
               <div
                 style={{
-                  padding: "15px",
-                  background: "#fafafa",
-                  borderRadius: "12px",
-                  border: "1px solid #e0e0e0",
-                  textAlign: "center",
-                  display: "block",
-                  width: "100%",
+                  marginBottom: "40px",
+                  breakInside: "avoid",
+                  pageBreakInside: "avoid",
                 }}
               >
                 <div
                   style={{
-                    fontSize: "14px",
-                    color: "#555",
-                    lineHeight: "1.6",
-                    padding: "8px",
+                    padding: "20px",
+                    background: "#fafafa",
+                    borderRadius: "12px",
+                    border: "1px solid #e0e0e0",
+                    textAlign: "center",
+                    display: "block",
+                    width: "100%",
                   }}
                 >
-                  As per company website{" "}
-                  <a
-                    data-pdf-link="terms"
-                    href={
-                      companyTermsUrl !== "#"
-                        ? companyTermsUrl
-                        : companyWebsiteUrl
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <div
                     style={{
-                      color: "#667eea",
-                      textDecoration: "underline",
-                      fontWeight: "bold",
-                      wordBreak: "break-all",
+                      fontSize: "14px",
+                      color: "#555",
+                      lineHeight: "1.6",
+                      padding: "8px",
                     }}
                   >
-                    {companyTermsUrl !== "#"
-                      ? companyTermsUrl
-                      : companyWebsiteUrl !== "#"
-                        ? companyWebsiteUrl
-                        : "www.iconicyatra.com"}
-                  </a>
+                    As per company website{" "}
+                    <a
+                      data-pdf-link="terms"
+                      href={
+                        companyTermsUrl !== "#"
+                          ? companyTermsUrl
+                          : companyWebsiteUrl
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: "#667eea",
+                        textDecoration: "underline",
+                        fontWeight: "bold",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {companyTermsUrl !== "#"
+                        ? companyTermsUrl
+                        : companyWebsiteUrl !== "#"
+                          ? companyWebsiteUrl
+                          : "www.iconicyatra.com"}
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Footer Section */}
-            <div style={{ textAlign: "center" }}>
+            {/* Footer Section - FORCED to BOTTOM using margin-top: auto */}
+            <div style={{ textAlign: "center", marginTop: "700px" }}>
               {imageElements.logo && (
                 <div style={{ marginBottom: "15px" }}>
                   <img

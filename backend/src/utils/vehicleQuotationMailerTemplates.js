@@ -1,5 +1,34 @@
 const INR = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
 
+const DEFAULT_PAYMENT_POLICY = [
+  "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.",
+  "20% at reservation + 100% Flight / Train cost",
+  "60% after booking confirmation",
+  "Balance before departure",
+];
+
+const DEFAULT_INCLUSIONS = [
+  "Pick-up & drop from / to the airport or railway station as per the itinerary",
+  "All sightseeing & transfers in a well-maintained Private AC/Non-AC vehicle (sedan / SUV / tempo traveller/similar as per group size)",
+  "Driver's batta (allowance), fuel charges, parking fees, toll taxes & state permit charges",
+  "Vehicle available from 08:00 AM to 08:00 PM daily (extended hours on extra charges)",
+  "Note: AC will be switched off in hilly areas & during steep ascents/descents for safety",
+];
+
+const DEFAULT_EXCLUSIONS = [
+  "Travel insurance",
+  "Emergency evacuation",
+  "Trip cancellation costs",
+  "Personal Expenses: Laundry, Room service, Tips, Shopping, Medical expenses",
+  "Flight / Train tickets",
+  "Entry fees to sightseeing places",
+  "Camera / video charges",
+  "Ropeway / boating / adventure activities",
+  "Meals: Lunch / Dinner / Snacks / Beverages (unless specifically mentioned)",
+  "Any extra costs due to unavoidable circumstances (natural calamities, strikes, lockdowns, bad weather, etc.)",
+  "Anything not mentioned in Inclusions",
+];
+
 const safe = (v, fallback = "") =>
   v === undefined || v === null || String(v).trim() === ""
     ? fallback
@@ -150,12 +179,26 @@ export function buildVehicleQuotationPdfPreviewEmail(vehicleData, customText = {
   const companyName = safe(customText?.companyName, "Iconic Travel");
   const companyWebsite = safe(customText?.companyWebsite);
   const policies = vehicle?.policies || {};
+  const inclusionFromPolicies = toPolicyArray(policies?.inclusionPolicy);
+  const inclusionFromVehicle = Array.isArray(vehicle?.inclusions) ? vehicle.inclusions.map(String).filter(Boolean) : [];
+  const baseInclusions = inclusionFromPolicies.length > 0
+    ? inclusionFromPolicies
+    : inclusionFromVehicle.length > 0
+    ? inclusionFromVehicle
+    : DEFAULT_INCLUSIONS;
   const inclusionWithAdditional = [
-    ...toPolicyArray(policies?.inclusionPolicy),
+    ...baseInclusions,
     ...includedAdditionalServiceLines(vehicle?.additionalServices),
   ];
-  const exclusionCombined = toPolicyArray(policies?.exclusionPolicy);
-  const paymentCombined = toPolicyArray(policies?.paymentPolicy);
+  const exclusionFromPolicies = toPolicyArray(policies?.exclusionPolicy);
+  const exclusionFromVehicle = Array.isArray(vehicle?.exclusions) ? vehicle.exclusions.map(String).filter(Boolean) : [];
+  const exclusionCombined = exclusionFromPolicies.length > 0
+    ? exclusionFromPolicies
+    : exclusionFromVehicle.length > 0
+    ? exclusionFromVehicle
+    : DEFAULT_EXCLUSIONS;
+  const paymentCombinedRaw = toPolicyArray(policies?.paymentPolicy);
+  const paymentCombined = paymentCombinedRaw.length > 0 ? paymentCombinedRaw : DEFAULT_PAYMENT_POLICY;
   const termsValue = policies?.termsAndConditions || customText?.termsAndConditions;
   const cancellationPolicyUrl = customText?.cancellationPolicyUrl;
   const bankDetails = Array.isArray(customText?.bankDetails)
@@ -223,12 +266,26 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
   const totals = vehicleTotals(vehicle);
   const companyName = safe(customText?.companyName, "Iconic Travel");
   const policies = vehicle?.policies || {};
+  const inclusionFromPolicies2 = toPolicyArray(policies?.inclusionPolicy);
+  const inclusionFromVehicle2 = Array.isArray(vehicle?.inclusions) ? vehicle.inclusions.map(String).filter(Boolean) : [];
+  const baseInclusions2 = inclusionFromPolicies2.length > 0
+    ? inclusionFromPolicies2
+    : inclusionFromVehicle2.length > 0
+    ? inclusionFromVehicle2
+    : DEFAULT_INCLUSIONS;
   const inclusionWithAdditional = [
-    ...toPolicyArray(policies?.inclusionPolicy),
+    ...baseInclusions2,
     ...includedAdditionalServiceLines(vehicle?.additionalServices),
   ];
-  const exclusionCombined = toPolicyArray(policies?.exclusionPolicy);
-  const paymentCombined = toPolicyArray(policies?.paymentPolicy);
+  const exclusionFromPolicies2 = toPolicyArray(policies?.exclusionPolicy);
+  const exclusionFromVehicle2 = Array.isArray(vehicle?.exclusions) ? vehicle.exclusions.map(String).filter(Boolean) : [];
+  const exclusionCombined = exclusionFromPolicies2.length > 0
+    ? exclusionFromPolicies2
+    : exclusionFromVehicle2.length > 0
+    ? exclusionFromVehicle2
+    : DEFAULT_EXCLUSIONS;
+  const paymentCombinedRaw = toPolicyArray(policies?.paymentPolicy);
+  const paymentCombined = paymentCombinedRaw.length > 0 ? paymentCombinedRaw : DEFAULT_PAYMENT_POLICY;
   const termsValue = policies?.termsAndConditions || customText?.termsAndConditions;
   const cancellationPolicyUrl = customText?.cancellationPolicyUrl;
   const bankDetails = Array.isArray(customText?.bankDetails)
