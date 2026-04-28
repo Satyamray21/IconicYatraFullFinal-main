@@ -129,6 +129,18 @@ function linesToPolicyArray(v) {
   return [String(v)];
 }
 
+// Convert any value to array of non-empty strings (mirrors backend toPolicyArray)
+function toPolicyArray(value) {
+  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof value === "string") {
+    return value
+      .split("\n")
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 // Maps UI field paths to Mongo $set keys
 function buildMongoSetFromDisplayField(field, value) {
   const P = "policies";
@@ -833,19 +845,27 @@ const VehicleQuotationPage = () => {
 
     const defaultPolicies = {
       inclusions: [
-        "All transfers and tours in a Private AC cab or similar vehicle.",
-        "Parking, toll charges, fuel, and driver expenses.",
-        "Hotel taxes.",
-        "Car AC will be off during hill station tours due to low temperatures.",
+        "Pick-up & drop from / to the airport or railway station as per the itinerary",
+        "All sightseeing & transfers in a well-maintained Private AC vehicle (sedan / SUV / tempo traveller as per group size)",
+        "Driver's batta (allowance), fuel charges, parking fees, toll taxes & state permit charges",
+        "Vehicle available from 08:00 AM to 08:00 PM daily (extended hours on extra charges)",
+        "Note: AC will be switched off in hilly areas & during steep ascents/descents for safety",
       ],
       exclusions: [
-        "Any extra costs arising due to unavoidable circumstances like natural calamities, lockdowns, heavy snowfall/rains, local political issues, strikes, riots, bandh, bad weather conditions, vehicle malfunctions, or law & order problems.",
-        "Cancellations of flight, train, bus, etc. No refunds or adjustments possible if sightseeing is affected due to such reasons. Extra costs to be borne by the guest on the spot.",
-        "Any costs for COVID testing before, during, or after the tour. Mandatory quarantine expenses to be borne by guests.",
-        "Sightseeing entry tickets are not included in the package cost.",
+        "Travel insurance",
+        "Emergency evacuation",
+        "Trip cancellation costs",
+        "Personal Expenses: Laundry, Room service, Tips, Shopping, Medical expenses",
+        "Flight / Train tickets",
+        "Entry fees to sightseeing places",
+        "Camera / video charges",
+        "Ropeway / boating / adventure activities",
+        "Meals: Lunch / Dinner / Snacks / Beverages (unless specifically mentioned)",
+        "Any extra costs due to unavoidable circumstances (natural calamities, strikes, lockdowns, bad weather, etc.)",
+        "Anything not mentioned in Inclusions",
       ],
       paymentPolicy:
-        "50% amount to be paid at the time of confirmation, balance 50% to be paid at least 10 days before the start date.",
+        "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.\n20% at reservation + 100% Flight / Train cost\n60% after booking confirmation\nBalance before departure",
       cancellationPolicy: [
         "Cancellations before 15 days: 50% of the total tour cost will be deducted.",
         "Cancellations within 7 days: No refunds, 100% charges applicable.",
@@ -1141,21 +1161,35 @@ const VehicleQuotationPage = () => {
   ];
 
   // Default policies if not provided in API response
+  const DEFAULT_PAYMENT_POLICY_LINES = [
+    "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.",
+    "20% at reservation + 100% Flight / Train cost",
+    "60% after booking confirmation",
+    "Balance before departure",
+  ];
+
   const defaultPolicies = {
     inclusions: [
-      "All transfers and tours in a Private AC cab or similar vehicle.",
-      "Parking, toll charges, fuel, and driver expenses.",
-      "Hotel taxes.",
-      "Car AC will be off during hill station tours due to low temperatures.",
+      "Pick-up & drop from / to the airport or railway station as per the itinerary",
+      "All sightseeing & transfers in a well-maintained Private AC vehicle (sedan / SUV / tempo traveller as per group size)",
+      "Driver's batta (allowance), fuel charges, parking fees, toll taxes & state permit charges",
+      "Vehicle available from 08:00 AM to 08:00 PM daily (extended hours on extra charges)",
+      "Note: AC will be switched off in hilly areas & during steep ascents/descents for safety",
     ],
     exclusions: [
-      "Any extra costs arising due to unavoidable circumstances like natural calamities, lockdowns, heavy snowfall/rains, local political issues, strikes, riots, bandh, bad weather conditions, vehicle malfunctions, or law & order problems.",
-      "Cancellations of flight, train, bus, etc. No refunds or adjustments possible if sightseeing is affected due to such reasons. Extra costs to be borne by the guest on the spot.",
-      "Any costs for COVID testing before, during, or after the tour. Mandatory quarantine expenses to be borne by guests.",
-      "Sightseeing entry tickets are not included in the package cost.",
+      "Travel insurance",
+      "Emergency evacuation",
+      "Trip cancellation costs",
+      "Personal Expenses: Laundry, Room service, Tips, Shopping, Medical expenses",
+      "Flight / Train tickets",
+      "Entry fees to sightseeing places",
+      "Camera / video charges",
+      "Ropeway / boating / adventure activities",
+      "Meals: Lunch / Dinner / Snacks / Beverages (unless specifically mentioned)",
+      "Any extra costs due to unavoidable circumstances (natural calamities, strikes, lockdowns, bad weather, etc.)",
+      "Anything not mentioned in Inclusions",
     ],
-    paymentPolicy:
-      "50% amount to be paid at the time of confirmation, balance 50% to be paid at least 10 days before the start date.",
+    paymentPolicy: DEFAULT_PAYMENT_POLICY_LINES.join("\n"),
     cancellationPolicy: [
       "Cancellations before 15 days: 50% of the total tour cost will be deducted.",
       "Cancellations within 7 days: No refunds, 100% charges applicable.",
@@ -1169,6 +1203,8 @@ const VehicleQuotationPage = () => {
       content:
         Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
           ? vehicle.inclusions
+          : Array.isArray(vehicle.policies?.inclusionPolicy) && vehicle.policies.inclusionPolicy.length > 0
+          ? vehicle.policies.inclusionPolicy
           : linesToPolicyArray(policyInputs.inclusionPolicy).length > 0
           ? linesToPolicyArray(policyInputs.inclusionPolicy)
           : defaultPolicies.inclusions,
@@ -1181,6 +1217,8 @@ const VehicleQuotationPage = () => {
       content:
         Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
           ? vehicle.exclusions
+          : Array.isArray(vehicle.policies?.exclusionPolicy) && vehicle.policies.exclusionPolicy.length > 0
+          ? vehicle.policies.exclusionPolicy
           : linesToPolicyArray(policyInputs.exclusionPolicy).length > 0
           ? linesToPolicyArray(policyInputs.exclusionPolicy)
           : defaultPolicies.exclusions,
@@ -1190,11 +1228,14 @@ const VehicleQuotationPage = () => {
     {
       title: "Payment Policy",
       icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
-      content:
-        (Array.isArray(policyInputs.paymentPolicy)
+      content: (() => {
+        const fromVehicle = toPolicyArray(vehicle.policies?.paymentPolicy);
+        if (fromVehicle.length > 0) return fromVehicle.join("\n");
+        const fromInput = Array.isArray(policyInputs.paymentPolicy)
           ? policyInputs.paymentPolicy.join("\n")
-          : String(policyInputs.paymentPolicy || "").trim()) ||
-        defaultPolicies.paymentPolicy,
+          : String(policyInputs.paymentPolicy || "").trim();
+        return fromInput || DEFAULT_PAYMENT_POLICY_LINES.join("\n");
+      })(),
       field: "policies.paymentPolicy",
       isArray: false,
     },
@@ -1308,9 +1349,26 @@ const VehicleQuotationPage = () => {
       gst: `${gstPercentage}%`,
     },
     policies: {
-      inclusions: defaultPolicies.inclusions,
-      exclusions: defaultPolicies.exclusions,
-      paymentPolicy: defaultPolicies.paymentPolicy,
+      inclusions:
+        Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
+          ? vehicle.inclusions
+          : Array.isArray(vehicle.policies?.inclusionPolicy) && vehicle.policies.inclusionPolicy.length > 0
+          ? vehicle.policies.inclusionPolicy
+          : defaultPolicies.inclusions,
+      exclusions:
+        Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
+          ? vehicle.exclusions
+          : Array.isArray(vehicle.policies?.exclusionPolicy) && vehicle.policies.exclusionPolicy.length > 0
+          ? vehicle.policies.exclusionPolicy
+          : defaultPolicies.exclusions,
+      paymentPolicy: (() => {
+        const fromVehicle = toPolicyArray(vehicle.policies?.paymentPolicy);
+        if (fromVehicle.length > 0) return fromVehicle.join("\n");
+        const fromInput = Array.isArray(policyInputs.paymentPolicy)
+          ? policyInputs.paymentPolicy.join("\n")
+          : String(policyInputs.paymentPolicy || "").trim();
+        return fromInput || DEFAULT_PAYMENT_POLICY_LINES.join("\n");
+      })(),
       cancellationPolicy: defaultPolicies.cancellationPolicy,
       terms: terms,
     },
