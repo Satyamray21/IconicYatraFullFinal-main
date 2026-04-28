@@ -1121,6 +1121,25 @@ const VehicleQuotationPage = () => {
   const location = lead.location || {};
   const tourDetails = lead.tourDetails || {};
   const members = tourDetails.members || {};
+  const tourPickupDrop = tourDetails.pickupDrop || {};
+
+  // Helper to format date/time
+  const fmtDate = (d) =>
+    d
+      ? new Date(d).toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : "N/A";
+  const fmtTime = (t) =>
+    t
+      ? new Date(t).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        })
+      : "N/A";
 
   // Calculate correct amounts with GST percentage
   const totalCost = parseFloat(costDetails.totalCost) || 0;
@@ -1258,11 +1277,11 @@ const VehicleQuotationPage = () => {
       ),
       text:
         pickupDropDetails.pickupArrivalNote ||
-        `Arrival: ${pickupDropDetails.pickupLocation || "N/A"} (${
-          pickupDropDetails.pickupDate
-            ? new Date(pickupDropDetails.pickupDate).toLocaleDateString()
-            : "N/A"
-        })`,
+        `Arrival: ${tourPickupDrop.arrivalCity || ""} ${
+          pickupDropDetails.pickupLocation || ""
+        } (${fmtDate(pickupDropDetails.pickupDate)}) (${fmtTime(
+          pickupDropDetails.pickupTime,
+        )})`,
       editable: true,
       field: "pickup",
       nestedKey: "arrival",
@@ -1271,11 +1290,11 @@ const VehicleQuotationPage = () => {
       icon: <Cancel sx={{ fontSize: 16, mr: 0.5, color: "error.main" }} />,
       text:
         pickupDropDetails.pickupDepartureNote ||
-        `Departure: ${pickupDropDetails.dropLocation || "N/A"} (${
-          pickupDropDetails.dropDate
-            ? new Date(pickupDropDetails.dropDate).toLocaleDateString()
-            : "N/A"
-        })`,
+        `Departure: ${tourPickupDrop.departureCity || ""} ${
+          pickupDropDetails.dropLocation || ""
+        } (${fmtDate(pickupDropDetails.dropDate)}) (${fmtTime(
+          pickupDropDetails.dropTime,
+        )})`,
       editable: true,
       field: "pickup",
       nestedKey: "departure",
@@ -1563,31 +1582,20 @@ const VehicleQuotationPage = () => {
                               {formatCurrency(finalTotal)}
                             </Typography>
 
-                            <Typography variant="body1">
-                              Pickup :{" "}
-                              {pickupDropDetails.pickupDate
-                                ? new Date(
-                                    pickupDropDetails.pickupDate,
-                                  ).toLocaleDateString("en-GB", {
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                    year: "numeric",
-                                  })
-                                : "N/A"}
-                            </Typography>
+                             <Typography variant="body1">
+                                Pickup :{" "}
+                                {tourPickupDrop.arrivalCity || ""}{" "}
+                                {pickupDropDetails.pickupLocation || ""}{" "}
+                                ({fmtDate(pickupDropDetails.pickupDate)}) (
+                                {fmtTime(pickupDropDetails.pickupTime)})
+                              </Typography>
 
-                            <Typography variant="body1">
-                              Drop :{" "}
-                              {pickupDropDetails.dropDate
-                                ? new Date(
-                                    pickupDropDetails.dropDate,
-                                  ).toLocaleDateString("en-GB", {
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                    year: "numeric",
-                                  })
-                                : "N/A"}
-                            </Typography>
+                              <Typography variant="body1">
+                                Drop : {tourPickupDrop.departureCity || ""}{" "}
+                                {pickupDropDetails.dropLocation || ""}{" "}
+                                ({fmtDate(pickupDropDetails.dropDate)}) (
+                                {fmtTime(pickupDropDetails.dropTime)})
+                              </Typography>
 
                             <Typography
                               variant="body2"
