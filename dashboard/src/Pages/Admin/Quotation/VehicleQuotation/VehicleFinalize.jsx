@@ -63,8 +63,6 @@ import Add from "@mui/icons-material/Add";
 import EmailQuotationDialog from "./Dialog/EmailQuotationDialog";
 import MakePaymentDialog from "./Dialog/MakePaymentDialog";
 import FinalizeDialog from "./Dialog/FinalizeDialog";
-import BankDetailsDialog from "./Dialog/BankDetailsDialog";
-import AddBankDialog from "./Dialog/AddBankDialog";
 import EditDialog from "./Dialog/EditDialog";
 import AddServiceDialog from "./Dialog/AddServiceDialog";
 import VehicleQuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
@@ -584,7 +582,7 @@ const VehicleQuotationPage = () => {
     setEditDialog({ ...editDialog, value: e.target.value });
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (selectedBank) => {
     if (q?.vehicle?.vehicleQuotationId) {
       try {
         const selectedVendorName = String(vendor || "").trim();
@@ -630,37 +628,19 @@ const VehicleQuotationPage = () => {
         return;
       }
     }
+    
+    if (selectedBank) {
+      setAccountType("company");
+      setAccountName(selectedBank.accountHolderName || "Iconic Yatra");
+      setAccountNumber(selectedBank.accountNumber || "");
+      setIfscCode(selectedBank.ifscCode || "");
+      setBankName(selectedBank.bankName || "");
+      setBranchName(selectedBank.branchName || "");
+    }
+
     setIsFinalized(true);
     setOpenFinalize(false);
-    setOpenBankDialog(true);
-  };
-
-  const handleBankDialogClose = () => {
-    setOpenBankDialog(false);
-    setAccountType("company");
-    setAccountName("Iconic Yatra");
-    setAccountNumber("");
-    setIfscCode("");
-    setBankName("");
-    setBranchName("");
-  };
-
-  const handleBankConfirm = () => {
-    console.log("Bank details:", {
-      accountType,
-      accountName,
-      accountNumber,
-      ifscCode,
-      bankName,
-      branchName,
-    });
     setInvoiceGenerated(true);
-    handleBankDialogClose();
-  };
-
-  // Add New Bank Functions
-  const handleAddBankOpen = () => {
-    setOpenAddBankDialog(true);
   };
 
   const handlePreviewDialogOpen = () => {
@@ -672,45 +652,6 @@ const VehicleQuotationPage = () => {
   const handlePreviewDialogClose = () => {
     setAutoGeneratePdfForMail(false);
     setOpenPreviewDialog(false);
-  };
-
-  const handleAddBankClose = () => {
-    setOpenAddBankDialog(false);
-    setNewBankDetails({
-      bankName: "",
-      branchName: "",
-      accountHolderName: "",
-      accountNumber: "",
-      ifscCode: "",
-      openingBalance: "",
-    });
-  };
-
-  const handleNewBankChange = (field, value) => {
-    setNewBankDetails((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleAddBank = () => {
-    if (
-      !newBankDetails.bankName ||
-      !newBankDetails.accountHolderName ||
-      !newBankDetails.accountNumber
-    ) {
-      alert("Please fill in all required fields");
-      return;
-    }
-
-    const newAccount = {
-      value: newBankDetails.bankName,
-      label: `${newBankDetails.bankName} - ${newBankDetails.accountHolderName}`,
-    };
-
-    setAccountOptions((prev) => [...prev, newAccount]);
-    setAccountName(newAccount.value);
-    handleAddBankClose();
   };
 
   // Add Service Functions
@@ -2310,28 +2251,6 @@ const VehicleQuotationPage = () => {
         vendor={vendor}
         setVendor={setVendor}
         onConfirm={handleConfirm}
-      />
-
-      {/* Bank Details Dialog */}
-      <BankDetailsDialog
-        open={openBankDialog}
-        onClose={handleBankDialogClose}
-        accountType={accountType}
-        setAccountType={setAccountType}
-        accountName={accountName}
-        setAccountName={setAccountName}
-        accountOptions={accountOptions}
-        onAddBankOpen={handleAddBankOpen}
-        onConfirm={handleBankConfirm}
-      />
-
-      {/* Add New Bank Dialog */}
-      <AddBankDialog
-        open={openAddBankDialog}
-        onClose={handleAddBankClose}
-        newBankDetails={newBankDetails}
-        onNewBankChange={handleNewBankChange}
-        onAddBank={handleAddBank}
       />
 
       {/* Edit Dialog */}
