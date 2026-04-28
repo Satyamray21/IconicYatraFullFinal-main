@@ -57,6 +57,7 @@ import {
   Edit,
   Receipt,
   Visibility,
+  Save,
 } from "@mui/icons-material";
 import Add from "@mui/icons-material/Add";
 import EmailQuotationDialog from "./Dialog/EmailQuotationDialog";
@@ -976,7 +977,7 @@ const VehicleQuotationPage = () => {
     });
   };
 
-  const handleSaveItinerary = async () => {
+  const handleSaveItinerary = async (keepOpen = false) => {
     const { mode, title, description, id } = itineraryDialog;
 
     if (!title.trim() || !description.trim()) {
@@ -995,49 +996,71 @@ const VehicleQuotationPage = () => {
           title,
           description,
         };
-
         setLocalItinerary((prev) => [...prev, newItineraryItem]);
 
-        dispatch(
-          addItinerary({
-            vehicleQuotationId: q.vehicle.vehicleQuotationId,
-            itinerary: [{ title, description }],
-          }),
-        );
+        if (keepOpen) {
+          // Open next day automatically
+          const nextDay = (localItinerary.length + 1) + 1;
+          setItineraryDialog({
+            open: true,
+            mode: "add",
+            day: nextDay,
+            title: `Day ${nextDay}`,
+            description: "",
+            id: null,
+          });
+          setSnackbar({
+            open: true,
+            message: `Day ${nextDay - 1} added locally. Enter Day ${nextDay} details.`,
+            severity: "success",
+          });
+          return; // Exit early to keep dialog open
+        }
       } else if (mode === "edit") {
         setLocalItinerary((prev) =>
           prev.map((item) =>
             item._id === id ? { ...item, title, description } : item,
           ),
         );
-
-        dispatch(
-          editItinerary({
-            vehicleQuotationId: q.vehicle.vehicleQuotationId,
-            itineraryId: id,
-            data: { title, description },
-          }),
-        );
       }
 
-      setItineraryDialog({
-        open: false,
-        mode: "add",
-        day: null,
-        title: "",
-        description: "",
-        id: null,
+      handleCloseItineraryDialog();
+      setSnackbar({
+        open: true,
+        message: `Itinerary ${mode === "add" ? "added" : "updated"} locally. Don't forget to 'Save All'.`,
+        severity: "info",
       });
+    } catch (error) {
+      console.error("Itinerary error:", error);
+    }
+  };
+
+  const handleBulkSaveItinerary = async () => {
+    if (!q?.vehicle?.vehicleQuotationId) return;
+
+    try {
+      // Remove temp IDs before saving
+      const cleanedItinerary = localItinerary.map(({ _id, ...rest }) => ({
+        ...rest,
+        ...(_id?.startsWith?.("temp_") ? {} : { _id }),
+      }));
+
+      await axios.patch(`/vehicleQT/${q.vehicle.vehicleQuotationId}`, {
+        itinerary: cleanedItinerary,
+      });
+
+      // Refresh the data
+      await dispatch(getVehicleQuotationById(q.vehicle.vehicleQuotationId));
 
       setSnackbar({
         open: true,
-        message: `Itinerary ${mode === "add" ? "added" : "updated"} successfully`,
+        message: "Itinerary saved successfully to database",
         severity: "success",
       });
-    } catch (error) {
+    } catch (e) {
       setSnackbar({
         open: true,
-        message: "Failed to save itinerary",
+        message: e?.response?.data?.message || "Failed to save itinerary",
         severity: "error",
       });
     }
@@ -1151,6 +1174,13 @@ const VehicleQuotationPage = () => {
   const gstAmount = (amountAfterDiscount * gstPercentage) / 100;
   const finalTotal = amountAfterDiscount + gstAmount;
 
+  // Calculate total received from payment history
+  const totalReceived = paymentHistory.reduce((acc, v) => {
+    const isReceive = v?.drCr === "Cr" || v?.paymentType === "Receive Voucher" || v?.particulars?.toLowerCase().includes("receive");
+    return isReceive ? acc + (parseFloat(v.amount) || 0) : acc;
+  }, 0);
+  const balanceAmount = finalTotal - totalReceived;
+
   // Format guest information string - ALWAYS show both adults and children
   const getGuestInfoString = () => {
     const adults = members.adults || 0;
@@ -1161,7 +1191,7 @@ const VehicleQuotationPage = () => {
   const infoMap = {
     call: `📞 ${personalDetails.mobile || "N/A"}`,
     email: `✉️ ${personalDetails.emailId || "N/A"}`,
-    payment: `Received: 0\n Balance: ${formatCurrency(finalTotal)}`,
+    payment: `Received: ${formatCurrency(totalReceived)}\n Balance: ${formatCurrency(balanceAmount)}`,
     quotation: `Total Quotation Cost: ${formatCurrency(finalTotal)}`,
     guest: getGuestInfoString(),
   };
@@ -1319,8 +1349,8 @@ const VehicleQuotationPage = () => {
     contact: `${personalDetails.fullName || "N/A"} | ${personalDetails.mobile || "N/A"}`,
     phone: personalDetails.mobile || "N/A",
     email: personalDetails.emailId || "N/A",
-    received: "₹ 0",
-    balance: formatCurrency(finalTotal),
+    received: formatCurrency(totalReceived),
+    balance: formatCurrency(balanceAmount),
     company: "Iconic Yatra",
     address: "B-38 2nd floor, Sector 64, Noida, Uttar Pradesh – 201301",
     website: "https://www.iconicyatra.com",
@@ -1785,14 +1815,26 @@ const VehicleQuotationPage = () => {
                           <Typography variant="h6">
                             Itinerary Details
                           </Typography>
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={handleAddItinerary}
-                            startIcon={<Add />}
-                          >
-                            Add Day
-                          </Button>
+                          <Box display="flex" gap={1}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={handleAddItinerary}
+                              startIcon={<Add />}
+                            >
+                              Add Day
+                            </Button>
+                            <Button
+                              variant="contained"
+                              size="small"
+                              color="primary"
+                              onClick={handleBulkSaveItinerary}
+                              startIcon={<Save />}
+                              disabled={localItinerary.length === 0}
+                            >
+                              Save All
+                            </Button>
+                          </Box>
                         </Box>
 
                         {localItinerary.length > 0 ? (
@@ -2329,9 +2371,32 @@ const VehicleQuotationPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseItineraryDialog}>Cancel</Button>
-          <Button onClick={handleSaveItinerary} variant="contained">
-            {itineraryDialog.mode === "add" ? "Add" : "Save"}
-          </Button>
+          {itineraryDialog.mode === "add" ? (
+            <>
+              <Button
+                onClick={() => handleSaveItinerary(true)}
+                variant="outlined"
+                color="primary"
+              >
+                Add & Next
+              </Button>
+              <Button
+                onClick={() => handleSaveItinerary(false)}
+                variant="contained"
+                color="primary"
+              >
+                Save & Close
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={() => handleSaveItinerary(false)}
+              variant="contained"
+              color="primary"
+            >
+              Save Changes
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>
