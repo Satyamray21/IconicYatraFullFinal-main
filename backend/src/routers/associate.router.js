@@ -40,15 +40,15 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
-router.post("/", requirePermission("canManageStaff"), upload.single("qrCode"), createAssociate);
-router.get("/", requirePermission("canManageStaff"), getAllAssociates);
-router.get("/:id", requirePermission("canManageStaff"), getAssociateById);
+router.post("/", requirePermission("canManageAssociates"), upload.single("qrCode"), createAssociate);
+router.get("/", requirePermission("canAccessAssociates"), getAllAssociates);
+router.get("/:id", requirePermission("canAccessAssociates"), getAssociateById);
 router.get(
   "/:id/quotations",
-  requirePermission("canManageStaff"),
+  requirePermission("canAccessAssociates"),
   getAssociateQuotations
 );
-router.put("/:id", requirePermission("canManageStaff"), upload.single("qrCode"), updateAssociate);
-router.delete("/:id", requirePermission("canManageStaff"), deleteAssociate);
+router.put("/:id", requirePermission("canManageAssociates"), upload.single("qrCode"), updateAssociate);
+router.delete("/:id", requirePermission("canManageAssociates"), deleteAssociate);
 
 export default router;

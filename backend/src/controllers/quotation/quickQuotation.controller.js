@@ -17,6 +17,7 @@ import PDFDocument from "pdfkit";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -197,6 +198,15 @@ export const createQuickQuotation = async (req, res) => {
       policy: pkg.policy,
     });
 
+    const shortRef = `QT-${newQuotation._id.toString().slice(-6).toUpperCase()}`;
+    await logActivity({
+      action: "CREATE",
+      model: "QuickQuotation",
+      refId: shortRef,
+      description: `New quick quotation ${shortRef} created for ${customerName} by ${req.user?.name || 'Admin'}`,
+      user: req.user?.name || "Admin",
+    });
+
     res.status(201).json({
       message: "Quick quotation created successfully",
       quotation: newQuotation,
@@ -289,6 +299,15 @@ export const updateQuickQuotation = async (req, res) => {
 
     if (!updated)
       return res.status(404).json({ message: "Quotation not found" });
+
+    const shortRef = `QT-${updated._id.toString().slice(-6).toUpperCase()}`;
+    await logActivity({
+      action: "UPDATE",
+      model: "QuickQuotation",
+      refId: shortRef,
+      description: `Quick quotation ${shortRef} updated by ${req.user?.name || 'Admin'}`,
+      user: req.user?.name || "Admin",
+    });
 
     res.status(200).json({ message: "Quotation updated", quotation: updated });
   } catch (error) {

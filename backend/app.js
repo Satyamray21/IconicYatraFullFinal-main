@@ -159,6 +159,12 @@ app.use("/api/v1/social-links", socialLinksRoutes);
 
 import homePageRoutes from "./src/routers/homePage.routes.js";
 app.use("/api/v1/home", homePageRoutes);
+
+import dashboardRouter from "./src/routers/dashboard.router.js";
+app.use("/api/v1/dashboard", verifyToken, dashboardRouter);
+
+import reminderRouter from "./src/routers/reminder.router.js";
+app.use("/api/v1/reminders", verifyToken, reminderRouter);
 // ==========================================
 // ✅ Fix: Load JSON without import
 const swaggerDocument = JSON.parse(

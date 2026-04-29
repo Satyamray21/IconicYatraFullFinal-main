@@ -27,6 +27,11 @@ import {
   Tooltip,
   IconButton,
   Typography,
+  alpha,
+  useTheme,
+  Switch,
+  Grid,
+
 } from "@mui/material";
 import {
   ContentCopy as ContentCopyIcon,
@@ -35,10 +40,16 @@ import {
   History as HistoryIcon,
   Refresh as RefreshIcon,
   Download as DownloadIcon,
+  CheckCircle as CheckCircleIcon,
+  Warning as WarningIcon,
+  Security as SecurityIcon,
 } from "@mui/icons-material";
 import api from "../../../../utils/axios";
+import { motion, AnimatePresence } from "framer-motion";
+import dayjs from "dayjs";
 
-const StaffAccessPermission = ({ staffId, staffData }) => {
+const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
+  const theme = useTheme();
   const [permissions, setPermissions] = useState(null);
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -52,6 +63,11 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
   const [needsPermissionSetup, setNeedsPermissionSetup] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Style constants
+  const textColor = isDark ? "#fff" : "inherit";
+  const subTextColor = isDark ? "rgba(255,255,255,0.6)" : "text.secondary";
+  const borderColor = isDark ? "rgba(255,255,255,0.1)" : "divider";
 
   // Fetch permission modules
   useEffect(() => {
@@ -87,7 +103,6 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
       setErrorMessage(
         error.response?.data?.message || "Failed to fetch permissions"
       );
-      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -121,7 +136,6 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
     }
   };
 
-  // Generate new credentials
   const handleGenerateCredentials = async () => {
     try {
       setLoading(true);
@@ -136,22 +150,30 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
     }
   };
 
-  // Copy to clipboard
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     setSuccessMessage("Copied to clipboard!");
     setTimeout(() => setSuccessMessage(""), 2000);
   };
 
-  // Handle permission change
   const handlePermissionChange = (permissionKey) => {
-    setSelectedPermissions({
-      ...selectedPermissions,
-      [permissionKey]: !selectedPermissions[permissionKey],
-    });
+    setSelectedPermissions(prev => ({
+      ...prev,
+      [permissionKey]: !prev[permissionKey],
+    }));
   };
 
-  // Handle role change and apply defaults
+  const handleToggleModule = (moduleName, check) => {
+    const module = modules.find(m => m.name === moduleName);
+    if (!module) return;
+
+    const newPerms = { ...selectedPermissions };
+    module.permissions.forEach(p => {
+      newPerms[p.key] = check;
+    });
+    setSelectedPermissions(newPerms);
+  };
+
   const handleRoleChange = async (newRole) => {
     if (permissions?.needsPermissionSetup) {
       setSelectedRole(newRole);
@@ -173,7 +195,6 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
     }
   };
 
-  // Save permission changes
   const handleSavePermissions = async () => {
     try {
       setLoading(true);
@@ -190,7 +211,6 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
     }
   };
 
-  // Fetch login history (API wraps rows in { data: [...], pagination })
   const handleViewLoginHistory = async () => {
     try {
       setLoading(true);
@@ -198,11 +218,7 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
         `/staff-permission/${staffId}/login-history?limit=50`
       );
       const payload = response.data?.data;
-      const rows = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.data)
-          ? payload.data
-          : [];
+      const rows = Array.isArray(payload) ? payload : (payload?.data || []);
       setLoginHistory(rows);
       setLoginHistoryDialog(true);
     } catch (error) {
@@ -212,7 +228,6 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
     }
   };
 
-  // Toggle staff status
   const handleToggleStatus = async (newStatus) => {
     try {
       setLoading(true);
@@ -230,329 +245,364 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
 
   if (!permissions && loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (!permissions) {
-    return (
-      <Box sx={{ p: 3 }}>
-        {errorMessage && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMessage("")}>
-            {errorMessage}
-          </Alert>
-        )}
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
+        <CircularProgress size={30} />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      {successMessage && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage("")}>
-          {successMessage}
-        </Alert>
-      )}
-      {errorMessage && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMessage("")}>
-          {errorMessage}
-        </Alert>
-      )}
+    <Box sx={{ color: textColor }}>
+      {/* Messages */}
+      <AnimatePresence>
+        {successMessage && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <Alert severity="success" sx={{ m: 3, mb: 0 }} onClose={() => setSuccessMessage("")}>
+              {successMessage}
+            </Alert>
+          </motion.div>
+        )}
+        {errorMessage && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <Alert severity="error" sx={{ m: 3, mb: 0 }} onClose={() => setErrorMessage("")}>
+              {errorMessage}
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {needsPermissionSetup && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          This staff member has no dashboard login yet. Choose a role and click{" "}
-          <strong>Create staff login &amp; permissions</strong> to generate a username and temporary
-          password.
-        </Alert>
-      )}
+      <Box sx={{ p: 3 }}>
+        {needsPermissionSetup && (
+          <Card sx={{ mb: 3, background: "rgba(59, 130, 246, 0.05)", border: "1px solid rgba(59, 130, 246, 0.2)", borderRadius: 3 }}>
+            <CardContent>
+              <Box display="flex" gap={2} alignItems="flex-start">
+                <SecurityIcon sx={{ color: "#3b82f6", mt: 0.5 }} />
+                <Box>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Initial Account Setup</Typography>
+                  <Typography variant="body2" color={subTextColor} sx={{ mb: 2 }}>
+                    This staff member doesn't have a dashboard account yet. Select a base role to generate their login credentials and default permissions.
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", mt: 2 }}>
+                    {["Admin", "Manager", "Staff"].map((role) => (
+                      <Button
+                        key={role}
+                        variant={selectedRole === role ? "contained" : "outlined"}
+                        onClick={() => handleRoleChange(role)}
+                        disabled={loading}
+                        size="small"
+                        sx={{ borderRadius: 2, px: 3 }}
+                      >
+                        {role}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={handleCreateStaffPermission}
+                      disabled={loading}
+                      startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <LockIcon />}
+                      sx={{ borderRadius: 2, px: 3, boxShadow: "0 4px 12px rgba(16, 185, 129, 0.2)" }}
+                    >
+                      Initialize Access
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        )}
 
-      {needsPermissionSetup && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-              Initial setup
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Role below applies when the account is created. You can change permissions after
-              setup.
-            </Typography>
-            <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
-              {["Admin", "Manager", "Staff"].map((role) => (
-                <Button
-                  key={role}
-                  variant={selectedRole === role ? "contained" : "outlined"}
-                  onClick={() => handleRoleChange(role)}
-                  disabled={loading}
-                >
-                  {role}
-                </Button>
-              ))}
-              <Button
-                variant="contained"
-                color="success"
-                onClick={handleCreateStaffPermission}
-                disabled={loading}
-                startIcon={
-                  loading ? <CircularProgress size={20} color="inherit" /> : <LockIcon />
-                }
-              >
-                Create staff login & permissions
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Credentials Card */}
-      <Card sx={{ mb: 3 }}>
-        <CardHeader
-          title="Staff Credentials"
-          action={
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleGenerateCredentials}
-              disabled={loading || needsPermissionSetup}
-              startIcon={<RefreshIcon />}
-            >
-              Generate New Credentials
-            </Button>
-          }
-        />
-        <Divider />
-        <CardContent>
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-            <Box>
-              <Box sx={{ mb: 2 }}>
-                <strong>Username:</strong>{" "}
-                {permissions?.credentials?.username || "—"}
-                <Tooltip title="Copy username">
-                  <IconButton
+        {/* Status & Creds Summary Card */}
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={7}>
+            <Card sx={{ height: "100%", background: isDark ? "rgba(255,255,255,0.03)" : "#fff", border: `1px solid ${borderColor}`, borderRadius: 3 }}>
+              <CardContent>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                  <Typography variant="subtitle1" fontWeight={700}>Account Status</Typography>
+                  <Chip
+                    label={permissions?.status || "Pending"}
+                    color={permissions?.status === "Active" ? "success" : "warning"}
                     size="small"
-                    onClick={() => copyToClipboard(permissions?.credentials?.username)}
-                    disabled={!permissions?.credentials?.username}
-                  >
-                    <ContentCopyIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              <Box>
-                <strong>Generated:</strong>{" "}
-                {permissions?.credentials?.generatedAt
-                  ? new Date(permissions.credentials.generatedAt).toLocaleString()
-                  : "—"}
-              </Box>
-            </Box>
-            <Box>
-              <Box sx={{ mb: 2 }}>
-                <strong>Status:</strong>
-                <Chip
-                  label={permissions?.status}
-                  color={permissions?.status === "Active" ? "success" : "error"}
-                  sx={{ ml: 1 }}
-                />
-              </Box>
-              <Box>
-                <strong>Role:</strong>
-                <Chip label={permissions?.role} color="primary" sx={{ ml: 1 }} />
-              </Box>
-            </Box>
-          </Box>
-          <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={handleViewLoginHistory}
-              startIcon={<HistoryIcon />}
-              disabled={needsPermissionSetup}
-            >
-              View Login History
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() =>
-                handleToggleStatus(permissions?.status === "Active" ? "Inactive" : "Active")
-              }
-              disabled={needsPermissionSetup}
-            >
-              {permissions?.status === "Active" ? "Deactivate" : "Activate"}
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
+                    sx={{ fontWeight: 700 }}
+                  />
+                </Box>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color={subTextColor}>Username</Typography>
+                    <Box display="flex" alignItems="center">
+                      <Typography variant="body1" fontWeight={600}>{permissions?.credentials?.username || "Not set"}</Typography>
+                      {permissions?.credentials?.username && (
+                        <IconButton size="small" onClick={() => copyToClipboard(permissions.credentials.username)}>
+                          <ContentCopyIcon fontSize="inherit" sx={{ color: subTextColor }} />
+                        </IconButton>
+                      )}
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color={subTextColor}>Assigned Role</Typography>
+                    <Typography variant="body1" fontWeight={600} sx={{ color: "#3b82f6" }}>{permissions?.role || "—"}</Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Box display="flex" gap={1} mt={1}>
+                      <Button
+                        size="small"
+                        startIcon={<HistoryIcon />}
+                        onClick={handleViewLoginHistory}
+                        disabled={needsPermissionSetup}
+                        sx={{ color: subTextColor }}
+                      >
+                        Login Logs
+                      </Button>
+                      <Button
+                        size="small"
+                        color={permissions?.status === "Active" ? "error" : "success"}
+                        onClick={() => handleToggleStatus(permissions?.status === "Active" ? "Inactive" : "Active")}
+                        disabled={needsPermissionSetup}
+                      >
+                        {permissions?.status === "Active" ? "Suspend Account" : "Activate Account"}
+                      </Button>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
 
-      {/* Permissions Card — hidden until login record exists */}
-      {!needsPermissionSetup && (
-        <Card>
-          <CardHeader
-            title="Access & Permissions"
-            subheader={`Current Role: ${permissions?.role}`}
-            action={
+          <Grid item xs={12} md={5}>
+            <Card sx={{ height: "100%", background: "linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.1) 100%)", border: `1px solid ${borderColor}`, borderRadius: 3 }}>
+              <CardContent sx={{ textAlign: "center", py: 4 }}>
+                <RefreshIcon sx={{ fontSize: 40, color: "#3b82f6", mb: 1.5 }} />
+                <Typography variant="subtitle1" fontWeight={700}>Security Reset</Typography>
+                <Typography variant="body2" color={subTextColor} sx={{ mb: 2.5 }}>
+                  Force generate new login credentials and temporary password for this staff.
+                </Typography>
+                <Button
+                  variant="contained"
+                  onClick={handleGenerateCredentials}
+                  disabled={loading || needsPermissionSetup}
+                  sx={{ borderRadius: 2, background: "#3b82f6", "&:hover": { background: "#2563eb" } }}
+                >
+                  Reset Credentials
+                </Button>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Permissions Management Section */}
+        {!needsPermissionSetup && (
+          <Box>
+            <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 2, px: 1 }}>
+              <Box>
+                <Typography variant="h6" fontWeight={700}>Access Matrix</Typography>
+                <Typography variant="body2" color={subTextColor}>Configure which modules and actions this user can access.</Typography>
+              </Box>
               <Button
                 variant="contained"
-                color="primary"
                 onClick={() => setPermissionsDialog(true)}
                 startIcon={<EditIcon />}
+                sx={{ borderRadius: 2, background: alpha("#3b82f6", 0.9), "&:hover": { background: "#3b82f6" } }}
               >
-                Edit Permissions
+                Modify Permissions
               </Button>
-            }
-          />
-          <Divider />
-          <CardContent>
-            <Box sx={{ mb: 3 }}>
-              <strong>Select Role:</strong>
-              <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
-                {["Admin", "Manager", "Staff"].map((role) => (
-                  <Button
-                    key={role}
-                    variant={selectedRole === role ? "contained" : "outlined"}
-                    onClick={() => handleRoleChange(role)}
-                    disabled={loading}
-                  >
-                    {role}
-                  </Button>
-                ))}
-              </Box>
             </Box>
 
-            <Divider sx={{ my: 2 }} />
+            <Grid container spacing={2}>
+              {modules.map((module) => {
+                const activeCount = module.permissions.filter(p => selectedPermissions[p.key]).length;
+                const totalCount = module.permissions.length;
 
-            <Box>
-              <strong style={{ marginBottom: 8, display: "block" }}>Current Permissions:</strong>
-              <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 2 }}>
-                {modules.map((module) => (
-                  <Box
-                    key={module.name}
-                    sx={{ border: "1px solid #e0e0e0", p: 2, borderRadius: 1 }}
-                  >
-                    <strong>{module.name}</strong>
-                    <Box sx={{ mt: 1 }}>
-                      {module.permissions.map((perm) => (
-                        <Box
-                          key={perm.key}
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            mt: 0.5,
-                            color: selectedPermissions[perm.key] ? "#1976d2" : "#999",
-                          }}
-                        >
+                return (
+                  <Grid item xs={12} sm={6} lg={4} key={module.name}>
+                    <Card sx={{
+                      height: "100%",
+                      background: isDark ? "rgba(255,255,255,0.02)" : "#fff",
+                      border: `1px solid ${activeCount > 0 ? alpha("#3b82f6", 0.3) : borderColor}`,
+                      borderRadius: 3,
+                      transition: "all 0.3s ease",
+                      "&:hover": { borderColor: alpha("#3b82f6", 0.5), transform: "translateY(-4px)" }
+                    }}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+                          <Typography variant="subtitle2" fontWeight={700}>{module.name}</Typography>
                           <Chip
-                            label={perm.label}
+                            label={`${activeCount}/${totalCount}`}
                             size="small"
-                            variant={
-                              selectedPermissions[perm.key] ? "filled" : "outlined"
-                            }
-                            color={selectedPermissions[perm.key] ? "primary" : "default"}
+                            variant="outlined"
+                            sx={{
+                              height: 20,
+                              fontSize: "0.65rem",
+                              fontWeight: 700,
+                              borderColor: activeCount > 0 ? "#3b82f6" : "rgba(255,255,255,0.1)",
+                              color: activeCount > 0 ? "#3b82f6" : subTextColor
+                            }}
                           />
                         </Box>
-                      ))}
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          </CardContent>
-        </Card>
-      )}
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
+                          {module.permissions.map((perm) => (
+                            <Tooltip title={perm.label} key={perm.key}>
+                              <Chip
+                                label={perm.label.split(" ")[0]}
+                                size="small"
+                                sx={{
+                                  fontSize: "0.65rem",
+                                  height: 24,
+                                  background: selectedPermissions[perm.key] ? alpha("#3b82f6", 0.15) : "transparent",
+                                  color: selectedPermissions[perm.key] ? "#60a5fa" : alpha(subTextColor, 0.5),
+                                  border: `1px solid ${selectedPermissions[perm.key] ? alpha("#3b82f6", 0.4) : alpha(borderColor, 0.5)}`,
+                                  fontWeight: selectedPermissions[perm.key] ? 700 : 400
+                                }}
+                              />
+                            </Tooltip>
+                          ))}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </Box>
+        )}
+      </Box>
 
       {/* Permissions Edit Dialog */}
-      <Dialog open={permissionsDialog} onClose={() => setPermissionsDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Edit Staff Permissions</DialogTitle>
-        <DialogContent>
+      <Dialog
+        open={permissionsDialog}
+        onClose={() => setPermissionsDialog(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            background: isDark ? "#1e293b" : "#fff",
+            color: textColor,
+            borderRadius: 4,
+            backgroundImage: "none"
+          }
+        }}
+      >
+        <DialogTitle sx={{ p: 3, pb: 1, fontWeight: 800, fontSize: "1.5rem" }}>
+          Edit Access Permissions
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, pt: 1 }}>
+          <Box mb={3}>
+            <Typography variant="caption" color={subTextColor} sx={{ textTransform: "uppercase", fontWeight: 700, mb: 1, display: "block" }}>
+              Quick Select Role
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              {["Admin", "Manager", "Staff"].map(r => (
+                <Chip
+                  key={r}
+                  label={r}
+                  onClick={() => handleRoleChange(r)}
+                  variant={selectedRole === r ? "filled" : "outlined"}
+                  color={selectedRole === r ? "primary" : "default"}
+                  sx={{ px: 1 }}
+                />
+              ))}
+            </Box>
+          </Box>
+
+          <Divider sx={{ mb: 3, borderColor: alpha(borderColor, 0.5) }} />
+
           {modules.map((module) => (
-            <Box key={module.name} sx={{ mb: 2 }}>
-              <strong>{module.name}</strong>
-              <FormGroup>
+            <Box key={module.name} sx={{ mb: 4 }}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Typography variant="subtitle1" fontWeight={800}>{module.name}</Typography>
+                <Box>
+                  <Button size="small" onClick={() => handleToggleModule(module.name, true)} sx={{ fontSize: "0.7rem" }}>Select All</Button>
+                  <Button size="small" onClick={() => handleToggleModule(module.name, false)} sx={{ fontSize: "0.7rem", color: "error.main" }}>Clear</Button>
+                </Box>
+              </Box>
+              <Grid container spacing={1}>
                 {module.permissions.map((perm) => (
-                  <FormControlLabel
-                    key={perm.key}
-                    control={
-                      <Checkbox
-                        checked={selectedPermissions[perm.key] || false}
-                        onChange={() => handlePermissionChange(perm.key)}
-                      />
-                    }
-                    label={perm.label}
-                  />
+                  <Grid item xs={6} sm={4} key={perm.key}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={selectedPermissions[perm.key] || false}
+                          onChange={() => handlePermissionChange(perm.key)}
+                        />
+                      }
+                      label={<Typography variant="body2">{perm.label}</Typography>}
+                    />
+                  </Grid>
                 ))}
-              </FormGroup>
-              <Divider sx={{ mt: 1 }} />
+              </Grid>
             </Box>
           ))}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPermissionsDialog(false)}>Cancel</Button>
-          <Button onClick={handleSavePermissions} variant="contained" disabled={loading}>
+        <DialogActions sx={{ p: 3, pt: 0 }}>
+          <Button onClick={() => setPermissionsDialog(false)} sx={{ color: subTextColor }}>Cancel</Button>
+          <Button
+            onClick={handleSavePermissions}
+            variant="contained"
+            disabled={loading}
+            sx={{ borderRadius: 2, px: 4 }}
+          >
             {loading ? <CircularProgress size={24} /> : "Save Changes"}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Credentials Display Dialog */}
-      <Dialog open={credentialsDialog} onClose={() => setCredentialsDialog(false)}>
-        <DialogTitle>New Credentials Generated</DialogTitle>
+      <Dialog
+        open={credentialsDialog}
+        onClose={() => setCredentialsDialog(false)}
+        PaperProps={{
+          sx: { background: isDark ? "#0f172a" : "#fff", color: textColor, borderRadius: 4, border: "1px solid #3b82f6" }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>New Credentials Secured</DialogTitle>
         <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            ⚠️ This is a temporary password. Staff must change it on first login.
+          <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+            These credentials will only be shown once. Share them securely with the staff member.
           </Alert>
-          <Box sx={{ mb: 2 }}>
-            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-              <TextField
-                fullWidth
-                label="Username"
-                value={credentials?.username || ""}
-                InputProps={{ readOnly: true }}
-              />
-              <Tooltip title="Copy">
-                <IconButton onClick={() => copyToClipboard(credentials?.username)}>
-                  <ContentCopyIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-            <Box sx={{ display: "flex", alignItems: "center" }}>
-              <TextField
-                fullWidth
-                label="Temporary Password"
-                type="text"
-                value={credentials?.tempPassword || ""}
-                InputProps={{ readOnly: true }}
-              />
-              <Tooltip title="Copy">
-                <IconButton onClick={() => copyToClipboard(credentials?.tempPassword)}>
-                  <ContentCopyIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
+          <Box sx={{ mb: 3 }}>
+            <TextField
+              fullWidth
+              label="Username"
+              value={credentials?.username || ""}
+              variant="filled"
+              InputProps={{ readOnly: true, sx: { fontWeight: 700, color: "#3b82f6" } }}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              label="Temporary Password"
+              value={credentials?.tempPassword || ""}
+              variant="filled"
+              InputProps={{
+                readOnly: true,
+                sx: { fontWeight: 700, color: "#10b981", letterSpacing: 1 },
+                endAdornment: (
+                  <IconButton onClick={() => copyToClipboard(credentials?.tempPassword)}>
+                    <ContentCopyIcon />
+                  </IconButton>
+                )
+              }}
+            />
           </Box>
           <Button
             fullWidth
-            variant="outlined"
+            variant="contained"
+            color="primary"
             startIcon={<DownloadIcon />}
             onClick={() => {
-              const text = `Username: ${credentials?.username}\nTemporary Password: ${credentials?.tempPassword}\n\nNote: Please change password on first login.`;
+              const text = `Account: Iconic Yatra Staff Portal\nUsername: ${credentials?.username}\nTemp Password: ${credentials?.tempPassword}\n\nURL: ${window.location.origin}`;
               const element = document.createElement("a");
-              element.setAttribute(
-                "href",
-                "data:text/plain;charset=utf-8," + encodeURIComponent(text)
-              );
-              element.setAttribute("download", `credentials_${credentials?.username}.txt`);
-              element.style.display = "none";
-              document.body.appendChild(element);
+              element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(text));
+              element.setAttribute("download", `staff_creds_${credentials?.username}.txt`);
               element.click();
-              document.body.removeChild(element);
             }}
+            sx={{ borderRadius: 2, py: 1.5 }}
           >
-            Download Credentials
+            Download Credential PDF/Txt
           </Button>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCredentialsDialog(false)}>Close</Button>
+        <DialogActions sx={{ pb: 3, px: 3 }}>
+          <Button onClick={() => setCredentialsDialog(false)} variant="outlined" fullWidth sx={{ borderRadius: 2 }}>Got it</Button>
         </DialogActions>
       </Dialog>
 
@@ -560,52 +610,48 @@ const StaffAccessPermission = ({ staffId, staffData }) => {
       <Dialog
         open={loginHistoryDialog}
         onClose={() => setLoginHistoryDialog(false)}
-        maxWidth="lg"
+        maxWidth="md"
         fullWidth
+        PaperProps={{
+          sx: { background: isDark ? "#1e293b" : "#fff", color: textColor, borderRadius: 4 }
+        }}
       >
-        <DialogTitle>Login History</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800 }}>Access Logs: {permissions?.credentials?.username}</DialogTitle>
         <DialogContent>
-          {!Array.isArray(loginHistory) || loginHistory.length === 0 ? (
-            <Box sx={{ p: 2, textAlign: "center", color: "#999" }}>
-              No login history found
-            </Box>
-          ) : (
-            <TableContainer component={Paper} sx={{ mt: 1 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                    <TableCell>Date & Time</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>IP Address</TableCell>
-                    <TableCell>Location</TableCell>
-                    <TableCell>ISP</TableCell>
+          <TableContainer component={Paper} sx={{ background: "transparent", border: `1px solid ${borderColor}`, borderRadius: 2 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ background: alpha(borderColor, 0.5) }}>
+                  <TableCell sx={{ color: subTextColor, fontWeight: 700 }}>Timestamp</TableCell>
+                  <TableCell sx={{ color: subTextColor, fontWeight: 700 }}>Result</TableCell>
+                  <TableCell sx={{ color: subTextColor, fontWeight: 700 }}>IP / Location</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {loginHistory.map((log, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell sx={{ color: textColor }}>{dayjs(log.timestamp).format("MMM D, YYYY HH:mm")}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={log.status === "Login Successful" ? "Success" : "Failed"}
+                        size="small"
+                        color={log.status === "Login Successful" ? "success" : "error"}
+                        variant="outlined"
+                        sx={{ fontSize: "0.6rem", height: 18, fontWeight: 700 }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ color: textColor }}>
+                      <Typography variant="body2" sx={{ fontSize: "0.75rem" }}>{log.ip}</Typography>
+                      <Typography variant="caption" sx={{ color: subTextColor }}>{log.city}, {log.country}</Typography>
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(Array.isArray(loginHistory) ? loginHistory : []).map((log, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{log.dateTime}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={log.status}
-                          size="small"
-                          color={log.status === "Login Successful" ? "success" : "error"}
-                        />
-                      </TableCell>
-                      <TableCell>{log.ip}</TableCell>
-                      <TableCell>
-                        {log.city}, {log.region}, {log.country}
-                      </TableCell>
-                      <TableCell>{log.isp}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLoginHistoryDialog(false)}>Close</Button>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setLoginHistoryDialog(false)}>Close Logs</Button>
         </DialogActions>
       </Dialog>
     </Box>

@@ -1,5 +1,6 @@
 import Blog from '../models/Blog.model.js';
 import { uploadOnCloudinary, deleteFromCloudinary } from '../utils/cloudinarys.js';
+import { logActivity } from '../utils/ActivityLog.js';
 
 // Helper function to generate slug
 const generateSlug = (title) => {
@@ -87,6 +88,14 @@ const createBlog = async (req, res) => {
         });
 
         await blog.save();
+
+        await logActivity({
+            action: "CREATE",
+            model: "Blog",
+            refId: blog.slug,
+            description: `Blog post "${blog.title}" published by ${req.user?.name || 'Admin'}`,
+            user: req.user?.name || "Admin",
+        });
 
         res.status(201).json({
             success: true,
@@ -291,6 +300,14 @@ const updateBlog = async (req, res) => {
             { ...blogData, updatedAt: Date.now() },
             { new: true, runValidators: true }
         );
+
+        await logActivity({
+            action: "UPDATE",
+            model: "Blog",
+            refId: updatedBlog.slug,
+            description: `Blog post "${updatedBlog.title}" updated by ${req.user?.name || 'Admin'}`,
+            user: req.user?.name || "Admin",
+        });
 
         res.status(200).json({
             success: true,

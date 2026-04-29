@@ -215,11 +215,11 @@ export const createLead = asyncHandler(async (req, res) => {
     status: "Active",
   });
   await logActivity({
-    action: "Created",
+    action: "CREATE",
     model: "Lead",
-    referenceId: leadId,
-    description: `Lead ${leadId} created successfully by ${req.user?.name || 'System'}`,
-    performedBy: req.user?.name || "System",
+    refId: leadId,
+    description: `Lead ${leadId} was created by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+    user: req.user?.name || req.user?.staffUserId || "System",
   });
 
   return res
@@ -407,8 +407,8 @@ export const deleteLead = asyncHandler(async (req, res) => {
     action: "Deleted",
     model: "Lead",
     referenceId: leadId,
-    description: `Lead ${leadId} deleted by ${req.user?.name || 'System'}`,
-    performedBy: req.user?.name || "System",
+    description: `Lead ${leadId} deleted by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+    performedBy: req.user?.name || req.user?.staffUserId || "System",
   });
 
   res.status(200).json(new ApiResponse(200, {}, "Lead deleted successfully"));
@@ -468,9 +468,9 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
   await logActivity({
     action: "Status Changed",
     model: "Lead",
-    referenceId: leadId,
-    description: `Lead ${leadId} status changed from ${currentStatus} to ${status} by ${req.user?.name || 'System'}`,
-    performedBy: req.user?.name || "System",
+    refId: leadId,
+    description: `Lead ${leadId} status changed from ${currentStatus} to ${status} by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+    user: req.user?.name || req.user?.staffUserId || "System",
   });
 
   return res

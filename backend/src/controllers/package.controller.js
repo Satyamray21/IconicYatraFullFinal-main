@@ -1,6 +1,7 @@
 import Package from "../models/package.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { logActivity } from "../utils/ActivityLog.js";
 
 // ----------------------
 // Improved Helpers
@@ -410,6 +411,14 @@ export const createPackage = asyncHandler(async (req, res) => {
         const doc = await Package.create(data);
         const responseData = normalizePackageUrls(doc.toObject());
 
+        await logActivity({
+            action: "CREATE",
+            model: "Package",
+            refId: doc._id,
+            description: `Package "${doc.sector}" created by ${req.user?.name || 'System'}`,
+            user: req.user?.name || "System",
+        });
+
         return res.status(201).json({
             message: "Package created successfully",
             package: responseData
@@ -516,6 +525,14 @@ export const updateStep1 = asyncHandler(async (req, res) => {
     if (!updated) {
         return res.status(404).json({ message: "Package not found" });
     }
+
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: updated._id,
+        description: `Package "${updated.sector}" updated by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
 
     const responseData = normalizePackageUrls(updated.toObject());
     res.json(responseData);

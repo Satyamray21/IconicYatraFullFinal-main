@@ -6,7 +6,7 @@ import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
-router.post("/send", requirePermission("canEditInvoice"), async (req, res) => {
+router.post("/send", requirePermission("canManagePayments"), async (req, res) => {
     const { email, slipName } = req.body;
 
     if (!email) {
