@@ -51,6 +51,7 @@ const QuotationPDFDialog = ({
   onClose,
   quotation,
   pdfHeading = "CUSTOM QUOTATION",
+  onSendMail,
 }) => {
   const printRef = useRef();
   const [error, setError] = useState("");
@@ -61,6 +62,7 @@ const QuotationPDFDialog = ({
   const [companyOptions, setCompanyOptions] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [emailContentMode, setEmailContentMode] = useState("short");
   const [globalPolicyDefaults, setGlobalPolicyDefaults] = useState({
     inclusions: [],
     exclusions: [],
@@ -68,6 +70,18 @@ const QuotationPDFDialog = ({
     cancellationPolicy: "",
     termsAndConditions: "",
   });
+
+  const blobToBase64 = (blob) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = String(reader.result || "");
+        const base64 = result.includes(",") ? result.split(",")[1] : "";
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
 
   // Helper function to safely get nested values
   const getValue = (obj, path, defaultValue = "N/A") => {
@@ -337,7 +351,23 @@ const QuotationPDFDialog = ({
   )
     ? getRawValue(quotationData, "hotelPricingData")
     : [];
+  /** Same totals appear in Payment Summary — hide from the pricing table. */
+  const isTotalsRowDuplicatedInPaymentSummary = (row) => {
+    const label = String(row?.destination || "")
+      .toLowerCase()
+      .trim();
+    return (
+      label.includes("final package totals") ||
+      label.includes("total quotation cost")
+    );
+  };
+  const finalPackageTotalsRow = hotelPricingRows.find((row) =>
+    String(row?.destination || "")
+      .toLowerCase()
+      .includes("final package totals"),
+  );
   const totalCostRow =
+    finalPackageTotalsRow ||
     hotelPricingRows.find((row) =>
       String(row?.destination || "")
         .toLowerCase()
@@ -412,41 +442,137 @@ const QuotationPDFDialog = ({
   ];
 
   const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
+  const additionalServices = Array.isArray(
+    getRawValue(quotationData, "additionalServices"),
+  )
+    ? getRawValue(quotationData, "additionalServices")
+    : [];
+  const additionalServiceLines = additionalServices
+    .map((s) => {
+      const particulars = String(s?.particulars || "").trim();
+      if (!particulars) return "";
+      const included = String(s?.included || "").toLowerCase() === "yes";
+      const total = toNumber(s?.totalAmount);
+      if (included) return `${particulars}: Included`;
+      return `${particulars}: INR ${(Number.isFinite(total) ? total : 0).toLocaleString("en-IN")}`;
+    })
+    .filter(Boolean);
   const policiesCancellationPolicy = getValue(
     quotationData,
     "policies.cancellationPolicy",
     [],
   );
 
-  const days = getValue(quotationData, "days", []);
+  const rawDays = getRawValue(quotationData, "days");
+  const days = Array.isArray(rawDays) ? rawDays : [];
   const bannerImage = getValue(quotationData, "bannerImage", "");
-  const hotelPricingData = hotelPricingRows;
+  const hotelPricingData = hotelPricingRows.filter(
+    (row) => !isTotalsRowDuplicatedInPaymentSummary(row),
+  );
+
+  const normalizePricingCell = (value) =>
+    String(value ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  /** Hide placeholder hotel names (TBD etc.), but keep ₹ amounts. */
+  const isTbdLikeHotelName = (value) => {
+    const text = normalizePricingCell(value);
+    if (!text || text === "-" || text === "—") return false;
+    if (text.startsWith("₹")) return false;
+    const compact = text.replace(/[\s._\-–—]/g, "").toUpperCase();
+    if (compact === "TBD" || compact === "TBA") return true;
+    if (/\bTBD\b/i.test(text)) return true;
+    if (/\bTBA\b/i.test(text)) return true;
+    if (/^tbd\b/i.test(text)) return true;
+    return false;
+  };
+
   const isSummaryPricingRow = (row) => {
     const label = String(row?.destination || "").toLowerCase();
-    return label.includes("quotation cost") || label.includes("igst");
+    return (
+      label.includes("quotation cost") ||
+      label.includes("igst") ||
+      label.includes("transportation") ||
+      (label.includes("hotel") && label.includes("cost")) ||
+      label.includes("final package")
+    );
+  };
+  const getDestinationLabel = (row) =>
+    String(row?.destination || "")
+      .toLowerCase()
+      .trim();
+  const isTransportationCostRow = (row) => {
+    const label = getDestinationLabel(row);
+    return label.includes("transportation") && label.includes("cost");
+  };
+  const isHotelCostRow = (row) => {
+    const label = getDestinationLabel(row);
+    return label.includes("hotel") && label.includes("cost");
+  };
+  const parseNightsCount = (value) => {
+    const match = String(value ?? "").match(/\d+/);
+    return match ? Number(match[0]) : 0;
+  };
+  const totalTripNights = hotelPricingData
+    .filter((row) => !isSummaryPricingRow(row))
+    .reduce((sum, row) => sum + parseNightsCount(row?.nights), 0);
+  const getNightsCellValue = (row) => {
+    if (isTransportationCostRow(row) && totalTripNights > 0) {
+      return `${totalTripNights + 1} D`;
+    }
+    if (isHotelCostRow(row) && totalTripNights > 0) {
+      return `${totalTripNights} N`;
+    }
+    const txt = String(row?.nights || "-").trim();
+    return txt ? txt.charAt(0).toUpperCase() + txt.slice(1) : "-";
+  };
+  const isCurrencyCell = (value) => {
+    const text = String(value || "").trim();
+    return text.startsWith("₹") || /^rs\.?\s+/i.test(text);
   };
   const hasHotelNameValue = (value) => {
-    const text = String(value || "").trim();
+    const text = normalizePricingCell(value);
     if (!text || text === "-") return false;
+    if (text === "—") return false;
+    if (isTbdLikeHotelName(text)) return false;
     if (text.startsWith("₹")) return false;
     return true;
   };
-  const nonSummaryRows = hotelPricingData.filter(
-    (row) => !isSummaryPricingRow(row),
-  );
+  const isDestinationHotelPricingRow = (row) => !isSummaryPricingRow(row);
   const renderHotelCellValue = (row, key) => {
     const value = row?.[key];
     if (isSummaryPricingRow(row)) return value || "-";
-    return hasHotelNameValue(value) ? value : "";
+    const v = normalizePricingCell(value);
+    if (!v) return "";
+    if (isTbdLikeHotelName(v)) return "";
+    if (isCurrencyCell(v)) return v;
+    if (!hasHotelNameValue(value)) return "";
+    const text = v;
+    const firstUpper = text.charAt(0).toUpperCase() + text.slice(1);
+    return `${firstUpper} / Similar`;
   };
-  const showStandardCol = nonSummaryRows.some((row) =>
-    hasHotelNameValue(row?.standard),
+  const toHeaderLabel = (header) => {
+    if (header === "destination") return "Destination";
+    if (header === "nights") return "Nights";
+    if (header === "standard") return "Standard";
+    if (header === "deluxe") return "Deluxe";
+    if (header === "superior") return "Superior";
+    return String(header || "");
+  };
+  const showStandardCol = hotelPricingData.some(
+    (row) =>
+      isDestinationHotelPricingRow(row) && hasHotelNameValue(row?.standard),
   );
-  const showDeluxeCol = nonSummaryRows.some((row) =>
-    hasHotelNameValue(row?.deluxe),
+  const showDeluxeCol = hotelPricingData.some(
+    (row) =>
+      isDestinationHotelPricingRow(row) && hasHotelNameValue(row?.deluxe),
   );
-  const showSuperiorCol = nonSummaryRows.some((row) =>
-    hasHotelNameValue(row?.superior),
+  const showSuperiorCol = hotelPricingData.some(
+    (row) =>
+      isDestinationHotelPricingRow(row) && hasHotelNameValue(row?.superior),
   );
   const visiblePackageColumns = [
     showStandardCol,
@@ -471,14 +597,18 @@ const QuotationPDFDialog = ({
   const globalCancellationArray =
     typeof globalPolicyDefaults.cancellationPolicy === "string"
       ? globalPolicyDefaults.cancellationPolicy
-          .split("\n")
-          .filter((s) => s.trim())
+        .split("\n")
+        .filter((s) => s.trim())
       : [];
 
   const finalInclusionArray =
     globalPolicyDefaults.inclusions?.length > 0
       ? globalPolicyDefaults.inclusions
       : fallbackInclusions;
+  const finalInclusionArrayWithServices = [
+    ...finalInclusionArray,
+    ...additionalServiceLines,
+  ];
   const finalExclusionArray = exclusionArray.filter((item) =>
     String(item || "").trim(),
   );
@@ -520,6 +650,18 @@ const QuotationPDFDialog = ({
     normalizeWebUrl(footerWebsite) ||
     "#";
 
+  /** Full T&C page from company master (preferred over generic website). */
+  const companyTermsUrl =
+    normalizeWebUrl(selectedCompany?.termsConditions) || companyWebsiteUrl;
+
+  const companyPaymentLink = normalizeWebUrl(selectedCompany?.paymentLink);
+
+  const netBankingPayeeName =
+    String(selectedCompany?.companyName || "").trim() ||
+    (footerCompany && footerCompany !== "N/A"
+      ? String(footerCompany).trim()
+      : "");
+
   const companyCancellationUrl = normalizeWebUrl(
     selectedCompany?.cancellationPolicy,
   );
@@ -546,12 +688,16 @@ const QuotationPDFDialog = ({
 
       for (let i = 0; i < days.length; i++) {
         const day = days[i];
-        if (
-          day.image &&
-          day.image.preview &&
-          typeof day.image.preview === "string"
-        ) {
-          const base64DayImage = await convertToBase64(day.image.preview, true);
+        const imgUrl =
+          day?.image &&
+          typeof day.image === "object" &&
+          (typeof day.image.preview === "string"
+            ? day.image.preview
+            : typeof day.image.url === "string"
+              ? day.image.url
+              : "");
+        if (imgUrl) {
+          const base64DayImage = await convertToBase64(imgUrl, true);
           if (base64DayImage) loadedImages[`day_${i}`] = base64DayImage;
         }
       }
@@ -569,7 +715,7 @@ const QuotationPDFDialog = ({
     }
   }, [open, logoUrl, bannerImage, days, convertToBase64]);
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async ({ shouldDownload = true } = {}) => {
     try {
       setLoading(true);
       setError("");
@@ -687,8 +833,8 @@ const QuotationPDFDialog = ({
         if (i === pageElements.length - 1) {
           if (termsLinkPosition) {
             const termsUrl =
-              companyWebsiteUrl !== "#"
-                ? companyWebsiteUrl
+              companyTermsUrl !== "#"
+                ? companyTermsUrl
                 : "https://www.iconicyatra.com";
             pdf.link(
               termsLinkPosition.x,
@@ -728,15 +874,35 @@ const QuotationPDFDialog = ({
         creator: "Iconic Yatra Travel Management System",
       });
 
-      pdf.save(
-        `${customerName.replace(/\s/g, "_")}_Quotation_${reference || Date.now()}.pdf`,
-      );
+      const fileName = `${customerName.replace(/\s/g, "_")}_Quotation_${reference || Date.now()}.pdf`;
+      if (shouldDownload) {
+        pdf.save(fileName);
+      }
+
+      const blob = pdf.output("blob");
+      const contentBase64 = await blobToBase64(blob);
+      return {
+        filename: fileName,
+        contentBase64,
+        mimeType: "application/pdf",
+      };
     } catch (err) {
       console.error("PDF generation error:", err);
       setError("PDF generation failed: " + (err.message || "Please try again"));
+      return null;
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSendMailWithPdf = async () => {
+    if (typeof onSendMail !== "function") return;
+    const payload = await handleDownloadPDF({ shouldDownload: false });
+    if (!payload?.contentBase64) return;
+    onSendMail({
+      pdfAttachment: payload,
+      previewPdfMode: emailContentMode === "short",
+    });
   };
 
   const handlePrint = () => {
@@ -1085,14 +1251,14 @@ const QuotationPDFDialog = ({
           </div>
           {pickupArrival && pickupArrival !== "N/A" ? (
             <div style={{ fontSize: "14px", marginBottom: "8px" }}>
-              🛬 Arrival: {pickupArrival}
+              🛬 Arrival: {String(pickupArrival).replace(/^arrival\s*:\s*/i, "")}
             </div>
           ) : (
             <div style={{ fontSize: "14px", color: "#999" }}>Not specified</div>
           )}
           {pickupDeparture && pickupDeparture !== "N/A" ? (
             <div style={{ fontSize: "14px" }}>
-              🛫 Departure: {pickupDeparture}
+              🛫 Departure: {String(pickupDeparture).replace(/^departure\s*:\s*/i, "")}
             </div>
           ) : (
             <div style={{ fontSize: "14px", color: "#999" }}>
@@ -1231,53 +1397,66 @@ const QuotationPDFDialog = ({
             >
               <thead>
                 <tr style={{ background: "#667eea" }}>
-                  {hotelPricingData[0] &&
-                    Object.keys(hotelPricingData[0]).map(
-                      (header) =>
-                        (header === "destination" ||
-                          header === "nights" ||
-                          (header === "standard" && showStandardCol) ||
-                          (header === "deluxe" && showDeluxeCol) ||
-                          (header === "superior" && showSuperiorCol)) && (
-                          <th
-                            key={header}
-                            style={{
-                              color: "white",
-                              padding: "14px",
-                              textAlign: "left",
-                              fontWeight: "bold",
-                            }}
-                          >
-                            {header.replace(/([A-Z])/g, " $1").trim()}
-                          </th>
-                        ),
-                    )}
+                  {[
+                    { key: "destination", show: true },
+                    { key: "nights", show: true },
+                    { key: "standard", show: showStandardCol },
+                    { key: "deluxe", show: showDeluxeCol },
+                    { key: "superior", show: showSuperiorCol },
+                  ]
+                    .filter((h) => h.show)
+                    .map((h) => (
+                      <th
+                        key={h.key}
+                        style={{
+                          color: "white",
+                          padding: "14px",
+                          textAlign: "left",
+                          fontWeight: "bold",
+                          textTransform: "none",
+                        }}
+                      >
+                        {toHeaderLabel(h.key)}
+                      </th>
+                    ))}
                 </tr>
               </thead>
               <tbody>
-                {hotelPricingData.map((row, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>
-                      {row?.destination || "-"}
-                    </td>
-                    <td style={{ padding: "12px" }}>{row?.nights || "-"}</td>
-                    {showStandardCol && (
+                {hotelPricingData
+                  .filter(
+                    (row) =>
+                      !isTransportationCostRow(row) &&
+                      !isHotelCostRow(row)
+                  ).map((row, idx) => (
+                    <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        {renderHotelCellValue(row, "standard")}
+                        {(() => {
+                          const txt = String(row?.destination || "-").trim();
+                          return txt
+                            ? txt.charAt(0).toUpperCase() + txt.slice(1)
+                            : "-";
+                        })()}
                       </td>
-                    )}
-                    {showDeluxeCol && (
                       <td style={{ padding: "12px" }}>
-                        {renderHotelCellValue(row, "deluxe")}
+                        {getNightsCellValue(row)}
                       </td>
-                    )}
-                    {showSuperiorCol && (
-                      <td style={{ padding: "12px" }}>
-                        {renderHotelCellValue(row, "superior")}
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                      {showStandardCol && (
+                        <td style={{ padding: "12px" }}>
+                          {renderHotelCellValue(row, "standard")}
+                        </td>
+                      )}
+                      {showDeluxeCol && (
+                        <td style={{ padding: "12px" }}>
+                          {renderHotelCellValue(row, "deluxe")}
+                        </td>
+                      )}
+                      {showSuperiorCol && (
+                        <td style={{ padding: "12px" }}>
+                          {renderHotelCellValue(row, "superior")}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -1339,7 +1518,7 @@ const QuotationPDFDialog = ({
                   {showStandardCol && standardTotal > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Standard)
+                        Package Cost (Standard)
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(standardTotal)}
@@ -1349,7 +1528,7 @@ const QuotationPDFDialog = ({
                   {showDeluxeCol && deluxeTotal > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Deluxe)
+                        Package Cost (Deluxe)
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(deluxeTotal)}
@@ -1359,7 +1538,7 @@ const QuotationPDFDialog = ({
                   {showSuperiorCol && superiorTotal > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Superior)
+                        Package Cost (Superior)
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(superiorTotal)}
@@ -1370,43 +1549,13 @@ const QuotationPDFDialog = ({
               ) : (
                 effectiveTotal > 0 && (
                   <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>Total Package Cost</td>
+                    <td style={{ padding: "12px" }}>Package Cost</td>
                     <td style={{ padding: "12px", textAlign: "right" }}>
                       {formatCurrency(effectiveTotal)}
                     </td>
                   </tr>
                 )
               )}
-              {visiblePackageColumns <= 1 &&
-                pricingDiscount &&
-                pricingDiscount !== "N/A" &&
-                pricingDiscount !== "₹ 0" &&
-                pricingDiscount !== 0 && (
-                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>Discount</td>
-                    <td
-                      style={{
-                        padding: "12px",
-                        textAlign: "right",
-                        color: "#2e7d32",
-                      }}
-                    >
-                      -{formatCurrency(pricingDiscount)}
-                    </td>
-                  </tr>
-                )}
-              {visiblePackageColumns <= 1 &&
-                pricingGst &&
-                pricingGst !== "N/A" &&
-                pricingGst !== "₹ 0" &&
-                pricingGst !== 0 && (
-                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>GST</td>
-                    <td style={{ padding: "12px", textAlign: "right" }}>
-                      {formatCurrency(pricingGst)}
-                    </td>
-                  </tr>
-                )}
               {visiblePackageColumns <= 1 && (
                 <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
                   <td style={{ padding: "14px", fontSize: "16px" }}>
@@ -1448,8 +1597,60 @@ const QuotationPDFDialog = ({
         </div>
       </div>
 
+      {/* Net banking: beneficiary name matches selected company */}
+      {netBankingPayeeName && (
+        <div style={{ marginBottom: "35px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "16px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            🏦 Net Banking / NEFT / RTGS
+          </div>
+          <div
+            style={{
+              padding: "18px",
+              background: "#f3f6ff",
+              borderRadius: "12px",
+              borderLeft: "4px solid #667eea",
+              fontSize: "14px",
+              lineHeight: "1.7",
+              color: "#333",
+            }}
+          >
+            <div style={{ marginBottom: "10px" }}>
+              Please transfer funds in favor of{" "}
+              <strong style={{ color: "#667eea" }}>
+                {netBankingPayeeName}
+              </strong>
+              . Use this name exactly as the account / beneficiary name when
+              paying via net banking, NEFT, RTGS, or IMPS.
+            </div>
+            {companyPaymentLink && (
+              <div style={{ marginTop: "12px" }}>
+                <span style={{ fontWeight: "600" }}>Online payment: </span>
+                <Link
+                  href={companyPaymentLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="hover"
+                  sx={{ fontWeight: "bold", wordBreak: "break-all" }}
+                >
+                  {companyPaymentLink}
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Inclusion Policy Section */}
-      {finalInclusionArray.length > 0 && (
+      {finalInclusionArrayWithServices.length > 0 && (
         <div>
           <div
             style={{
@@ -1471,7 +1672,7 @@ const QuotationPDFDialog = ({
               borderLeft: "4px solid #2e7d32",
             }}
           >
-            {finalInclusionArray.map(
+            {finalInclusionArrayWithServices.map(
               (item, idx) =>
                 item &&
                 item !== "" && (
@@ -1494,20 +1695,26 @@ const QuotationPDFDialog = ({
     </div>
   );
 
-  // PAGE 3: Exclusion and Payment Policy
-  const PoliciesPage = () => (
+  // SINGLE PAGE: Exclusion, Payment, Cancellation & Refund, Terms & Conditions, and Footer
+  const PoliciesAndFooterPage = () => (
     <div
       className="pdf-page"
-      style={{ padding: "25px", background: "#fff", minHeight: "297mm" }}
+      style={{
+        padding: "25px",
+        background: "#fff",
+        minHeight: "297mm",
+        display: "flex",
+        flexDirection: "column",
+      }}
     >
       {/* Exclusion Policy */}
       {finalExclusionArray.length > 0 && (
-        <div style={{ marginBottom: "35px" }}>
+        <div style={{ marginBottom: "25px" }}>
           <div
             style={{
               fontWeight: "bold",
               fontSize: "20px",
-              marginBottom: "20px",
+              marginBottom: "15px",
               borderBottom: "3px solid #667eea",
               paddingBottom: "10px",
               color: "#333",
@@ -1517,7 +1724,7 @@ const QuotationPDFDialog = ({
           </div>
           <div
             style={{
-              padding: "18px",
+              padding: "15px",
               background: "#ffebee",
               borderRadius: "12px",
               borderLeft: "4px solid #c62828",
@@ -1532,7 +1739,7 @@ const QuotationPDFDialog = ({
                     style={{
                       fontSize: "13px",
                       marginLeft: "20px",
-                      marginBottom: "8px",
+                      marginBottom: "6px",
                       lineHeight: "1.5",
                     }}
                   >
@@ -1546,12 +1753,12 @@ const QuotationPDFDialog = ({
 
       {/* Payment Policy */}
       {finalPaymentPolicyArray.length > 0 && (
-        <div style={{ marginBottom: "35px" }}>
+        <div style={{ marginBottom: "25px" }}>
           <div
             style={{
               fontWeight: "bold",
               fontSize: "20px",
-              marginBottom: "20px",
+              marginBottom: "15px",
               borderBottom: "3px solid #667eea",
               paddingBottom: "10px",
               color: "#333",
@@ -1561,7 +1768,7 @@ const QuotationPDFDialog = ({
           </div>
           <div
             style={{
-              padding: "18px",
+              padding: "15px",
               background: "#e3f2fd",
               borderRadius: "12px",
               borderLeft: "4px solid #1565c0",
@@ -1576,7 +1783,7 @@ const QuotationPDFDialog = ({
                     style={{
                       fontSize: "13px",
                       marginLeft: "20px",
-                      marginBottom: "8px",
+                      marginBottom: "6px",
                       lineHeight: "1.5",
                     }}
                   >
@@ -1587,155 +1794,151 @@ const QuotationPDFDialog = ({
           </div>
         </div>
       )}
-    </div>
-  );
 
-  // LAST PAGE: Cancellation & Refund Policy, Terms & Conditions (with link only), and Footer
-  const LastPage = () => (
-    <div
-      className="pdf-page"
-      style={{
-        padding: "25px",
-        background: "#fff",
-        minHeight: "297mm",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Cancellation & Refund Policy - Full Policy */}
+      {/* Cancellation & Refund Policy */}
       {(finalCancellationArray.length > 0 || companyCancellationUrl) && (
+        <div style={{ marginBottom: "25px" }}>
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "20px",
+              marginBottom: "15px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
+              color: "#333",
+            }}
+          >
+            <MoneyOff sx={{ mr: 1 }} /> Cancellation & Refund Policy
+          </div>
+          <div
+            style={{
+              padding: "15px",
+              background: "#fff3e0",
+              borderRadius: "12px",
+              borderLeft: "4px solid #e65100",
+            }}
+          >
+            {companyCancellationUrl && (
+              <div
+                style={{
+                  fontSize: "13px",
+                  marginBottom: "12px",
+                  textAlign: "center",
+                  lineHeight: "1.6",
+                  padding: "8px",
+                  background: "#fff",
+                  borderRadius: "8px",
+                }}
+              >
+                Full cancellation & refund policy:{" "}
+                <a
+                  data-pdf-link="cancellation"
+                  href={companyCancellationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "#1565c0",
+                    textDecoration: "underline",
+                    fontWeight: "bold",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {companyCancellationUrl}
+                </a>
+              </div>
+            )}
+            {finalCancellationArray.map(
+              (item, idx) =>
+                item &&
+                item !== "" && (
+                  <div
+                    key={idx}
+                    style={{
+                      fontSize: "13px",
+                      marginLeft: item.startsWith("•") ? "20px" : "0px",
+                      marginBottom: "6px",
+                      lineHeight: "1.6",
+                      fontWeight: item.includes("Policy:") ? "bold" : "normal",
+                      marginTop: item.includes("Policy:") ? "8px" : "0px",
+                    }}
+                  >
+                    {item}
+                  </div>
+                ),
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Terms & Conditions */}
+      <div style={{ marginBottom: "15px" }}>
         <div
           style={{
-            padding: "18px",
-            marginBottom: "25px",
-            background: "#fff3e0",
+            fontWeight: "bold",
+            fontSize: "20px",
+            marginBottom: "12px",
+            borderBottom: "3px solid #667eea",
+            paddingBottom: "8px",
+            color: "#333",
+          }}
+        >
+          <Description sx={{ mr: 1 }} /> Terms & Conditions
+        </div>
+        <div
+          style={{
+            padding: "12px",
+            background: "#fafafa",
             borderRadius: "12px",
-            borderLeft: "4px solid #e65100",
+            border: "1px solid #e0e0e0",
+            textAlign: "center",
           }}
         >
           <div
             style={{
-              fontWeight: "bold",
-              color: "#e65100",
-              marginBottom: "12px",
-              fontSize: "16px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
+              fontSize: "14px",
+              color: "#555",
+              lineHeight: "1.5",
+              padding: "8px",
             }}
           >
-            <MoneyOff /> 🔄 Cancellation & Refund Policy
-          </div>
-          {companyCancellationUrl && (
-            <div
+            Full terms & conditions:{" "}
+            <a
+              data-pdf-link="terms"
+              href={
+                companyTermsUrl !== "#" ? companyTermsUrl : companyWebsiteUrl
+              }
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
-                fontSize: "13px",
-                marginBottom: "14px",
-                textAlign: "center",
-                lineHeight: "1.6",
+                color: "#667eea",
+                textDecoration: "underline",
+                fontWeight: "bold",
+                wordBreak: "break-all",
               }}
             >
-              Full cancellation & refund policy:{" "}
-              <a
-                data-pdf-link="cancellation"
-                href={companyCancellationUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: "#1565c0",
-                  textDecoration: "underline",
-                  fontWeight: "bold",
-                  wordBreak: "break-all",
-                }}
-              >
-                {companyCancellationUrl}
-              </a>
-            </div>
-          )}
-          {finalCancellationArray.map(
-            (item, idx) =>
-              item &&
-              item !== "" && (
-                <div
-                  key={idx}
-                  style={{
-                    fontSize: "13px",
-                    marginLeft: item.startsWith("•") ? "20px" : "0px",
-                    marginBottom: "6px",
-                    lineHeight: "1.6",
-                    fontWeight: item.includes("Policy:") ? "bold" : "normal",
-                    marginTop: item.includes("Policy:") ? "8px" : "0px",
-                  }}
-                >
-                  {item}
-                </div>
-              ),
-          )}
-        </div>
-      )}
-
-      {/* Terms & Conditions - Simple version with link only */}
-      <div
-        style={{
-          padding: "18px",
-          marginBottom: "30px",
-          background: "#fafafa",
-          borderRadius: "12px",
-          border: "1px solid #e0e0e0",
-        }}
-      >
-        <div
-          style={{
-            fontWeight: "bold",
-            color: "#424242",
-            marginBottom: "12px",
-            fontSize: "16px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
-          <Description /> Terms & Conditions
-        </div>
-        <div
-          style={{
-            fontSize: "14px",
-            color: "#555",
-            lineHeight: "1.6",
-            textAlign: "center",
-            padding: "10px",
-          }}
-        >
-          As per company website{" "}
-          <a
-            data-pdf-link="terms"
-            href={companyWebsiteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              color: "#667eea",
-              textDecoration: "underline",
-              fontWeight: "bold",
-            }}
-          >
-            {companyWebsiteUrl !== "#"
-              ? companyWebsiteUrl
-              : "www.iconicyatra.com"}
-          </a>
+              {companyTermsUrl !== "#"
+                ? companyTermsUrl
+                : companyWebsiteUrl !== "#"
+                  ? companyWebsiteUrl
+                  : "www.iconicyatra.com"}
+            </a>
+          </div>
         </div>
       </div>
 
-      {/* Footer - On the same page after Terms & Conditions */}
-      <div style={{ marginTop: "30px", textAlign: "center" }}>
+      {/* Footer Section */}
+      <div
+        style={{ marginTop: "35px", textAlign: "center", paddingTop: "0px" }}
+      >
         {imageElements.logo && (
           <img
             src={imageElements.logo}
             alt="Company Logo"
-            style={{ height: "50px", width: "auto", marginBottom: "12px" }}
+            style={{ height: "45px", width: "auto", marginBottom: "8px" }}
           />
         )}
         {footerAddress && footerAddress !== "N/A" && (
-          <div style={{ fontSize: "12px", marginBottom: "6px", color: "#666" }}>
+          <div style={{ fontSize: "11px", marginBottom: "4px", color: "#666" }}>
             📍 {footerAddress}
           </div>
         )}
@@ -1743,10 +1946,10 @@ const QuotationPDFDialog = ({
           style={{
             display: "flex",
             justifyContent: "center",
-            gap: "20px",
+            gap: "15px",
             flexWrap: "wrap",
-            marginBottom: "12px",
-            fontSize: "12px",
+            marginBottom: "8px",
+            fontSize: "11px",
             color: "#666",
           }}
         >
@@ -1757,15 +1960,15 @@ const QuotationPDFDialog = ({
           )}
         </div>
         {footerContact && footerContact !== "N/A" && (
-          <div style={{ fontSize: "12px", marginTop: "8px", color: "#666" }}>
+          <div style={{ fontSize: "11px", marginTop: "6px", color: "#666" }}>
             👤 Contact Person: {footerContact}
             {footerContactDesignation ? ` (${footerContactDesignation})` : ""}
           </div>
         )}
-        <div style={{ fontSize: "10px", color: "#999", marginTop: "15px" }}>
+        <div style={{ fontSize: "9px", color: "#999", marginTop: "10px" }}>
           This is a computer generated quotation. No signature required.
         </div>
-        <div style={{ fontSize: "10px", color: "#999", marginTop: "5px" }}>
+        <div style={{ fontSize: "9px", color: "#999", marginTop: "3px" }}>
           © {new Date().getFullYear()} {footerCompany}. All rights reserved.
         </div>
       </div>
@@ -1831,6 +2034,28 @@ const QuotationPDFDialog = ({
             >
               {loading ? "Generating PDF..." : "Download PDF"}
             </Button>
+            {typeof onSendMail === "function" && (
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel>Email Content</InputLabel>
+                <Select
+                  value={emailContentMode}
+                  onChange={(e) => setEmailContentMode(e.target.value)}
+                >
+                  <MenuItem value="short">Short Intro Content</MenuItem>
+                  <MenuItem value="full">Full Email Content</MenuItem>
+                </Select>
+              </FormControl>
+            )}
+            {typeof onSendMail === "function" && (
+              <Button
+                onClick={handleSendMailWithPdf}
+                startIcon={<Email />}
+                variant="outlined"
+                disabled={!renderComplete || loading}
+              >
+                Send Mail
+              </Button>
+            )}
             <Button onClick={onClose} startIcon={<Close />} color="inherit">
               Close
             </Button>
@@ -1882,8 +2107,7 @@ const QuotationPDFDialog = ({
           <Page1 />
           {days.length > 0 && <ItineraryPages />}
           <CombinedPricingPage />
-          <PoliciesPage />
-          <LastPage />
+          <PoliciesAndFooterPage />
         </div>
       </DialogContent>
     </Dialog>

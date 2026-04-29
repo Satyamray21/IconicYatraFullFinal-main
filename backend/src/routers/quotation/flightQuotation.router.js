@@ -6,25 +6,20 @@ import {
     updateFlightQuotationById,
     deleteFlightQuotationById,
     confirmFlightQuotation,
+    previewFlightQuotationMail,
+    sendFlightQuotationMail,
 } from "../../controllers/quotation/flightQuotation.controller.js";
+import { requirePermission } from "../../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
-
-router.post("/", createFlightQuotation);
-
-// Get all
-router.get("/", getAllFlightQuotations);
-
-// Get by ID
-router.get("/:flightQuotationId", getFlightQuotationById);
-
-// Update by ID
-router.put("/:flightQuotationId", updateFlightQuotationById);
-
-// Delete by ID
-router.delete("/:flightQuotationId", deleteFlightQuotationById);
-
-router.patch("/confirm/:flightQuotationId", confirmFlightQuotation);
+router.post("/", requirePermission("canCreateBooking"), createFlightQuotation);
+router.get("/", requirePermission("canAccessBookings"), getAllFlightQuotations);
+router.get("/:flightQuotationId", requirePermission("canAccessBookings"), getFlightQuotationById);
+router.put("/:flightQuotationId", requirePermission("canEditBooking"), updateFlightQuotationById);
+router.delete("/:flightQuotationId", requirePermission("canDeleteBooking"), deleteFlightQuotationById);
+router.patch("/confirm/:flightQuotationId", requirePermission("canEditBooking"), confirmFlightQuotation);
+router.get("/email/preview/:flightQuotationId", requirePermission("canEditBooking"), previewFlightQuotationMail);
+router.post("/:flightQuotationId/email/send", requirePermission("canEditBooking"), sendFlightQuotationMail);
 
 export default router;

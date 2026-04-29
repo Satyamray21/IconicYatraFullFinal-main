@@ -10,6 +10,7 @@ import Bank from "../../models/bankDetails.js";
 import GlobalSettings from "../../models/globalSettings.model.js";
 import {
   buildCustomQuotationNormalEmail,
+  buildCustomQuotationPdfPreviewEmail,
   buildCustomQuotationBookingEmail,
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
@@ -80,6 +81,7 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
       const quotation = await CustomQuotation.create({
         ...req.body,
         quotationId,
+        currentStep: 1,
       });
 
       return res
@@ -472,6 +474,11 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
       throw new ApiError(400, `Invalid step number: ${stepNumber}`);
     }
 
+    quotation.currentStep = Math.max(
+      Number(quotation.currentStep) || 1,
+      stepNumber,
+    );
+
     await quotation.save();
     console.log("✅ Step", stepNumber, "updated successfully!");
 
@@ -510,12 +517,15 @@ const resolveMailAuth = (senderAccount) => {
   const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
 
   const user = useSecondary
-    ? process.env.EMAIL_USER2
-    : process.env.EMAIL_USER;
+    ? process.env.gmail2 || process.env.EMAIL_USER2 || process.env.gmail || process.env.EMAIL_USER
+    : process.env.gmail || process.env.EMAIL_USER;
 
   const pass = useSecondary
-    ? process.env.EMAIL_PASS2
-    : process.env.EMAIL_PASS;
+    ? process.env.app_pass2 ||
+      process.env.EMAIL_PASS2 ||
+      process.env.app_pass ||
+      process.env.EMAIL_PASS
+    : process.env.app_pass || process.env.EMAIL_PASS;
 
   return { user, pass };
 };
@@ -602,6 +612,10 @@ const loadEmailMeta = async (company) => {
         accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
       }).lean()
     : [];
+  const pickHttp = (v) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return /^https?:\/\//i.test(s) ? s : "";
+  };
 
   return {
     companyName: company?.companyName || "Iconic Travel",
@@ -612,19 +626,36 @@ const loadEmailMeta = async (company) => {
     globalPaymentPolicy: globalSettings?.paymentPolicy || "",
     globalTermsAndConditions: globalSettings?.termsAndConditions || "",
     companyTermsConditions: company?.termsConditions || "",
+    companyCancellationPolicyUrl: pickHttp(company?.cancellationPolicy),
+    companyPaymentLink: pickHttp(company?.paymentLink),
     bankDetails,
   };
 };
 
 export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
-  const { finalizedPackage } = req.body || {};
+  const { finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts } = req.body || {};
 
-  if (!FINAL_PACKAGES.includes(finalizedPackage)) {
-    throw new ApiError(
-      400,
-      "finalizedPackage must be Standard, Deluxe, or Superior",
+  // Support both single and multiple packages
+  let packagesToFinalize = [];
+  
+  if (Array.isArray(finalizedPackages) && finalizedPackages.length > 0) {
+    // Multiple packages - validate each
+    packagesToFinalize = finalizedPackages.filter(pkg => 
+      pkg && String(pkg).trim() && FINAL_PACKAGES.includes(String(pkg).trim())
     );
+    if (packagesToFinalize.length === 0) {
+      throw new ApiError(400, "At least one valid package required (Standard, Deluxe, or Superior)");
+    }
+  } else if (finalizedPackage && String(finalizedPackage).trim()) {
+    // Single package (backward compatibility)
+    const pkg = String(finalizedPackage).trim();
+    if (!FINAL_PACKAGES.includes(pkg)) {
+      throw new ApiError(400, `Invalid package: ${pkg}. Must be Standard, Deluxe, or Superior`);
+    }
+    packagesToFinalize = [pkg];
+  } else {
+    throw new ApiError(400, "finalizedPackage(s) must be Standard, Deluxe, or Superior");
   }
 
   const quotation = await CustomQuotation.findOne({ quotationId });
@@ -633,8 +664,20 @@ export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
   }
 
   quotation.finalizeStatus = "finalized";
-  quotation.finalizedPackage = finalizedPackage;
+  quotation.finalizedPackage = packagesToFinalize[0]; // Keep for backward compatibility
+  quotation.finalizedPackages = packagesToFinalize; // New field for multiple packages
   quotation.finalizedAt = new Date();
+
+  // Store vendor details with amounts if provided
+  if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {
+    quotation.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts.map(vendor => ({
+      vendorName: vendor.vendorName || "",
+      vendorType: vendor.vendorType || "Other",
+      amount: Number(vendor.amount) || 0,
+      remarks: vendor.remarks || "",
+    }));
+  }
+
   await quotation.save();
 
   return res
@@ -699,6 +742,8 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     senderAccount,
     companyId,
     companyName,
+    pdfAttachment,
+    previewPdfMode = false,
   } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -726,10 +771,17 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
           customText.normal || {},
           meta,
         );
+  const previewPdfBody = buildCustomQuotationPdfPreviewEmail(
+    quotation,
+    customText.normal || {},
+    meta,
+  );
   const body =
     type === "booking"
       ? generatedBody
-      : String(bodyHtml || "").trim() || generatedBody;
+      : previewPdfMode
+        ? previewPdfBody
+        : String(bodyHtml || "").trim() || generatedBody;
 
   const finalSubject =
     subject ||
@@ -755,20 +807,38 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     },
   });
 
-  try {
-    await transporter.sendMail({
-      from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
-      to,
-      cc: cc && cc.length ? cc : undefined,
-      replyTo: selectedCompany?.email || auth.user,
-      subject: finalSubject,
-      html: body,
-      text: body.replace(/<[^>]*>/g, ""), // fallback
-    });
-  } catch (error) {
-    console.error("Mail Error:", error);
-    throw new ApiError(500, "Failed to send email");
-  }
+  const providedPdfAttachment =
+    pdfAttachment &&
+    typeof pdfAttachment === "object" &&
+    String(pdfAttachment.contentBase64 || "").trim()
+      ? {
+          filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+          content: Buffer.from(
+            String(pdfAttachment.contentBase64).trim(),
+            "base64",
+          ),
+          contentType:
+            String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+        }
+      : null;
+
+    const isBooking = String(type || "").trim().toLowerCase() === "booking";
+
+    try {
+      await transporter.sendMail({
+        from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+        to,
+        cc: cc && cc.length ? cc : undefined,
+        replyTo: selectedCompany?.email || auth.user,
+        subject: finalSubject,
+        html: body,
+        text: body.replace(/<[^>]*>/g, ""), // fallback
+        attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
+      });
+    } catch (error) {
+      console.error("Mail Error:", error);
+      throw new ApiError(500, "Failed to send email");
+    }
 
   return res.status(200).json(
     new ApiResponse(

@@ -65,6 +65,9 @@ const StaffCard = lazy(() => import("../Pages/Admin/Staff/StaffCard"));
 const StaffForm = lazy(() => import("../Pages/Admin/Staff/Form/StaffForm"));
 const StaffEditForm = lazy(() =>
   import("../Pages/Admin/Staff/Form/EditStaff"));
+const StaffPermissionPage = lazy(() =>
+  import("../Pages/Admin/Staff/StaffPermissionPage")
+);
 
 const CompanyWebsiteEnquiry=lazy(()=>import("../Components/CompanyWebsiteEnquiry"));
 
@@ -366,12 +369,16 @@ const MainRoute = () => {
           <Route path="/packageform" element={<MultiStepPackageForm />} />
           <Route path="/packageform-old" element={<PackageForm />} />
           <Route path="/tourpackage/packageeditform/:id" element={<PackageEditForm />} />
+          <Route path="/associates/associateseditform/:associateId" element={<AssociatesEditFrom />} />
           <Route path="/associates" element={<AssociatesCard />} />
           <Route path="/associatesform" element={<AssociatesForm />} />
-          <Route path="/associates/associateseditform/:associateId" element={<AssociatesEditFrom />} />
           <Route path="/staff" element={<StaffCard />} />
           <Route path="/staffform" element={<StaffForm />} />
           <Route path="/staff/staffeditform/:staffId" element={<StaffEditForm />} />
+          <Route
+            path="/admin/staff/:staffId/permissions"
+            element={<StaffPermissionPage />}
+          />
           <Route path="/payments" element={<PaymentsCard />} />
           <Route path="/payments-form" element={<PaymentsForm />} />
           <Route path="/payments-form/:id" element={<PaymentEdit />} />

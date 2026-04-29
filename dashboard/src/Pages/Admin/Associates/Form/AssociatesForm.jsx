@@ -10,6 +10,7 @@ import {
   FormControl,
   InputLabel,
   Select,
+  CircularProgress,
 } from "@mui/material";
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -26,9 +27,16 @@ import {
   clearStates,
   clearCities,
 } from "../../../../features/location/locationSlice";
+import { toast } from "react-toastify";
 const titles = ["Mr", "Mrs", "Ms", "Dr"];
-const roles = ["B2B Vendor", "Hotel Vendor", "Referral Partner", "Staff", "Sub Agent", "Vehicle Vendor"];
-
+const roles = [
+  "Vehicle Vendor",
+  "Hotel Vendor",
+  "B2B Vendor",
+  "Referral Partner",
+  "Staff",
+  "Sub Agent",
+];
 
 const validationSchema = Yup.object().shape({
   fullName: Yup.string().required("Required"),
@@ -49,6 +57,7 @@ const validationSchema = Yup.object().shape({
 
 const AssociatesForm = () => {
   const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const {
@@ -58,10 +67,12 @@ const AssociatesForm = () => {
     loading,
   } = useSelector((state) => state.location);
 
-  const handleFinalSubmit = (values) => {
+  const handleFinalSubmit = async (values) => {
+    setSubmitting(true);
     const formattedData = {
       personalDetails: {
-        fullName: `${values.fullName.split(" ")[0] || ""} ${values.fullName.split(" ").slice(1).join(" ") || ""}`.trim(),
+        fullName:
+          `${values.fullName.split(" ")[0] || ""} ${values.fullName.split(" ").slice(1).join(" ") || ""}`.trim(),
         mobileNumber: values.mobile,
         alternateContact: values.alternateContact,
         associateType: values.associateType,
@@ -69,7 +80,8 @@ const AssociatesForm = () => {
         title: values.title,
         dob: values.dob,
       },
-      staffLocation: {  // Changed from associateLocation to staffLocation
+      staffLocation: {
+        // Changed from associateLocation to staffLocation
         country: values.country,
         state: values.state,
         city: values.city,
@@ -81,19 +93,19 @@ const AssociatesForm = () => {
         pincode: values.pincode,
       },
       firm: {
-  firmType: values.firmType,
-  gstin: values.gstin,        // ✅ FIXED
-  cin: values.cin,
-  pan: values.pan,
-  turnover: values.turnover,  // ✅ FIXED
-  firmName: values.firmName,
-  firmDescription: values.firmDescription,
-  sameAsContact: values.sameAsContact,
-  address1: values.firmAddress1,
-  address2: values.firmAddress2,
-  address3: values.firmAddress3,
-  supportingDocs: values.supportingDocs,
-},
+        firmType: values.firmType,
+        gstin: values.gstin, // ✅ FIXED
+        cin: values.cin,
+        pan: values.pan,
+        turnover: values.turnover, // ✅ FIXED
+        firmName: values.firmName,
+        firmDescription: values.firmDescription,
+        sameAsContact: values.sameAsContact,
+        address1: values.firmAddress1,
+        address2: values.firmAddress2,
+        address3: values.firmAddress3,
+        supportingDocs: values.supportingDocs,
+      },
 
       bank: {
         bankName: values.bankName,
@@ -102,17 +114,23 @@ const AssociatesForm = () => {
         accountHolderName: values.accountHolderName,
         accountNumber: values.accountNumber,
         ifscCode: values.ifscCode,
+        upiId: values.upiId,
+        qrCode: values.qrCode,
       },
     };
 
-    dispatch(createAssociate(formattedData))
-      .unwrap()
-      .then(() => {
-        navigate("/associates");
-      })
-      .catch((err) => {
-        console.error("Associates creation failed:", err);
-      });
+    try {
+      await dispatch(createAssociate(formattedData)).unwrap();
+      toast.success("Associates added successfully");
+      navigate("/associates");
+    } catch (err) {
+      console.error("Associates creation failed:", err);
+      toast.error(
+        err?.message || "Failed to add associate. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const formik = useFormik({
@@ -144,7 +162,7 @@ const AssociatesForm = () => {
       firmDescription: "",
       sameAsContact: false,
       supportingDocs: null,
-      firmAddress1: "",  // 👈 rename
+      firmAddress1: "", // 👈 rename
       firmAddress2: "",
       firmAddress3: "",
 
@@ -154,20 +172,20 @@ const AssociatesForm = () => {
       accountHolderName: "",
       accountNumber: "",
       ifscCode: "",
+      upiId: "",
+      qrCode: null,
+      qrCodePreview: null,
       nameOfBranch: "",
     },
 
     validationSchema,
-    onSubmit: (values) => {
+    onSubmit: async (values) => {
       if (step === 1) {
         setStep(2);
       } else {
-        handleFinalSubmit(values); // This will dispatch the action
+        await handleFinalSubmit(values);
       }
-    }
-
-
-    ,
+    },
   });
 
   const {
@@ -202,7 +220,7 @@ const AssociatesForm = () => {
         fetchCitiesByState({
           countryName: values.country,
           stateName: values.state,
-        })
+        }),
       );
     } else {
       dispatch(clearCities());
@@ -239,24 +257,24 @@ const AssociatesForm = () => {
               </Typography>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 3 }}>
-  <FormControl fullWidth>
-    <InputLabel id="title-label">Title</InputLabel>
-    <Select
-      labelId="title-label"
-      id="title"
-      name="title"
-      value={values.title || ""}
-      label="Title"
-      onChange={(e) => setFieldValue("title", e.target.value)}
-    >
-      {titles.map((title) => (
-        <MenuItem key={title} value={title}>
-          {title}
-        </MenuItem>
-      ))}
-    </Select>
-  </FormControl>
-</Grid>
+                  <FormControl fullWidth>
+                    <InputLabel id="title-label">Title</InputLabel>
+                    <Select
+                      labelId="title-label"
+                      id="title"
+                      name="title"
+                      value={values.title || ""}
+                      label="Title"
+                      onChange={(e) => setFieldValue("title", e.target.value)}
+                    >
+                      {titles.map((title) => (
+                        <MenuItem key={title} value={title}>
+                          {title}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
 
                 <Grid size={{ xs: 6 }}>
                   <TextField
@@ -296,7 +314,9 @@ const AssociatesForm = () => {
                   <FormControl
                     fullWidth
                     required
-                    error={touched.associateType && Boolean(errors.associateType)}
+                    error={
+                      touched.associateType && Boolean(errors.associateType)
+                    }
                   >
                     <InputLabel>Associate Type</InputLabel>
                     <Select
@@ -356,7 +376,7 @@ const AssociatesForm = () => {
                     >
                       {renderSelectOptions(
                         countriesData?.map((c) => c.name),
-                        "Loading countries..."
+                        "Loading countries...",
                       )}
                     </Select>
                   </FormControl>
@@ -375,7 +395,7 @@ const AssociatesForm = () => {
                     >
                       {renderSelectOptions(
                         statesData?.map((s) => s.name),
-                        "Loading states..."
+                        "Loading states...",
                       )}
                     </Select>
                   </FormControl>
@@ -391,7 +411,7 @@ const AssociatesForm = () => {
                     >
                       {renderSelectOptions(
                         citiesData?.map((c) => c.name),
-                        "Loading cities..."
+                        "Loading cities...",
                       )}
                     </Select>
                   </FormControl>
@@ -459,16 +479,26 @@ const AssociatesForm = () => {
                 variant="contained"
                 color="secondary"
                 onClick={() => setStep(1)}
+                disabled={submitting}
               >
                 Back
               </Button>
-              <Button type="submit" variant="contained" color="primary">
-                Submit Final
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={submitting}
+                startIcon={
+                  submitting ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : null
+                }
+              >
+                {submitting ? "Submitting…" : "Submit Final"}
               </Button>
             </Box>
           </>
         )}
-
 
         <Box display="flex" gap={2} justifyContent="center" mt={3}>
           {step === 1 && (

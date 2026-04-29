@@ -7,10 +7,16 @@ const quickQuotationSchema = new mongoose.Schema(
         customerName: { type: String, required: true, trim: true },
         email: { type: String, required: true, trim: true },
         phone: { type: String, trim: true },
+        clientLocation: { type: String, trim: true, default: "" },
 
         packageId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Package",
+        },
+        quickQuotationId: {
+            type: String,
+            unique: true,
+            trim: true,
         },
 
         adults: { type: Number, required: true },
@@ -28,11 +34,13 @@ const quickQuotationSchema = new mongoose.Schema(
             type: String,
             default: ""
         },
+        pickupTime: { type: Date, default: null },
 
         dropPoint: {
             type: String,
             default: ""
         },
+        dropTime: { type: Date, default: null },
 
         totalCost: {
             type: Number,
@@ -67,6 +75,18 @@ const quickQuotationSchema = new mongoose.Schema(
             hotelVendorName: { type: String, default: "" },
             vehicleVendorName: { type: String, default: "" },
         },
+        finalizedVendorsWithAmounts: [
+            {
+                vendorName: { type: String, trim: true, default: "" },
+                vendorType: {
+                    type: String,
+                    enum: ["Hotel", "Vehicle", "Other"],
+                    default: "Other",
+                },
+                amount: { type: Number, default: 0, min: 0 },
+                remarks: { type: String, trim: true, default: "" },
+            },
+        ],
     },
     { timestamps: true }
 );
@@ -75,17 +95,58 @@ const quickQuotationSchema = new mongoose.Schema(
 // FIXED pre-save hook
 // =============================
 quickQuotationSchema.pre("save", async function (next) {
+    if (this.isNew && !this.quickQuotationId) {
+        const lastQuotation = await mongoose
+            .model("QuickQuotation")
+            .findOne({ quickQuotationId: { $exists: true, $ne: null } })
+            .sort({ createdAt: -1 })
+            .select("quickQuotationId")
+            .lean();
+
+        let nextNumber = 1;
+        if (lastQuotation?.quickQuotationId) {
+            const m = String(lastQuotation.quickQuotationId).match(
+                /^ICYR_Q_(\d+)$/
+            );
+            if (m) {
+                nextNumber = Number(m[1]) + 1;
+            }
+        }
+        this.quickQuotationId = `ICYR_Q_${String(nextNumber).padStart(4, "0")}`;
+    }
+
     if (this.isNew && this.packageId) {
         const pkg = await Package.findById(this.packageId).lean();
 
         if (pkg) {
-            // Save snapshot
-            this.packageSnapshot = pkg;
+            const incomingSnapshot =
+                this.packageSnapshot && typeof this.packageSnapshot === "object"
+                    ? this.packageSnapshot
+                    : {};
+
+            // Merge package snapshot with incoming values from request.
+            // Incoming fields (e.g. quotationDetails.arrivalDate/departureDate) must win.
+            this.packageSnapshot = {
+                ...pkg,
+                ...incomingSnapshot,
+                quotationDetails: {
+                    ...(pkg?.quotationDetails && typeof pkg.quotationDetails === "object"
+                        ? pkg.quotationDetails
+                        : {}),
+                    ...(incomingSnapshot?.quotationDetails &&
+                    typeof incomingSnapshot.quotationDetails === "object"
+                        ? incomingSnapshot.quotationDetails
+                        : {}),
+                },
+            };
 
             // Save policies
-            this.policy = pkg.policy;
+            this.policy = {
+                ...(pkg?.policy && typeof pkg.policy === "object" ? pkg.policy : {}),
+                ...(this.policy && typeof this.policy === "object" ? this.policy : {}),
+            };
 
-            if (pkg.transportation) {
+            if (!this.transportation && pkg.transportation) {
                 this.transportation = pkg.transportation;
             }
 

@@ -76,8 +76,8 @@ const Navbar = () => {
     const fetchDestinations = async () => {
       try {
         const [domesticRes, internationalRes] = await Promise.all([
-          destinationAxios.get("/?tourType=Domestic"),
-          destinationAxios.get("/?tourType=International")
+          destinationAxios.get("/?tourType=Domestic&onlyUsed=true"),
+          destinationAxios.get("/?tourType=International&onlyUsed=true")
         ]);
 
         if (isMounted) {

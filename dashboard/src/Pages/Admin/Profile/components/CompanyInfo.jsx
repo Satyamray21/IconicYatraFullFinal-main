@@ -53,8 +53,9 @@ import {
   getCompany,
   upsertCompany,
 } from "../../../../features/companyUI/companyUISlice";
+import StaffAccessPermission from "./StaffAccessPermission";
 
-const CompanyProfile = () => {
+const CompanyProfile = ({ staffId = null, staffData = null }) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -596,6 +597,29 @@ const handleQrUpload = async () => {
                   </Button>
                 </Box>
               )}
+
+            {/* Access & Permission */}
+            {selected === "Access & Permission" && !staffId && (
+              <Box 
+                textAlign="center" 
+                mt={6}
+                sx={{
+                  p: 6,
+                  borderRadius: 3,
+                  backgroundColor: alpha(theme.palette.primary.main, 0.02),
+                  border: `2px dashed ${alpha(theme.palette.primary.main, 0.2)}`,
+                }}
+              >
+                <LockIcon sx={{ fontSize: 60, color: alpha(theme.palette.primary.main, 0.3), mb: 2 }} />
+                <Typography variant="h6" mb={2} color="textSecondary">
+                  Please navigate from a Staff Details page to manage permissions
+                </Typography>
+              </Box>
+            )}
+
+            {selected === "Access & Permission" && staffId && (
+              <StaffAccessPermission staffId={staffId} staffData={staffData} />
+            )}
 
             {/* Company Data */}
             {selected === "Company Profile" &&

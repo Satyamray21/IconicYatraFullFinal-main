@@ -43,7 +43,11 @@ const VehicleQuotationStep2 = ({ step1Data, onBack }) => {
     validationSchema: Yup.object({
       discount: Yup.number().typeError("Must be a number"),
       gstOption: Yup.string().required("Required"),
-      taxPercent: Yup.string().required("Required"),
+      taxPercent: Yup.string().when("gstOption", {
+        is: (val) => val !== "None",
+        then: (schema) => schema.required("Required"),
+        otherwise: (schema) => schema.notRequired(),
+      }),
       contactDetails: Yup.string().required("Required"),
     }),
     onSubmit: async (values) => {
@@ -94,13 +98,13 @@ const VehicleQuotationStep2 = ({ step1Data, onBack }) => {
 
   return (
     <Paper sx={{ p: 3, maxWidth: 700, mx: "auto" }} elevation={3}>
-      <Typography variant="h6" gutterBottom>
+      {/* <Typography variant="h6" gutterBottom>
         Quotation : Margin & Taxes
-      </Typography>
+      </Typography> */}
 
       <form onSubmit={formik.handleSubmit}>
         {/* Company Margin */}
-        <Box sx={{ mb: 3, border: "1px solid #ccc", p: 2, borderRadius: 1 }}>
+        {/* <Box sx={{ mb: 3, border: "1px solid #ccc", p: 2, borderRadius: 1 }}>
           <Typography variant="subtitle1" gutterBottom>
             Company Margin
           </Typography>
@@ -108,7 +112,7 @@ const VehicleQuotationStep2 = ({ step1Data, onBack }) => {
 
 
           </Grid>
-        </Box>
+        </Box> */}
 
         {/* Discount */}
         <Box sx={{ mb: 3, border: "1px solid #ccc", p: 2, borderRadius: 1 }}>
@@ -137,14 +141,21 @@ const VehicleQuotationStep2 = ({ step1Data, onBack }) => {
               row
               name="gstOption"
               value={formik.values.gstOption}
-              onChange={formik.handleChange}
+              onChange={(e) => {
+                formik.handleChange(e);
+                if (e.target.value === "None") {
+                  formik.setFieldValue("taxPercent", "0%");
+                } else if (formik.values.taxPercent === "0%") {
+                  formik.setFieldValue("taxPercent", "");
+                }
+              }}
             >
               <FormControlLabel value="Full" control={<Radio />} label="Full" />
-              <FormControlLabel
+              {/* <FormControlLabel
                 value="Margin"
                 control={<Radio />}
                 label="Margin"
-              />
+              /> */}
               <FormControlLabel value="None" control={<Radio />} label="None" />
             </RadioGroup>
             {formik.touched.gstOption && formik.errors.gstOption && (
@@ -154,23 +165,26 @@ const VehicleQuotationStep2 = ({ step1Data, onBack }) => {
             )}
           </FormControl>
 
-          <TextField
-            select
-            fullWidth
-            label="Apply GST (Tax %)"
-            name="taxPercent"
-            value={formik.values.taxPercent}
-            onChange={formik.handleChange}
-            error={
-              formik.touched.taxPercent && Boolean(formik.errors.taxPercent)
-            }
-            helperText={formik.touched.taxPercent && formik.errors.taxPercent}
-          >
-            <MenuItem value="5%">5%</MenuItem>
-            <MenuItem value="12%">12%</MenuItem>
-            <MenuItem value="18%">18%</MenuItem>
-            <MenuItem value="28%">28%</MenuItem>
-          </TextField>
+          {formik.values.gstOption !== "None" && (
+            <TextField
+              select
+              fullWidth
+              label="Apply GST (Tax %)"
+              name="taxPercent"
+              value={formik.values.taxPercent}
+              onChange={formik.handleChange}
+              error={
+                formik.touched.taxPercent && Boolean(formik.errors.taxPercent)
+              }
+              helperText={formik.touched.taxPercent && formik.errors.taxPercent}
+              sx={{ mt: 1 }}
+            >
+              <MenuItem value="5%">5%</MenuItem>
+              <MenuItem value="12%">12%</MenuItem>
+              <MenuItem value="18%">18%</MenuItem>
+              <MenuItem value="28%">28%</MenuItem>
+            </TextField>
+          )}
         </Box>
 
         {/* Signature Details */}

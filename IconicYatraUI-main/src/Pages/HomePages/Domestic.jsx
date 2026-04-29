@@ -36,13 +36,15 @@ const Domestic = () => {
   const { destination } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-
+  const [currency, setCurrency] = useState("INR");
+  const [rates, setRates] = useState({});
   const [page, setPage] = useState(1);
   const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
   const [selectedPackageTitle, setSelectedPackageTitle] = useState("");
   const [domesticDescriptionsBySlug, setDomesticDescriptionsBySlug] = useState(
-    {}
+    {},
   );
+  const [domesticSectorLabelBySlug, setDomesticSectorLabelBySlug] = useState({});
   const [domesticAllDescription, setDomesticAllDescription] = useState("");
 
   const {
@@ -53,7 +55,10 @@ const Domestic = () => {
     totalPackages = 0,
   } = useSelector((state) => state.packages);
 
-  const [selectedDestination, setSelectedDestination] = useState("All");
+  const routeSlug =
+    destination && destination !== "All"
+      ? String(destination).toLowerCase().trim()
+      : "";
 
   // ✅ Fetch packages (fetch more when filtering by sector to show all matches)
   useEffect(() => {
@@ -69,24 +74,33 @@ const Domestic = () => {
         const res = await destinationAxios.get("/?tourType=Domestic");
         if (!isMounted) return;
 
-        const map = (Array.isArray(res.data) ? res.data : []).reduce(
+        const list = Array.isArray(res.data) ? res.data : [];
+        const map = list.reduce(
           (acc, item) => {
             const sector = item?.sector?.trim();
             if (!sector) return acc;
             acc[slugifyValue(sector)] = item?.description?.trim() || "";
             return acc;
           },
-          {}
+          {},
         );
+        const labelMap = list.reduce((acc, item) => {
+          const sector = item?.sector?.trim();
+          if (!sector) return acc;
+          acc[slugifyValue(sector)] = sector;
+          return acc;
+        }, {});
 
         setDomesticDescriptionsBySlug(map);
-        const allDescriptionItem = (Array.isArray(res.data) ? res.data : []).find(
-          (item) => !item?.sector
+        setDomesticSectorLabelBySlug(labelMap);
+        const allDescriptionItem = list.find((item) => !item?.sector);
+        setDomesticAllDescription(
+          allDescriptionItem?.tourTypeDescription?.trim() || "",
         );
-        setDomesticAllDescription(allDescriptionItem?.tourTypeDescription?.trim() || "");
       } catch (error) {
         if (isMounted) {
           setDomesticDescriptionsBySlug({});
+          setDomesticSectorLabelBySlug({});
           setDomesticAllDescription("");
         }
       }
@@ -99,48 +113,45 @@ const Domestic = () => {
     };
   }, []);
 
-  // ✅ Handle destination/sector filter from route
-  // Reset page only when route changes, not when package data updates.
+  // ✅ Reset page only when route changes
   useEffect(() => {
-    if (destination && destination !== "All") {
-      const routeSlug = String(destination).toLowerCase().trim();
-
-      const matchedBySector = packages?.find(
-        (pkg) => slugifyValue(pkg.sector) === routeSlug
-      );
-
-      if (matchedBySector?.sector) {
-        setSelectedDestination(matchedBySector.sector);
-      } else {
-        const matchedByTitle = packages?.find(
-          (pkg) =>
-            slugifyValue(pkg.title) === routeSlug ||
-            normalizeText(pkg.title) === normalizeText(routeSlug.replace(/-/g, " "))
-        );
-        setSelectedDestination(matchedByTitle ? matchedByTitle.title : "All");
-      }
-    } else {
-      setSelectedDestination("All");
-    }
-
     setPage(1);
   }, [destination]);
+  useEffect(() => {
+    const fetchRates = async () => {
+      try {
+        const res = await fetch("https://open.er-api.com/v6/latest/INR");
+        const data = await res.json();
+        setRates(data.rates || {});
+      } catch (err) {
+        console.error("Currency fetch error", err);
+      }
+    };
 
+    fetchRates();
+  }, []);
   // ✅ Filter packages
-  const filteredPackages =
-    selectedDestination === "All"
-      ? packages
-      : packages.filter(
-          (pkg) =>
-            slugifyValue(pkg.sector) === slugifyValue(selectedDestination) ||
-            normalizeText(pkg.title) === normalizeText(selectedDestination)
-        );
+  const filteredPackages = !routeSlug
+    ? packages
+    : packages.filter(
+        (pkg) =>
+          slugifyValue(pkg.sector) === routeSlug ||
+          slugifyValue(pkg.title) === routeSlug ||
+          normalizeText(pkg.title) === normalizeText(routeSlug.replace(/-/g, " ")),
+      );
 
   const currentPackages = filteredPackages || [];
+  const selectedDestination = !routeSlug
+    ? "All"
+    : domesticSectorLabelBySlug[routeSlug] ||
+      routeSlug
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
   const selectedDescription =
-    selectedDestination === "All"
+    !routeSlug
       ? domesticAllDescription || DEFAULT_DOMESTIC_DESCRIPTION
-      : domesticDescriptionsBySlug[slugifyValue(selectedDestination)] ||
+      : domesticDescriptionsBySlug[routeSlug] ||
         DEFAULT_DOMESTIC_DESCRIPTION;
 
   // ✅ Navigate to details page (pass package data)
@@ -157,29 +168,58 @@ const Domestic = () => {
 
   // ✅ Price helpers
   const getStandardHotelPrice = (pkg) => {
+    if (pkg?.finalStandardCost && Number(pkg.finalStandardCost) > 0) {
+      return Number(pkg.finalStandardCost);
+    }
+
     if (pkg?.startingPrice) return pkg.startingPrice;
     if (pkg?.price) return pkg.price;
 
     if (!pkg.destinationNights?.length) return null;
 
-    const firstDestination = pkg.destinationNights[0];
-
-    if (!firstDestination?.hotels?.length) return null;
-
-    const standardHotel = firstDestination.hotels.find(
-      (hotel) => hotel.category === "standard"
+    const totalStandardCost = pkg.destinationNights.reduce(
+      (sum, destination) => {
+        const nights = Number(destination?.nights) || 0;
+        const standardHotel = (destination?.hotels || []).find(
+          (hotel) => hotel?.category === "standard",
+        );
+        const standardRate = Number(standardHotel?.pricePerPerson) || 0;
+        return sum + nights * standardRate;
+      },
+      0,
     );
 
-    if (standardHotel && standardHotel.pricePerPerson > 0) {
-      return standardHotel.pricePerPerson;
-    }
-
-    return null;
+    return totalStandardCost > 0 ? totalStandardCost : null;
   };
+  const convertPrice = (price) => {
+    if (!price) return null;
 
+    // INR → selected currency
+    if (currency === "INR") return price;
+
+    const rate = rates[currency];
+    if (!rate) return price;
+
+    let converted = price * rate;
+
+    // ✅ increase by 25 if not INR
+    converted += 25;
+
+    return converted;
+  };
   const formatPrice = (price) => {
     if (!price) return "Price on request";
-    return `₹${price.toLocaleString()}`;
+
+    const converted = convertPrice(price);
+
+    const symbols = {
+      INR: "₹",
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+    };
+
+    return `${symbols[currency] || currency} ${Math.round(converted).toLocaleString()}`;
   };
 
   const getPriceDisplay = (pkg) => {
@@ -203,6 +243,18 @@ const Domestic = () => {
     <>
       <Box sx={{ backgroundColor: "#f4f6f8", minHeight: "100vh", py: 6 }}>
         <Container maxWidth="lg">
+          <Box display="flex" justifyContent="flex-end" mb={3}>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              style={{ padding: "8px", borderRadius: "5px" }}
+            >
+              <option value="INR">INR</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+            </select>
+          </Box>
           {/* Breadcrumbs */}
           <Paper
             elevation={2}
@@ -214,7 +266,12 @@ const Domestic = () => {
             }}
           >
             <Breadcrumbs aria-label="breadcrumb">
-              <MUILink underline="hover" color="inherit" component={Link} to="/">
+              <MUILink
+                underline="hover"
+                color="inherit"
+                component={Link}
+                to="/"
+              >
                 Home
               </MUILink>
 
@@ -295,8 +352,8 @@ const Domestic = () => {
                           ? pkg.bannerImage.startsWith("http")
                             ? pkg.bannerImage
                             : pkg.bannerImage.startsWith("/upload/")
-                            ? `${BASE_URL}${pkg.bannerImage}`
-                            : `${BASE_URL}/upload/${pkg.bannerImage}`
+                              ? `${BASE_URL}${pkg.bannerImage}`
+                              : `${BASE_URL}/upload/${pkg.bannerImage}`
                           : "https://via.placeholder.com/300x200?text=No+Image"
                       }
                       title={pkg.title || "No Title"}
@@ -312,20 +369,21 @@ const Domestic = () => {
               </Grid>
 
               {/* Pagination */}
-              {selectedDestination === "All" && totalPages > 1 && (
+              {!routeSlug && totalPages > 1 && (
                 <Box display="flex" justifyContent="center" mt={5}>
-                 <Pagination
-    count={totalPages}
-    page={page}
-    onChange={(e, value) => {
-      setPage(value);
-      dispatch(fetchDomesticPackages({ page: value, limit: 9 }));
-      window.scrollTo(0, 0);
-    }}
-    color="primary"
-    size="large"
-  />
-
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(e, value) => {
+                      setPage(value);
+                      dispatch(
+                        fetchDomesticPackages({ page: value, limit: 9 }),
+                      );
+                      window.scrollTo(0, 0);
+                    }}
+                    color="primary"
+                    size="large"
+                  />
                 </Box>
               )}
             </>

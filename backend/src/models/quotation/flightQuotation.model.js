@@ -52,6 +52,14 @@ const flightQuotationSchema = mongoose.Schema({
 
     finalFare: { type: Number, default: null },
 
+    policies: {
+        inclusionPolicy: [{ type: String, trim: true }],
+        exclusionPolicy: [{ type: String, trim: true }],
+        paymentPolicy: [{ type: String, trim: true }],
+        cancellationPolicy: [{ type: String, trim: true }],
+        termsAndConditions: [{ type: String, trim: true }],
+    },
+
     status: {
         type: String,
         enum: ['In Progress', 'Completed', 'Confirmed', 'New'],

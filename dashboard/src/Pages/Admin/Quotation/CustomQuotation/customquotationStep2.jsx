@@ -45,8 +45,8 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
         const sectorMatch =
           (Array.isArray(tourDestinations)
             ? tourDestinations.some(
-              (dest) => dest?.trim().toLowerCase() === sectorLower
-            )
+                (dest) => dest?.trim().toLowerCase() === sectorLower,
+              )
             : tourDestinations?.trim?.().toLowerCase() === sectorLower) ||
           lead.location?.state?.trim().toLowerCase() === sectorLower;
 
@@ -86,7 +86,7 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
             .positive("Must be positive")
             .integer("Must be an integer")
             .required("No. of Nights is required"),
-        })
+        }),
       ),
     }),
     onSubmit: (values) => {
@@ -97,7 +97,7 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
 
       const totalNights = formattedCities.reduce(
         (sum, city) => sum + (parseInt(city.nights) || 0),
-        0
+        0,
       );
 
       setCalculatedTotalNights(totalNights);
@@ -105,7 +105,7 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
       if (totalNightsFromLead > 0 && totalNights !== totalNightsFromLead) {
         formik.setFieldError(
           "cities",
-          `Total nights allocated (${totalNights}) does not match required nights (${totalNightsFromLead})`
+          `Total nights allocated (${totalNights}) does not match required nights (${totalNightsFromLead})`,
         );
         return;
       }
@@ -119,7 +119,7 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
   useEffect(() => {
     const totalNights = formik.values.cities.reduce(
       (sum, city) => sum + (parseInt(city.nights) || 0),
-      0
+      0,
     );
     setCalculatedTotalNights(totalNights);
   }, [formik.values.cities]);
@@ -156,8 +156,8 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
       {totalNightsFromLead > 0 &&
         calculatedTotalNights !== totalNightsFromLead && (
           <Alert severity="warning" sx={{ mb: 2 }}>
-            Current total nights: <strong>{calculatedTotalNights}</strong> | Required:{" "}
-            <strong>{totalNightsFromLead}</strong>
+            Current total nights: <strong>{calculatedTotalNights}</strong> |
+            Required: <strong>{totalNightsFromLead}</strong>
           </Alert>
         )}
 
@@ -170,7 +170,7 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
                 {formik.values.cities.map((city, index) => (
                   <Grid container spacing={2} key={index} alignItems="center">
                     {/* City Dropdown */}
-                    <Grid item xs={12} md={5}>
+                    <Grid size={{ xs: 12, md: 5 }}>
                       <TextField
                         fullWidth
                         select
@@ -182,7 +182,7 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
                           if (e.target.value !== "Other") {
                             formik.setFieldValue(
                               `cities[${index}].customCity`,
-                              ""
+                              "",
                             );
                           }
                         }}
@@ -201,7 +201,9 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
                             {c.name}
                           </MenuItem>
                         ))}
-                        <MenuItem value="Other">Other (Add Custom City)</MenuItem>
+                        <MenuItem value="Other">
+                          Other (Add Custom City)
+                        </MenuItem>
                       </TextField>
 
                       {/* Custom city input */}
@@ -227,7 +229,7 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
                     </Grid>
 
                     {/* Nights Input */}
-                    <Grid item xs={12} md={5}>
+                    <Grid size={{ xs: 12, md: 5 }}>
                       <TextField
                         fullWidth
                         type="number"
@@ -248,7 +250,7 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
                     </Grid>
 
                     {/* Delete */}
-                    <Grid item xs={12} md={2}>
+                    <Grid size={{ xs: 12, md: 2 }}>
                       <IconButton
                         color="error"
                         onClick={() => arrayHelpers.remove(index)}
@@ -279,7 +281,9 @@ const CustomQuotationStep2 = ({ sector, clientName, onNext }) => {
             )}
           />
 
-          <Box sx={{ my: 2, p: 1, backgroundColor: "#f5f5f5", borderRadius: 1 }}>
+          <Box
+            sx={{ my: 2, p: 1, backgroundColor: "#f5f5f5", borderRadius: 1 }}
+          >
             <Typography variant="body2">
               <strong>Current Total Nights:</strong> {calculatedTotalNights}
             </Typography>

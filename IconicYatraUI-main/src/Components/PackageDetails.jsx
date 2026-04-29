@@ -512,11 +512,11 @@ const PackageDetail = () => {
                 Accommodation & Pricing
               </Typography>
 
-              {packageData.destinationNights?.map((destination, destIndex) => (
-                <Card key={destIndex} elevation={2} sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+              {packageData.destinationNights?.length > 0 ? (
+                <Card elevation={2} sx={{ p: 3, mb: 4, borderRadius: 3 }}>
                   <Typography variant="h5" color="primary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Hotel color="primary" />
-                    {destination.destination} - {destination.nights} Nights
+                    Stay Details
                   </Typography>
 
                   <Box sx={{ overflow: 'auto' }}>
@@ -524,119 +524,97 @@ const PackageDetail = () => {
                       <thead>
                         <tr style={{ backgroundColor: '#f5f5f5' }}>
                           <th style={{ padding: '16px', textAlign: 'left', border: '1px solid #e0e0e0', fontWeight: 'bold', fontSize: '16px' }}>
-                            Hotel Category
+                            Destination
                           </th>
                           <th style={{ padding: '16px', textAlign: 'left', border: '1px solid #e0e0e0', fontWeight: 'bold', fontSize: '16px' }}>
-                            Hotel Name
-                          </th>
-                          <th style={{ padding: '16px', textAlign: 'center', border: '1px solid #e0e0e0', fontWeight: 'bold', fontSize: '16px' }}>
                             Nights
                           </th>
-                          <th style={{ padding: '16px', textAlign: 'right', border: '1px solid #e0e0e0', fontWeight: 'bold', fontSize: '16px' }}>
-                            Price/Night
+                          <th style={{ padding: '16px', textAlign: 'left', border: '1px solid #e0e0e0', fontWeight: 'bold', fontSize: '16px' }}>
+                            Standard/Similar
                           </th>
-                          <th style={{ padding: '16px', textAlign: 'right', border: '1px solid #e0e0e0', fontWeight: 'bold', fontSize: '16px' }}>
-                            Total Price
-                          </th>
+                          {packageData.destinationNights.some((destination) => {
+                            const hotel = (destination.hotels || []).find((item) => item?.category === "deluxe");
+                            const hotelName = String(hotel?.hotelName || "").trim().toLowerCase();
+                            return hotelName && hotelName !== "tbd";
+                          }) && (
+                            <th style={{ padding: '16px', textAlign: 'left', border: '1px solid #e0e0e0', fontWeight: 'bold', fontSize: '16px' }}>
+                              Deluxe/Similar
+                            </th>
+                          )}
+                          {packageData.destinationNights.some((destination) => {
+                            const hotel = (destination.hotels || []).find((item) => item?.category === "superior");
+                            const hotelName = String(hotel?.hotelName || "").trim().toLowerCase();
+                            return hotelName && hotelName !== "tbd";
+                          }) && (
+                            <th style={{ padding: '16px', textAlign: 'left', border: '1px solid #e0e0e0', fontWeight: 'bold', fontSize: '16px' }}>
+                              Superior/Similar
+                            </th>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
-                        {destination.hotels?.map((hotel, hotelIndex) => {
-                          const totalPrice = hotel.pricePerPerson * destination.nights;
+                        {packageData.destinationNights.map((destination, destIndex) => {
+                          const getHotelNameByCategory = (category) => {
+                            const hotel = (destination.hotels || []).find((item) => item?.category === category);
+                            const hotelName = String(hotel?.hotelName || "").trim();
+                            if (!hotelName || hotelName.toLowerCase() === "tbd") return "";
+                            return hotelName;
+                          };
+                          const standardHotelName = getHotelNameByCategory("standard");
+                          const deluxeHotelName = getHotelNameByCategory("deluxe");
+                          const superiorHotelName = getHotelNameByCategory("superior");
+                          const showDeluxeColumn = packageData.destinationNights.some((dest) => {
+                            const hotel = (dest.hotels || []).find((item) => item?.category === "deluxe");
+                            const hotelName = String(hotel?.hotelName || "").trim().toLowerCase();
+                            return hotelName && hotelName !== "tbd";
+                          });
+                          const showSuperiorColumn = packageData.destinationNights.some((dest) => {
+                            const hotel = (dest.hotels || []).find((item) => item?.category === "superior");
+                            const hotelName = String(hotel?.hotelName || "").trim().toLowerCase();
+                            return hotelName && hotelName !== "tbd";
+                          });
+
                           return (
                             <tr
-                              key={hotelIndex}
+                              key={`${destination.destination}-${destIndex}`}
                               style={{
-                                backgroundColor: hotelIndex % 2 === 0 ? '#fafafa' : '#ffffff',
+                                backgroundColor: destIndex % 2 === 0 ? '#fafafa' : '#ffffff',
                                 transition: 'all 0.3s ease'
                               }}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.backgroundColor = '#e3f2fd';
-                                e.currentTarget.style.transform = 'scale(1.01)';
                               }}
                               onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = hotelIndex % 2 === 0 ? '#fafafa' : '#ffffff';
-                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.backgroundColor = destIndex % 2 === 0 ? '#fafafa' : '#ffffff';
                               }}
                             >
                               <td style={{ padding: '16px', border: '1px solid #e0e0e0', fontWeight: '600' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Chip
-                                    label={hotel.category.toUpperCase()}
-                                    color={
-                                      hotel.category === 'standard' ? 'primary' :
-                                        hotel.category === 'deluxe' ? 'secondary' :
-                                          'success'
-                                    }
-                                    variant="filled"
-                                    size="medium"
-                                  />
-                                </Box>
+                                {destination.destination}
                               </td>
-                              <td style={{ padding: '16px', border: '1px solid #e0e0e0', fontSize: '15px' }}>
-                                {hotel.hotelName}
-                              </td>
-                              <td style={{ padding: '16px', border: '1px solid #e0e0e0', textAlign: 'center', fontWeight: '500' }}>
+                              <td style={{ padding: '16px', border: '1px solid #e0e0e0', fontWeight: '600' }}>
                                 {destination.nights}
                               </td>
-                              <td style={{ padding: '16px', border: '1px solid #e0e0e0', textAlign: 'right', fontWeight: '600', color: '#1976d2' }}>
-                                ₹{hotel.pricePerPerson?.toLocaleString()}
+                              <td style={{ padding: '16px', border: '1px solid #e0e0e0', fontSize: '15px' }}>
+                                {standardHotelName}
                               </td>
-                              <td style={{ padding: '16px', border: '1px solid #e0e0e0', textAlign: 'right', fontWeight: '700', color: '#2e7d32', fontSize: '16px' }}>
-                                ₹{totalPrice?.toLocaleString()}
-                              </td>
+                              {showDeluxeColumn && (
+                                <td style={{ padding: '16px', border: '1px solid #e0e0e0', fontSize: '15px' }}>
+                                  {deluxeHotelName}
+                                </td>
+                              )}
+                              {showSuperiorColumn && (
+                                <td style={{ padding: '16px', border: '1px solid #e0e0e0', fontSize: '15px' }}>
+                                  {superiorHotelName}
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
                   </Box>
-
-                  {/* Price Comparison */}
-                  {destination.hotels?.length > 1 && (
-                    <Box sx={{ mt: 3, p: 3, backgroundColor: '#fff3e0', borderRadius: 2, border: '1px solid #ffb74d' }}>
-                      <Typography variant="h6" gutterBottom color="warning.main">
-                        💰 Price Comparison
-                      </Typography>
-                      <Grid container spacing={2}>
-                        {destination.hotels.map((hotel, index) => (
-                          <Grid size={{ xs: 12, md: 4 }} key={index}>
-                            <Paper elevation={1} sx={{ p: 2, textAlign: 'center', backgroundColor: 'white' }}>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', textTransform: 'capitalize' }}>
-                                {hotel.category}
-                              </Typography>
-                              <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold', my: 1 }}>
-                                ₹{(hotel.pricePerPerson * destination.nights)?.toLocaleString()}
-                              </Typography>
-                              <Typography variant="body2" color="text.secondary">
-                                ₹{hotel.pricePerPerson?.toLocaleString()}/night
-                              </Typography>
-                            </Paper>
-                          </Grid>
-                        ))}
-                      </Grid>
-                    </Box>
-                  )}
-
-                  {/* Call to Action */}
-                  <Box sx={{ mt: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 2, textAlign: 'center' }}>
-                    <Typography variant="h6" gutterBottom color="info.main">
-                      🏨 Ready to Book?
-                    </Typography>
-                    <Typography variant="body1" sx={{ mb: 2 }}>
-                      Contact us for special discounts and customized packages
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      startIcon={<Send />}
-                      onClick={handleQueryOpen}
-                    >
-                      Get Best Price
-                    </Button>
-                  </Box>
                 </Card>
-              )) || (
+              ) : (
                   <Paper elevation={2} sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
                     <Hotel sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
                     <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -650,6 +628,25 @@ const PackageDetail = () => {
                     </Button>
                   </Paper>
                 )}
+
+              {packageData.destinationNights?.length > 0 && (
+                <Box sx={{ mt: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 2, textAlign: 'center' }}>
+                  <Typography variant="h6" gutterBottom color="info.main">
+                    🏨 Ready to Book?
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    Contact us for special discounts and customized packages
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<Send />}
+                    onClick={handleQueryOpen}
+                  >
+                    Get Best Price
+                  </Button>
+                </Box>
+              )}
             </TabPanel>
 
             {/* Terms & Conditions Tab - UPDATED with Numbered List */}

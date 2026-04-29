@@ -152,9 +152,11 @@ const QuotationFlightForm = () => {
         });
       }
 
-
       // Add multicity flights
-      if (values.tripType === "multicity" && values.additionalCities.length > 0) {
+      if (
+        values.tripType === "multicity" &&
+        values.additionalCities.length > 0
+      ) {
         values.additionalCities.forEach((city) => {
           payload.flightDetails.push({
             from: city.from,
@@ -167,7 +169,6 @@ const QuotationFlightForm = () => {
           });
         });
       }
-
 
       await dispatch(createFlightQuotation(payload));
       formik.resetForm();
@@ -193,14 +194,15 @@ const QuotationFlightForm = () => {
 
   const handleAdditionalCityChange = (index, field, value) => {
     const updatedCities = formik.values.additionalCities.map((city, i) =>
-      i === index ? { ...city, [field]: value } : city
+      i === index ? { ...city, [field]: value } : city,
     );
     formik.setFieldValue("additionalCities", updatedCities);
   };
 
-
   const deleteCity = (index) => {
-    const updatedCities = formik.values.additionalCities.filter((_, i) => i !== index);
+    const updatedCities = formik.values.additionalCities.filter(
+      (_, i) => i !== index,
+    );
     formik.setFieldValue("additionalCities", updatedCities);
   };
 
@@ -233,7 +235,6 @@ const QuotationFlightForm = () => {
       });
     }
 
-
     // Multicity
     if (v.tripType === "multicity" && v.additionalCities.length > 0) {
       v.additionalCities.forEach((c) => {
@@ -265,20 +266,37 @@ const QuotationFlightForm = () => {
     setPreviewOpen(true);
   };
 
-
-
   const handleClientChange = (event) => {
     const selectedClientName = event.target.value;
     formik.setFieldValue("clientName", selectedClientName);
 
     const selectedLead =
-      leadList.find((lead) => lead?.personalDetails?.fullName === selectedClientName) || null;
+      leadList.find(
+        (lead) => lead?.personalDetails?.fullName === selectedClientName,
+      ) || null;
 
     if (selectedLead) {
-      const { personalDetails } = selectedLead;
+      const { personalDetails, tourDetails } = selectedLead;
+
+      // Set personal details
       formik.setFieldValue("fullName", personalDetails?.fullName || "");
       formik.setFieldValue("email", personalDetails?.emailId || "");
       formik.setFieldValue("mobile", personalDetails?.mobile || "");
+
+      // Set member details from tourDetails
+      if (tourDetails?.members) {
+        formik.setFieldValue("adults", tourDetails.members.adults || 0);
+        formik.setFieldValue("childs", tourDetails.members.children || 0);
+        formik.setFieldValue("infants", tourDetails.members.infants || 0);
+      }
+    } else {
+      // Clear the fields if no lead is found
+      formik.setFieldValue("fullName", "");
+      formik.setFieldValue("email", "");
+      formik.setFieldValue("mobile", "");
+      formik.setFieldValue("adults", "");
+      formik.setFieldValue("childs", "");
+      formik.setFieldValue("infants", "");
     }
   };
 
@@ -305,7 +323,9 @@ const QuotationFlightForm = () => {
             value={values[fromField]}
             onChange={formik.handleChange}
             onBlur={formik.handleBlur}
-            error={formik.touched[fromField] && Boolean(formik.errors[fromField])}
+            error={
+              formik.touched[fromField] && Boolean(formik.errors[fromField])
+            }
             helperText={formik.touched[fromField] && formik.errors[fromField]}
           />
         </Grid>
@@ -334,8 +354,13 @@ const QuotationFlightForm = () => {
             value={values[airlineField]}
             onChange={formik.handleChange}
             onBlur={formik.handleBlur}
-            error={formik.touched[airlineField] && Boolean(formik.errors[airlineField])}
-            helperText={formik.touched[airlineField] && formik.errors[airlineField]}
+            error={
+              formik.touched[airlineField] &&
+              Boolean(formik.errors[airlineField])
+            }
+            helperText={
+              formik.touched[airlineField] && formik.errors[airlineField]
+            }
           >
             {[
               "AirIndia",
@@ -363,8 +388,13 @@ const QuotationFlightForm = () => {
             value={values[flightNoField]}
             onChange={formik.handleChange}
             onBlur={formik.handleBlur}
-            error={formik.touched[flightNoField] && Boolean(formik.errors[flightNoField])}
-            helperText={formik.touched[flightNoField] && formik.errors[flightNoField]}
+            error={
+              formik.touched[flightNoField] &&
+              Boolean(formik.errors[flightNoField])
+            }
+            helperText={
+              formik.touched[flightNoField] && formik.errors[flightNoField]
+            }
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -379,7 +409,9 @@ const QuotationFlightForm = () => {
             value={values[fareField]}
             onChange={formik.handleChange}
             onBlur={formik.handleBlur}
-            error={formik.touched[fareField] && Boolean(formik.errors[fareField])}
+            error={
+              formik.touched[fareField] && Boolean(formik.errors[fareField])
+            }
             helperText={formik.touched[fareField] && formik.errors[fareField]}
           />
         </Grid>
@@ -394,8 +426,11 @@ const QuotationFlightForm = () => {
                 name: dateField,
                 fullWidth: true,
                 onBlur: formik.handleBlur,
-                error: formik.touched[dateField] && Boolean(formik.errors[dateField]),
-                helperText: formik.touched[dateField] && formik.errors[dateField],
+                error:
+                  formik.touched[dateField] &&
+                  Boolean(formik.errors[dateField]),
+                helperText:
+                  formik.touched[dateField] && formik.errors[dateField],
               },
             }}
           />
@@ -440,7 +475,9 @@ const QuotationFlightForm = () => {
             label="From"
             name={`additionalCities[${index}].from`}
             value={city.from}
-            onChange={(e) => handleAdditionalCityChange(index, "from", e.target.value)}
+            onChange={(e) =>
+              handleAdditionalCityChange(index, "from", e.target.value)
+            }
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -450,7 +487,9 @@ const QuotationFlightForm = () => {
             label="To"
             name={`additionalCities[${index}].to`}
             value={city.to}
-            onChange={(e) => handleAdditionalCityChange(index, "to", e.target.value)}
+            onChange={(e) =>
+              handleAdditionalCityChange(index, "to", e.target.value)
+            }
           />
         </Grid>
         <Grid size={{ xs: 12 }}>
@@ -461,7 +500,9 @@ const QuotationFlightForm = () => {
             label="Preferred Airline"
             name={`additionalCities[${index}].airline`}
             value={city.airline}
-            onChange={(e) => handleAdditionalCityChange(index, "airline", e.target.value)}
+            onChange={(e) =>
+              handleAdditionalCityChange(index, "airline", e.target.value)
+            }
           >
             {[
               "AirIndia",
@@ -486,7 +527,9 @@ const QuotationFlightForm = () => {
             label="Flight No."
             name={`additionalCities[${index}].flightNo`}
             value={city.flightNo}
-            onChange={(e) => handleAdditionalCityChange(index, "flightNo", e.target.value)}
+            onChange={(e) =>
+              handleAdditionalCityChange(index, "flightNo", e.target.value)
+            }
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -498,7 +541,9 @@ const QuotationFlightForm = () => {
             inputProps={{ inputMode: "numeric", min: 0 }}
             name={`additionalCities[${index}].fare`}
             value={city.fare}
-            onChange={(e) => handleAdditionalCityChange(index, "fare", e.target.value)}
+            onChange={(e) =>
+              handleAdditionalCityChange(index, "fare", e.target.value)
+            }
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -506,7 +551,13 @@ const QuotationFlightForm = () => {
             label="Date"
             value={city.date}
             onChange={(val) => handleAdditionalCityChange(index, "date", val)}
-            slotProps={{ textField: { id: `ac-date-${index}`, name: `additionalCities[${index}].date`, fullWidth: true } }}
+            slotProps={{
+              textField: {
+                id: `ac-date-${index}`,
+                name: `additionalCities[${index}].date`,
+                fullWidth: true,
+              },
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -514,7 +565,13 @@ const QuotationFlightForm = () => {
             label="Time"
             value={city.time}
             onChange={(val) => handleAdditionalCityChange(index, "time", val)}
-            slotProps={{ textField: { id: `ac-time-${index}`, name: `additionalCities[${index}].time`, fullWidth: true } }}
+            slotProps={{
+              textField: {
+                id: `ac-time-${index}`,
+                name: `additionalCities[${index}].time`,
+                fullWidth: true,
+              },
+            }}
           />
         </Grid>
       </Grid>
@@ -523,7 +580,8 @@ const QuotationFlightForm = () => {
 
   // Preview dialog (self-contained, safe)
   const PreviewDialog = ({ data }) => {
-    if (!data || !data.flightDetails || data.flightDetails.length === 0) return null;
+    if (!data || !data.flightDetails || data.flightDetails.length === 0)
+      return null;
 
     return (
       <Dialog
@@ -563,7 +621,11 @@ const QuotationFlightForm = () => {
           <Box>
             {/* Header with trip type and client */}
             <Box sx={{ p: 3, pb: 2, background: "#f9f9f9" }}>
-              <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="flex-start"
+              >
                 <Chip
                   label={data.tripType?.toUpperCase()}
                   color="primary"
@@ -583,13 +645,24 @@ const QuotationFlightForm = () => {
 
             {/* Flight Details (first leg) */}
             <Box sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center" }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ display: "flex", alignItems: "center" }}
+              >
                 <FlightTakeoff sx={{ mr: 1, color: "primary.main" }} />
                 Flight Details
               </Typography>
 
-              <Paper variant="outlined" sx={{ p: 2, mb: 2, background: "#fafafa" }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Paper
+                variant="outlined"
+                sx={{ p: 2, mb: 2, background: "#fafafa" }}
+              >
+                <Box
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                >
                   <Box>
                     <Typography variant="body2" color="textSecondary">
                       From
@@ -600,7 +673,13 @@ const QuotationFlightForm = () => {
                   </Box>
 
                   <Box sx={{ textAlign: "center", flex: 1 }}>
-                    <FlightTakeoff sx={{ color: "success.main", fontSize: 20, verticalAlign: "middle" }} />
+                    <FlightTakeoff
+                      sx={{
+                        color: "success.main",
+                        fontSize: 20,
+                        verticalAlign: "middle",
+                      }}
+                    />
                     <Box
                       sx={{
                         display: "inline-block",
@@ -611,7 +690,13 @@ const QuotationFlightForm = () => {
                         verticalAlign: "middle",
                       }}
                     />
-                    <FlightLand sx={{ color: "error.main", fontSize: 20, verticalAlign: "middle" }} />
+                    <FlightLand
+                      sx={{
+                        color: "error.main",
+                        fontSize: 20,
+                        verticalAlign: "middle",
+                      }}
+                    />
                   </Box>
 
                   <Box sx={{ textAlign: "right" }}>
@@ -649,7 +734,11 @@ const QuotationFlightForm = () => {
                     <Typography variant="body2" color="textSecondary">
                       Fare
                     </Typography>
-                    <Typography variant="body1" fontWeight="500" color="primary">
+                    <Typography
+                      variant="body1"
+                      fontWeight="500"
+                      color="primary"
+                    >
                       {data.flightDetails?.[0]?.fare || "-"}
                     </Typography>
                   </Box>
@@ -666,12 +755,22 @@ const QuotationFlightForm = () => {
                     sx={{ display: "flex", alignItems: "center", mt: 3 }}
                   >
                     <FlightLand sx={{ mr: 1, color: "primary.main" }} />
-                    {data.tripType === "multicity" ? "Multi-City Flight Details" : "Return / Next Flight"}
+                    {data.tripType === "multicity"
+                      ? "Multi-City Flight Details"
+                      : "Return / Next Flight"}
                   </Typography>
 
                   {data.flightDetails.slice(1).map((leg, idx) => (
-                    <Paper key={idx} variant="outlined" sx={{ p: 2, mb: 2, background: "#fafafa" }}>
-                      <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Paper
+                      key={idx}
+                      variant="outlined"
+                      sx={{ p: 2, mb: 2, background: "#fafafa" }}
+                    >
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
                         <Box>
                           <Typography variant="body2" color="textSecondary">
                             From
@@ -682,7 +781,9 @@ const QuotationFlightForm = () => {
                         </Box>
 
                         <Box sx={{ textAlign: "center", flex: 1 }}>
-                          <FlightTakeoff sx={{ color: "success.main", fontSize: 20 }} />
+                          <FlightTakeoff
+                            sx={{ color: "success.main", fontSize: 20 }}
+                          />
                           <Box
                             sx={{
                               display: "inline-block",
@@ -692,7 +793,9 @@ const QuotationFlightForm = () => {
                               mx: 1,
                             }}
                           />
-                          <FlightLand sx={{ color: "error.main", fontSize: 20 }} />
+                          <FlightLand
+                            sx={{ color: "error.main", fontSize: 20 }}
+                          />
                         </Box>
 
                         <Box sx={{ textAlign: "right" }}>
@@ -730,7 +833,11 @@ const QuotationFlightForm = () => {
                           <Typography variant="body2" color="textSecondary">
                             Fare
                           </Typography>
-                          <Typography variant="body1" fontWeight="500" color="primary">
+                          <Typography
+                            variant="body1"
+                            fontWeight="500"
+                            color="primary"
+                          >
                             {leg?.fare || "-"}
                           </Typography>
                         </Box>
@@ -740,11 +847,16 @@ const QuotationFlightForm = () => {
                 </>
               )}
 
-
               {/* Passengers */}
               <Box sx={{ mt: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center" }}>
-                  <AirlineSeatReclineNormal sx={{ mr: 1, color: "primary.main" }} />
+                <Typography
+                  variant="h6"
+                  gutterBottom
+                  sx={{ display: "flex", alignItems: "center" }}
+                >
+                  <AirlineSeatReclineNormal
+                    sx={{ mr: 1, color: "primary.main" }}
+                  />
                   Passengers
                 </Typography>
 
@@ -761,7 +873,11 @@ const QuotationFlightForm = () => {
                     variant="outlined"
                     color="secondary"
                   />
-                  <Chip avatar={<Avatar>{data.infants || 0}</Avatar>} label="Infants" variant="outlined" />
+                  <Chip
+                    avatar={<Avatar>{data.infants || 0}</Avatar>}
+                    label="Infants"
+                    variant="outlined"
+                  />
                 </Box>
               </Box>
 
@@ -771,7 +887,10 @@ const QuotationFlightForm = () => {
                   <Typography variant="h6" gutterBottom>
                     Message
                   </Typography>
-                  <Paper variant="outlined" sx={{ p: 2, background: "#f9f9f9" }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{ p: 2, background: "#f9f9f9" }}
+                  >
                     <Typography variant="body2">{data.message}</Typography>
                   </Paper>
                 </Box>
@@ -779,7 +898,11 @@ const QuotationFlightForm = () => {
 
               {/* Personal Details */}
               <Box sx={{ mt: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center" }}>
+                <Typography
+                  variant="h6"
+                  gutterBottom
+                  sx={{ display: "flex", alignItems: "center" }}
+                >
                   <Person sx={{ mr: 1, color: "primary.main" }} />
                   Personal Details
                 </Typography>
@@ -787,12 +910,16 @@ const QuotationFlightForm = () => {
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Box display="flex" alignItems="center" mb={1}>
                     <Person sx={{ mr: 1, color: "action.active" }} />
-                    <Typography variant="body1">{data.fullName || "-"}</Typography>
+                    <Typography variant="body1">
+                      {data.fullName || "-"}
+                    </Typography>
                   </Box>
 
                   <Box display="flex" alignItems="center" mb={1}>
                     <Phone sx={{ mr: 1, color: "action.active" }} />
-                    <Typography variant="body1">{data.mobile || "-"}</Typography>
+                    <Typography variant="body1">
+                      {data.mobile || "-"}
+                    </Typography>
                   </Box>
 
                   <Box display="flex" alignItems="center">
@@ -806,7 +933,11 @@ const QuotationFlightForm = () => {
         </DialogContent>
 
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setPreviewOpen(false)} variant="outlined" startIcon={<Close />}>
+          <Button
+            onClick={() => setPreviewOpen(false)}
+            variant="outlined"
+            startIcon={<Close />}
+          >
             Close
           </Button>
           <Button variant="contained" onClick={() => window.print()}>
@@ -835,7 +966,13 @@ const QuotationFlightForm = () => {
                 key={type}
                 value={type}
                 control={<Radio />}
-                label={type === "oneway" ? "One Way" : type === "roundtrip" ? "Round-Trip" : "Multi City"}
+                label={
+                  type === "oneway"
+                    ? "One Way"
+                    : type === "roundtrip"
+                      ? "Round-Trip"
+                      : "Multi City"
+                }
               />
             ))}
           </RadioGroup>
@@ -854,11 +991,16 @@ const QuotationFlightForm = () => {
             value={formik.values.clientName}
             onChange={handleClientChange}
             onBlur={formik.handleBlur}
-            error={formik.touched.clientName && Boolean(formik.errors.clientName)}
+            error={
+              formik.touched.clientName && Boolean(formik.errors.clientName)
+            }
             helperText={formik.touched.clientName && formik.errors.clientName}
           >
             {leadList.map((lead, index) => (
-              <MenuItem key={index} value={lead?.personalDetails?.fullName || ""}>
+              <MenuItem
+                key={index}
+                value={lead?.personalDetails?.fullName || ""}
+              >
                 {lead?.personalDetails?.fullName || "-"}
               </MenuItem>
             ))}
@@ -875,11 +1017,14 @@ const QuotationFlightForm = () => {
             </Paper>
           </Grid>
 
-          {(formik.values.tripType === "roundtrip" || formik.values.tripType === "multicity") && (
+          {(formik.values.tripType === "roundtrip" ||
+            formik.values.tripType === "multicity") && (
             <Grid size={{ xs: 12, md: 6 }}>
               <Paper sx={{ p: 3, mb: 3 }}>
                 <Typography variant="subtitle1" gutterBottom>
-                  {formik.values.tripType === "roundtrip" ? "Return Flight Details" : "Next Flight Details"}
+                  {formik.values.tripType === "roundtrip"
+                    ? "Return Flight Details"
+                    : "Next Flight Details"}
                 </Typography>
                 {renderFlightDetails(true)}
               </Paper>
@@ -974,7 +1119,9 @@ const QuotationFlightForm = () => {
                 value={formik.values.fullName}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
-                error={formik.touched.fullName && Boolean(formik.errors.fullName)}
+                error={
+                  formik.touched.fullName && Boolean(formik.errors.fullName)
+                }
                 helperText={formik.touched.fullName && formik.errors.fullName}
               />
             </Grid>
@@ -1013,10 +1160,20 @@ const QuotationFlightForm = () => {
           <Button type="submit" variant="contained" color="primary">
             Save
           </Button>
-          <Button variant="outlined" color="info" startIcon={<VisibilityIcon />} onClick={handlePreview}>
+          <Button
+            variant="outlined"
+            color="info"
+            startIcon={<VisibilityIcon />}
+            onClick={handlePreview}
+          >
             View
           </Button>
-          <Button type="reset" variant="outlined" color="secondary" onClick={formik.handleReset}>
+          <Button
+            type="reset"
+            variant="outlined"
+            color="secondary"
+            onClick={formik.handleReset}
+          >
             Clear Form
           </Button>
         </Box>

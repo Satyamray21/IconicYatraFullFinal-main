@@ -1,11 +1,212 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
+import { Staff } from "../models/staff.model.js";
+import { StaffPermission } from "../models/staffPermission.model.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import nodemailer from "nodemailer";
 import { OTP } from "../models/otp.model.js";
-
+import { comparePassword } from "../utils/permission.utils.js";
+import { LoginHistory } from "../models/loginHistory.model.js";
+import { saveLoginHistory as persistLoginHistory } from "../utils/loginHistory.utils.js";
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "12h";
+
+/** Resolve Mongo id from JWT (handles string, ObjectId, or { $oid }). */
+function jwtSubjectId(decoded) {
+  if (!decoded || typeof decoded !== "object") return "";
+  let v =
+    decoded.id ?? decoded._id ?? decoded.userId ?? decoded.sub ?? decoded.user_id;
+  if (v == null) return "";
+  if (typeof v === "object" && v.$oid != null) v = v.$oid;
+  return String(v).trim();
+}
+
+async function loadStaffFromTokenPayload(decoded) {
+  const raw = jwtSubjectId(decoded);
+  if (/^[0-9a-fA-F]{24}$/.test(raw)) {
+    const byId = await Staff.findById(raw).lean();
+    if (byId) return byId;
+    const permByJwt = await StaffPermission.findById(raw).select("staffId").lean();
+    if (permByJwt?.staffId) {
+      const s = await Staff.findById(permByJwt.staffId).lean();
+      if (s) return s;
+    }
+  }
+  if (decoded.staffUserId) {
+    const s = await Staff.findOne({ staffId: String(decoded.staffUserId) }).lean();
+    if (s) return s;
+  }
+  if (decoded.staffKey) {
+    const s = await Staff.findOne({ staffId: String(decoded.staffKey) }).lean();
+    if (s) return s;
+  }
+  const loginHint = decoded.loginId ?? decoded.username;
+  if (loginHint) {
+    const perm = await StaffPermission.findOne({
+      $or: [
+        { staffUserId: String(loginHint) },
+        { "credentials.username": String(loginHint) },
+      ],
+    })
+      .select("staffId")
+      .lean();
+    if (perm?.staffId) {
+      const s = await Staff.findById(perm.staffId).lean();
+      if (s) return s;
+    }
+  }
+  if (decoded.email) {
+    const email = String(decoded.email).trim().toLowerCase();
+    if (email) {
+      const s = await Staff.findOne({
+        $expr: {
+          $eq: [
+            { $toLower: { $ifNull: ["$personalDetails.email", ""] } },
+            email,
+          ],
+        },
+      }).lean();
+      if (s) return s;
+    }
+  }
+  return null;
+}
+
+async function loadUserFromTokenPayload(decoded) {
+  const raw = jwtSubjectId(decoded);
+  if (/^[0-9a-fA-F]{24}$/.test(raw)) {
+    const u = await User.findById(raw).select("-password").lean();
+    if (u) return u;
+  }
+  if (decoded.userKey) {
+    const u = await User.findOne({ userId: String(decoded.userKey) })
+      .select("-password")
+      .lean();
+    if (u) return u;
+  }
+  if (decoded.email) {
+    const email = String(decoded.email).trim().toLowerCase();
+    if (email) {
+      const u = await User.findOne({ email }).select("-password").lean();
+      if (u) return u;
+    }
+  }
+  return null;
+}
+
+/** Dashboard profile URL may use User.userId (e.g. AMD_1234) or Staff.staffId / Staff _id / login username. */
+async function findStaffByRouteParam(param) {
+  if (param == null || param === "") return null;
+  const s = String(param).trim();
+  if (!s) return null;
+  if (/^[0-9a-fA-F]{24}$/.test(s)) {
+    const byId = await Staff.findById(s).lean();
+    if (byId) return byId;
+  }
+  const byStaffCode = await Staff.findOne({ staffId: s }).lean();
+  if (byStaffCode) return byStaffCode;
+  const perm = await StaffPermission.findOne({
+    $or: [{ staffUserId: s }, { "credentials.username": s }],
+  })
+    .select("staffId")
+    .lean();
+  if (perm?.staffId) {
+    return Staff.findById(perm.staffId).lean();
+  }
+  return null;
+}
+
+export const getCurrentProfile = async (req, res) => {
+  try {
+    const decoded = req.user;
+    if (
+      !decoded ||
+      (!jwtSubjectId(decoded) &&
+        !decoded.staffUserId &&
+        !decoded.userKey &&
+        !decoded.email &&
+        !decoded.loginId &&
+        !decoded.username)
+    ) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    let staff = await loadStaffFromTokenPayload(decoded);
+    if (staff) {
+      const permission = await StaffPermission.findOne({ staffId: staff._id })
+        .select("role")
+        .lean();
+      return res.json(staffToProfilePayload(staff, permission));
+    }
+
+    const user = await loadUserFromTokenPayload(decoded);
+    if (user) {
+      return res.json({ ...user, accountType: "user" });
+    }
+
+    return res.status(404).json({ error: "User not found" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateCurrentUser = async (req, res) => {
+  try {
+    const decoded = req.user;
+    if (
+      !decoded ||
+      (!jwtSubjectId(decoded) &&
+        !decoded.staffUserId &&
+        !decoded.userKey &&
+        !decoded.email &&
+        !decoded.loginId &&
+        !decoded.username)
+    ) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    let staff = await loadStaffFromTokenPayload(decoded);
+    if (staff) {
+      req.params.userId = staff.staffId;
+      return updateUser(req, res);
+    }
+
+    const userLean = await loadUserFromTokenPayload(decoded);
+    if (userLean?.userId) {
+      req.params.userId = userLean.userId;
+      return updateUser(req, res);
+    }
+
+    return res.status(404).json({ error: "User not found" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+function staffToProfilePayload(staff, permissionDoc) {
+  const p = staff.personalDetails || {};
+  const role = permissionDoc?.role || "Staff";
+  return {
+    _id: staff._id,
+    accountType: "staff",
+    fullName: p.fullName,
+    name: p.fullName,
+    email: p.email,
+    mobileNumber: p.mobileNumber,
+    userId: staff.staffId,
+    userRole: role,
+    role,
+    profileImg: p.staffPhoto?.url || "",
+    country: staff.staffLocation?.country,
+    state: staff.staffLocation?.state,
+    city: staff.staffLocation?.city,
+    address: staff.address,
+    staffLocation: staff.staffLocation,
+    personalDetails: staff.personalDetails,
+    bank: staff.bank,
+  };
+}
 
 // REGISTER
 export const register = async (req, res) => {
@@ -73,33 +274,145 @@ export const register = async (req, res) => {
   }
 };
 
-// LOGIN
+// LOGIN (B2C users by email, or dashboard staff by generated username / staffUserId)
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const loginId = typeof email === "string" ? email.trim() : "";
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!loginId || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ error: "Invalid credentials" });
+    const user = await User.findOne({ email: loginId });
+    if (user) {
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        await persistLoginHistory(
+          loginId,
+          user._id,
+          user.userId || String(user._id),
+          "Failed",
+          req,
+        );
+        return res.status(400).json({ error: "Invalid credentials" });
+      }
 
+      await persistLoginHistory(
+        user.email || loginId,
+        user._id,
+        user.userId || String(user._id),
+        "Success",
+        req,
+      );
+
+      const token = jwt.sign(
+        {
+          id: user._id.toString(),
+          role: user.userRole,
+          userKey: user.userId,
+          email: user.email,
+        },
+        ACCESS_TOKEN_SECRET,
+        { expiresIn: ACCESS_TOKEN_EXPIRY },
+      );
+
+      return res.json({
+        message: "Login successful",
+        token,
+        user: {
+          id: user._id,
+          name: user.fullName,
+          email: user.email,
+          role: user.userRole,
+          userId: user.userId,
+          profileImg: user.profileImg,
+        },
+      });
+    }
+
+    const permission = await StaffPermission.findOne({
+      $or: [
+        { "credentials.username": loginId },
+        { staffUserId: loginId },
+      ],
+    }).populate("staffId", "personalDetails staffId");
+
+    if (!permission) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (permission.status !== "Active") {
+      return res.status(403).json({
+        error: `Account is ${permission.status}. Contact an administrator.`,
+      });
+    }
+
+    if (permission.isLocked) {
+      return res.status(403).json({
+        error: "Account is locked. Contact an administrator.",
+      });
+    }
+
+    const pwdOk = await comparePassword(
+      password,
+      permission.credentials.password,
+    );
+    if (!pwdOk) {
+      const failedStaff = permission.staffId;
+      if (failedStaff?._id) {
+        await persistLoginHistory(
+          loginId,
+          failedStaff._id,
+          failedStaff.staffId || permission.staffUserId || "",
+          "Failed",
+          req,
+        );
+      }
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    const staff = permission.staffId;
+    if (!staff) {
+      return res.status(500).json({ error: "Staff profile missing" });
+    }
+
+    const staffEmail =
+      staff.personalDetails?.email || permission.credentials?.username || "";
     const token = jwt.sign(
-      { id: user._id, role: user.userRole },
+      {
+        id: staff._id.toString(),
+        role: permission.role,
+        staffUserId: permission.staffUserId,
+        loginId: loginId,
+        email: staffEmail || undefined,
+      },
       ACCESS_TOKEN_SECRET,
       { expiresIn: ACCESS_TOKEN_EXPIRY },
     );
 
-    res.json({
+    await persistLoginHistory(
+      permission.credentials?.username || loginId,
+      staff._id,
+      staff.staffId || permission.staffUserId || "",
+      "Success",
+      req,
+    );
+
+    return res.json({
       message: "Login successful",
       token,
       user: {
-        id: user._id,
-        name: user.fullName,
-        email: user.email,
-        role: user.userRole,
-        userId: user.userId,
-        profileImg: user.profileImg,
+        accountType: "staff",
+        id: staff._id,
+        name: staff.personalDetails?.fullName,
+        fullName: staff.personalDetails?.fullName,
+        email:
+          staff.personalDetails?.email || permission.credentials.username,
+        role: permission.role,
+        userRole: permission.role,
+        userId: staff.staffId,
+        profileImg: staff.personalDetails?.staffPhoto?.url || "",
       },
     });
   } catch (error) {
@@ -120,11 +433,21 @@ export const getUsers = async (req, res) => {
 // GET USER BY ID
 export const getUserById = async (req, res) => {
   try {
-    const user = await User.findOne({ userId: req.params.userId }).select(
-      "-password",
-    );
-    if (!user) return res.status(404).json({ error: "User not found" });
-    res.json(user);
+    const param = req.params.userId;
+    const user = await User.findOne({ userId: param }).select("-password").lean();
+    if (user) {
+      return res.json({ ...user, accountType: "user" });
+    }
+
+    const staff = await findStaffByRouteParam(param);
+    if (staff) {
+      const permission = await StaffPermission.findOne({ staffId: staff._id })
+        .select("role")
+        .lean();
+      return res.json(staffToProfilePayload(staff, permission));
+    }
+
+    return res.status(404).json({ error: "User not found" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -133,6 +456,7 @@ export const getUserById = async (req, res) => {
 // UPDATE USER
 export const updateUser = async (req, res) => {
   try {
+    const param = req.params.userId;
     const { fullName, mobileNumber, country, state, city } = req.body;
 
     // handle address parsing
@@ -169,16 +493,59 @@ export const updateUser = async (req, res) => {
     }
 
     const user = await User.findOneAndUpdate(
-      { userId: req.params.userId }, // search by custom userId
+      { userId: param },
       updatedData,
       { new: true },
     ).select("-password");
 
-    if (!user) {
+    if (user) {
+      return res.json({
+        message: "User updated successfully",
+        user: { ...user.toObject?.() ?? user, accountType: "user" },
+      });
+    }
+
+    const staffLean = await findStaffByRouteParam(param);
+    if (!staffLean) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json({ message: "User updated successfully", user });
+    const set = {};
+    if (fullName !== undefined) set["personalDetails.fullName"] = fullName;
+    if (mobileNumber !== undefined) set["personalDetails.mobileNumber"] = mobileNumber;
+    if (country !== undefined) set["staffLocation.country"] = country;
+    if (state !== undefined) set["staffLocation.state"] = state;
+    if (city !== undefined) set["staffLocation.city"] = city;
+    if (address && Object.keys(address).length > 0) {
+      set.address = address;
+    }
+
+    if (req.file) {
+      const upload = await uploadOnCloudinary(req.file.path, req.file.mimetype);
+      if (upload) {
+        set["personalDetails.staffPhoto.url"] = upload.secure_url;
+        set["personalDetails.staffPhoto.publicId"] = upload.public_id;
+      }
+    }
+
+    let staffDoc;
+    if (Object.keys(set).length > 0) {
+      staffDoc = await Staff.findByIdAndUpdate(staffLean._id, { $set: set }, {
+        new: true,
+        runValidators: true,
+      }).lean();
+    } else {
+      staffDoc = await Staff.findById(staffLean._id).lean();
+    }
+
+    const permission = await StaffPermission.findOne({ staffId: staffDoc._id })
+      .select("role")
+      .lean();
+
+    return res.json({
+      message: "User updated successfully",
+      user: staffToProfilePayload(staffDoc, permission),
+    });
   } catch (error) {
     console.error("UPDATE ERROR:", error);
     res.status(500).json({ error: error.message });
@@ -358,5 +725,62 @@ export const changePassword = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error" });
+  }
+};
+
+export const getLoginHistory = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const data = await LoginHistory.find({ userId });
+    res.status(200).json({
+      message: "Login history fetched successfully",
+      data,
+      success: true,
+    });
+  } catch (error) {
+    console.error("Error fetching login history:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+/** Current session: staff JWT id = Staff _id; matches LoginHistory.userId */
+export const getMyLoginHistory = async (req, res) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const userId = req.user.id;
+    const { limit = 50, skip = 0 } = req.query;
+    const lim = Math.min(Number(limit) || 50, 100);
+    const sk = Number(skip) || 0;
+
+    const history = await LoginHistory.find({ userId })
+      .sort({ timestamp: -1 })
+      .limit(lim)
+      .skip(sk)
+      .lean();
+
+    const total = await LoginHistory.countDocuments({ userId });
+
+    res.status(200).json({
+      success: true,
+      message: "Login history fetched successfully",
+      data: history,
+      pagination: {
+        total,
+        limit: lim,
+        skip: sk,
+        hasMore: sk + lim < total,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching my login history:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };

@@ -135,6 +135,14 @@ const customQuotationSchema = new mongoose.Schema(
             unique: true,
         },
 
+        /** Last completed wizard step (1–6); used to resume from quotation list */
+        currentStep: {
+            type: Number,
+            default: 1,
+            min: 1,
+            max: 6,
+        },
+
         finalizeStatus: {
             type: String,
             enum: ["draft", "finalized"],
@@ -144,6 +152,22 @@ const customQuotationSchema = new mongoose.Schema(
             type: String,
             enum: ["Standard", "Deluxe", "Superior"],
         },
+        /** Multiple selected packages during finalization */
+        finalizedPackages: [
+            {
+                type: String,
+                enum: ["Standard", "Deluxe", "Superior"],
+            },
+        ],
+        /** Vendor details with amounts for each finalized vendor */
+        finalizedVendorsWithAmounts: [
+            {
+                vendorName: { type: String, required: true },
+                vendorType: { type: String, enum: ["Hotel", "Vehicle", "Other"], required: true },
+                amount: { type: Number, default: 0 },
+                remarks: { type: String, default: "" },
+            },
+        ],
         finalizedAt: {
             type: Date,
         },

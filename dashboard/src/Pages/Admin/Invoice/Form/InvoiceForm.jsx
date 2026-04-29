@@ -136,9 +136,11 @@ const InvoiceForm = () => {
         }),
         onSubmit: async (values, { resetForm }) => {
             try {
+                const { taxType, note, ...rest } = values;
                 const payload = {
-                    ...values,
-                    withTax: values.taxType === "withTax", // true if withTax, false if withoutTax
+                    ...rest,
+                    withTax: taxType === "withTax",
+                    additionalNote: note || "",
                 };
                 await dispatch(createInvoice(payload)).unwrap();
                 toast.success("Invoice created successfully!");
@@ -704,19 +706,29 @@ const InvoiceForm = () => {
                             "receivedAmount",
                             "balanceAmount",
                         ].map((field) => (
-                            <Grid item xs={12} sm={3} key={field}>
+                            <Grid size={{ xs: 12, sm: 3 }} key={field}>
                                 <TextField
                                     fullWidth
                                     label={field
                                         .replace(/([A-Z])/g, " $1")
                                         .replace(/^./, (s) => s.toUpperCase())}
                                     name={field}
-                                    value={values[field]}
+                                    value={
+                                        values[field] === undefined || values[field] === null
+                                            ? ""
+                                            : values[field]
+                                    }
                                     onChange={(e) => {
                                         handleChange(e);
                                         if (field === "receivedAmount") {
                                             updateItemsAndTotals(values.items || [], e.target.value);
                                         }
+                                    }}
+                                    InputProps={{
+                                        readOnly:
+                                            field === "invoiceValuePurchase" ||
+                                            field === "totalAmount" ||
+                                            field === "balanceAmount",
                                     }}
                                 />
                             </Grid>

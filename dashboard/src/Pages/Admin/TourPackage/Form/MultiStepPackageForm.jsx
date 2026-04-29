@@ -4,7 +4,12 @@ import { Box, Stepper, Step, StepLabel, Typography, Paper, Button } from "@mui/m
 import PackageEntryForm from "../Form/PackageForm";
 import TourDetailsForm from "../Form/TourDetailsForm";
 import { useDispatch } from "react-redux";
-import { createPackage, updatePackageTourDetails, fetchYatraPackages } from "../../../../features/package/packageSlice"; // ✅ Import fetchYatraPackages
+import {
+    createPackage,
+    updatePackageTourDetails,
+    fetchDomesticPackages,
+    fetchInternationalPackages,
+} from "../../../../features/package/packageSlice";
 import { useNavigate } from "react-router-dom";
 import { fetchHotels } from "../../../../features/hotel/hotelSlice";
 

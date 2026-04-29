@@ -138,11 +138,25 @@ const InvoiceEditForm = () => {
             ],
             paymentMode: selectedInvoice.paymentMode || "",
             referenceNo: selectedInvoice.referenceNo || "",
-            note: selectedInvoice.note || "",
-            invoiceValuePurchase: selectedInvoice.invoiceValuePurchase || "",
-            totalAmount: selectedInvoice.totalAmount || "",
-            receivedAmount: selectedInvoice.receivedAmount || "",
-            balanceAmount: selectedInvoice.balanceAmount || "",
+            note: selectedInvoice.note || selectedInvoice.additionalNote || "",
+            invoiceValuePurchase:
+                selectedInvoice.invoiceValuePurchase === undefined ||
+                selectedInvoice.invoiceValuePurchase === null
+                    ? ""
+                    : selectedInvoice.invoiceValuePurchase,
+            totalAmount:
+                selectedInvoice.totalAmount === undefined || selectedInvoice.totalAmount === null
+                    ? ""
+                    : selectedInvoice.totalAmount,
+            receivedAmount:
+                selectedInvoice.receivedAmount === undefined ||
+                selectedInvoice.receivedAmount === null
+                    ? ""
+                    : selectedInvoice.receivedAmount,
+            balanceAmount:
+                selectedInvoice.balanceAmount === undefined || selectedInvoice.balanceAmount === null
+                    ? ""
+                    : selectedInvoice.balanceAmount,
         },
         validationSchema: Yup.object({
             companyId: Yup.string().required("Please select a company"),
@@ -160,9 +174,11 @@ const InvoiceEditForm = () => {
         }),
         onSubmit: async (values, { resetForm }) => {
             try {
+                const { taxType, note, ...rest } = values;
                 const payload = {
-                    ...values,
-                    withTax: values.taxType === "withTax",
+                    ...rest,
+                    withTax: taxType === "withTax",
+                    additionalNote: note || "",
                 };
 
                 await dispatch(updateInvoice({ id, updatedData: payload })).unwrap();
@@ -174,7 +190,7 @@ const InvoiceEditForm = () => {
         },
     });
 
-    const { values, handleChange, handleSubmit, setFieldValue } = formik;
+    const { values, handleChange, handleSubmit, setFieldValue, setValues } = formik;
 
     /* ================= AUTO-FILL COMPANY DETAILS ================= */
     useEffect(() => {
@@ -251,13 +267,14 @@ const InvoiceEditForm = () => {
 
     /* ================= UPDATE ITEMS & TOTALS ================= */
     const updateItemsAndTotals = useCallback(
-        (updatedItems, receivedAmountVal) => {
+        (updatedItems, receivedAmountVal, taxTypeOverride) => {
+            const taxType = taxTypeOverride ?? values.taxType;
             const {
                 items: recalcItems,
                 totalAmount,
                 balanceAmount,
                 invoiceValuePurchase,
-            } = computeTotals(updatedItems, receivedAmountVal, values.taxType);
+            } = computeTotals(updatedItems, receivedAmountVal, taxType);
 
             setFieldValue("items", recalcItems, false);
             setFieldValue("totalAmount", totalAmount, false);
@@ -312,41 +329,55 @@ const InvoiceEditForm = () => {
         }
     }, [values.isInternational, dispatch]);
 
-    // Initialize Formik when Redux selectedInvoice changes
+    const numOrEmpty = (v) => (v === undefined || v === null ? "" : v);
+
+    // Initialize Formik when loaded invoice matches route id, then recalc totals from line items
     useEffect(() => {
-        if (selectedInvoice && Object.keys(selectedInvoice).length > 0) {
-            formik.setValues({
-                companyId: selectedInvoice.companyId?._id || selectedInvoice.companyId || "",
-                accountType: selectedInvoice.accountType || "",
-                mobile: selectedInvoice.mobile || "",
-                billingName: selectedInvoice.billingName || "",
-                billingAddress: selectedInvoice.billingAddress || "",
-                gstin: selectedInvoice.gstin || "",
-                invoiceNo: selectedInvoice.invoiceNo || "",
-                invoiceDate: selectedInvoice.invoiceDate ? selectedInvoice.invoiceDate.split('T')[0] : "",
-                dueDate: selectedInvoice.dueDate ? selectedInvoice.dueDate.split('T')[0] : "",
-                stateOfSupply: selectedInvoice.stateOfSupply || "",
-                taxType: selectedInvoice.withTax ? "withTax" : "withoutTax",
-                isInternational: selectedInvoice.isInternational || false,
-                description: selectedInvoice.description || "",
-                noOfPax: selectedInvoice.noOfPax || "",
-                startDate: selectedInvoice.startDate ? selectedInvoice.startDate.split('T')[0] : "",
-                returnDate: selectedInvoice.returnDate ? selectedInvoice.returnDate.split('T')[0] : "",
-                cabType: selectedInvoice.cabType || "",
-                tourType: selectedInvoice.tourType || "",
-                startingPoint: selectedInvoice.startingPoint || "",
-                dropPoint: selectedInvoice.dropPoint || "",
-                items: selectedInvoice.items || [],
-                paymentMode: selectedInvoice.paymentMode || "",
-                referenceNo: selectedInvoice.referenceNo || "",
-                note: selectedInvoice.note || "",
-                invoiceValuePurchase: selectedInvoice.invoiceValuePurchase || "",
-                totalAmount: selectedInvoice.totalAmount || "",
-                receivedAmount: selectedInvoice.receivedAmount || "",
-                balanceAmount: selectedInvoice.balanceAmount || "",
-            });
-        }
-    }, [selectedInvoice]);
+        if (!id || !selectedInvoice?._id || String(selectedInvoice._id) !== String(id)) return;
+
+        const taxType = selectedInvoice.withTax ? "withTax" : "withoutTax";
+
+        setValues({
+            companyId: selectedInvoice.companyId?._id || selectedInvoice.companyId || "",
+            accountType: selectedInvoice.accountType || "",
+            mobile: selectedInvoice.mobile || "",
+            billingName: selectedInvoice.billingName || "",
+            billingAddress: selectedInvoice.billingAddress || "",
+            gstin: selectedInvoice.gstin || "",
+            invoiceNo: selectedInvoice.invoiceNo || "",
+            invoiceDate: selectedInvoice.invoiceDate ? selectedInvoice.invoiceDate.split("T")[0] : "",
+            dueDate: selectedInvoice.dueDate ? selectedInvoice.dueDate.split("T")[0] : "",
+            stateOfSupply: selectedInvoice.stateOfSupply || "",
+            taxType,
+            isInternational: selectedInvoice.isInternational || false,
+            description: selectedInvoice.description || "",
+            noOfPax: selectedInvoice.noOfPax || "",
+            startDate: selectedInvoice.startDate ? selectedInvoice.startDate.split("T")[0] : "",
+            returnDate: selectedInvoice.returnDate ? selectedInvoice.returnDate.split("T")[0] : "",
+            cabType: selectedInvoice.cabType || "",
+            tourType: selectedInvoice.tourType || "",
+            startingPoint: selectedInvoice.startingPoint || "",
+            dropPoint: selectedInvoice.dropPoint || "",
+            items: selectedInvoice.items || [],
+            paymentMode: selectedInvoice.paymentMode || "",
+            referenceNo: selectedInvoice.referenceNo || "",
+            note: selectedInvoice.note || selectedInvoice.additionalNote || "",
+            invoiceValuePurchase: numOrEmpty(selectedInvoice.invoiceValuePurchase),
+            totalAmount: numOrEmpty(selectedInvoice.totalAmount),
+            receivedAmount: numOrEmpty(selectedInvoice.receivedAmount),
+            balanceAmount: numOrEmpty(selectedInvoice.balanceAmount),
+        });
+
+        const items = selectedInvoice.items || [];
+        const received = selectedInvoice.receivedAmount ?? "";
+        const { items: recalcItems, totalAmount, balanceAmount, invoiceValuePurchase } =
+            computeTotals(items, received, taxType);
+
+        setFieldValue("items", recalcItems, false);
+        setFieldValue("totalAmount", totalAmount, false);
+        setFieldValue("balanceAmount", balanceAmount, false);
+        setFieldValue("invoiceValuePurchase", invoiceValuePurchase, false);
+    }, [id, selectedInvoice?._id, computeTotals, setFieldValue, setValues]);
 
     /* ================= LOADING STATE ================= */
     if (isLoading) {
@@ -801,21 +832,30 @@ const InvoiceEditForm = () => {
                             "receivedAmount",
                             "balanceAmount",
                         ].map((field) => (
-                            <Grid item xs={12} sm={3} key={field}>
+                            <Grid size={{ xs: 12, sm: 3 }} key={field}>
                                 <TextField
                                     fullWidth
                                     label={field
                                         .replace(/([A-Z])/g, " $1")
                                         .replace(/^./, (s) => s.toUpperCase())}
                                     name={field}
-                                    value={values[field]}
+                                    value={
+                                        values[field] === undefined || values[field] === null
+                                            ? ""
+                                            : values[field]
+                                    }
                                     onChange={(e) => {
                                         handleChange(e);
                                         if (field === "receivedAmount") {
                                             updateItemsAndTotals(values.items, e.target.value);
                                         }
                                     }}
-
+                                    InputProps={{
+                                        readOnly:
+                                            field === "invoiceValuePurchase" ||
+                                            field === "totalAmount" ||
+                                            field === "balanceAmount",
+                                    }}
                                 />
                             </Grid>
                         ))}

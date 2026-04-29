@@ -59,8 +59,9 @@ export const deleteQuickQuotation = createAsyncThunk(
     "quickQuotation/delete",
     async (id, { rejectWithValue }) => {
         try {
-            await api.delete(`/quickQT/${id}`);
-            return id; // Return the ID to remove from state
+            const safeId = String(id || "").trim();
+            await api.delete(`/quickQT/${safeId}`);
+            return safeId; // Return the ID to remove from state
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Failed to delete quotation");
         }
@@ -82,10 +83,25 @@ export const sendQuickQuotationMail = createAsyncThunk(
 
 export const finalizeQuickQuotation = createAsyncThunk(
     "quickQuotation/finalize",
-    async ({ id, finalizedPackage }, { rejectWithValue }) => {
+    async ({ id, finalizedPackage, finalizedVendorsWithAmounts }, { rejectWithValue, getState }) => {
         try {
+            const currentQuotation = getState()?.quickQuotation?.currentQuotation;
+            const existingPackage = currentQuotation?.finalizedPackage;
+            const payload = {};
+            if (finalizedPackage) {
+                payload.finalizedPackage = finalizedPackage;
+            } else if (
+                Array.isArray(finalizedVendorsWithAmounts) &&
+                finalizedVendorsWithAmounts.length > 0 &&
+                existingPackage
+            ) {
+                payload.finalizedPackage = existingPackage;
+            }
+            if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {
+                payload.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts;
+            }
             const { data } = await api.patch(`/quickQT/${id}/finalize`, {
-                finalizedPackage,
+                ...payload,
             });
             return data?.data ?? data;
         } catch (err) {
@@ -177,7 +193,10 @@ const quickQuotationSlice = createSlice({
             .addCase(deleteQuickQuotation.fulfilled, (state, action) => {
                 state.loading = false;
                 state.successMessage = "Quotation deleted successfully!";
-                state.quotations = state.quotations.filter(q => q._id !== action.payload);
+                const deletedId = String(action.payload || "").trim();
+                state.quotations = state.quotations.filter(
+                    (q) => String(q?._id || "").trim() !== deletedId
+                );
                 state.currentQuotation = null;
             })
             .addCase(deleteQuickQuotation.rejected, (state, action) => {
