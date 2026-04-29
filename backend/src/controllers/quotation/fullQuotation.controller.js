@@ -1,10 +1,10 @@
-// controllers/fullQuotation/fullQuotation.controller.js
 import { fullQuotation } from "../../models/quotation/fullQuotation.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { v4 as uuidv4 } from "uuid";
 import { uploadOnCloudinary } from "../../utils/cloudinary.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 /* =====================================================
    STEP 1 - CREATE OR RESUME QUOTATION
 ===================================================== */
@@ -55,6 +55,14 @@ export const createOrResumeStep1 = asyncHandler(async (req, res) => {
         quotationValidity,
         quotation,
         currentStep: 1,
+    });
+
+    await logActivity({
+        action: "CREATE",
+        model: "FullQuotation",
+        refId: quotationId,
+        description: `New full quotation ${quotationId} drafted for ${clientDetails.clientName} by ${req.user?.name || 'Admin'}`,
+        user: req.user?.name || "Admin",
     });
 
     return res
@@ -279,6 +287,14 @@ export const finalizeQuotation = asyncHandler(async (req, res) => {
     quotation.status = "Submitted";
     quotation.submittedAt = new Date();
     await quotation.save();
+
+    await logActivity({
+        action: "UPDATE",
+        model: "FullQuotation",
+        refId: quotationId,
+        description: `Full quotation ${quotationId} for ${quotation.clientDetails?.clientName} was finalized by ${req.user?.name || 'Admin'}`,
+        user: req.user?.name || "Admin",
+    });
 
     return res
         .status(200)

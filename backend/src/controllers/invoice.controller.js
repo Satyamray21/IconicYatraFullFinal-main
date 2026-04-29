@@ -1,5 +1,6 @@
 import Invoice from "../models/invoice.model.js";
 import Company from "../models/company.model.js";
+import { logActivity } from "../utils/ActivityLog.js";
 import {
     renumberInvoicesAfterDeleteForMonth,
     getCalendarMonthKey,
@@ -30,6 +31,14 @@ export const createInvoice = async (req, res) => {
         // Populate company details in response
         const populatedInvoice = await Invoice.findById(savedInvoice._id)
             .populate("companyId", "companyName address phone email gstin stateCode logo authorizedSignatory");
+
+        await logActivity({
+            action: "CREATE",
+            model: "Invoice",
+            refId: populatedInvoice.invoiceNo,
+            description: `Invoice ${populatedInvoice.invoiceNo} generated for ${populatedInvoice.personalDetails?.name || 'Client'} by ${req.user?.name || 'System'}`,
+            user: req.user?.name || "System",
+        });
 
         res.status(201).json({
             success: true,
@@ -93,6 +102,15 @@ export const updateInvoice = async (req, res) => {
             new: true,
         });
         if (!updated) return res.status(404).json({ message: "Invoice not found" });
+        
+        await logActivity({
+            action: "UPDATE",
+            model: "Invoice",
+            refId: updated.invoiceNo,
+            description: `Invoice ${updated.invoiceNo} was updated by ${req.user?.name || 'System'}`,
+            user: req.user?.name || "System",
+        });
+
         res.json(updated);
     } catch (error) {
         res.status(400).json({ message: error.message });

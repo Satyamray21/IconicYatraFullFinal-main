@@ -1,8 +1,9 @@
 import ReceivedVoucher from "../models/payment.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import Company from "../models/company.model.js";
-// @desc    Create a new voucher
+import { logActivity } from "../utils/ActivityLog.js";
 
+// @desc    Create a new voucher
 export const createVoucher = asyncHandler(async (req, res) => {
   const {
     paymentType,
@@ -27,7 +28,7 @@ export const createVoucher = asyncHandler(async (req, res) => {
 
   // ✅ Month + Year
   const month = voucherDate.getMonth() + 1; // 1-12
-const year = voucherDate.getFullYear();
+  const year = voucherDate.getFullYear();
 
   // ✅ Find last voucher for SAME company + month + year
   const lastVoucher = await ReceivedVoucher.findOne({
@@ -70,6 +71,15 @@ const invoiceId = `${monthNames[month-1]}/${year}/${formattedNumber}`;
       year,
       quotationRef: quotationRef || undefined,
     });
+
+    await logActivity({
+      action: "CREATE",
+      model: "Payment",
+      refId: invoiceId,
+      description: `Payment voucher ${invoiceId} for ₹${amount} (${partyName}) created by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+      user: req.user?.name || req.user?.staffUserId || "System",
+    });
+
   } catch (err) {
     // ✅ HANDLE DUPLICATE SAFELY
     if (err.code === 11000) {
@@ -84,9 +94,6 @@ const invoiceId = `${monthNames[month-1]}/${year}/${formattedNumber}`;
     data: voucher,
   });
 });
-
-
-
 
 // @desc    List vouchers linked to a quotation reference (e.g. custom quotation id)
 export const getVouchersByQuotationRef = asyncHandler(async (req, res) => {
@@ -142,16 +149,37 @@ export const updateVoucher = asyncHandler(async (req, res) => {
         res.status(404);
         throw new Error("Voucher not found");
     }
+
+    await logActivity({
+      action: "UPDATE",
+      model: "Payment",
+      refId: updatedVoucher.invoiceId,
+      description: `Payment voucher ${updatedVoucher.invoiceId} updated by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+      user: req.user?.name || req.user?.staffUserId || "System",
+    });
+
     res.status(200).json({ success: true, message: "Voucher updated", data: updatedVoucher });
 });
 
 // @desc    Delete voucher
 export const deleteVoucher = asyncHandler(async (req, res) => {
+    const voucher = await ReceivedVoucher.findById(req.params.id);
     const deleted = await ReceivedVoucher.findByIdAndDelete(req.params.id);
     if (!deleted) {
         res.status(404);
         throw new Error("Voucher not found");
     }
+
+    if (voucher) {
+      await logActivity({
+        action: "DELETE",
+        model: "Payment",
+        refId: voucher.invoiceId,
+        description: `Payment voucher ${voucher.invoiceId} for ₹${voucher.amount} (${voucher.partyName}) deleted by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+        user: req.user?.name || req.user?.staffUserId || "System",
+      });
+    }
+
     res.status(200).json({ success: true, message: "Voucher deleted" });
 });
 
