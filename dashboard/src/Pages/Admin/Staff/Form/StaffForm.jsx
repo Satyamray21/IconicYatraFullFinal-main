@@ -12,6 +12,8 @@ import {
   Select,
   Avatar,
   IconButton,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -65,6 +67,11 @@ const StaffForm = () => {
     aadharPhoto: null,
     panPhoto: null,
   });
+  const [notification, setNotification] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
@@ -110,11 +117,11 @@ const StaffForm = () => {
       ifscCode: "",
     },
     validationSchema,
-    onSubmit: (values) => {
+    onSubmit: async (values, { setSubmitting }) => {
       if (step === 1) {
         setStep(2);
       } else {
-        handleFinalSubmit(values);
+        await handleFinalSubmit(values);
       }
     },
   });
@@ -127,6 +134,7 @@ const StaffForm = () => {
     handleSubmit,
     setFieldValue,
     resetForm,
+    isSubmitting,
   } = formik;
 
   useEffect(() => {
@@ -179,7 +187,7 @@ const StaffForm = () => {
     setFieldValue(fieldName, null);
   };
 
-  const handleFinalSubmit = (values) => {
+  const handleFinalSubmit = async (values) => {
     const formData = new FormData();
     
     // Append personal details
@@ -238,13 +246,25 @@ const StaffForm = () => {
       formData.append("panPhoto", values.panPhoto);
     }
 
-    dispatch(createStaff(formData))
+    return dispatch(createStaff(formData))
       .unwrap()
       .then(() => {
-        navigate("/staff");
+        setNotification({
+          open: true,
+          message: "Staff created successfully!",
+          severity: "success",
+        });
+        setTimeout(() => {
+          navigate("/staff");
+        }, 1500);
       })
       .catch((err) => {
         console.error("Staff creation failed:", err);
+        setNotification({
+          open: true,
+          message: err || "Failed to create staff. Please try again.",
+          severity: "error",
+        });
       });
   };
 
@@ -671,8 +691,13 @@ const StaffForm = () => {
               >
                 Back
               </Button>
-              <Button type="submit" variant="contained" color="primary">
-                Submit Final
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Submitting..." : "Submit Final"}
               </Button>
             </Box>
           </>
@@ -685,15 +710,31 @@ const StaffForm = () => {
                 variant="contained"
                 color="error"
                 onClick={() => resetForm()}
+                disabled={isSubmitting}
               >
                 Clear
               </Button>
-              <Button variant="contained" type="submit">
+              <Button variant="contained" type="submit" disabled={isSubmitting}>
                 Save & Continue
               </Button>
             </>
           )}
         </Box>
+
+        <Snackbar
+          open={notification.open}
+          autoHideDuration={6000}
+          onClose={() => setNotification({ ...notification, open: false })}
+          anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        >
+          <Alert
+            onClose={() => setNotification({ ...notification, open: false })}
+            severity={notification.severity}
+            sx={{ width: "100%" }}
+          >
+            {notification.message}
+          </Alert>
+        </Snackbar>
       </form>
     </Box>
   );

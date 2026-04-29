@@ -13,6 +13,11 @@ const quickQuotationSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Package",
         },
+        quickQuotationId: {
+            type: String,
+            unique: true,
+            trim: true,
+        },
 
         adults: { type: Number, required: true },
         children: { type: Number, default: 0 },
@@ -29,11 +34,13 @@ const quickQuotationSchema = new mongoose.Schema(
             type: String,
             default: ""
         },
+        pickupTime: { type: Date, default: null },
 
         dropPoint: {
             type: String,
             default: ""
         },
+        dropTime: { type: Date, default: null },
 
         totalCost: {
             type: Number,
@@ -68,6 +75,18 @@ const quickQuotationSchema = new mongoose.Schema(
             hotelVendorName: { type: String, default: "" },
             vehicleVendorName: { type: String, default: "" },
         },
+        finalizedVendorsWithAmounts: [
+            {
+                vendorName: { type: String, trim: true, default: "" },
+                vendorType: {
+                    type: String,
+                    enum: ["Hotel", "Vehicle", "Other"],
+                    default: "Other",
+                },
+                amount: { type: Number, default: 0, min: 0 },
+                remarks: { type: String, trim: true, default: "" },
+            },
+        ],
     },
     { timestamps: true }
 );
@@ -76,6 +95,26 @@ const quickQuotationSchema = new mongoose.Schema(
 // FIXED pre-save hook
 // =============================
 quickQuotationSchema.pre("save", async function (next) {
+    if (this.isNew && !this.quickQuotationId) {
+        const lastQuotation = await mongoose
+            .model("QuickQuotation")
+            .findOne({ quickQuotationId: { $exists: true, $ne: null } })
+            .sort({ createdAt: -1 })
+            .select("quickQuotationId")
+            .lean();
+
+        let nextNumber = 1;
+        if (lastQuotation?.quickQuotationId) {
+            const m = String(lastQuotation.quickQuotationId).match(
+                /^ICYR_Q_(\d+)$/
+            );
+            if (m) {
+                nextNumber = Number(m[1]) + 1;
+            }
+        }
+        this.quickQuotationId = `ICYR_Q_${String(nextNumber).padStart(4, "0")}`;
+    }
+
     if (this.isNew && this.packageId) {
         const pkg = await Package.findById(this.packageId).lean();
 

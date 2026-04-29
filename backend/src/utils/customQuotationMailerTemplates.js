@@ -95,7 +95,7 @@ const itineraryLines = (itinerary = []) =>
       (d) => `
                 <div style="margin-bottom:12px;">
                     
-                    <div style="color:#2e7d32; font-weight:600;">
+                    <div style="color:#000; font-weight:bold;">
                         ${safe(d?.dayTitle, "")}
                     </div>
 
@@ -116,12 +116,53 @@ const policyLines = (arr = []) =>
 
 const includedAdditionalServiceLines = (additionalServices = []) => {
   return (Array.isArray(additionalServices) ? additionalServices : [])
-    .filter((s) => String(s?.included || "").toLowerCase() === "yes")
     .map((s) => {
       const particulars = safe(s?.particulars, "Additional Service");
+      const included = String(s?.included || "").toLowerCase() === "yes";
       const totalAmount = toNum(s?.totalAmount || s?.amount);
+      if (included) return `${particulars}: Included`;
       return `${particulars}: INR ${INR.format(totalAmount)}`;
     });
+};
+
+const splitAdditionalServicePolicyLines = (additionalServices = []) => {
+  const services = Array.isArray(additionalServices) ? additionalServices : [];
+  const inclusionLines = [];
+  const exclusionLines = [];
+  services.forEach((s) => {
+    const particulars = safe(s?.particulars, "Additional Service");
+    if (!particulars) return;
+    const included = String(s?.included || "").toLowerCase() === "yes";
+    const totalAmount = toNum(s?.totalAmount || s?.amount);
+    if (included) inclusionLines.push(`${particulars}: Included`);
+    else exclusionLines.push(`${particulars}: INR ${INR.format(totalAmount)}`);
+  });
+  return { inclusionLines, exclusionLines };
+};
+
+const stripHtmlText = (value = "") =>
+  decodeBasicHtmlEntities(String(value || "")).replace(/<[^>]+>/g, " ");
+
+const removeGstExtraExclusionLine = (lines = [], quotation = {}) => {
+  const qd = quotation?.tourDetails?.quotationDetails || {};
+  const taxes = qd?.taxes || {};
+  const gstIncludedInFinalAmount =
+    taxes?.gstIncludedInFinalAmount === true ||
+    String(taxes?.gstMode || "").toLowerCase() === "with_gst";
+  const normalized = normalizePolicyLinesForEmail(
+    Array.isArray(lines) ? lines : [],
+  );
+  if (!gstIncludedInFinalAmount) return normalized;
+  return normalized.filter((line) => {
+    const s = stripHtmlText(line)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    // Remove only the specific "GST is extra on total package cost" exclusion sentence.
+    return !/govt\.?\s*tax\s*gst\s*5%?\s*is\s*extra\s*on\s*total\s*package\s*cost/.test(
+      s,
+    );
+  });
 };
 
 /** No http(s) URLs or <a> tags in PAYMENT POLICY email body (clients should not get clickable payment links there). */
@@ -151,6 +192,31 @@ const toPolicyArray = (value) => {
 
 const mergePolicies = (...items) => [...new Set(items.flat().filter(Boolean))];
 
+const decodeBasicHtmlEntities = (text = "") =>
+  String(text)
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+
+/** Convert HTML policy blocks (<p>..</p>) into plain text lines for robust email rendering. */
+const normalizePolicyLinesForEmail = (arr = []) =>
+  (Array.isArray(arr) ? arr : [])
+    .flatMap((item) =>
+      String(item || "")
+        .replace(/<\/p>\s*<p[^>]*>/gi, "\n")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/li>\s*<li[^>]*>/gi, "\n")
+        .replace(/<li[^>]*>/gi, "")
+        .replace(/<\/li>/gi, "\n")
+        .replace(/<[^>]+>/g, " ")
+        .split("\n"),
+    )
+    .map((line) => decodeBasicHtmlEntities(line).replace(/\s{2,}/g, " ").trim())
+    .filter(Boolean);
+
 /** Prefer quotation policies when set; avoids repeating the same HTML as global defaults (common for quick quotations). */
 const quotationPoliciesOrGlobal = (quotationValue, globalValue) => {
   const q = toPolicyArray(quotationValue);
@@ -171,6 +237,16 @@ const cancellationPolicyUrlLine = (url) => {
     <b>As per company cancellation policy -</b><br/>
     <a href="${u}" target="_blank" rel="noopener noreferrer" style="color:#1976d2; font-weight:bold; word-break:break-all;">${u}</a>
   </p>`;
+};
+
+const stripPickupDropMeta = (value) => {
+  const raw = safe(value, "");
+  if (!raw) return "";
+  return raw
+    .replace(/\(([^)]*)\)/g, "")
+    .replace(/^(arrival|departure)\s*:\s*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 };
 
 const companyPaymentLinkLine = (url) => {
@@ -204,10 +280,11 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
         <br/>
         <p style="color:#d32f2f; font-weight:bold;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
+        <div style="text-align:center;">
         ${(bankDetails || [])
           .map(
             (b, i) => `
-                    <div style="margin-bottom:8px;">
+                    <div style="margin-bottom:12px;">
                         <b>${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
                           b?.branchName,
                           "Branch",
@@ -219,6 +296,7 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
                 `,
           )
           .join("")}
+        </div>
     `;
 };
 
@@ -244,7 +322,7 @@ const bankTextSection = (bankDetails = []) => {
     // ✅ FIXED (HTML as string)
     `<p>
             <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
-            <span style="color:#2e7d32;">
+            <span style="color:#000; font-weight:bold;">
                 All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
                 For more details, contact your Tour Expert.
             </span>
@@ -279,21 +357,26 @@ export const buildCustomQuotationNormalEmail = (
     td?.policies?.paymentPolicy,
     options?.globalPaymentPolicy,
   );
-  const additionalInclusionLines = includedAdditionalServiceLines(
-    qd?.additionalServices,
-  );
+  const {
+    inclusionLines: additionalInclusionLines,
+    exclusionLines: additionalExclusionLines,
+  } = splitAdditionalServicePolicyLines(qd?.additionalServices);
   const inclusionCombined = quotationPoliciesOrGlobal(
     td?.policies?.inclusionPolicy,
     options?.globalInclusions,
   );
   const inclusionWithAdditional = [
-    ...inclusionCombined,
+    ...normalizePolicyLinesForEmail(inclusionCombined),
     ...additionalInclusionLines,
   ];
-  const exclusionCombined = quotationPoliciesOrGlobal(
+  const exclusionCombinedBase = quotationPoliciesOrGlobal(
     td?.policies?.exclusionPolicy,
     options?.globalExclusions,
   );
+  const exclusionCombined = [
+    ...removeGstExtraExclusionLine(exclusionCombinedBase, quotation),
+    ...additionalExclusionLines,
+  ];
   const cancellationCombined = quotationPoliciesOrGlobal(
     td?.policies?.cancellationPolicy,
     options?.globalCancellationPolicy,
@@ -422,7 +505,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         ${bankHtmlSection(bankDetails, paymentLink)}
         <p>
     <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
-    <span style="color:#2e7d32;">
+    <span style="color:#000; font-weight:bold;">
         All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
         For more details, contact your Tour Expert.
     </span>
@@ -529,21 +612,27 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
     td?.policies?.paymentPolicy,
     customText.globalPaymentPolicy,
   );
-  const additionalInclusionLines = includedAdditionalServiceLines(
-    qd?.additionalServices,
-  );
+  const {
+    inclusionLines: additionalInclusionLines,
+    exclusionLines: additionalExclusionLinesForBooking,
+  } =
+    splitAdditionalServicePolicyLines(qd?.additionalServices);
   const inclusionCombined = quotationPoliciesOrGlobal(
     td?.policies?.inclusionPolicy,
     customText.globalInclusions,
   );
   const inclusionWithAdditional = [
-    ...inclusionCombined,
+    ...normalizePolicyLinesForEmail(inclusionCombined),
     ...additionalInclusionLines,
   ];
-  const exclusionCombined = quotationPoliciesOrGlobal(
+  const exclusionCombinedBase = quotationPoliciesOrGlobal(
     td?.policies?.exclusionPolicy,
     customText.globalExclusions,
   );
+  const exclusionCombined = [
+    ...removeGstExtraExclusionLine(exclusionCombinedBase, quotation),
+    ...additionalExclusionLinesForBooking,
+  ];
   const cancellationCombined = quotationPoliciesOrGlobal(
     td?.policies?.cancellationPolicy,
     customText.globalCancellationPolicy,
@@ -569,10 +658,10 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         
         
        
-        <p style="color:#00FF00; font-weight:bold;"> ${td.quotationTitle}</p>
+        <p style="color:#000; font-weight:bold;"> ${td.quotationTitle}</p>
         <p style="color:#d32f2f; font-weight:bold;">DETAILS OF TOUR PACKAGE:</p>
          <p style="color:#d32f2f; font-weight:bold;">
-            BOOKING ID: ${safe(customText.bookingId, quotation?.quotationId)}
+            BOOKING ID: ${safe(customText.bookingId, quotation?.quickQuotationId || quotation?.quotationId)}
         </p>
         
         <p><b>No. of Pax:</b> ${guests}</p>
@@ -594,7 +683,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p><b>Next Payable Amount:</b> INR ${INR.format(nextPayableAmount)}</p>
         ${paymentDueDate ? `<p><b>Payment Due Date:</b> ${paymentDueDate}</p>` : ""}
         <p style="color:#d32f2f; font-weight:bold;">Please clear your all dues as per the payment policy.</p>
-        <p style="color:#2e7d32; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>
+        <p style="color:#000; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>
         <br/>
         <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
         <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p>
@@ -621,7 +710,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         ${bankHtmlSection(bankDetails, paymentLink)}
         <p>
             <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
-            <span style="color:#2e7d32;">
+            <span style="color:#000; font-weight:bold;">
                 All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
                 For more details, contact your Tour Expert.
             </span>
@@ -695,6 +784,14 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   const additionalServicesFromSnapshot = Array.isArray(qdSnap.additionalServices)
     ? qdSnap.additionalServices
     : [];
+  const finalizedPackage = safe(quick.finalizedPackage, "Standard");
+  const finalizedKey = ["standard", "deluxe", "superior"].includes(
+    String(finalizedPackage).toLowerCase(),
+  )
+    ? String(finalizedPackage).toLowerCase()
+    : "standard";
+  const finalizedKeyCap =
+    finalizedKey.charAt(0).toUpperCase() + finalizedKey.slice(1);
   const resolvedArrivalDate =
     qdSnap.arrivalDate ||
     snap.arrivalDate ||
@@ -720,7 +817,81 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     // Keep time blank for date-only values that default to midnight.
     return hh === "00" && mm === "00" ? "" : `${hh}:${mm}`;
   };
+  const parseDateAndTimeFromPointText = (value) => {
+    const raw = safe(value, "");
+    if (!raw) return { date: "", time: "" };
+
+    // Example supported: "Arrival: At Airport (03/06/2026 at 15:30)"
+    const m = raw.match(
+      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2}))?\)/i,
+    );
+    if (!m) return { date: "", time: "" };
+
+    const dd = String(m[1]).padStart(2, "0");
+    const mm = String(m[2]).padStart(2, "0");
+    const yyyy = String(m[3]).length === 2 ? `20${m[3]}` : String(m[3]);
+    const hh = m[4] ? String(m[4]).padStart(2, "0") : "";
+    const min = m[5] ? String(m[5]).padStart(2, "0") : "";
+    const iso = `${yyyy}-${mm}-${dd}T00:00:00.000Z`;
+    return {
+      date: Number.isNaN(new Date(iso).getTime()) ? "" : iso,
+      time: hh && min ? `${hh}:${min}` : "",
+    };
+  };
   const calcSnap = qdSnap.packageCalculations || {};
+  const billableExtras = sumBillableAdditionalServices(additionalServicesFromSnapshot);
+  const tierFromCalc = Number(calcSnap?.[finalizedKey]?.finalTotal);
+  const tierFromQuotedCost = Number(
+    qdSnap?.[`${finalizedKey}Cost`] ?? pkg?.[`final${finalizedKeyCap}Cost`],
+  );
+  const quickTotal = toNum(quick.totalCost);
+  const resolvedTierFinalTotal =
+    quickTotal > 0
+      ? Math.max(0, quickTotal - billableExtras)
+      : Number.isFinite(tierFromCalc) && tierFromCalc > 0
+        ? tierFromCalc
+        : Number.isFinite(tierFromQuotedCost) && tierFromQuotedCost > 0
+          ? tierFromQuotedCost
+          : 0;
+  const resolvedTierAfterDiscount =
+    resolvedTierFinalTotal > 0
+      ? Math.round((resolvedTierFinalTotal / 1.05) * 100) / 100
+      : 0;
+  const normalizedCalcSnap = {
+    standard: {
+      ...(calcSnap?.standard || {}),
+      finalTotal:
+        finalizedKey === "standard"
+          ? resolvedTierFinalTotal
+          : toNum(calcSnap?.standard?.finalTotal),
+      afterDiscount:
+        finalizedKey === "standard"
+          ? toNum(calcSnap?.standard?.afterDiscount) || resolvedTierAfterDiscount
+          : toNum(calcSnap?.standard?.afterDiscount),
+    },
+    deluxe: {
+      ...(calcSnap?.deluxe || {}),
+      finalTotal:
+        finalizedKey === "deluxe"
+          ? resolvedTierFinalTotal
+          : toNum(calcSnap?.deluxe?.finalTotal),
+      afterDiscount:
+        finalizedKey === "deluxe"
+          ? toNum(calcSnap?.deluxe?.afterDiscount) || resolvedTierAfterDiscount
+          : toNum(calcSnap?.deluxe?.afterDiscount),
+    },
+    superior: {
+      ...(calcSnap?.superior || {}),
+      finalTotal:
+        finalizedKey === "superior"
+          ? resolvedTierFinalTotal
+          : toNum(calcSnap?.superior?.finalTotal),
+      afterDiscount:
+        finalizedKey === "superior"
+          ? toNum(calcSnap?.superior?.afterDiscount) || resolvedTierAfterDiscount
+          : toNum(calcSnap?.superior?.afterDiscount),
+    },
+  };
   const stdSnap = Number(calcSnap.standard?.finalTotal);
   const hasDetailedPricing =
     Number.isFinite(stdSnap) ||
@@ -763,15 +934,38 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
       : Array.isArray(snap.itinerary)
         ? snap.itinerary
         : [];
-  const itinerary = itinerarySource.map((day) => ({
-    dayTitle: safe(day.title, "Day"),
-    dayNote: safe(day.notes || day.description || day.aboutCity, ""),
-  }));
+  const itinerary = itinerarySource.map((day, index) => {
+    const rawTitle = safe(day.dayTitle || day.title, "");
+    const hasDayPrefix = /^day\s*\d+/i.test(rawTitle);
+    const dayPrefix = `Day ${index + 1}`;
+    const dayTitle = rawTitle
+      ? hasDayPrefix
+        ? rawTitle
+        : `${dayPrefix}: ${rawTitle}`
+      : dayPrefix;
+
+    return {
+      dayTitle,
+      dayNote: safe(day.notes || day.description || day.aboutCity, ""),
+    };
+  });
+
+  const arrivalFromText = parseDateAndTimeFromPointText(quick.pickupPoint);
+  const departureFromText = parseDateAndTimeFromPointText(quick.dropPoint);
+  const pickupTimeResolved = safe(
+    quick.pickupTime,
+    safe(quick?.packageSnapshot?.quotationDetails?.pickupTime, ""),
+  );
+  const dropTimeResolved = safe(
+    quick.dropTime,
+    safe(quick?.packageSnapshot?.quotationDetails?.dropTime, ""),
+  );
 
   return {
-    quotationId: String(quick._id || ""),
+    quotationId: String(quick.quickQuotationId || quick._id || ""),
+    quickQuotationId: String(quick.quickQuotationId || ""),
     clientDetails: { clientName: safe(quick.customerName, "Guest") },
-    finalizedPackage: "Standard",
+    finalizedPackage,
     tourDetails: {
       quotationTitle: safe(
         pkg.displayTitle,
@@ -808,7 +1002,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
               qdSnap.taxes && typeof qdSnap.taxes === "object"
                 ? qdSnap.taxes
                 : { taxPercent: 5, applyGST: true, gstOn: "Full" },
-            packageCalculations: calcSnap,
+            packageCalculations: normalizedCalcSnap,
             additionalServices: additionalServicesFromSnapshot,
           }
         : {
@@ -819,14 +1013,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
             mealPlan: safe(pkg.mealPlan?.planType, "CP"),
             rooms: { numberOfRooms: 1, sharingType: "Double sharing" },
             destinations,
-            packageCalculations: {
-              standard: {
-                finalTotal: total,
-                afterDiscount: approxBeforeTax,
-              },
-              deluxe: { finalTotal: 0, afterDiscount: 0 },
-              superior: { finalTotal: 0, afterDiscount: 0 },
-            },
+            packageCalculations: normalizedCalcSnap,
             taxes: { taxPercent: 5, applyGST: true, gstOn: "package" },
             additionalServices: additionalServicesFromSnapshot,
           },
@@ -838,12 +1025,24 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
           ),
         },
         pickupDropDetails: {
-          pickupLocation: safe(quick.pickupPoint, "As per itinerary"),
-          dropLocation: safe(quick.dropPoint, "As per itinerary"),
-          pickupDate: resolvedArrivalDate,
-          dropDate: resolvedDepartureDate,
-          pickupTime: deriveTimeFromDate(resolvedArrivalDate),
-          dropTime: deriveTimeFromDate(resolvedDepartureDate),
+          pickupLocation: safe(
+            stripPickupDropMeta(quick.pickupPoint),
+            "As per itinerary",
+          ),
+          dropLocation: safe(
+            stripPickupDropMeta(quick.dropPoint),
+            "As per itinerary",
+          ),
+          pickupDate: arrivalFromText.date || resolvedArrivalDate,
+          dropDate: departureFromText.date || resolvedDepartureDate,
+          pickupTime:
+            pickupTimeResolved ||
+            arrivalFromText.time ||
+            deriveTimeFromDate(resolvedArrivalDate),
+          dropTime:
+            dropTimeResolved ||
+            departureFromText.time ||
+            deriveTimeFromDate(resolvedDepartureDate),
         },
       },
     },

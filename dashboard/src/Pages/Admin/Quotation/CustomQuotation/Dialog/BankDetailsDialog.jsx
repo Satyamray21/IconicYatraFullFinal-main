@@ -34,70 +34,40 @@ const BankDetailsDialog = ({
             <DialogTitle sx={{ color: "primary.main" }}>Bank Details</DialogTitle>
             <DialogContent>
                 <Box sx={{ mt: 2 }}>
-                    <FormControl component="fieldset" sx={{ mb: 2 }}>
-                        <MuiRadioGroup
-                            row
-                            value={accountType}
-                            onChange={(e) => setAccountType(e.target.value)}
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: "primary.main" }}>
+                        Select Company Bank Account
+                    </Typography>
+
+                    <FormControl fullWidth margin="normal">
+                        <InputLabel>Account Name</InputLabel>
+                        <Select
+                            value={accountName}
+                            onChange={(e) => setAccountName(e.target.value)}
+                            label="Account Name"
                         >
-                            <MuiFormControlLabel
-                                value="company"
-                                control={<Radio />}
-                                label="Company Account"
-                            />
-                            <MuiFormControlLabel
-                                value="other"
-                                control={<Radio />}
-                                label="Other Accounts"
-                            />
-                        </MuiRadioGroup>
+                            {accountOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
                     </FormControl>
 
-                    {accountType === "company" ? (
-                        <>
-                            <Typography variant="body2" sx={{ mb: 2 }}>
-                                Account Name : Iconic Yatra
-                            </Typography>
-                            <Typography variant="body2" sx={{ mb: 2 }}>
-                                Account Number : 0
-                            </Typography>
-                            <Typography variant="body2" sx={{ mb: 2 }}>
-                                IFSC Code :
-                            </Typography>
-                            <Typography variant="body2" sx={{ mb: 2 }}>
-                                Bank Name :
-                            </Typography>
-                            <Typography variant="body2" sx={{ mb: 2 }}>
-                                Branch Name :
-                            </Typography>
-                        </>
-                    ) : (
-                        <>
+                    {accountName && accountOptions.find(o => o.value === accountName) && (
+                        <Box sx={{ mt: 3, p: 2, border: "1px solid #e0e0e0", borderRadius: 1 }}>
                             <Typography variant="body2" sx={{ mb: 1 }}>
-                                *Account Name
+                                <b>Bank:</b> {accountOptions.find(o => o.value === accountName)?.bankName}
                             </Typography>
-                            <FormControl fullWidth margin="normal">
-                                <InputLabel>Account Name</InputLabel>
-                                <Select
-                                    value={accountName}
-                                    onChange={(e) => setAccountName(e.target.value)}
-                                    label="Account Name"
-                                >
-                                    {accountOptions.map((option) => (
-                                        <MenuItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </MenuItem>
-                                    ))}
-                                    <Divider />
-                                    <MenuItem onClick={onAddBankOpen}>
-                                        <Box display="flex" alignItems="center">
-                                            <Add sx={{ mr: 1 }} />
-                                            Add New Bank
-                                        </Box>
-                                    </MenuItem>
-                                </Select>
-                            </FormControl>
-                        </>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                                <b>A/C Holder:</b> {accountOptions.find(o => o.value === accountName)?.accountHolderName}
+                            </Typography>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                                <b>A/C Number:</b> {accountName}
+                            </Typography>
+                            <Typography variant="body2">
+                                <b>IFSC:</b> {accountOptions.find(o => o.value === accountName)?.ifscCode}
+                            </Typography>
+                        </Box>
                     )}
                 </Box>
             </DialogContent>

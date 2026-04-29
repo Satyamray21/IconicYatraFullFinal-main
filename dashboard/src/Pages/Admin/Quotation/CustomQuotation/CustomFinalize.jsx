@@ -621,6 +621,7 @@ useEffect(() => {
             hotelVendorName: "",
             vehicleVendorName: "",
         },
+        finalizedVendorsWithAmounts: [],
         vehicles: [],
         pricing: { discount: "", gst: "", total: "" },
         policies: {
@@ -662,6 +663,7 @@ useEffect(() => {
         amount: "",
         taxType: "",
     });
+    const [editingServiceId, setEditingServiceId] = useState(null);
     const [openEmailDialog, setOpenEmailDialog] = useState(false);
     const [emailTemplateType, setEmailTemplateType] = useState("normal");
     const [emailTemplateBodies, setEmailTemplateBodies] = useState({
@@ -763,6 +765,25 @@ useEffect(() => {
         loadPaymentHistory();
     }, [loadPaymentHistory]);
 
+    // Keep received/balance fresh without requiring manual Transaction click.
+    useEffect(() => {
+        if (!id) return undefined;
+        const refresh = () => {
+            loadPaymentHistory();
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                refresh();
+            }
+        };
+        window.addEventListener("focus", refresh);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("focus", refresh);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, [id, loadPaymentHistory]);
+
     useEffect(() => {
         if (selectedQuotation?.finalizeStatus === "finalized") {
             setIsFinalized(true);
@@ -842,6 +863,15 @@ useEffect(() => {
     }, [quotation, billableServicesSum, selectedQuotation]);
 
     const finalizedVendors = React.useMemo(() => {
+        const vendorAmountRows = Array.isArray(quotation?.finalizedVendorsWithAmounts)
+            ? quotation.finalizedVendorsWithAmounts
+                  .map((v) => ({
+                      name: String(v?.vendorName || "").trim(),
+                      amount: Number(v?.amount) || 0,
+                  }))
+                  .filter((v) => Boolean(v.name))
+            : [];
+
         const savedNames = [
             quotation?.finalizedVendorDetails?.hotelVendorName,
             quotation?.finalizedVendorDetails?.vehicleVendorName,
@@ -857,8 +887,20 @@ useEffect(() => {
             )
             .map((v) => String(v?.partyName || "").trim())
             .filter(Boolean);
-        return Array.from(new Set([...savedNames, ...paymentNames]));
-    }, [paymentHistory, quotation?.finalizedVendorDetails]);
+        const mergedNames = Array.from(new Set([...savedNames, ...paymentNames]));
+        const mergedRows = mergedNames.map((name) => {
+            const found = vendorAmountRows.find((row) => row.name === name);
+            return found || { name, amount: null };
+        });
+        vendorAmountRows.forEach((row) => {
+            if (!mergedRows.some((x) => x.name === row.name)) mergedRows.push(row);
+        });
+        return mergedRows;
+    }, [
+        paymentHistory,
+        quotation?.finalizedVendorDetails,
+        quotation?.finalizedVendorsWithAmounts,
+    ]);
 
     useEffect(() => {
         const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
@@ -978,7 +1020,7 @@ useEffect(() => {
         const transformedDays = itinerary?.map((day, index) => ({
             id: index,
             dayDate: day.dayDate || "",
-            date: day.dayDate || formatDate(arrivalDate),
+            date: day.dayDate || "",
             title: day.dayTitle || `Day ${index + 1}`,
             description: day.dayNote || "",
             image: day.image ? { preview: day.image, name: "Itinerary Image" } : null,
@@ -1012,6 +1054,7 @@ useEffect(() => {
 
         return {
             date: formatDate(createdAt),
+            arrivalDate,
             reference: quotationId,
             quotationTitle: tourDetails.quotationTitle || "",
             destinationSummary: tourDetails.destinationSummary || "",
@@ -1040,14 +1083,15 @@ useEffect(() => {
                 hotelVendorName: tourDetails?.vendorDetails?.hotelVendorName || "",
                 vehicleVendorName: tourDetails?.vendorDetails?.vehicleVendorName || "",
             },
+            finalizedVendorsWithAmounts: apiData?.finalizedVendorsWithAmounts || [],
             vehicles: vehicleDetails ? [{
                 pickup: {
                     date: formatDate(vehicleDetails.pickupDate),
-                    time: formatDateTime(vehicleDetails.pickupTime).split(', ')[1]
+                    time: formatTime(vehicleDetails.pickupTime)
                 },
                 drop: {
                     date: formatDate(vehicleDetails.dropDate),
-                    time: formatDateTime(vehicleDetails.dropTime).split(', ')[1]
+                    time: formatTime(vehicleDetails.dropTime)
                 },
             }] : [],
             pricing: {
@@ -1055,6 +1099,8 @@ useEffect(() => {
                 gst: `₹ ${quotationDetails.taxes?.applyGST ? 'Calculated' : 0}`,
                 total: `₹ ${quotationCostNumber.toLocaleString("en-IN")}`,
             },
+            packageCalculations: quotationDetails.packageCalculations || {},
+            additionalServices: quotationDetails.additionalServices || [],
             policies: {
                 inclusions: policies.inclusionPolicy || [],
                 exclusions: policies.exclusionPolicy?.join('\n') || "No exclusions specified",
@@ -1101,17 +1147,37 @@ useEffect(() => {
     // Add this near your other helper functions
     const formatTime = (timeString) => {
         if (!timeString) return "N/A";
-        // If it's already in a readable format, return as is
-        if (timeString.includes(':')) return timeString;
+        const raw = String(timeString).trim();
+        if (!raw) return "N/A";
+        if (raw.includes("T")) {
+            const d = new Date(raw);
+            if (!Number.isNaN(d.getTime())) {
+                return d.toLocaleTimeString('en-IN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            }
+        }
+        if (/^\d{1,2}:\d{2}/.test(raw)) {
+            const [hh, mm] = raw.split(":");
+            const d = new Date();
+            d.setHours(Number(hh) || 0, Number(mm) || 0, 0, 0);
+            return d.toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
         // Otherwise try to parse it
         try {
-            return new Date(`1970-01-01T${timeString}`).toLocaleTimeString('en-IN', {
+            return new Date(`1970-01-01T${raw}`).toLocaleTimeString('en-IN', {
                 hour: '2-digit',
                 minute: '2-digit',
                 hour12: true
             });
         } catch {
-            return timeString;
+            return raw;
         }
     };
 
@@ -1432,6 +1498,7 @@ useEffect(() => {
     const handleAddServiceOpen = () => setOpenAddService(true);
     const handleAddServiceClose = () => {
         setOpenAddService(false);
+        setEditingServiceId(null);
         setCurrentService({
             included: "no",
             particulars: "",
@@ -1704,11 +1771,13 @@ useEffect(() => {
     };
 
     const handleConfirm = async (values) => {
-        const pkg = values?.quotation;
-        if (!pkg || !id) {
+        // Support both single and multiple packages
+        const packages = values?.quotations || (values?.quotation ? [values.quotation] : []);
+        
+        if (packages.length === 0 || !id) {
             setSnackbar({
                 open: true,
-                message: "Select a package to finalize",
+                message: "Select at least one package to finalize",
                 severity: "error",
             });
             return;
@@ -1717,16 +1786,24 @@ useEffect(() => {
             await dispatch(
                 finalizeCustomQuotation({
                     quotationId: id,
-                    finalizedPackage: pkg,
+                    finalizedPackage: packages[0], // Keep for backward compatibility
+                    finalizedPackages: packages, // New field for multiple packages
+                    selectedBank: values?.selectedBank,
                 })
             ).unwrap();
+
+            // Set the bank in state so the next dialog (HotelVendor) sees it
+            if (values?.selectedBank) {
+                setAccountName(values.selectedBank.accountNumber);
+            }
+
             await dispatch(getCustomQuotationById(id)).unwrap();
             setIsFinalized(true);
             setOpenFinalize(false);
             setOpenBankDialog(true);
             setSnackbar({
                 open: true,
-                message: `Quotation finalized — ${pkg}`,
+                message: `Quotation finalized — ${packages.join(", ")}`,
                 severity: "success",
             });
         } catch (e) {
@@ -1759,17 +1836,40 @@ useEffect(() => {
         });
         if (id) {
             try {
+                const vendorRows = Array.isArray(vendorPayload?.finalizedVendorsWithAmounts)
+                    ? vendorPayload.finalizedVendorsWithAmounts
+                    : [];
+                const hotelVendorNamesFromRows = vendorRows
+                    .filter((v) => String(v?.vendorType || "").toLowerCase() === "hotel")
+                    .map((v) => String(v?.vendorName || "").trim())
+                    .filter(Boolean);
+
+                const updateData = {
+                    "tourDetails.vendorDetails.vendorType":
+                        vendorPayload.vendorType || "",
+                    "tourDetails.vendorDetails.hotelVendorName":
+                        vendorPayload.hotelVendorName ||
+                        hotelVendorNamesFromRows.join(", ") ||
+                        "",
+                    "tourDetails.vendorDetails.vehicleVendorName":
+                        vendorPayload.vehicleVendorName || "",
+                };
+
+                // Update with vendor amounts if provided
+                if (vendorPayload.finalizedVendorsWithAmounts && vendorPayload.finalizedVendorsWithAmounts.length > 0) {
+                    // Store vendor amounts in a separate finalize call
+                    await dispatch(
+                        finalizeCustomQuotation({
+                            quotationId: id,
+                            finalizedVendorsWithAmounts: vendorPayload.finalizedVendorsWithAmounts,
+                        })
+                    ).unwrap();
+                }
+
                 await dispatch(
                     updateCustomQuotation({
                         quotationId: id,
-                        formData: {
-                            "tourDetails.vendorDetails.vendorType":
-                                vendorPayload.vendorType || "",
-                            "tourDetails.vendorDetails.hotelVendorName":
-                                vendorPayload.hotelVendorName || "",
-                            "tourDetails.vendorDetails.vehicleVendorName":
-                                vendorPayload.vehicleVendorName || "",
-                        },
+                        formData: updateData,
                     })
                 ).unwrap();
                 await refreshQuotationFromApi();
@@ -1843,10 +1943,10 @@ useEffect(() => {
     const handleAddService = () => {
         if (
             !currentService.particulars ||
-            (currentService.included === "yes" &&
+            (currentService.included === "no" &&
                 (!currentService.amount || !currentService.taxType))
         ) {
-            alert("Please fill in all required fields (amount and tax when included)");
+            alert("Please fill in all required fields (amount and tax for extra services)");
             return;
         }
 
@@ -1856,12 +1956,12 @@ useEffect(() => {
         const taxRate = selectedTax ? selectedTax.rate : 0;
 
         const amount =
-            currentService.included === "yes" ? parseFloat(currentService.amount) : 0;
+            currentService.included === "no" ? parseFloat(currentService.amount) : 0;
         const taxAmount = amount * (taxRate / 100) || 0;
 
         const newService = {
             ...currentService,
-            id: Date.now(),
+            id: editingServiceId || Date.now(),
             amount: amount,
             taxRate,
             taxAmount,
@@ -1869,7 +1969,14 @@ useEffect(() => {
             taxLabel: selectedTax ? selectedTax.label : "Non",
         };
 
-        setServices((prev) => [...prev, newService]);
+        setServices((prev) =>
+            editingServiceId
+                ? prev.map((service) =>
+                      service.id === editingServiceId ? newService : service
+                  )
+                : [...prev, newService]
+        );
+        setEditingServiceId(null);
         setCurrentService({
             included: "no",
             particulars: "",
@@ -1879,6 +1986,7 @@ useEffect(() => {
     };
 
     const handleClearService = () => {
+        setEditingServiceId(null);
         setCurrentService({
             included: "no",
             particulars: "",
@@ -1887,8 +1995,25 @@ useEffect(() => {
         });
     };
 
+    const handleEditService = (serviceId) => {
+        const row = services.find((service) => service.id === serviceId);
+        if (!row) return;
+        setEditingServiceId(serviceId);
+        setCurrentService({
+            included: String(row.included || "no").toLowerCase() === "yes" ? "yes" : "no",
+            particulars: row.particulars || "",
+            amount: row.included === "no" ? String(row.amount ?? "") : "",
+            taxType:
+                row.taxType ||
+                (row.taxRate === 5 ? "gst5" : row.taxRate === 18 ? "gst18" : "non"),
+        });
+    };
+
     const handleRemoveService = (id) => {
         setServices((prev) => prev.filter((service) => service.id !== id));
+        if (editingServiceId === id) {
+            handleClearService();
+        }
     };
 
     const handleSaveServices = async () => {
@@ -2678,16 +2803,30 @@ useEffect(() => {
                                     >
                                         Finalized Vendors
                                     </Typography>
+                                    <Box sx={{ mb: 1.5 }}>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={<Edit />}
+                                            onClick={() => setOpenBankDialog(true)}
+                                        >
+                                            Edit Vendors
+                                        </Button>
+                                    </Box>
 
                                     {finalizedVendors.length ? (
                                         <Box display="flex" gap={1} flexWrap="wrap">
-                                            {finalizedVendors.map((name) => (
+                                            {finalizedVendors.map((vendor) => (
                                                 <Chip
-                                                    key={name}
+                                                    key={vendor.name}
                                                     size="small"
                                                     color="success"
                                                     variant="outlined"
-                                                    label={name}
+                                                    label={
+                                                        vendor.amount != null
+                                                            ? `${vendor.name} (₹ ${Number(vendor.amount).toLocaleString("en-IN")})`
+                                                            : vendor.name
+                                                    }
                                                 />
                                             ))}
                                         </Box>
@@ -3297,10 +3436,12 @@ useEffect(() => {
                 accountType={accountType}
                 setAccountType={setAccountType}
                 accountName={accountName}
-                setAccountName={accountName}
+                setAccountName={setAccountName}
                 accountOptions={accountOptions}
                 onAddBankOpen={handleAddBankOpen}
                 onConfirm={handleBankConfirm}
+                initialVendorDetails={quotation?.finalizedVendorDetails}
+                initialFinalizedVendorsWithAmounts={quotation?.finalizedVendorsWithAmounts}
             />
             <AddBankDialog
                 open={openAddBankDialog}
@@ -3377,8 +3518,10 @@ useEffect(() => {
                 onAddService={handleAddService}
                 onClearService={handleClearService}
                 onRemoveService={handleRemoveService}
+                onEditService={handleEditService}
                 onSaveServices={handleSaveServices}
                 taxOptions={taxOptions}
+                isEditingService={Boolean(editingServiceId)}
             />
             <AddFlightDialog
                 open={openAddFlight}

@@ -330,10 +330,12 @@ const QuotationPDFDialog = ({
   const destinationSummary = getValue(quotationData, "destinationSummary");
   const reference = getValue(quotationData, "reference");
   const date = getValue(quotationData, "date");
+  const packageCalculations = getRawValue(quotationData, "packageCalculations") || {};
 
   const pricingTotal = getRawValue(quotationData, "pricing.total");
   const pricingDiscount = getValue(quotationData, "pricing.discount");
   const pricingGst = getValue(quotationData, "pricing.gst");
+  const arrivalDateRaw = getRawValue(quotationData, "arrivalDate");
 
   const toNumber = (value) => {
     if (value === null || value === undefined) return null;
@@ -371,6 +373,38 @@ const QuotationPDFDialog = ({
   const standardTotal = toNumber(totalCostRow?.standard);
   const deluxeTotal = toNumber(totalCostRow?.deluxe);
   const superiorTotal = toNumber(totalCostRow?.superior);
+  const discountAmount = toNumber(pricingDiscount) || 0;
+  const gstAmount = toNumber(pricingGst) || 0;
+  const parsedArrivalDate = arrivalDateRaw ? new Date(arrivalDateRaw) : null;
+  const canUseArrivalDate =
+    parsedArrivalDate instanceof Date &&
+    !Number.isNaN(parsedArrivalDate.getTime());
+  const arrivalDateDisplay = canUseArrivalDate
+    ? parsedArrivalDate.toLocaleDateString("en-IN")
+    : "";
+  const standardAfterDiscount = toNumber(packageCalculations?.standard?.afterDiscount);
+  const deluxeAfterDiscount = toNumber(packageCalculations?.deluxe?.afterDiscount);
+  const superiorAfterDiscount = toNumber(packageCalculations?.superior?.afterDiscount);
+  const standardGst = toNumber(packageCalculations?.standard?.gstAmount) || 0;
+  const deluxeGst = toNumber(packageCalculations?.deluxe?.gstAmount) || 0;
+  const superiorGst = toNumber(packageCalculations?.superior?.gstAmount) || 0;
+  const standardFinalTotal = toNumber(packageCalculations?.standard?.finalTotal);
+  const deluxeFinalTotal = toNumber(packageCalculations?.deluxe?.finalTotal);
+  const superiorFinalTotal = toNumber(packageCalculations?.superior?.finalTotal);
+  const getItineraryDisplayDate = (day, dayIndex) => {
+    if (canUseArrivalDate) {
+      const d = new Date(parsedArrivalDate);
+      d.setDate(d.getDate() + dayIndex);
+      return d.toLocaleDateString("en-IN");
+    }
+    if (day?.dayDate && day.dayDate !== "N/A") return day.dayDate;
+    if (day?.date && day.date !== "N/A") return day.date;
+    return "";
+  };
+  const stripDayPrefix = (title = "") =>
+    String(title)
+      .replace(/^\s*day\s*[\d]+\s*[:.-]?\s*/i, "")
+      .trim();
 
   const logoUrl =
     selectedCompany?.logo ||
@@ -426,6 +460,23 @@ const QuotationPDFDialog = ({
   ];
 
   const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
+  const additionalServices = Array.isArray(
+    getRawValue(quotationData, "additionalServices"),
+  )
+    ? getRawValue(quotationData, "additionalServices")
+    : [];
+  const additionalServiceLines = additionalServices
+    .map((s) => {
+      const particulars = String(s?.particulars || "").trim();
+      if (!particulars) return "";
+      const included = String(s?.included || "").toLowerCase() === "yes";
+      const total = toNumber(s?.totalAmount);
+      if (included) {
+        return `${particulars}: Included`;
+      }
+      return `${particulars}: INR ${(Number.isFinite(total) ? total : 0).toLocaleString("en-IN")}`;
+    })
+    .filter(Boolean);
   const policiesCancellationPolicy = getValue(
     quotationData,
     "policies.cancellationPolicy",
@@ -493,6 +544,10 @@ const QuotationPDFDialog = ({
     globalPolicyDefaults.inclusions?.length > 0
       ? globalPolicyDefaults.inclusions
       : fallbackInclusions;
+  const finalInclusionArrayWithServices = [
+    ...finalInclusionArray,
+    ...additionalServiceLines,
+  ];
   const finalExclusionArray = exclusionArray.filter((item) =>
     String(item || "").trim(),
   );
@@ -710,7 +765,7 @@ const QuotationPDFDialog = ({
         if (i === pageElements.length - 1) {
           if (termsLinkPosition) {
             const termsUrl =
-              ompanyTermsUrl !== "#"
+              companyTermsUrl !== "#"
                 ? companyTermsUrl
                 : "https://www.iconicyatra.com";
             pdf.link(
@@ -837,8 +892,10 @@ const QuotationPDFDialog = ({
   }
 
   // Render individual day card with full content
-  const renderDayCard = (day, globalIndex) => (
-    <div
+  const renderDayCard = (day, globalIndex) => {
+    const dayDisplayDate = getItineraryDisplayDate(day, globalIndex);
+    const cleanTitle = stripDayPrefix(day.title || "");
+    return <div
       key={globalIndex}
       style={{ marginBottom: "25px", pageBreakInside: "avoid" }}
     >
@@ -875,10 +932,10 @@ const QuotationPDFDialog = ({
             <div
               style={{ fontWeight: "bold", color: "#667eea", fontSize: "18px" }}
             >
-              Day {globalIndex + 1}: {day.title || `Day ${globalIndex + 1}`}
+              Day {globalIndex + 1}
+              {cleanTitle ? `: ${cleanTitle}` : ""}
             </div>
-            {(day.date || day.dayDate) &&
-              (day.date !== "N/A" || day.dayDate !== "N/A") && (
+            {Boolean(dayDisplayDate) && (
                 <span
                   style={{
                     background: "#667eea",
@@ -889,7 +946,7 @@ const QuotationPDFDialog = ({
                     fontWeight: "bold",
                   }}
                 >
-                  {day.dayDate || day.date}
+                  {dayDisplayDate}
                 </span>
               )}
           </div>
@@ -951,8 +1008,8 @@ const QuotationPDFDialog = ({
           )}
         </div>
       </div>
-    </div>
-  );
+    </div>;
+  };
 
   // PAGE 1: Company Logo, Ref, Quotation Name, Banner, Customer Details, Pickup, Accommodation
   const Page1 = () => (
@@ -1014,6 +1071,11 @@ const QuotationPDFDialog = ({
           )}
           {date && date !== "N/A" && (
             <div style={{ fontSize: "12px", color: "#555" }}>Date: {date}</div>
+          )}
+          {arrivalDateDisplay && (
+            <div style={{ fontSize: "12px", color: "#555" }}>
+              Arrival Date: {arrivalDateDisplay}
+            </div>
           )}
         </div>
       </div>
@@ -1379,33 +1441,104 @@ const QuotationPDFDialog = ({
             <tbody>
               {visiblePackageColumns > 1 ? (
                 <>
-                  {showStandardCol && standardTotal > 0 && (
+                  {showStandardCol &&
+                    (standardAfterDiscount > 0 || standardTotal > 0) && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Standard)
+                        Grand Total (After Discount) - Standard
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
-                        {formatCurrency(standardTotal)}
+                        {formatCurrency(standardAfterDiscount || standardTotal)}
                       </td>
                     </tr>
                   )}
-                  {showDeluxeCol && deluxeTotal > 0 && (
+                  {showStandardCol && standardGst > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                      <td style={{ padding: "12px" }}>
-                        Total Package Cost (Deluxe)
-                      </td>
+                      <td style={{ padding: "12px" }}>GST - Standard</td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
-                        {formatCurrency(deluxeTotal)}
+                        {formatCurrency(standardGst)}
                       </td>
                     </tr>
                   )}
-                  {showSuperiorCol && superiorTotal > 0 && (
+                  {showStandardCol &&
+                    (standardFinalTotal > 0 || standardTotal > 0) && (
+                    <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
+                      <td style={{ padding: "12px" }}>Grand Total - Standard</td>
+                      <td
+                        style={{
+                          padding: "12px",
+                          textAlign: "right",
+                          color: "#667eea",
+                        }}
+                      >
+                        {formatCurrency(standardFinalTotal || standardTotal)}
+                      </td>
+                    </tr>
+                  )}
+                  {showDeluxeCol &&
+                    (deluxeAfterDiscount > 0 || deluxeTotal > 0) && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Superior)
+                        Grand Total (After Discount) - Deluxe
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
-                        {formatCurrency(superiorTotal)}
+                        {formatCurrency(deluxeAfterDiscount || deluxeTotal)}
+                      </td>
+                    </tr>
+                  )}
+                  {showDeluxeCol && deluxeGst > 0 && (
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>GST - Deluxe</td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(deluxeGst)}
+                      </td>
+                    </tr>
+                  )}
+                  {showDeluxeCol && (deluxeFinalTotal > 0 || deluxeTotal > 0) && (
+                    <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
+                      <td style={{ padding: "12px" }}>Grand Total - Deluxe</td>
+                      <td
+                        style={{
+                          padding: "12px",
+                          textAlign: "right",
+                          color: "#667eea",
+                        }}
+                      >
+                        {formatCurrency(deluxeFinalTotal || deluxeTotal)}
+                      </td>
+                    </tr>
+                  )}
+                  {showSuperiorCol &&
+                    (superiorAfterDiscount > 0 || superiorTotal > 0) && (
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>
+                        Grand Total (After Discount) - Superior
+                      </td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(superiorAfterDiscount || superiorTotal)}
+                      </td>
+                    </tr>
+                  )}
+                  {showSuperiorCol && superiorGst > 0 && (
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>GST - Superior</td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(superiorGst)}
+                      </td>
+                    </tr>
+                  )}
+                  {showSuperiorCol &&
+                    (superiorFinalTotal > 0 || superiorTotal > 0) && (
+                    <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
+                      <td style={{ padding: "12px" }}>Grand Total - Superior</td>
+                      <td
+                        style={{
+                          padding: "12px",
+                          textAlign: "right",
+                          color: "#667eea",
+                        }}
+                      >
+                        {formatCurrency(superiorFinalTotal || superiorTotal)}
                       </td>
                     </tr>
                   )}
@@ -1420,11 +1553,7 @@ const QuotationPDFDialog = ({
                   </tr>
                 )
               )}
-              {visiblePackageColumns <= 1 &&
-                pricingDiscount &&
-                pricingDiscount !== "N/A" &&
-                pricingDiscount !== "₹ 0" &&
-                pricingDiscount !== 0 && (
+              {discountAmount > 0 && (
                   <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                     <td style={{ padding: "12px" }}>Discount</td>
                     <td
@@ -1434,27 +1563,21 @@ const QuotationPDFDialog = ({
                         color: "#2e7d32",
                       }}
                     >
-                      -{formatCurrency(pricingDiscount)}
+                      -{formatCurrency(discountAmount)}
                     </td>
                   </tr>
                 )}
-              {visiblePackageColumns <= 1 &&
-                pricingGst &&
-                pricingGst !== "N/A" &&
-                pricingGst !== "₹ 0" &&
-                pricingGst !== 0 && (
+              {gstAmount > 0 && (
                   <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                     <td style={{ padding: "12px" }}>GST</td>
                     <td style={{ padding: "12px", textAlign: "right" }}>
-                      {formatCurrency(pricingGst)}
+                      {formatCurrency(gstAmount)}
                     </td>
                   </tr>
                 )}
               {visiblePackageColumns <= 1 && (
                 <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
-                  <td style={{ padding: "14px", fontSize: "16px" }}>
-                    Grand Total
-                  </td>
+                  <td style={{ padding: "14px", fontSize: "16px" }}>Grand Total</td>
                   <td
                     style={{
                       padding: "14px",
@@ -1541,7 +1664,7 @@ const QuotationPDFDialog = ({
         </div>
       )}
       {/* Inclusion Policy Section */}
-      {finalInclusionArray.length > 0 && (
+      {finalInclusionArrayWithServices.length > 0 && (
         <div>
           <div
             style={{
@@ -1563,7 +1686,7 @@ const QuotationPDFDialog = ({
               borderLeft: "4px solid #2e7d32",
             }}
           >
-            {finalInclusionArray.map(
+            {finalInclusionArrayWithServices.map(
               (item, idx) =>
                 item &&
                 item !== "" && (

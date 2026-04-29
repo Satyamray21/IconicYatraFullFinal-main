@@ -15,7 +15,7 @@ import { useNavigate } from "react-router-dom";
 const EditProfile = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
-    const { user, loading } = useSelector((state) => state.profile);
+    const { user, loading, error } = useSelector((state) => state.profile);
 
     const [formData, setFormData] = useState({
         fullName: "",
@@ -35,10 +35,8 @@ const EditProfile = () => {
     const [previewImg, setPreviewImg] = useState("");
 
     useEffect(() => {
-        const storedUser = JSON.parse(localStorage.getItem("user"));
-        if (storedUser?.userId) {
-            dispatch(fetchProfile(storedUser.userId));
-        }
+        const token = localStorage.getItem("token");
+        if (token) dispatch(fetchProfile());
     }, [dispatch]);
 
     useEffect(() => {
@@ -94,7 +92,7 @@ const EditProfile = () => {
             data.append("profileImg", formData.profileImg);
         }
 
-        dispatch(updateProfile({ userId: user.userId, formData: data }))
+        dispatch(updateProfile({ formData: data }))
             .unwrap()
             .then((updatedUser) => {
                 setPreviewImg(updatedUser.profileImg);
@@ -104,10 +102,27 @@ const EditProfile = () => {
     };
 
 
-    if (loading || !user) return <CircularProgress />;
+    if (loading && !user) {
+        return <CircularProgress sx={{ display: "block", mx: "auto", mt: 4 }} />;
+    }
+
+    if (!user) {
+        return (
+            <Box sx={{ p: 4, maxWidth: 800, mx: "auto" }}>
+                <Typography color="error">
+                    {error || "Could not load profile. Check login or API base URL (e.g. /api/v1)."}
+                </Typography>
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ p: 4, maxWidth: 800, mx: "auto" }}>
+            {error && (
+                <Typography color="warning.main" sx={{ mb: 2 }}>
+                    {error} (showing last saved details)
+                </Typography>
+            )}
             <Typography variant="h5" fontWeight="bold" mb={3}>
                 Edit Profile
             </Typography>

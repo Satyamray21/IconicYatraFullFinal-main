@@ -442,6 +442,21 @@ const QuotationPDFDialog = ({
   ];
 
   const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
+  const additionalServices = Array.isArray(
+    getRawValue(quotationData, "additionalServices"),
+  )
+    ? getRawValue(quotationData, "additionalServices")
+    : [];
+  const additionalServiceLines = additionalServices
+    .map((s) => {
+      const particulars = String(s?.particulars || "").trim();
+      if (!particulars) return "";
+      const included = String(s?.included || "").toLowerCase() === "yes";
+      const total = toNumber(s?.totalAmount);
+      if (included) return `${particulars}: Included`;
+      return `${particulars}: INR ${(Number.isFinite(total) ? total : 0).toLocaleString("en-IN")}`;
+    })
+    .filter(Boolean);
   const policiesCancellationPolicy = getValue(
     quotationData,
     "policies.cancellationPolicy",
@@ -582,14 +597,18 @@ const QuotationPDFDialog = ({
   const globalCancellationArray =
     typeof globalPolicyDefaults.cancellationPolicy === "string"
       ? globalPolicyDefaults.cancellationPolicy
-          .split("\n")
-          .filter((s) => s.trim())
+        .split("\n")
+        .filter((s) => s.trim())
       : [];
 
   const finalInclusionArray =
     globalPolicyDefaults.inclusions?.length > 0
       ? globalPolicyDefaults.inclusions
       : fallbackInclusions;
+  const finalInclusionArrayWithServices = [
+    ...finalInclusionArray,
+    ...additionalServiceLines,
+  ];
   const finalExclusionArray = exclusionArray.filter((item) =>
     String(item || "").trim(),
   );
@@ -1232,14 +1251,14 @@ const QuotationPDFDialog = ({
           </div>
           {pickupArrival && pickupArrival !== "N/A" ? (
             <div style={{ fontSize: "14px", marginBottom: "8px" }}>
-              🛬 Arrival: {pickupArrival}
+              🛬 Arrival: {String(pickupArrival).replace(/^arrival\s*:\s*/i, "")}
             </div>
           ) : (
             <div style={{ fontSize: "14px", color: "#999" }}>Not specified</div>
           )}
           {pickupDeparture && pickupDeparture !== "N/A" ? (
             <div style={{ fontSize: "14px" }}>
-              🛫 Departure: {pickupDeparture}
+              🛫 Departure: {String(pickupDeparture).replace(/^departure\s*:\s*/i, "")}
             </div>
           ) : (
             <div style={{ fontSize: "14px", color: "#999" }}>
@@ -1403,36 +1422,41 @@ const QuotationPDFDialog = ({
                 </tr>
               </thead>
               <tbody>
-                {hotelPricingData.map((row, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>
-                      {(() => {
-                        const txt = String(row?.destination || "-").trim();
-                        return txt
-                          ? txt.charAt(0).toUpperCase() + txt.slice(1)
-                          : "-";
-                      })()}
-                    </td>
-                    <td style={{ padding: "12px" }}>
-                      {getNightsCellValue(row)}
-                    </td>
-                    {showStandardCol && (
+                {hotelPricingData
+                  .filter(
+                    (row) =>
+                      !isTransportationCostRow(row) &&
+                      !isHotelCostRow(row)
+                  ).map((row, idx) => (
+                    <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        {renderHotelCellValue(row, "standard")}
+                        {(() => {
+                          const txt = String(row?.destination || "-").trim();
+                          return txt
+                            ? txt.charAt(0).toUpperCase() + txt.slice(1)
+                            : "-";
+                        })()}
                       </td>
-                    )}
-                    {showDeluxeCol && (
                       <td style={{ padding: "12px" }}>
-                        {renderHotelCellValue(row, "deluxe")}
+                        {getNightsCellValue(row)}
                       </td>
-                    )}
-                    {showSuperiorCol && (
-                      <td style={{ padding: "12px" }}>
-                        {renderHotelCellValue(row, "superior")}
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                      {showStandardCol && (
+                        <td style={{ padding: "12px" }}>
+                          {renderHotelCellValue(row, "standard")}
+                        </td>
+                      )}
+                      {showDeluxeCol && (
+                        <td style={{ padding: "12px" }}>
+                          {renderHotelCellValue(row, "deluxe")}
+                        </td>
+                      )}
+                      {showSuperiorCol && (
+                        <td style={{ padding: "12px" }}>
+                          {renderHotelCellValue(row, "superior")}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -1494,7 +1518,7 @@ const QuotationPDFDialog = ({
                   {showStandardCol && standardTotal > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Standard)
+                        Package Cost (Standard)
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(standardTotal)}
@@ -1504,7 +1528,7 @@ const QuotationPDFDialog = ({
                   {showDeluxeCol && deluxeTotal > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Deluxe)
+                        Package Cost (Deluxe)
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(deluxeTotal)}
@@ -1514,7 +1538,7 @@ const QuotationPDFDialog = ({
                   {showSuperiorCol && superiorTotal > 0 && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Total Package Cost (Superior)
+                        Package Cost (Superior)
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(superiorTotal)}
@@ -1525,43 +1549,13 @@ const QuotationPDFDialog = ({
               ) : (
                 effectiveTotal > 0 && (
                   <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>Total Package Cost</td>
+                    <td style={{ padding: "12px" }}>Package Cost</td>
                     <td style={{ padding: "12px", textAlign: "right" }}>
                       {formatCurrency(effectiveTotal)}
                     </td>
                   </tr>
                 )
               )}
-              {visiblePackageColumns <= 1 &&
-                pricingDiscount &&
-                pricingDiscount !== "N/A" &&
-                pricingDiscount !== "₹ 0" &&
-                pricingDiscount !== 0 && (
-                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>Discount</td>
-                    <td
-                      style={{
-                        padding: "12px",
-                        textAlign: "right",
-                        color: "#2e7d32",
-                      }}
-                    >
-                      -{formatCurrency(pricingDiscount)}
-                    </td>
-                  </tr>
-                )}
-              {visiblePackageColumns <= 1 &&
-                pricingGst &&
-                pricingGst !== "N/A" &&
-                pricingGst !== "₹ 0" &&
-                pricingGst !== 0 && (
-                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>GST</td>
-                    <td style={{ padding: "12px", textAlign: "right" }}>
-                      {formatCurrency(pricingGst)}
-                    </td>
-                  </tr>
-                )}
               {visiblePackageColumns <= 1 && (
                 <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
                   <td style={{ padding: "14px", fontSize: "16px" }}>
@@ -1656,7 +1650,7 @@ const QuotationPDFDialog = ({
       )}
 
       {/* Inclusion Policy Section */}
-      {finalInclusionArray.length > 0 && (
+      {finalInclusionArrayWithServices.length > 0 && (
         <div>
           <div
             style={{
@@ -1678,7 +1672,7 @@ const QuotationPDFDialog = ({
               borderLeft: "4px solid #2e7d32",
             }}
           >
-            {finalInclusionArray.map(
+            {finalInclusionArrayWithServices.map(
               (item, idx) =>
                 item &&
                 item !== "" && (

@@ -634,13 +634,28 @@ const loadEmailMeta = async (company) => {
 
 export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
-  const { finalizedPackage } = req.body || {};
+  const { finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts } = req.body || {};
 
-  if (!FINAL_PACKAGES.includes(finalizedPackage)) {
-    throw new ApiError(
-      400,
-      "finalizedPackage must be Standard, Deluxe, or Superior",
+  // Support both single and multiple packages
+  let packagesToFinalize = [];
+  
+  if (Array.isArray(finalizedPackages) && finalizedPackages.length > 0) {
+    // Multiple packages - validate each
+    packagesToFinalize = finalizedPackages.filter(pkg => 
+      pkg && String(pkg).trim() && FINAL_PACKAGES.includes(String(pkg).trim())
     );
+    if (packagesToFinalize.length === 0) {
+      throw new ApiError(400, "At least one valid package required (Standard, Deluxe, or Superior)");
+    }
+  } else if (finalizedPackage && String(finalizedPackage).trim()) {
+    // Single package (backward compatibility)
+    const pkg = String(finalizedPackage).trim();
+    if (!FINAL_PACKAGES.includes(pkg)) {
+      throw new ApiError(400, `Invalid package: ${pkg}. Must be Standard, Deluxe, or Superior`);
+    }
+    packagesToFinalize = [pkg];
+  } else {
+    throw new ApiError(400, "finalizedPackage(s) must be Standard, Deluxe, or Superior");
   }
 
   const quotation = await CustomQuotation.findOne({ quotationId });
@@ -649,8 +664,20 @@ export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
   }
 
   quotation.finalizeStatus = "finalized";
-  quotation.finalizedPackage = finalizedPackage;
+  quotation.finalizedPackage = packagesToFinalize[0]; // Keep for backward compatibility
+  quotation.finalizedPackages = packagesToFinalize; // New field for multiple packages
   quotation.finalizedAt = new Date();
+
+  // Store vendor details with amounts if provided
+  if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {
+    quotation.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts.map(vendor => ({
+      vendorName: vendor.vendorName || "",
+      vendorType: vendor.vendorType || "Other",
+      amount: Number(vendor.amount) || 0,
+      remarks: vendor.remarks || "",
+    }));
+  }
+
   await quotation.save();
 
   return res
@@ -795,21 +822,23 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
         }
       : null;
 
-  try {
-    await transporter.sendMail({
-      from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
-      to,
-      cc: cc && cc.length ? cc : undefined,
-      replyTo: selectedCompany?.email || auth.user,
-      subject: finalSubject,
-      html: body,
-      text: body.replace(/<[^>]*>/g, ""), // fallback
-      attachments: providedPdfAttachment ? [providedPdfAttachment] : [],
-    });
-  } catch (error) {
-    console.error("Mail Error:", error);
-    throw new ApiError(500, "Failed to send email");
-  }
+    const isBooking = String(type || "").trim().toLowerCase() === "booking";
+
+    try {
+      await transporter.sendMail({
+        from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+        to,
+        cc: cc && cc.length ? cc : undefined,
+        replyTo: selectedCompany?.email || auth.user,
+        subject: finalSubject,
+        html: body,
+        text: body.replace(/<[^>]*>/g, ""), // fallback
+        attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
+      });
+    } catch (error) {
+      console.error("Mail Error:", error);
+      throw new ApiError(500, "Failed to send email");
+    }
 
   return res.status(200).json(
     new ApiResponse(

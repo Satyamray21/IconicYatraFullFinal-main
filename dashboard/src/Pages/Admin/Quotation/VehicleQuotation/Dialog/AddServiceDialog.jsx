@@ -25,7 +25,7 @@ import {
   TableBody,
   IconButton,
 } from "@mui/material";
-import { Add, Delete } from "@mui/icons-material";
+import { Add, Delete, Edit } from "@mui/icons-material";
 
 const AddServiceDialog = ({
   open,
@@ -36,11 +36,16 @@ const AddServiceDialog = ({
   onAddService,
   onClearService,
   onRemoveService,
+  onEditService,
   onSaveServices,
   taxOptions,
+  isEditingService = false,
 }) => {
   const calculateTotalAmount = () => {
-    return services.reduce((total, service) => total + service.totalAmount, 0);
+    return services.reduce((total, service) => {
+      if (String(service?.included || "").toLowerCase() !== "no") return total;
+      return total + (Number(service?.totalAmount) || 0);
+    }, 0);
   };
 
   return (
@@ -60,8 +65,16 @@ const AddServiceDialog = ({
               value={currentService.included}
               onChange={(e) => onServiceChange("included", e.target.value)}
             >
-              <FormControlLabel value="yes" control={<Radio />} label="Yes" />
-              <FormControlLabel value="no" control={<Radio />} label="No" />
+              <FormControlLabel
+                value="yes"
+                control={<Radio />}
+                label="Yes (no extra charge)"
+              />
+              <FormControlLabel
+                value="no"
+                control={<Radio />}
+                label="No (add as extra)"
+              />
             </RadioGroup>
           </FormControl>
 
@@ -81,12 +94,7 @@ const AddServiceDialog = ({
               value={currentService.amount}
               onChange={(e) => onServiceChange("amount", e.target.value)}
               margin="normal"
-              disabled={currentService.included === "no"}
-              placeholder={
-                currentService.included === "no"
-                  ? "Not included in quotation"
-                  : ""
-              }
+              placeholder="Enter service amount"
             />
             <FormControl fullWidth margin="normal">
               <InputLabel>*Tax %</InputLabel>
@@ -129,17 +137,26 @@ const AddServiceDialog = ({
                         </TableCell>
                         <TableCell>{service.particulars}</TableCell>
                         <TableCell align="right">
-                          {service.included === "no" ? "Excluded" : `₹${service.amount}`}
+                          {service.included === "yes"
+                            ? "Included"
+                            : `₹${service.amount}`}
                         </TableCell>
                         <TableCell align="right">
                           {service.taxLabel}
                         </TableCell>
                         <TableCell align="right">
-                          {service.included === "no"
-                            ? "Excluded"
+                          {service.included === "yes"
+                            ? "Included"
                             : `₹${service.totalAmount.toFixed(2)}`}
                         </TableCell>
                         <TableCell>
+                          <IconButton
+                            size="small"
+                            onClick={() => onEditService?.(service.id)}
+                            color="primary"
+                          >
+                            <Edit fontSize="small" />
+                          </IconButton>
                           <IconButton
                             size="small"
                             onClick={() => onRemoveService(service.id)}
@@ -171,7 +188,7 @@ const AddServiceDialog = ({
           variant="outlined"
           startIcon={<Add />}
         >
-          Add More
+          {isEditingService ? "Update Service" : "Add More"}
         </Button>
         <Button
           onClick={onClearService}

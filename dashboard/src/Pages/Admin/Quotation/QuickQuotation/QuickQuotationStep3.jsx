@@ -37,10 +37,10 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
   const clientAccommodation = clientTourDetails?.accommodation || {};
   const clientDestination = String(
     clientTourDetails?.tourDestination ||
-      clientDetails?.tourDestination ||
-      clientDetails?.clientLocation ||
-      clientDetails?.sector ||
-      "",
+    clientDetails?.tourDestination ||
+    clientDetails?.clientLocation ||
+    clientDetails?.sector ||
+    "",
   )
     .trim()
     .toLowerCase();
@@ -180,9 +180,9 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
       setFieldValue(
         "noOfRooms",
         Number(clientAccommodation?.noOfRooms) ||
-          Number(clientDetails?.noOfRooms) ||
-          Number(selectedPkg.numberOfRooms) ||
-          1,
+        Number(clientDetails?.noOfRooms) ||
+        Number(selectedPkg.numberOfRooms) ||
+        1,
       );
 
       // Costing from package
@@ -192,7 +192,7 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
       const transportationCost =
         Number(selectedPkg.transportationTotalCost) ||
         (Number(selectedPkg.transportationCostPerDay) || 0) *
-          (Number(selectedPkg.transportationDays) || 0);
+        (Number(selectedPkg.transportationDays) || 0);
       const hotelCost = Number(selectedPkg.hotelTotalCost) || 0;
       const totalCost = Number(selectedPkg.totalCost) || standardCost || 0;
 

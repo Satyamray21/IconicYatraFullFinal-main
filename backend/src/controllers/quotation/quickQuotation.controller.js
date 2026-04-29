@@ -794,6 +794,8 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
     auth: { user: auth.user, pass: auth.pass },
   });
 
+  const isBooking = String(type || "").trim().toLowerCase() === "booking";
+  const shouldAttachPdf = !isBooking;
   const providedPdfAttachment =
     pdfAttachment &&
     typeof pdfAttachment === "object" &&
@@ -810,7 +812,8 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
       : null;
 
   try {
-    const generatedPdfAttachment = providedPdfAttachment
+    const generatedPdfAttachment =
+      !shouldAttachPdf || providedPdfAttachment
       ? null
       : await buildPdfAttachment({
           subject: finalSubject,
@@ -825,9 +828,9 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
       subject: finalSubject,
       html: body,
       text: body.replace(/<[^>]*>/g, ""),
-      attachments: [providedPdfAttachment || generatedPdfAttachment].filter(
-        Boolean,
-      ),
+      attachments: shouldAttachPdf
+        ? [providedPdfAttachment || generatedPdfAttachment].filter(Boolean)
+        : [],
     });
   } catch (error) {
     console.error("Quick QT mail error:", error);
@@ -853,7 +856,7 @@ export const finalizeQuickQuotation = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const mongoId = await resolveQuickQuotationMongoId(id);
   if (!mongoId) throw new ApiError(404, "Quotation not found");
-  const { finalizedPackage } = req.body || {};
+  const { finalizedPackage, finalizedVendorsWithAmounts } = req.body || {};
   const quotation = await QuickQuotation.findById(mongoId);
   if (!quotation) throw new ApiError(404, "Quotation not found");
 
@@ -861,6 +864,19 @@ export const finalizeQuickQuotation = asyncHandler(async (req, res) => {
   quotation.finalizedAt = new Date();
   if (finalizedPackage != null && String(finalizedPackage).trim()) {
     quotation.finalizedPackage = String(finalizedPackage).trim();
+  }
+  if (
+    Array.isArray(finalizedVendorsWithAmounts) &&
+    finalizedVendorsWithAmounts.length > 0
+  ) {
+    quotation.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts.map(
+      (vendor) => ({
+        vendorName: vendor.vendorName || "",
+        vendorType: vendor.vendorType || "Other",
+        amount: Number(vendor.amount) || 0,
+        remarks: vendor.remarks || "",
+      }),
+    );
   }
   await quotation.save();
 
