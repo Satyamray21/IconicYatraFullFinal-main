@@ -29,10 +29,14 @@ const GlassCard = ({ children, sx }) => (
   <Card
     sx={{
       borderRadius: 4,
-      background: "rgba(255, 255, 255, 0.05)",
-      backdropFilter: "blur(20px)",
-      border: "1px solid rgba(255, 255, 255, 0.1)",
-      boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.2)",
+      background: "#ffffff",
+      border: "1px solid #e2e8f0",
+      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+      transition: "all 0.3s ease",
+      "&:hover": {
+        boxShadow: "0 4px 12px rgba(25, 118, 210, 0.1)",
+        borderColor: "#1976d2",
+      },
       ...sx,
     }}
   >
@@ -50,6 +54,14 @@ const StaffPermissionPage = () => {
   const [staff, setStaff] = useState(staffData || null);
   const [loading, setLoading] = useState(!staffData);
   const [error, setError] = useState(null);
+
+  // Color constants
+  const primaryBlue = "#1976d2";
+  const lightBlue = "#f5f9ff";
+  const textColor = "#1a202c";
+  const subTextColor = "#64748b";
+  const borderColor = "#e2e8f0";
+  const hoverBlue = "#1565c0";
 
   // Fetch staff profile when not passed via navigation state
   useEffect(() => {
@@ -77,10 +89,10 @@ const StaffPermissionPage = () => {
         alignItems="center"
         minHeight="100vh"
         sx={{
-          background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+          bgcolor: "#ffffff",
         }}
       >
-        <CircularProgress color="primary" />
+        <CircularProgress sx={{ color: primaryBlue }} />
       </Box>
     );
   }
@@ -89,9 +101,8 @@ const StaffPermissionPage = () => {
     <Box
       sx={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+        bgcolor: "#ffffff",
         py: 4,
-        color: "#fff"
       }}
     >
       <Container maxWidth="lg">
@@ -101,16 +112,20 @@ const StaffPermissionPage = () => {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Breadcrumbs sx={{ mb: 2, "& .MuiBreadcrumbs-separator": { color: "rgba(255,255,255,0.3)" } }}>
+          <Breadcrumbs sx={{ mb: 2 }}>
             <Link
               component="button"
               variant="body2"
               onClick={() => navigate("/admin/staff")}
-              sx={{ color: alpha("#fff", 0.7), textDecoration: "none", "&:hover": { color: "#fff" } }}
+              sx={{
+                color: subTextColor,
+                textDecoration: "none",
+                "&:hover": { color: primaryBlue }
+              }}
             >
               Staff Management
             </Link>
-            <Typography variant="body2" color="#fff">
+            <Typography variant="body2" sx={{ color: textColor }}>
               Access & Permissions
             </Typography>
           </Breadcrumbs>
@@ -120,9 +135,12 @@ const StaffPermissionPage = () => {
             onClick={() => navigate(-1)}
             sx={{
               mb: 4,
-              color: "#fff",
-              borderColor: "rgba(255,255,255,0.2)",
-              "&:hover": { borderColor: "#fff", background: "rgba(255,255,255,0.05)" }
+              color: primaryBlue,
+              borderColor: borderColor,
+              "&:hover": {
+                borderColor: primaryBlue,
+                bgcolor: alpha(primaryBlue, 0.04)
+              }
             }}
             variant="outlined"
           >
@@ -134,7 +152,13 @@ const StaffPermissionPage = () => {
         {error && (
           <Alert
             severity="error"
-            sx={{ mb: 3, background: "rgba(211, 47, 47, 0.1)", color: "#ff8a80", border: "1px solid rgba(211, 47, 47, 0.3)" }}
+            sx={{
+              mb: 3,
+              bgcolor: alpha("#d32f2f", 0.04),
+              color: "#d32f2f",
+              borderRadius: 2,
+              border: `1px solid ${alpha("#d32f2f", 0.2)}`
+            }}
             onClose={() => setError(null)}
           >
             {error}
@@ -152,7 +176,7 @@ const StaffPermissionPage = () => {
               sx={{
                 mb: 4,
                 p: 3,
-                background: "linear-gradient(145deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%)",
+                background: lightBlue,
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
@@ -160,57 +184,57 @@ const StaffPermissionPage = () => {
                   sx={{
                     width: 80,
                     height: 80,
-                    background: "linear-gradient(45deg, #3b82f6, #2563eb)",
-                    boxShadow: "0 4px 14px 0 rgba(37, 99, 235, 0.39)"
+                    background: `linear-gradient(135deg, ${primaryBlue}, ${hoverBlue})`,
+                    boxShadow: `0 4px 14px 0 ${alpha(primaryBlue, 0.3)}`
                   }}
                 >
                   <PersonIcon sx={{ fontSize: 40 }} />
                 </Avatar>
                 <Box sx={{ flex: 1 }}>
-                  <Box display="flex" alignItems="center" gap={1.5}>
-                    <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: "-0.5px" }}>
+                  <Box display="flex" alignItems="center" gap={1.5} flexWrap="wrap">
+                    <Typography variant="h4" fontWeight={800} sx={{ color: textColor, letterSpacing: "-0.5px" }}>
                       {staff.personalDetails?.fullName}
                     </Typography>
                     <Chip
                       label={staff.personalDetails?.userRole || "Staff"}
                       size="small"
                       sx={{
-                        background: "rgba(59, 130, 246, 0.2)",
-                        color: "#60a5fa",
+                        bgcolor: alpha(primaryBlue, 0.1),
+                        color: primaryBlue,
                         fontWeight: 600,
-                        border: "1px solid rgba(59, 130, 246, 0.3)"
+                        border: `1px solid ${alpha(primaryBlue, 0.3)}`
                       }}
                     />
                   </Box>
                   <Box sx={{ display: "flex", gap: 4, mt: 2, flexWrap: "wrap" }}>
                     <Box>
-                      <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.5)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>
+                      <Typography variant="caption" sx={{ color: subTextColor, textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>
                         Staff ID
                       </Typography>
-                      <Typography variant="body1" fontWeight={600}>
+                      <Typography variant="body1" fontWeight={600} sx={{ color: textColor }}>
                         {staff.staffId}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.5)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>
+                      <Typography variant="caption" sx={{ color: subTextColor, textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>
                         Email Address
                       </Typography>
-                      <Typography variant="body1" fontWeight={600}>
+                      <Typography variant="body1" fontWeight={600} sx={{ color: textColor }}>
                         {staff.personalDetails?.email}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.5)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>
+                      <Typography variant="caption" sx={{ color: subTextColor, textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>
                         Contact
                       </Typography>
-                      <Typography variant="body1" fontWeight={600}>
+                      <Typography variant="body1" fontWeight={600} sx={{ color: textColor }}>
                         {staff.personalDetails?.phone}
                       </Typography>
                     </Box>
                   </Box>
                 </Box>
                 <Box>
-                  <ShieldIcon sx={{ fontSize: 60, color: "rgba(255,255,255,0.1)" }} />
+                  <ShieldIcon sx={{ fontSize: 60, color: alpha(primaryBlue, 0.1) }} />
                 </Box>
               </Box>
             </GlassCard>
@@ -223,9 +247,9 @@ const StaffPermissionPage = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <GlassCard>
+          <GlassCard sx={{ overflow: "hidden" }}>
             <CardContent sx={{ p: 0 }}>
-              <StaffAccessPermission staffId={staffId} staffData={staff} isDark={true} />
+              <StaffAccessPermission staffId={staffId} staffData={staff} isDark={false} />
             </CardContent>
           </GlassCard>
         </motion.div>
@@ -237,7 +261,7 @@ const StaffPermissionPage = () => {
           transition={{ duration: 1, delay: 0.5 }}
         >
           <Box sx={{ mt: 4, textAlign: "center" }}>
-            <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.4)" }}>
+            <Typography variant="body2" sx={{ color: subTextColor }}>
               Admin Privilege Control System v2.0 • Secured by Iconic Yatra Infrastructure
             </Typography>
           </Box>

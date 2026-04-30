@@ -2,6 +2,7 @@ import Package from "../models/package.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { logActivity } from "../utils/ActivityLog.js";
+import { getCache, setCache, clearPattern } from "../utils/cache.js";
 
 // ----------------------
 // Improved Helpers
@@ -419,6 +420,12 @@ export const createPackage = asyncHandler(async (req, res) => {
             user: req.user?.name || "System",
         });
 
+        // Invalidate caches
+        await Promise.all([
+            clearPattern('packages:*'),
+            clearPattern('dashboard:stats:*')
+        ]);
+
         return res.status(201).json({
             message: "Package created successfully",
             package: responseData
@@ -534,6 +541,12 @@ export const updateStep1 = asyncHandler(async (req, res) => {
         user: req.user?.name || "System",
     });
 
+    // Invalidate caches
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
+
     const responseData = normalizePackageUrls(updated.toObject());
     res.json(responseData);
 });
@@ -575,6 +588,12 @@ export const updateTourDetails = asyncHandler(async (req, res) => {
         new: true,
         runValidators: true
     });
+
+    // Invalidate caches
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
 
     const responseData = normalizePackageUrls(updated.toObject());
     res.json(responseData);
@@ -664,7 +683,16 @@ export const uploadDayImage = asyncHandler(async (req, res) => {
 // GET BY ID (IMPROVED)
 // ----------------------
 export const getById = asyncHandler(async (req, res) => {
-    const doc = await Package.findById(req.params.id);
+    const { id } = req.params;
+    const cacheKey = `packages:id:${id}`;
+
+    const cachedData = await getCache(cacheKey);
+    if (cachedData) {
+        console.log(`[Cache] Package by ID fetched from Redis: ${cacheKey}`);
+        return res.json({ fromCache: true, ...cachedData });
+    }
+
+    const doc = await Package.findById(id);
     if (!doc) {
         return res.status(404).json({ message: "Package not found" });
     }
@@ -673,7 +701,10 @@ export const getById = asyncHandler(async (req, res) => {
     packageData.status = calculateStatus(packageData.validFrom, packageData.validTill);
 
     const responseData = normalizePackageUrls(packageData);
-    res.json(responseData);
+    
+    await setCache(cacheKey, responseData, 604800);
+    console.log(`[DB] Package by ID fetched from MongoDB: ${cacheKey}`);
+    res.json({ fromCache: false, ...responseData });
 });
 
 // ----------------------
@@ -681,6 +712,14 @@ export const getById = asyncHandler(async (req, res) => {
 // ----------------------
 export const listPackages = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, tourType, search, status } = req.query;
+    const cacheKey = `packages:list:${page}:${limit}:${tourType || 'all'}:${search || 'none'}:${status || 'all'}`;
+
+    const cachedData = await getCache(cacheKey);
+    if (cachedData) {
+        console.log(`[Cache] Package list fetched from Redis: ${cacheKey}`);
+        return res.json({ fromCache: true, ...cachedData });
+    }
+
     const query = {};
 
     // ✅ UPDATED: Build query with new tour types
@@ -716,13 +755,17 @@ export const listPackages = asyncHandler(async (req, res) => {
         return normalizePackageUrls(packageData);
     });
 
-    res.json({
+    const response = {
         items: responseItems,
         total,
         page: Number(page),
         limit: limitNum,
         totalPages: Math.ceil(total / limitNum)
-    });
+    };
+
+    await setCache(cacheKey, response, 3600);
+    console.log(`[DB] Package list fetched from MongoDB: ${cacheKey}`);
+    res.json({ fromCache: false, ...response });
 });
 
 // ----------------------
@@ -731,7 +774,14 @@ export const listPackages = asyncHandler(async (req, res) => {
 export const getPackagesByTourType = async (req, res) => {
   try {
     const { tourType } = req.params;
-    const { page = 1, limit = 9, status = "active" } = req.query; // Default to active only
+    const { page = 1, limit = 9, status = "active" } = req.query;
+    const cacheKey = `packages:tourType:${tourType}:${page}:${limit}:${status}`;
+
+    const cachedData = await getCache(cacheKey);
+    if (cachedData) {
+        console.log(`[Cache] Packages by tour type fetched from Redis: ${cacheKey}`);
+        return res.json({ fromCache: true, ...cachedData });
+    }
 
     const formattedTourType =
       tourType.toLowerCase() === "domestic"
@@ -757,7 +807,7 @@ export const getPackagesByTourType = async (req, res) => {
 
     const totalPackages = await Package.countDocuments(filter);
 
-    res.json({
+    const response = {
       packages,
       totalPackages,
       totalPages: Math.ceil(totalPackages / limit),
@@ -766,7 +816,11 @@ export const getPackagesByTourType = async (req, res) => {
         tourType: formattedTourType,
         status: status || "all"
       }
-    });
+    };
+
+    await setCache(cacheKey, response, 604800);
+    console.log(`[DB] Packages by tour type fetched from MongoDB: ${cacheKey}`);
+    res.json({ fromCache: false, ...response });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -781,7 +835,14 @@ export const getPackagesByCategory = async (req, res) => {
     const { packageCategory } = req.params;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const { status = "active" } = req.query; // Default to active only
+    const { status = "active" } = req.query;
+    const cacheKey = `packages:category:${packageCategory}:${page}:${limit}:${status}`;
+
+    const cachedData = await getCache(cacheKey);
+    if (cachedData) {
+        console.log(`[Cache] Packages by category fetched from Redis: ${cacheKey}`);
+        return res.status(200).json({ fromCache: true, ...cachedData });
+    }
 
     const skip = (page - 1) * limit;
 
@@ -811,7 +872,7 @@ export const getPackagesByCategory = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
-    res.status(200).json({
+    const response = {
       success: true,
       totalPackages,
       currentPage: page,
@@ -821,7 +882,11 @@ export const getPackagesByCategory = async (req, res) => {
         status: status || "all"
       },
       packages
-    });
+    };
+
+    await setCache(cacheKey, response, 604800);
+    console.log(`[DB] Packages by category fetched from MongoDB: ${cacheKey}`);
+    res.status(200).json({ fromCache: false, ...response });
 
   } catch (error) {
     res.status(500).json({
@@ -840,6 +905,12 @@ export const getPackagesByCategory = async (req, res) => {
 export const remove = asyncHandler(async (req, res) => {
     const doc = await Package.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ message: "Package not found" });
+
+    // Invalidate caches
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
 
     res.json({ message: "Deleted", id: doc._id });
 });

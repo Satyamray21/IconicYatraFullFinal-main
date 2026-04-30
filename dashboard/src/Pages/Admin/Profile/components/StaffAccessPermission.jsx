@@ -64,10 +64,13 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Style constants
-  const textColor = isDark ? "#fff" : "inherit";
-  const subTextColor = isDark ? "rgba(255,255,255,0.6)" : "text.secondary";
-  const borderColor = isDark ? "rgba(255,255,255,0.1)" : "divider";
+  // Style constants - White and Primary Blue combination
+  const textColor = "#1a202c";
+  const subTextColor = "#64748b";
+  const borderColor = "#e2e8f0";
+  const primaryBlue = "#1976d2";
+  const lightBlue = "#f0f7ff";
+  const hoverBlue = "#1565c0";
 
   // Fetch permission modules
   useEffect(() => {
@@ -252,7 +255,7 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
   }
 
   return (
-    <Box sx={{ color: textColor }}>
+    <Box sx={{ color: textColor, bgcolor: "#ffffff", minHeight: "100vh" }}>
       {/* Messages */}
       <AnimatePresence>
         {successMessage && (
@@ -273,12 +276,12 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
 
       <Box sx={{ p: 3 }}>
         {needsPermissionSetup && (
-          <Card sx={{ mb: 3, background: "rgba(59, 130, 246, 0.05)", border: "1px solid rgba(59, 130, 246, 0.2)", borderRadius: 3 }}>
+          <Card sx={{ mb: 3, background: lightBlue, border: `1px solid ${primaryBlue}20`, borderRadius: 3 }}>
             <CardContent>
               <Box display="flex" gap={2} alignItems="flex-start">
-                <SecurityIcon sx={{ color: "#3b82f6", mt: 0.5 }} />
+                <SecurityIcon sx={{ color: primaryBlue, mt: 0.5 }} />
                 <Box>
-                  <Typography variant="h6" fontWeight={700} gutterBottom>Initial Account Setup</Typography>
+                  <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: textColor }}>Initial Account Setup</Typography>
                   <Typography variant="body2" color={subTextColor} sx={{ mb: 2 }}>
                     This staff member doesn't have a dashboard account yet. Select a base role to generate their login credentials and default permissions.
                   </Typography>
@@ -290,18 +293,33 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
                         onClick={() => handleRoleChange(role)}
                         disabled={loading}
                         size="small"
-                        sx={{ borderRadius: 2, px: 3 }}
+                        sx={{
+                          borderRadius: 2,
+                          px: 3,
+                          bgcolor: selectedRole === role ? primaryBlue : "transparent",
+                          borderColor: selectedRole === role ? primaryBlue : borderColor,
+                          color: selectedRole === role ? "#fff" : textColor,
+                          "&:hover": {
+                            bgcolor: selectedRole === role ? hoverBlue : alpha(primaryBlue, 0.04),
+                            borderColor: primaryBlue,
+                          }
+                        }}
                       >
                         {role}
                       </Button>
                     ))}
                     <Button
                       variant="contained"
-                      color="success"
                       onClick={handleCreateStaffPermission}
                       disabled={loading}
                       startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <LockIcon />}
-                      sx={{ borderRadius: 2, px: 3, boxShadow: "0 4px 12px rgba(16, 185, 129, 0.2)" }}
+                      sx={{
+                        borderRadius: 2,
+                        px: 3,
+                        bgcolor: "#10b981",
+                        boxShadow: `0 4px 12px ${alpha("#10b981", 0.2)}`,
+                        "&:hover": { bgcolor: "#059669" }
+                      }}
                     >
                       Initialize Access
                     </Button>
@@ -314,11 +332,11 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
 
         {/* Status & Creds Summary Card */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={7}>
-            <Card sx={{ height: "100%", background: isDark ? "rgba(255,255,255,0.03)" : "#fff", border: `1px solid ${borderColor}`, borderRadius: 3 }}>
+          <Grid size={{ xs: 12, md: 7 }}>
+            <Card sx={{ height: "100%", bgcolor: "#ffffff", border: `1px solid ${borderColor}`, borderRadius: 3, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                  <Typography variant="subtitle1" fontWeight={700}>Account Status</Typography>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ color: textColor }}>Account Status</Typography>
                   <Chip
                     label={permissions?.status || "Pending"}
                     color={permissions?.status === "Active" ? "success" : "warning"}
@@ -327,10 +345,10 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
                   />
                 </Box>
                 <Grid container spacing={2}>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color={subTextColor}>Username</Typography>
                     <Box display="flex" alignItems="center">
-                      <Typography variant="body1" fontWeight={600}>{permissions?.credentials?.username || "Not set"}</Typography>
+                      <Typography variant="body1" fontWeight={600} sx={{ color: textColor }}>{permissions?.credentials?.username || "Not set"}</Typography>
                       {permissions?.credentials?.username && (
                         <IconButton size="small" onClick={() => copyToClipboard(permissions.credentials.username)}>
                           <ContentCopyIcon fontSize="inherit" sx={{ color: subTextColor }} />
@@ -338,18 +356,18 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
                       )}
                     </Box>
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color={subTextColor}>Assigned Role</Typography>
-                    <Typography variant="body1" fontWeight={600} sx={{ color: "#3b82f6" }}>{permissions?.role || "—"}</Typography>
+                    <Typography variant="body1" fontWeight={600} sx={{ color: primaryBlue }}>{permissions?.role || "—"}</Typography>
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={{ xs: 12 }}>
                     <Box display="flex" gap={1} mt={1}>
                       <Button
                         size="small"
                         startIcon={<HistoryIcon />}
                         onClick={handleViewLoginHistory}
                         disabled={needsPermissionSetup}
-                        sx={{ color: subTextColor }}
+                        sx={{ color: textColor }}
                       >
                         Login Logs
                       </Button>
@@ -368,11 +386,11 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={5}>
-            <Card sx={{ height: "100%", background: "linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.1) 100%)", border: `1px solid ${borderColor}`, borderRadius: 3 }}>
+          <Grid size={{ xs: 12, md: 5 }}>
+            <Card sx={{ height: "100%", background: `linear-gradient(135deg, ${alpha(primaryBlue, 0.03)} 0%, ${alpha(primaryBlue, 0.08)} 100%)`, border: `1px solid ${borderColor}`, borderRadius: 3 }}>
               <CardContent sx={{ textAlign: "center", py: 4 }}>
-                <RefreshIcon sx={{ fontSize: 40, color: "#3b82f6", mb: 1.5 }} />
-                <Typography variant="subtitle1" fontWeight={700}>Security Reset</Typography>
+                <RefreshIcon sx={{ fontSize: 40, color: primaryBlue, mb: 1.5 }} />
+                <Typography variant="subtitle1" fontWeight={700} sx={{ color: textColor }}>Security Reset</Typography>
                 <Typography variant="body2" color={subTextColor} sx={{ mb: 2.5 }}>
                   Force generate new login credentials and temporary password for this staff.
                 </Typography>
@@ -380,7 +398,7 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
                   variant="contained"
                   onClick={handleGenerateCredentials}
                   disabled={loading || needsPermissionSetup}
-                  sx={{ borderRadius: 2, background: "#3b82f6", "&:hover": { background: "#2563eb" } }}
+                  sx={{ borderRadius: 2, bgcolor: primaryBlue, "&:hover": { bgcolor: hoverBlue } }}
                 >
                   Reset Credentials
                 </Button>
@@ -394,14 +412,14 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
           <Box>
             <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 2, px: 1 }}>
               <Box>
-                <Typography variant="h6" fontWeight={700}>Access Matrix</Typography>
+                <Typography variant="h6" fontWeight={700} sx={{ color: textColor }}>Access Matrix</Typography>
                 <Typography variant="body2" color={subTextColor}>Configure which modules and actions this user can access.</Typography>
               </Box>
               <Button
                 variant="contained"
                 onClick={() => setPermissionsDialog(true)}
                 startIcon={<EditIcon />}
-                sx={{ borderRadius: 2, background: alpha("#3b82f6", 0.9), "&:hover": { background: "#3b82f6" } }}
+                sx={{ borderRadius: 2, bgcolor: primaryBlue, "&:hover": { bgcolor: hoverBlue } }}
               >
                 Modify Permissions
               </Button>
@@ -413,18 +431,18 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
                 const totalCount = module.permissions.length;
 
                 return (
-                  <Grid item xs={12} sm={6} lg={4} key={module.name}>
+                  <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={module.name}>
                     <Card sx={{
                       height: "100%",
-                      background: isDark ? "rgba(255,255,255,0.02)" : "#fff",
-                      border: `1px solid ${activeCount > 0 ? alpha("#3b82f6", 0.3) : borderColor}`,
+                      bgcolor: "#ffffff",
+                      border: `1px solid ${activeCount > 0 ? alpha(primaryBlue, 0.3) : borderColor}`,
                       borderRadius: 3,
                       transition: "all 0.3s ease",
-                      "&:hover": { borderColor: alpha("#3b82f6", 0.5), transform: "translateY(-4px)" }
+                      "&:hover": { borderColor: alpha(primaryBlue, 0.5), transform: "translateY(-4px)", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }
                     }}>
                       <CardContent sx={{ p: 2 }}>
                         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
-                          <Typography variant="subtitle2" fontWeight={700}>{module.name}</Typography>
+                          <Typography variant="subtitle2" fontWeight={700} sx={{ color: textColor }}>{module.name}</Typography>
                           <Chip
                             label={`${activeCount}/${totalCount}`}
                             size="small"
@@ -433,8 +451,8 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
                               height: 20,
                               fontSize: "0.65rem",
                               fontWeight: 700,
-                              borderColor: activeCount > 0 ? "#3b82f6" : "rgba(255,255,255,0.1)",
-                              color: activeCount > 0 ? "#3b82f6" : subTextColor
+                              borderColor: activeCount > 0 ? primaryBlue : borderColor,
+                              color: activeCount > 0 ? primaryBlue : subTextColor
                             }}
                           />
                         </Box>
@@ -447,9 +465,9 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
                                 sx={{
                                   fontSize: "0.65rem",
                                   height: 24,
-                                  background: selectedPermissions[perm.key] ? alpha("#3b82f6", 0.15) : "transparent",
-                                  color: selectedPermissions[perm.key] ? "#60a5fa" : alpha(subTextColor, 0.5),
-                                  border: `1px solid ${selectedPermissions[perm.key] ? alpha("#3b82f6", 0.4) : alpha(borderColor, 0.5)}`,
+                                  bgcolor: selectedPermissions[perm.key] ? alpha(primaryBlue, 0.1) : "transparent",
+                                  color: selectedPermissions[perm.key] ? primaryBlue : subTextColor,
+                                  border: `1px solid ${selectedPermissions[perm.key] ? alpha(primaryBlue, 0.4) : alpha(borderColor, 0.5)}`,
                                   fontWeight: selectedPermissions[perm.key] ? 700 : 400
                                 }}
                               />
@@ -474,14 +492,14 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
         fullWidth
         PaperProps={{
           sx: {
-            background: isDark ? "#1e293b" : "#fff",
+            bgcolor: "#ffffff",
             color: textColor,
             borderRadius: 4,
             backgroundImage: "none"
           }
         }}
       >
-        <DialogTitle sx={{ p: 3, pb: 1, fontWeight: 800, fontSize: "1.5rem" }}>
+        <DialogTitle sx={{ p: 3, pb: 1, fontWeight: 800, fontSize: "1.5rem", color: textColor }}>
           Edit Access Permissions
         </DialogTitle>
         <DialogContent sx={{ p: 3, pt: 1 }}>
@@ -508,24 +526,35 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
           {modules.map((module) => (
             <Box key={module.name} sx={{ mb: 4 }}>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                <Typography variant="subtitle1" fontWeight={800}>{module.name}</Typography>
+                <Typography variant="subtitle1" fontWeight={800} sx={{ color: textColor }}>{module.name}</Typography>
                 <Box>
-                  <Button size="small" onClick={() => handleToggleModule(module.name, true)} sx={{ fontSize: "0.7rem" }}>Select All</Button>
-                  <Button size="small" onClick={() => handleToggleModule(module.name, false)} sx={{ fontSize: "0.7rem", color: "error.main" }}>Clear</Button>
+                  <Button size="small" onClick={() => handleToggleModule(module.name, true)} sx={{ fontSize: "0.7rem", color: primaryBlue }}>Select All</Button>
+                  <Button size="small" onClick={() => handleToggleModule(module.name, false)} sx={{ fontSize: "0.7rem", color: "#d32f2f" }}>Clear</Button>
                 </Box>
               </Box>
               <Grid container spacing={1}>
                 {module.permissions.map((perm) => (
-                  <Grid item xs={6} sm={4} key={perm.key}>
+                  <Grid size={{ xs: 6, sm: 4 }} key={perm.key}>
                     <FormControlLabel
                       control={
                         <Switch
                           size="small"
                           checked={selectedPermissions[perm.key] || false}
                           onChange={() => handlePermissionChange(perm.key)}
+                          sx={{
+                            '& .MuiSwitch-switchBase.Mui-checked': {
+                              color: primaryBlue,
+                              '&:hover': {
+                                backgroundColor: alpha(primaryBlue, 0.08),
+                              },
+                            },
+                            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                              backgroundColor: primaryBlue,
+                            },
+                          }}
                         />
                       }
-                      label={<Typography variant="body2">{perm.label}</Typography>}
+                      label={<Typography variant="body2" sx={{ color: textColor }}>{perm.label}</Typography>}
                     />
                   </Grid>
                 ))}
@@ -539,7 +568,7 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
             onClick={handleSavePermissions}
             variant="contained"
             disabled={loading}
-            sx={{ borderRadius: 2, px: 4 }}
+            sx={{ borderRadius: 2, px: 4, bgcolor: primaryBlue, "&:hover": { bgcolor: hoverBlue } }}
           >
             {loading ? <CircularProgress size={24} /> : "Save Changes"}
           </Button>
@@ -551,10 +580,10 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
         open={credentialsDialog}
         onClose={() => setCredentialsDialog(false)}
         PaperProps={{
-          sx: { background: isDark ? "#0f172a" : "#fff", color: textColor, borderRadius: 4, border: "1px solid #3b82f6" }
+          sx: { bgcolor: "#ffffff", color: textColor, borderRadius: 4, border: `1px solid ${primaryBlue}` }
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800 }}>New Credentials Secured</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800, color: textColor }}>New Credentials Secured</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
             These credentials will only be shown once. Share them securely with the staff member.
@@ -565,7 +594,7 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
               label="Username"
               value={credentials?.username || ""}
               variant="filled"
-              InputProps={{ readOnly: true, sx: { fontWeight: 700, color: "#3b82f6" } }}
+              InputProps={{ readOnly: true, sx: { fontWeight: 700, color: primaryBlue } }}
               sx={{ mb: 2 }}
             />
             <TextField
@@ -596,13 +625,13 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
               element.setAttribute("download", `staff_creds_${credentials?.username}.txt`);
               element.click();
             }}
-            sx={{ borderRadius: 2, py: 1.5 }}
+            sx={{ borderRadius: 2, py: 1.5, bgcolor: primaryBlue, "&:hover": { bgcolor: hoverBlue } }}
           >
             Download Credential PDF/Txt
           </Button>
         </DialogContent>
         <DialogActions sx={{ pb: 3, px: 3 }}>
-          <Button onClick={() => setCredentialsDialog(false)} variant="outlined" fullWidth sx={{ borderRadius: 2 }}>Got it</Button>
+          <Button onClick={() => setCredentialsDialog(false)} variant="outlined" fullWidth sx={{ borderRadius: 2, borderColor: borderColor, color: textColor }}>Got it</Button>
         </DialogActions>
       </Dialog>
 
@@ -613,18 +642,18 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
         maxWidth="md"
         fullWidth
         PaperProps={{
-          sx: { background: isDark ? "#1e293b" : "#fff", color: textColor, borderRadius: 4 }
+          sx: { bgcolor: "#ffffff", color: textColor, borderRadius: 4 }
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800 }}>Access Logs: {permissions?.credentials?.username}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800, color: textColor }}>Access Logs: {permissions?.credentials?.username}</DialogTitle>
         <DialogContent>
-          <TableContainer component={Paper} sx={{ background: "transparent", border: `1px solid ${borderColor}`, borderRadius: 2 }}>
+          <TableContainer component={Paper} sx={{ background: "transparent", border: `1px solid ${borderColor}`, borderRadius: 2, boxShadow: "none" }}>
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ background: alpha(borderColor, 0.5) }}>
-                  <TableCell sx={{ color: subTextColor, fontWeight: 700 }}>Timestamp</TableCell>
-                  <TableCell sx={{ color: subTextColor, fontWeight: 700 }}>Result</TableCell>
-                  <TableCell sx={{ color: subTextColor, fontWeight: 700 }}>IP / Location</TableCell>
+                <TableRow sx={{ bgcolor: alpha(borderColor, 0.3) }}>
+                  <TableCell sx={{ color: textColor, fontWeight: 700 }}>Timestamp</TableCell>
+                  <TableCell sx={{ color: textColor, fontWeight: 700 }}>Result</TableCell>
+                  <TableCell sx={{ color: textColor, fontWeight: 700 }}>IP / Location</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -651,7 +680,7 @@ const StaffAccessPermission = ({ staffId, staffData, isDark = false }) => {
           </TableContainer>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setLoginHistoryDialog(false)}>Close Logs</Button>
+          <Button onClick={() => setLoginHistoryDialog(false)} sx={{ color: primaryBlue }}>Close Logs</Button>
         </DialogActions>
       </Dialog>
     </Box>
