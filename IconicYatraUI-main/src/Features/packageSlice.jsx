@@ -158,6 +158,7 @@ const packageSlice = createSlice({
     totalPages: 1,
     page: 1,
     limit: 9,
+    currentSector: "All",
   },
 
   reducers: {
@@ -180,6 +181,10 @@ const packageSlice = createSlice({
       state.latest = [];
       state.popular = [];
       state.page = 1;
+      state.currentSector = "All";
+    },
+    setCurrentSector: (state, action) => {
+      state.currentSector = action.payload;
     },
   },
 
@@ -260,9 +265,17 @@ const packageSlice = createSlice({
       })
 
       // Single package
+      .addCase(fetchPackageById.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(fetchPackageById.fulfilled, (state, action) => {
         state.loading = false;
         state.selected = action.payload || null;
+      })
+      .addCase(fetchPackageById.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       })
 
       // Dynamic tour type
@@ -279,6 +292,7 @@ export const {
   clearError,
   setLoading,
   clearAllPackages,
+  setCurrentSector,
 } = packageSlice.actions;
 
 export default packageSlice.reducer;

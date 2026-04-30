@@ -16,7 +16,18 @@ import Hotel from '../models/hotel.model.js';
 import { Reminder } from '../models/Reminder.model.js';
 import { startOfMonth, endOfMonth, subMonths, format, startOfDay, endOfDay } from 'date-fns';
 
+import { getCache, setCache } from '../utils/cache.js';
+
 export const getDashboardStats = asyncHandler(async (req, res) => {
+  const { activityDate } = req.query;
+  const cacheKey = `dashboard:stats:${activityDate || 'all'}`;
+
+  // Try to get from cache
+  const cachedData = await getCache(cacheKey);
+  if (cachedData) {
+    return res.status(200).json(new ApiResponse(200, cachedData, "Dashboard stats fetched from cache"));
+  }
+
   // 1. Lead Stats
   const leadStats = await Lead.aggregate([
     {
@@ -57,7 +68,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   // 3. Tour/Package Stats
   const packages = await Package.find({}, 'status validFrom validTill');
   const today = new Date();
-  
+
   const tourStats = {
     total: packages.length,
     active: 0,
@@ -88,7 +99,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   for (let i = 5; i >= 0; i--) {
     const monthStart = startOfMonth(subMonths(today, i));
     const monthEnd = endOfMonth(subMonths(today, i));
-    
+
     const revenue = invoices
       .filter(inv => {
         const date = new Date(inv.createdAt);
@@ -103,7 +114,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   }
 
   // 6. Activities (Recent or Date-filtered)
-  const { activityDate } = req.query;
   let activityFilter = {};
   let activityLimit = 10;
 
@@ -153,6 +163,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     },
     reminders
   };
+
+  // Cache the results for 5 minutes
+  await setCache(cacheKey, stats, 300);
 
   return res.status(200).json(new ApiResponse(200, stats, "Dashboard stats fetched successfully"));
 });

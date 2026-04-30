@@ -41,6 +41,8 @@ import {
   fetchInternationalCities,
   fetchCountries,
   fetchStatesByCountry,
+  fetchAllIndianCities as fetchAllIndianCitiesAction,
+  fetchAllCitiesByCountry,
 } from "../../../../features/location/locationSlice";
 import {
   getLeadOptions,
@@ -632,59 +634,14 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   // Pure India ki saari cities fetch karne ka function
   const fetchAllIndianCities = async () => {
     try {
-      console.log("Fetching all Indian states...");
-
-      // Pehle saari states fetch karo
-      await dispatch(fetchStatesByCountry("India")).unwrap();
-
-      // Har state ki cities fetch karo aur combine karo
-      const allStates = states.length > 0 ? states : await getIndianStates();
-      console.log("Indian states:", allStates);
-
-      const allCities = [];
-
-      // Har state ke liye cities fetch karo
-      for (const state of allStates) {
-        try {
-          const stateName = state.name || state;
-          console.log(`Fetching cities for state: ${stateName}`);
-
-          const citiesData = await dispatch(
-            fetchDomesticCities(stateName),
-          ).unwrap();
-          const stateCities = citiesData
-            .map((city) =>
-              typeof city === "string" ? city : city.city || city.name || city,
-            )
-            .filter(Boolean);
-
-          allCities.push(...stateCities);
-          console.log(`Found ${stateCities.length} cities in ${stateName}`);
-        } catch (error) {
-          console.warn(
-            `Failed to fetch cities for state ${state.name}:`,
-            error,
-          );
-        }
-      }
-
-      console.log("Total Indian cities fetched:", allCities.length);
-      setAllIndianCities(allCities);
+      console.log("Fetching all Indian cities via single optimized request...");
+      const citiesData = await dispatch(fetchAllIndianCitiesAction()).unwrap();
+      setAllIndianCities(citiesData || []);
     } catch (error) {
       console.error("Failed to fetch all Indian cities:", error);
     }
   };
 
-  // Agar states empty hain toh manually fetch karo
-  const getIndianStates = async () => {
-    try {
-      const { data } = await axios.get(`countryStateAndCity/states/India`);
-      return data.states || [];
-    } catch (error) {
-      console.error("Failed to fetch Indian states:", error);
-      return [];
-    }
-  };
 
   // ✅ Available cities filter - Domestic mein pure India ki cities, International mein selected country ki cities
   const getAvailableCities = () => {
@@ -717,7 +674,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
       if (!hasSearch) {
         // When no search, show limited cities + Add New at top
-        const limitedCities = allAvailableCities.slice(0, 30);
+        const limitedCities = allAvailableCities.slice(0, 100);
         return ["__add_new", ...limitedCities];
       }
 
@@ -754,10 +711,10 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
       // Add New option at the top if no exact matches found
       if (results.length === 0 && startsWith.length === 0) {
-        return ["__add_new", ...searchResults.slice(0, 50)];
+        return ["__add_new", ...searchResults.slice(0, 200)];
       }
 
-      return [...searchResults.slice(0, 50)];
+      return [...searchResults.slice(0, 200)];
     };
   }, [options]);
 
@@ -811,11 +768,9 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
               console.error("Failed to fetch international cities:", error);
             });
         } else {
+          // Optimized: Fetch all cities of the country in one go
           dispatch(
-            fetchCitiesByState({
-              countryName: selectedCountry,
-              stateName: "all",
-            }),
+            fetchAllCitiesByCountry(selectedCountry),
           )
             .unwrap()
             .then((cities) => {
