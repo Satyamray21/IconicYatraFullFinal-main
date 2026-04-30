@@ -25,8 +25,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   // Try to get from cache
   const cachedData = await getCache(cacheKey);
   if (cachedData) {
+    console.log(`[Cache Hit] Dashboard stats fetched from Redis: ${cacheKey}`);
     return res.status(200).json(new ApiResponse(200, cachedData, "Dashboard stats fetched from cache"));
   }
+
+  console.log(`[Cache Miss] Dashboard stats fetched from MongoDB: ${cacheKey}`);
 
   // 1. Lead Stats
   const leadStats = await Lead.aggregate([
