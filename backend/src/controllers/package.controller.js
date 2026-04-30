@@ -589,11 +589,23 @@ export const updateTourDetails = asyncHandler(async (req, res) => {
         runValidators: true
     });
 
+    if (!updated) {
+        return res.status(404).json({ message: "Package not found" });
+    }
+
     // Invalidate caches
     await Promise.all([
         clearPattern('packages:*'),
         clearPattern('dashboard:stats:*')
     ]);
+
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: updated._id,
+        description: `Package "${updated.sector}" tour details updated by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
 
     const responseData = normalizePackageUrls(updated.toObject());
     res.json(responseData);
@@ -621,6 +633,14 @@ export const uploadBanner = asyncHandler(async (req, res) => {
     );
 
     if (!updated) return res.status(404).json({ message: "Package not found" });
+
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: updated._id,
+        description: `Package "${updated.sector}" banner updated by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
 
     const packageData = updated.toObject();
     res.json({
@@ -671,6 +691,14 @@ export const uploadDayImage = asyncHandler(async (req, res) => {
     pkg.days[idx].dayImage = uploadResult.secure_url;
     pkg.days[idx].dayImagePublicId = uploadResult.public_id;
     await pkg.save();
+
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: pkg._id,
+        description: `Package "${pkg.sector}" day ${idx + 1} image updated by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
 
     const packageData = pkg.toObject();
     res.json({
@@ -912,6 +940,14 @@ export const remove = asyncHandler(async (req, res) => {
         clearPattern('dashboard:stats:*')
     ]);
 
+    await logActivity({
+        action: "DELETE",
+        model: "Package",
+        refId: doc._id,
+        description: `Package "${doc.sector}" deleted by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
     res.json({ message: "Deleted", id: doc._id });
 });
 
@@ -1014,6 +1050,14 @@ export const makeAllPopular = asyncHandler(async (req, res) => {
         {},
         { $set: { isPopular: true } }
     );
+
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: "ALL",
+        description: `All packages marked as popular by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
 
     res.json({
         message: "All packages marked as popular",
