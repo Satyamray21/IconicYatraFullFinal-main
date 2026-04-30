@@ -91,7 +91,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   });
 
   // 4. Invoice & Revenue Stats
-  const invoices = await Invoice.find({}, 'totalAmount createdAt');
+  const invoices = await Invoice.find({}, 'totalAmount invoiceDate createdAt');
   const totalRevenue = invoices.reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
 
   // 5. Monthly Revenue (Last 6 months)
@@ -102,7 +102,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     const revenue = invoices
       .filter(inv => {
-        const date = new Date(inv.createdAt);
+        const date = inv.invoiceDate ? new Date(inv.invoiceDate) : new Date(inv.createdAt);
         return date >= monthStart && date <= monthEnd;
       })
       .reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
