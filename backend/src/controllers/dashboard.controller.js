@@ -115,7 +115,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
   // 6. Activities (Recent or Date-filtered)
   let activityFilter = {};
-  let activityLimit = 10;
+  let activityLimit = 50;
 
   if (activityDate) {
     const start = startOfDay(new Date(activityDate));
