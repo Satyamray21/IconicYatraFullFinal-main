@@ -2,6 +2,7 @@ import ReceivedVoucher from "../models/payment.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import Company from "../models/company.model.js";
 import { logActivity } from "../utils/ActivityLog.js";
+import { clearPattern } from "../utils/cache.js";
 
 // @desc    Create a new voucher
 export const createVoucher = asyncHandler(async (req, res) => {
@@ -93,6 +94,7 @@ const invoiceId = `${monthNames[month-1]}/${year}/${formattedNumber}`;
     message: "Voucher created successfully",
     data: voucher,
   });
+  await clearPattern('dashboard:stats:*');
 });
 
 // @desc    List vouchers linked to a quotation reference (e.g. custom quotation id)
@@ -159,6 +161,7 @@ export const updateVoucher = asyncHandler(async (req, res) => {
     });
 
     res.status(200).json({ success: true, message: "Voucher updated", data: updatedVoucher });
+    await clearPattern('dashboard:stats:*');
 });
 
 // @desc    Delete voucher
@@ -181,6 +184,7 @@ export const deleteVoucher = asyncHandler(async (req, res) => {
     }
 
     res.status(200).json({ success: true, message: "Voucher deleted" });
+    await clearPattern('dashboard:stats:*');
 });
 
 // @desc Get total payment received per company

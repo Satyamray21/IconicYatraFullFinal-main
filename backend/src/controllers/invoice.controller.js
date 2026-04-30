@@ -1,4 +1,5 @@
 import Invoice from "../models/invoice.model.js";
+import { clearPattern } from "../utils/cache.js";
 import Company from "../models/company.model.js";
 import { logActivity } from "../utils/ActivityLog.js";
 import {
@@ -36,10 +37,9 @@ export const createInvoice = async (req, res) => {
             action: "CREATE",
             model: "Invoice",
             refId: populatedInvoice.invoiceNo,
-            description: `Invoice ${populatedInvoice.invoiceNo} generated for ${populatedInvoice.personalDetails?.name || 'Client'} by ${req.user?.name || 'System'}`,
+            description: `Invoice ${populatedInvoice.invoiceNo} generated for ${populatedInvoice.billingName || 'Client'} by ${req.user?.name || 'System'}`,
             user: req.user?.name || "System",
         });
-
         res.status(201).json({
             success: true,
             message: "Invoice created successfully",
@@ -48,6 +48,8 @@ export const createInvoice = async (req, res) => {
     } catch (error) {
         console.error("Error creating invoice:", error);
         res.status(500).json({ success: false, message: error.message });
+    } finally {
+        await clearPattern('dashboard:stats:*');
     }
 };
 
@@ -107,13 +109,15 @@ export const updateInvoice = async (req, res) => {
             action: "UPDATE",
             model: "Invoice",
             refId: updated.invoiceNo,
-            description: `Invoice ${updated.invoiceNo} was updated by ${req.user?.name || 'System'}`,
+            description: `Invoice ${updated.invoiceNo} for ${updated.billingName || 'Client'} was updated by ${req.user?.name || 'System'}`,
             user: req.user?.name || "System",
         });
 
         res.json(updated);
     } catch (error) {
         res.status(400).json({ message: error.message });
+    } finally {
+        await clearPattern('dashboard:stats:*');
     }
 };
 
@@ -121,7 +125,7 @@ export const updateInvoice = async (req, res) => {
 export const deleteInvoice = async (req, res) => {
     try {
         const existing = await Invoice.findById(req.params.id)
-            .select("companyId invoiceDate")
+            .select("companyId invoiceDate invoiceNo billingName")
             .lean();
         if (!existing) return res.status(404).json({ message: "Invoice not found" });
 
@@ -130,6 +134,16 @@ export const deleteInvoice = async (req, res) => {
 
         await Invoice.findByIdAndDelete(req.params.id);
         await renumberInvoicesAfterDeleteForMonth(companyId, yearMonth);
+
+        await logActivity({
+            action: "DELETE",
+            model: "Invoice",
+            refId: existing.invoiceNo,
+            description: `Invoice ${existing.invoiceNo} for ${existing.billingName || 'Client'} deleted by ${req.user?.name || 'System'}`,
+            user: req.user?.name || "System",
+        });
+
+        await clearPattern('dashboard:stats:*');
 
         res.json({ message: "Invoice deleted successfully" });
     } catch (error) {

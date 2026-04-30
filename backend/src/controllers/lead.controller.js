@@ -222,12 +222,15 @@ export const createLead = asyncHandler(async (req, res) => {
     action: "CREATE",
     model: "Lead",
     refId: leadId,
-    description: `Lead ${leadId} was created by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+    description: `Lead ${leadId} (${personalDetails.fullName}) was created by ${req.user?.name || req.user?.staffUserId || 'System'}`,
     user: req.user?.name || req.user?.staffUserId || "System",
   });
 
-  // Clear leads cache
-  await clearPattern('leads:*');
+  // Clear leads and dashboard cache
+  await Promise.all([
+    clearPattern('leads:*'),
+    clearPattern('dashboard:stats:*')
+  ]);
 
   return res
     .status(201)
@@ -335,8 +338,17 @@ export const updateLead = asyncHandler(async (req, res) => {
     // Clear relevant caches
     await Promise.all([
       clearPattern('leads:*'),
+      clearPattern('dashboard:stats:*'),
       deleteCache(`leads:id:${leadId}`)
     ]);
+
+    await logActivity({
+      action: "UPDATE",
+      model: "Lead",
+      refId: leadId,
+      description: `Lead ${leadId} (${existingLead.personalDetails.fullName}) was updated by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+      user: req.user?.name || req.user?.staffUserId || "System",
+    });
 
     console.log("✅ Lead updated and saved successfully");
     res.status(200).json(new ApiResponse(200, existingLead, "Lead updated successfully"));
@@ -438,16 +450,17 @@ export const deleteLead = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Lead not found");
   }
   await logActivity({
-    action: "Deleted",
+    action: "DELETE",
     model: "Lead",
-    referenceId: leadId,
-    description: `Lead ${leadId} deleted by ${req.user?.name || req.user?.staffUserId || 'System'}`,
-    performedBy: req.user?.name || req.user?.staffUserId || "System",
+    refId: leadId,
+    description: `Lead ${leadId} (${deletedLead.personalDetails.fullName}) deleted by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+    user: req.user?.name || req.user?.staffUserId || "System",
   });
 
   // Clear relevant caches
   await Promise.all([
     clearPattern('leads:*'),
+    clearPattern('dashboard:stats:*'),
     deleteCache(`leads:id:${leadId}`)
   ]);
 
@@ -521,6 +534,7 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
   // Clear relevant caches
   await Promise.all([
     clearPattern('leads:*'),
+    clearPattern('dashboard:stats:*'),
     deleteCache(`leads:id:${leadId}`)
   ]);
 
@@ -528,7 +542,7 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
     action: "Status Changed",
     model: "Lead",
     refId: leadId,
-    description: `Lead ${leadId} status changed from ${currentStatus} to ${status} by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+    description: `Lead ${leadId} (${lead.personalDetails.fullName}) status changed from ${currentStatus} to ${status} by ${req.user?.name || req.user?.staffUserId || 'System'}`,
     user: req.user?.name || req.user?.staffUserId || "System",
   });
 
