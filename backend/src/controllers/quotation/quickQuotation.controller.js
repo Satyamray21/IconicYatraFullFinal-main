@@ -17,6 +17,7 @@ import PDFDocument from "pdfkit";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -207,6 +208,7 @@ export const createQuickQuotation = async (req, res) => {
       user: req.user?.name || "Admin",
     });
 
+    await clearPattern('dashboard:stats:*');
     res.status(201).json({
       message: "Quick quotation created successfully",
       quotation: newQuotation,
@@ -309,6 +311,7 @@ export const updateQuickQuotation = async (req, res) => {
       user: req.user?.name || "Admin",
     });
 
+    await clearPattern('dashboard:stats:*');
     res.status(200).json({ message: "Quotation updated", quotation: updated });
   } catch (error) {
     if (error instanceof ApiError) {
@@ -347,6 +350,7 @@ export const uploadQuickQuotationBanner = async (req, res) => {
       { new: true },
     );
 
+    await clearPattern('dashboard:stats:*');
     res
       .status(200)
       .json({ message: "Banner image uploaded", quotation: updated });
@@ -394,6 +398,16 @@ export const deleteQuickQuotation = async (req, res) => {
     const deleted = await QuickQuotation.findByIdAndDelete(mongoId);
     if (!deleted)
       return res.status(404).json({ message: "Quotation not found" });
+
+    await logActivity({
+      action: "DELETE",
+      model: "QuickQuotation",
+      refId: `QT-${mongoId.slice(-6).toUpperCase()}`,
+      description: `Quick quotation QT-${mongoId.slice(-6).toUpperCase()} (${deleted.customerName}) deleted by ${req.user?.name || 'Admin'}`,
+      user: req.user?.name || "Admin",
+    });
+
+    await clearPattern('dashboard:stats:*');
 
     res.status(200).json({ message: "Quotation deleted successfully" });
   } catch (error) {

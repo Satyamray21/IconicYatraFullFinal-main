@@ -2,6 +2,8 @@ import { HotelQuotation } from "../../models/quotation/hotelQuotation.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { clearPattern } from "../../utils/cache.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 
 // Helper to generate quotationId
 const generateQuotationId = async () => {
@@ -29,6 +31,16 @@ export const createHotelQuotation = asyncHandler(async (req, res) => {
         ...req.body,
         hotelQuotationId: quotationId,
     });
+
+    await logActivity({
+        action: "CREATE",
+        model: "HotelQuotation",
+        refId: quotationId,
+        description: `Hotel Quotation ${quotationId} (${req.body.clientDetails?.clientName || 'Guest'}) created by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
 
     return res
         .status(201)
@@ -68,6 +80,16 @@ export const deleteHotelQuotation = asyncHandler(async (req, res) => {
     if (!deleted) {
         throw new ApiError(404, "Hotel Quotation not found");
     }
+
+    await logActivity({
+        action: "DELETE",
+        model: "HotelQuotation",
+        refId: id,
+        description: `Hotel Quotation ${id} (${deleted.clientDetails?.clientName || 'Guest'}) deleted by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
 
     return res
         .status(200)

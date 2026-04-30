@@ -2,6 +2,8 @@ import { FlightQuotation } from "../../models/quotation/flightQuotation.model.js
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { clearPattern } from "../../utils/cache.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 import { Lead } from "../../models/lead.model.js"
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
@@ -92,7 +94,16 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
         leadId: lead.leadId
     });
 
+    await logActivity({
+        action: "CREATE",
+        model: "FlightQuotation",
+        refId: flightQuotationId,
+        description: `Flight Quotation ${flightQuotationId} (${clientDetails.clientName}) created by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
     // ✅ Send response with quotation + full lead info
+    await clearPattern('dashboard:stats:*');
     return res.status(201).json(
         new ApiResponse(201, {
             quotation,
@@ -185,6 +196,7 @@ export const updateFlightQuotationById = asyncHandler(async (req, res) => {
 
     if (!quotation) throw new ApiError(404, "Flight quotation not found");
 
+    await clearPattern('dashboard:stats:*');
     return res
         .status(200)
         .json(new ApiResponse(200, quotation, "Flight quotation updated successfully"));
@@ -196,6 +208,16 @@ export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
     const quotation = await FlightQuotation.findOneAndDelete({ flightQuotationId });
 
     if (!quotation) throw new ApiError(404, "Flight quotation not found");
+
+    await logActivity({
+        action: "DELETE",
+        model: "FlightQuotation",
+        refId: flightQuotationId,
+        description: `Flight Quotation ${flightQuotationId} (${quotation.clientDetails?.clientName || 'Guest'}) deleted by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
 
     return res
         .status(200)
@@ -250,6 +272,15 @@ export const confirmFlightQuotation = asyncHandler(async (req, res) => {
     quotation.status = "Confirmed";
     await quotation.save();
 
+    await logActivity({
+        action: "CONFIRM",
+        model: "FlightQuotation",
+        refId: flightQuotationId,
+        description: `Flight Quotation ${flightQuotationId} (${quotation.clientDetails?.clientName || 'Guest'}) confirmed by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
     return res.status(200).json(
         new ApiResponse(200, quotation, "Flight quotation confirmed successfully")
     );

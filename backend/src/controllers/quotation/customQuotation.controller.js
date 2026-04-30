@@ -3,6 +3,8 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../../utils/cloudinary.js";
+import { getCache, setCache, clearPattern } from "../../utils/cache.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 import mongoose from "mongoose";
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
@@ -84,6 +86,14 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
         currentStep: 1,
       });
 
+      await logActivity({
+        action: "CREATE",
+        model: "CustomQuotation",
+        refId: quotationId,
+        description: `Custom Quotation ${quotationId} (${req.body.clientDetails?.clientName || 'Guest'}) created by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+      });
+
       return res
         .status(201)
         .json(
@@ -113,6 +123,8 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
         // Some other error, throw it
         throw error;
       }
+    } finally {
+      await clearPattern('dashboard:stats:*');
     }
   }
 });
@@ -144,30 +156,9 @@ export const getCustomQuotationById = asyncHandler(async (req, res) => {
 export const updateCustomQuotation = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const updatedQuotation = await CustomQuotation.findByIdAndUpdate(
-    id,
-    { $set: req.body },
-    { new: true, runValidators: true },
-  );
-
-  if (!updatedQuotation) {
-    throw new ApiError(404, "Quotation not found");
-  }
-
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, updatedQuotation, "Quotation updated successfully"),
-    );
-});
-
-/** Partial update by business quotationId (e.g. ICYR_CQ_0001) — used from finalize / admin UI */
-export const updateCustomQuotationByQuotationId = asyncHandler(
-  async (req, res) => {
-    const { quotationId } = req.params;
-
-    const updatedQuotation = await CustomQuotation.findOneAndUpdate(
-      { quotationId },
+  try {
+    const updatedQuotation = await CustomQuotation.findByIdAndUpdate(
+      id,
       { $set: req.body },
       { new: true, runValidators: true },
     );
@@ -179,16 +170,49 @@ export const updateCustomQuotationByQuotationId = asyncHandler(
     return res
       .status(200)
       .json(
-        new ApiResponse(
-          200,
-          updatedQuotation,
-          "Quotation updated successfully",
-        ),
+        new ApiResponse(200, updatedQuotation, "Quotation updated successfully"),
       );
+  } catch (error) {
+    throw error;
+  } finally {
+    await clearPattern('dashboard:stats:*');
+  }
+});
+
+/** Partial update by business quotationId (e.g. ICYR_CQ_0001) — used from finalize / admin UI */
+export const updateCustomQuotationByQuotationId = asyncHandler(
+  async (req, res) => {
+    const { quotationId } = req.params;
+
+    try {
+
+      const updatedQuotation = await CustomQuotation.findOneAndUpdate(
+        { quotationId },
+        { $set: req.body },
+        { new: true, runValidators: true },
+      );
+
+      if (!updatedQuotation) {
+        throw new ApiError(404, "Quotation not found");
+      }
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            updatedQuotation,
+            "Quotation updated successfully",
+          ),
+        );
+    } catch (error) {
+      throw error;
+    } finally {
+      await clearPattern('dashboard:stats:*');
+    }
   },
 );
 
-// Step-wise Update
 // Step-wise Update
 export const updateQuotationStep = asyncHandler(async (req, res) => {
   console.log("🔄 ========== UPDATE STEP REQUEST START ==========");
@@ -494,8 +518,11 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error("💥 Error during quotation update:", error);
     throw error;
+  } finally {
+    await clearPattern('dashboard:stats:*');
   }
-});
+}
+);
 
 const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
 
@@ -522,9 +549,9 @@ const resolveMailAuth = (senderAccount) => {
 
   const pass = useSecondary
     ? process.env.app_pass2 ||
-      process.env.EMAIL_PASS2 ||
-      process.env.app_pass ||
-      process.env.EMAIL_PASS
+    process.env.EMAIL_PASS2 ||
+    process.env.app_pass ||
+    process.env.EMAIL_PASS
     : process.env.app_pass || process.env.EMAIL_PASS;
 
   return { user, pass };
@@ -609,8 +636,8 @@ const loadEmailMeta = async (company) => {
   const accountHolder = company?.companyName;
   const bankDetails = accountHolder
     ? await Bank.find({
-        accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
-      }).lean()
+      accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
+    }).lean()
     : [];
   const pickHttp = (v) => {
     const s = typeof v === "string" ? v.trim() : "";
@@ -636,53 +663,68 @@ export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
   const { finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts } = req.body || {};
 
-  // Support both single and multiple packages
-  let packagesToFinalize = [];
-  
-  if (Array.isArray(finalizedPackages) && finalizedPackages.length > 0) {
-    // Multiple packages - validate each
-    packagesToFinalize = finalizedPackages.filter(pkg => 
-      pkg && String(pkg).trim() && FINAL_PACKAGES.includes(String(pkg).trim())
-    );
-    if (packagesToFinalize.length === 0) {
-      throw new ApiError(400, "At least one valid package required (Standard, Deluxe, or Superior)");
+  try {
+
+    // Support both single and multiple packages
+    let packagesToFinalize = [];
+
+    if (Array.isArray(finalizedPackages) && finalizedPackages.length > 0) {
+      // Multiple packages - validate each
+      packagesToFinalize = finalizedPackages.filter(pkg =>
+        pkg && String(pkg).trim() && FINAL_PACKAGES.includes(String(pkg).trim())
+      );
+      if (packagesToFinalize.length === 0) {
+        throw new ApiError(400, "At least one valid package required (Standard, Deluxe, or Superior)");
+      }
+    } else if (finalizedPackage && String(finalizedPackage).trim()) {
+      // Single package (backward compatibility)
+      const pkg = String(finalizedPackage).trim();
+      if (!FINAL_PACKAGES.includes(pkg)) {
+        throw new ApiError(400, `Invalid package: ${pkg}. Must be Standard, Deluxe, or Superior`);
+      }
+      packagesToFinalize = [pkg];
+    } else {
+      throw new ApiError(400, "finalizedPackage(s) must be Standard, Deluxe, or Superior");
     }
-  } else if (finalizedPackage && String(finalizedPackage).trim()) {
-    // Single package (backward compatibility)
-    const pkg = String(finalizedPackage).trim();
-    if (!FINAL_PACKAGES.includes(pkg)) {
-      throw new ApiError(400, `Invalid package: ${pkg}. Must be Standard, Deluxe, or Superior`);
+
+    const quotation = await CustomQuotation.findOne({ quotationId });
+    if (!quotation) {
+      throw new ApiError(404, "Quotation not found");
     }
-    packagesToFinalize = [pkg];
-  } else {
-    throw new ApiError(400, "finalizedPackage(s) must be Standard, Deluxe, or Superior");
+
+    quotation.finalizeStatus = "finalized";
+    quotation.finalizedPackage = packagesToFinalize[0]; // Keep for backward compatibility
+    quotation.finalizedPackages = packagesToFinalize; // New field for multiple packages
+    quotation.finalizedAt = new Date();
+
+    // Store vendor details with amounts if provided
+    if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {
+      quotation.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts.map(vendor => ({
+        vendorName: vendor.vendorName || "",
+        vendorType: vendor.vendorType || "Other",
+        amount: Number(vendor.amount) || 0,
+        remarks: vendor.remarks || "",
+      }));
+    }
+
+    await quotation.save();
+
+    await logActivity({
+      action: "FINALIZE",
+      model: "CustomQuotation",
+      refId: quotationId,
+      description: `Custom Quotation ${quotationId} (${quotation.clientDetails?.clientName || 'Guest'}) finalized with ${packagesToFinalize.join(", ")} package(s) by ${req.user?.name || 'System'}`,
+      user: req.user?.name || "System",
+    });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, quotation, "Quotation finalized successfully"));
+  } catch (error) {
+    throw error;
+  } finally {
+    await clearPattern('dashboard:stats:*');
   }
-
-  const quotation = await CustomQuotation.findOne({ quotationId });
-  if (!quotation) {
-    throw new ApiError(404, "Quotation not found");
-  }
-
-  quotation.finalizeStatus = "finalized";
-  quotation.finalizedPackage = packagesToFinalize[0]; // Keep for backward compatibility
-  quotation.finalizedPackages = packagesToFinalize; // New field for multiple packages
-  quotation.finalizedAt = new Date();
-
-  // Store vendor details with amounts if provided
-  if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {
-    quotation.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts.map(vendor => ({
-      vendorName: vendor.vendorName || "",
-      vendorType: vendor.vendorType || "Other",
-      amount: Number(vendor.amount) || 0,
-      remarks: vendor.remarks || "",
-    }));
-  }
-
-  await quotation.save();
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, quotation, "Quotation finalized successfully"));
 });
 
 // Build email preview from custom quotation data
@@ -759,18 +801,18 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   const generatedBody =
     type === "booking"
       ? buildCustomQuotationBookingEmail(
+        quotation,
+        await mergeBookingEmailPayload(
           quotation,
-          await mergeBookingEmailPayload(
-            quotation,
-            meta,
-            readBookingOverridesFromRequest(req.body || {}),
-          ),
-        )
-      : buildCustomQuotationNormalEmail(
-          quotation,
-          customText.normal || {},
           meta,
-        );
+          readBookingOverridesFromRequest(req.body || {}),
+        ),
+      )
+      : buildCustomQuotationNormalEmail(
+        quotation,
+        customText.normal || {},
+        meta,
+      );
   const previewPdfBody = buildCustomQuotationPdfPreviewEmail(
     quotation,
     customText.normal || {},
@@ -809,36 +851,36 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
 
   const providedPdfAttachment =
     pdfAttachment &&
-    typeof pdfAttachment === "object" &&
-    String(pdfAttachment.contentBase64 || "").trim()
+      typeof pdfAttachment === "object" &&
+      String(pdfAttachment.contentBase64 || "").trim()
       ? {
-          filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
-          content: Buffer.from(
-            String(pdfAttachment.contentBase64).trim(),
-            "base64",
-          ),
-          contentType:
-            String(pdfAttachment.mimeType || "").trim() || "application/pdf",
-        }
+        filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+        content: Buffer.from(
+          String(pdfAttachment.contentBase64).trim(),
+          "base64",
+        ),
+        contentType:
+          String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+      }
       : null;
 
-    const isBooking = String(type || "").trim().toLowerCase() === "booking";
+  const isBooking = String(type || "").trim().toLowerCase() === "booking";
 
-    try {
-      await transporter.sendMail({
-        from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
-        to,
-        cc: cc && cc.length ? cc : undefined,
-        replyTo: selectedCompany?.email || auth.user,
-        subject: finalSubject,
-        html: body,
-        text: body.replace(/<[^>]*>/g, ""), // fallback
-        attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
-      });
-    } catch (error) {
-      console.error("Mail Error:", error);
-      throw new ApiError(500, "Failed to send email");
-    }
+  try {
+    await transporter.sendMail({
+      from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+      to,
+      cc: cc && cc.length ? cc : undefined,
+      replyTo: selectedCompany?.email || auth.user,
+      subject: finalSubject,
+      html: body,
+      text: body.replace(/<[^>]*>/g, ""), // fallback
+      attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
+    });
+  } catch (error) {
+    console.error("Mail Error:", error);
+    throw new ApiError(500, "Failed to send email");
+  }
 
   return res.status(200).json(
     new ApiResponse(
@@ -863,6 +905,16 @@ export const deleteCustomQuotation = asyncHandler(async (req, res) => {
   if (!deletedQuotation) {
     throw new ApiError(404, "Quotation not found");
   }
+
+  await logActivity({
+    action: "DELETE",
+    model: "CustomQuotation",
+    refId: deletedQuotation.quotationId,
+    description: `Custom Quotation ${deletedQuotation.quotationId} (${deletedQuotation.clientDetails?.clientName || 'Guest'}) deleted by ${req.user?.name || 'System'}`,
+    user: req.user?.name || "System",
+  });
+
+  await clearPattern('dashboard:stats:*');
 
   return res
     .status(200)
@@ -889,79 +941,86 @@ export const updatePackageCalculations = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
   const { packageCalculations, companyMargin, discount, taxes } = req.body;
 
-  const hasPkg =
-    packageCalculations &&
-    typeof packageCalculations === "object" &&
-    Object.keys(packageCalculations).length > 0;
-  const hasMargin = companyMargin && typeof companyMargin === "object";
-  const hasDiscount = discount !== undefined && discount !== null;
-  const hasTaxes = taxes && typeof taxes === "object";
+  try {
 
-  if (!hasPkg && !hasMargin && !hasDiscount && !hasTaxes) {
-    throw new ApiError(
-      400,
-      "Provide packageCalculations, companyMargin, discount, and/or taxes",
-    );
+    const hasPkg =
+      packageCalculations &&
+      typeof packageCalculations === "object" &&
+      Object.keys(packageCalculations).length > 0;
+    const hasMargin = companyMargin && typeof companyMargin === "object";
+    const hasDiscount = discount !== undefined && discount !== null;
+    const hasTaxes = taxes && typeof taxes === "object";
+
+    if (!hasPkg && !hasMargin && !hasDiscount && !hasTaxes) {
+      throw new ApiError(
+        400,
+        "Provide packageCalculations, companyMargin, discount, and/or taxes",
+      );
+    }
+
+    const quotation = await CustomQuotation.findOne({ quotationId });
+    if (!quotation) {
+      throw new ApiError(404, "Quotation not found");
+    }
+
+    if (!quotation.tourDetails.quotationDetails) {
+      quotation.tourDetails.quotationDetails = {};
+    }
+
+    if (hasPkg) {
+      quotation.tourDetails.quotationDetails.packageCalculations = {
+        ...quotation.tourDetails.quotationDetails.packageCalculations,
+        ...packageCalculations,
+        standard: {
+          ...(quotation.tourDetails.quotationDetails.packageCalculations
+            ?.standard || {}),
+          ...(packageCalculations.standard || {}),
+        },
+        deluxe: {
+          ...(quotation.tourDetails.quotationDetails.packageCalculations
+            ?.deluxe || {}),
+          ...(packageCalculations.deluxe || {}),
+        },
+        superior: {
+          ...(quotation.tourDetails.quotationDetails.packageCalculations
+            ?.superior || {}),
+          ...(packageCalculations.superior || {}),
+        },
+      };
+    }
+
+    if (hasMargin) {
+      quotation.tourDetails.quotationDetails.companyMargin = {
+        ...(quotation.tourDetails.quotationDetails.companyMargin || {}),
+        ...companyMargin,
+      };
+    }
+
+    if (hasDiscount) {
+      quotation.tourDetails.quotationDetails.discount = Number(discount) || 0;
+    }
+
+    if (hasTaxes) {
+      quotation.tourDetails.quotationDetails.taxes = {
+        ...(quotation.tourDetails.quotationDetails.taxes || {}),
+        ...taxes,
+      };
+    }
+
+    await quotation.save();
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          quotation,
+          "Package calculations updated successfully",
+        ),
+      );
+  } catch (error) {
+    throw error;
+  } finally {
+    await clearPattern('dashboard:stats:*');
   }
-
-  const quotation = await CustomQuotation.findOne({ quotationId });
-  if (!quotation) {
-    throw new ApiError(404, "Quotation not found");
-  }
-
-  if (!quotation.tourDetails.quotationDetails) {
-    quotation.tourDetails.quotationDetails = {};
-  }
-
-  if (hasPkg) {
-    quotation.tourDetails.quotationDetails.packageCalculations = {
-      ...quotation.tourDetails.quotationDetails.packageCalculations,
-      ...packageCalculations,
-      standard: {
-        ...(quotation.tourDetails.quotationDetails.packageCalculations
-          ?.standard || {}),
-        ...(packageCalculations.standard || {}),
-      },
-      deluxe: {
-        ...(quotation.tourDetails.quotationDetails.packageCalculations
-          ?.deluxe || {}),
-        ...(packageCalculations.deluxe || {}),
-      },
-      superior: {
-        ...(quotation.tourDetails.quotationDetails.packageCalculations
-          ?.superior || {}),
-        ...(packageCalculations.superior || {}),
-      },
-    };
-  }
-
-  if (hasMargin) {
-    quotation.tourDetails.quotationDetails.companyMargin = {
-      ...(quotation.tourDetails.quotationDetails.companyMargin || {}),
-      ...companyMargin,
-    };
-  }
-
-  if (hasDiscount) {
-    quotation.tourDetails.quotationDetails.discount = Number(discount) || 0;
-  }
-
-  if (hasTaxes) {
-    quotation.tourDetails.quotationDetails.taxes = {
-      ...(quotation.tourDetails.quotationDetails.taxes || {}),
-      ...taxes,
-    };
-  }
-
-  await quotation.save();
-
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        quotation,
-        "Package calculations updated successfully",
-      ),
-    );
 });
