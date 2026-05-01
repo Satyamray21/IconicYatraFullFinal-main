@@ -836,7 +836,7 @@ const FlightFinalize = () => {
                         <Typography variant="h5" color="primary" gutterBottom>
                           {formatCurrency(totalFinalFare)}
                         </Typography>
-                        {gstType === "Excluded" && (
+                        {gstType === "Excluded" && Number(gstPercentage) > 0 && (
                           <Box sx={{ mb: 1 }}>
                             <Typography variant="caption" color="text.secondary">
                               Base: {formatCurrency(baseFare)} | GST ({gstPercentage}%): {formatCurrency(gstAmount)}
@@ -857,7 +857,7 @@ const FlightFinalize = () => {
                           Total Flights: {flightData.length}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Total {gstType === "Included" ? "Fare (Incl. GST)" : "Fare"}: {formatCurrency(totalFinalFare)}
+                          Total {gstType === "Excluded" && Number(gstPercentage) > 0 ? "Fare (Incl. GST)" : "Fare"}: {formatCurrency(totalFinalFare)}
                         </Typography>
                       </Box>
                     </AccordionDetails>
@@ -990,6 +990,18 @@ const FlightFinalize = () => {
 
                             </TableRow>
                           ))}
+                          {gstType === "Excluded" && Number(gstPercentage) > 0 && (
+                            <>
+                              <TableRow>
+                                <TableCell colSpan={8} align="right" sx={{ fontWeight: "bold" }}>Base Fare</TableCell>
+                                <TableCell sx={{ fontWeight: "bold" }}>{formatCurrency(baseFare)}</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell colSpan={8} align="right" sx={{ fontWeight: "bold" }}>GST ({gstPercentage}%)</TableCell>
+                                <TableCell sx={{ fontWeight: "bold" }}>{formatCurrency(gstAmount)}</TableCell>
+                              </TableRow>
+                            </>
+                          )}
                         </TableBody>
                         <TableRow sx={{ backgroundColor: "primary.main" }}>
                           <TableCell
@@ -997,9 +1009,9 @@ const FlightFinalize = () => {
                             align="right"
                             sx={{ color: "white", fontWeight: "bold" }}
                           >
-                            Total Fare
+                            Total {gstType === "Excluded" && Number(gstPercentage) > 0 ? "Fare (Incl. GST)" : "Fare"}
                           </TableCell>
-                          <TableCell colSpan={2} sx={{ color: "white", fontWeight: "bold" }}>
+                          <TableCell sx={{ color: "white", fontWeight: "bold" }}>
                             {formatCurrency(totalFinalFare)}
                           </TableCell>
                         </TableRow>

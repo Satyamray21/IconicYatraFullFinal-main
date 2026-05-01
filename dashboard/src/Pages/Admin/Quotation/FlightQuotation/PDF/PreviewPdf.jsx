@@ -530,19 +530,33 @@ const FlightQuotationPDFDialog = ({
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
+    if (typeof dateString === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+      return dateString;
+    }
     try {
-      return new Date(dateString).toLocaleDateString();
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) return dateString;
+      // Force dd/MM/yyyy format
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
     } catch {
-      return "N/A";
+      return dateString;
     }
   };
 
   const formatTime = (timeString) => {
     if (!timeString) return "N/A";
+    if (typeof timeString === "string" && (timeString.includes("AM") || timeString.includes("PM"))) {
+      return timeString;
+    }
     try {
-      return new Date(timeString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const d = new Date(timeString);
+      if (isNaN(d.getTime())) return timeString;
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch {
-      return "N/A";
+      return timeString;
     }
   };
 
@@ -609,7 +623,7 @@ const FlightQuotationPDFDialog = ({
                 <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: "500", wordWrap: "break-word" }}>{formatCurrency(flight.fare)}</td>
               </tr>
             ))}
-            {quotationData.gstType === "Excluded" && (
+            {quotationData.gstType === "Excluded" && Number(quotationData.gstPercentage) > 0 && (
               <>
                 <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                   <td colSpan={8} style={{ padding: "10px", textAlign: "right", fontWeight: "bold" }}>Base Fare</td>
@@ -622,10 +636,12 @@ const FlightQuotationPDFDialog = ({
               </>
             )}
             <tr style={{ background: "#1976d2" }}>
-              <td colSpan={8} style={{ padding: "12px", textAlign: "right", color: "white", fontWeight: "bold" }}>
-                {quotationData.gstType === "Included" ? "Total Fare (Incl. GST)" : "Total Fare"}
+              <td colSpan={8} style={{ padding: "12px 15px", textAlign: "right", color: "white", fontWeight: "bold" }}>
+                {quotationData.gstType === "Excluded" && Number(quotationData.gstPercentage) > 0 ? "Total Fare (Incl. GST)" : "Total Fare"}
               </td>
-              <td style={{ padding: "12px", textAlign: "right", color: "white", fontWeight: "bold" }}>{formattedTotalFare}</td>
+              <td style={{ padding: "12px 10px", textAlign: "right", color: "white", fontWeight: "bold", fontSize: "1.1rem" }}>
+                {formattedTotalFare}
+              </td>
             </tr>
           </tbody>
         </table>
