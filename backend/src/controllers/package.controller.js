@@ -806,7 +806,7 @@ export const getPackagesByTourType = async (req, res) => {
     try {
         const { tourType } = req.params;
         const { page = 1, limit = 9, status = "active" } = req.query;
-        
+
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         const dateStr = now.toISOString().split('T')[0];
@@ -875,7 +875,7 @@ export const getPackagesByCategory = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const { status = "active" } = req.query;
-        
+
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         const dateStr = now.toISOString().split('T')[0];
