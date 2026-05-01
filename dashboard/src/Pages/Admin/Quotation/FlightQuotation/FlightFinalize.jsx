@@ -187,9 +187,14 @@ const FlightFinalize = () => {
   }
 
   // Handle Confirm Finalization
-  const getComputedFareTotal = (fareList = finalFareList) =>
-    (fareList || []).reduce((sum, fare) => sum + Number(fare || 0), 0);
-
+  const getComputedFareTotal = () => {
+    const base = finalFareList.reduce((sum, fare) => sum + Number(fare || 0), 0);
+    if (gstType === "Excluded") {
+      const gst = (base * Number(gstPercentage || 0)) / 100;
+      return base + gst;
+    }
+    return base;
+  };
   const handleConfirmFinalize = async () => {
     if (pnrList.some((pnr) => !pnr) || finalFareList.some((fare) => !fare)) {
       alert("Please enter PNR and Final Fare for all flights before confirming!");

@@ -81,16 +81,20 @@ const isHttpUrlString = (v) => {
   return s.length > 0 && /^https?:\/\//i.test(s);
 };
 
-const termsAndConditionsLine = (value) => {
+const termsAndConditionsLine = (value, companyTermsUrl = "https://iconictravel.in/terms") => {
   const t = normalizeTermsValue(value);
-  if (!t) return "";
-  if (!isHttpUrlString(t)) return `<p style="margin-bottom:10px;">${t}</p>`;
-  return `<p style="margin-bottom:10px;">
-    <b>As per company terms and conditions - </b>
-    <a href="${t}" target="_blank" rel="noopener noreferrer" style="color:#1976d2; font-weight:bold; word-break:break-all;">
-      View Terms & Conditions
-    </a>
-  </p>`;
+  const link = isHttpUrlString(t) ? t : companyTermsUrl;
+  
+  if (!link) return "";
+
+  return `
+    <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+    <p style="margin-bottom:10px;">
+      <b>As per company terms and conditions - </b>
+      <a href="${link}" target="_blank" rel="noopener noreferrer" style="color:#1976d2; font-weight:bold; word-break:break-all;">
+        View Terms & Conditions
+      </a>
+    </p>`;
 };
 
 const cancellationPolicyUrlLine = (url) => {
@@ -190,7 +194,8 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
       <p><b>Quotation ID:</b> ${safe(quotation?.flightQuotationId, "-")}</p>
       <p><b>Passenger:</b> ${safe(quotation?.personalDetails?.fullName, "Guest")}</p>
       <p><b>Trip Type:</b> ${safe(quotation?.tripType, "-")}</p>
-      <p><b>Total Fare(May vary on the time/date of booking):</b> INR ${INR.format(totals.total)}</p>
+      <p><b>${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? "Base Fare" : "Total Fare"}(May vary on the time/date of booking):</b> INR ${INR.format(quotation?.gstType === "Excluded" ? (quotation?.baseFare || totals.total) : totals.total)}</p>
+      ${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? `<p><b>GST (${quotation.gstPercentage}%):</b> INR ${INR.format(quotation.gstAmount)}</p><p><b>Total Fare (Incl. GST):</b> INR ${INR.format(totals.total)}</p>` : ""}
       <br/>
       <p style="color:#d32f2f; font-weight:bold;"><b>FLIGHT DETAILS:</b></p>
       ${(quotation?.flightDetails || [])
@@ -206,8 +211,7 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
       <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
       <p>${policyLines(exclusionPolicy.length ? exclusionPolicy : ["As per company exclusion policy."]).replace(/\n/g, "<br/>")}</p>
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
-      ${termsAndConditionsLine(termsandCondition)}
+      ${termsAndConditionsLine(termsandCondition, customText?.termsAndConditions)}
       <br/>
       <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
       ${cancellationPolicyUrlLine(customText?.cancellationPolicyUrl)}
@@ -241,7 +245,8 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
       <p><b>Trip Type:</b> ${safe(quotation?.tripType, "-")}</p>
       <br/>
       <p style="color:#d32f2f; font-weight:bold;">PAYMENT STATUS:</p>
-      <p><b>Package Cost:</b> INR ${INR.format(totals.total)}</p>
+      <p><b>${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? "Base Fare" : "Package Cost"}:</b> INR ${INR.format(quotation?.gstType === "Excluded" ? (quotation?.baseFare || totals.total) : totals.total)}</p>
+      ${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? `<p><b>GST (${quotation.gstPercentage}%):</b> INR ${INR.format(quotation.gstAmount)}</p><p><b>Total Package Cost (Incl. GST):</b> INR ${INR.format(totals.total)}</p>` : ""}
       <p><b>Payment received:</b> INR ${INR.format(receivedAmount)}</p>
       <p><b>The remaining payment:</b> INR ${INR.format(dueAmount)}</p>
       ${
@@ -270,8 +275,7 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
       <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
       <p>${policyLines(exclusionPolicy.length ? exclusionPolicy : ["As per company exclusion policy."]).replace(/\n/g, "<br/>")}</p>
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
-      ${termsAndConditionsLine(termsandCondition)}
+      ${termsAndConditionsLine(termsandCondition, customText?.termsAndConditions)}
       <br/>
       <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
       ${cancellationPolicyUrlLine(customText?.cancellationPolicyUrl)}

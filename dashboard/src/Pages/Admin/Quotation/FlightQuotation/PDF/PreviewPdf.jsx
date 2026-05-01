@@ -310,8 +310,8 @@ const FlightQuotationPDFDialog = ({
   const cancellationPolicyFromQuot = getPoliciesArray(getValue(quotationData, "policies.cancellationPolicy", []));
   const termsConditions = getValue(quotationData, "policies.termsAndConditions", "");
 
-  const finalInclusionArray = policiesInclusions.length > 0 ? policiesInclusions : globalPolicyDefaults.inclusions;
-  const finalExclusionArray = policiesExclusions.length > 0 ? policiesExclusions : globalPolicyDefaults.exclusions;
+  const finalInclusionArray = policiesInclusions.length > 0 ? policiesInclusions : (globalPolicyDefaults.inclusions || []);
+  const finalExclusionArray = policiesExclusions.length > 0 ? policiesExclusions : (globalPolicyDefaults.exclusions || []);
   const finalPaymentPolicy = paymentPolicy || globalPolicyDefaults.paymentPolicy;
   const finalCancellationArray = cancellationPolicyFromQuot.length > 0 ? cancellationPolicyFromQuot : 
     (globalPolicyDefaults.cancellationPolicy ? globalPolicyDefaults.cancellationPolicy.split("\n").filter(line => line.trim()) : []);
