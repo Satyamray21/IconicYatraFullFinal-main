@@ -50,6 +50,10 @@ const flightQuotationSchema = mongoose.Schema({
     pnrList: [{ type: String }],   // ✅ PNR per flight
     finalFareList: [{ type: Number }], // 🆕 NEW: Fare per flight
 
+    baseFare: { type: Number, default: null },
+    gstType: { type: String, enum: ["Included", "Excluded"], default: "Included" },
+    gstPercentage: { type: Number, default: 0 },
+    gstAmount: { type: Number, default: 0 },
     finalFare: { type: Number, default: null },
 
     policies: {

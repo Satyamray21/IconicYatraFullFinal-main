@@ -228,7 +228,7 @@ export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
 // ✅ Confirm Flight Quotation API
 export const confirmFlightQuotation = asyncHandler(async (req, res) => {
     const { flightQuotationId } = req.params;
-    const { pnrList, finalFareList, finalFare } = req.body;
+    const { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount } = req.body;
 
     const quotation = await FlightQuotation.findOne({ flightQuotationId });
 
@@ -262,12 +262,18 @@ export const confirmFlightQuotation = asyncHandler(async (req, res) => {
             throw new ApiError(400, "Final fare list length must match flight details length");
         }
         quotation.finalFareList = finalFareList;
-
-        // ✅ Update total final fare
-        quotation.finalFare = finalFare
-            ? Number(finalFare) // ✅ Use manual value if provided
-            : finalFareList.reduce((sum, fare) => sum + Number(fare || 0), 0);
     }
+
+    // ✅ Update GST and Fare fields
+    if (baseFare !== undefined) quotation.baseFare = baseFare;
+    if (gstType) quotation.gstType = gstType;
+    if (gstPercentage !== undefined) quotation.gstPercentage = gstPercentage;
+    if (gstAmount !== undefined) quotation.gstAmount = gstAmount;
+
+    // ✅ Update total final fare
+    quotation.finalFare = finalFare
+        ? Number(finalFare) // ✅ Use manual value if provided
+        : (Number(baseFare || 0) + Number(gstAmount || 0)) || finalFareList.reduce((sum, fare) => sum + Number(fare || 0), 0);
 
     quotation.status = "Confirmed";
     await quotation.save();
