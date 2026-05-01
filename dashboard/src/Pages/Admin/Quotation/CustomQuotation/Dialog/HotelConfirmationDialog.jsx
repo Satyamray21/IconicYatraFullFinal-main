@@ -37,8 +37,6 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
     const [mailCompanies, setMailCompanies] = useState([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState("");
     const [senderAccount, setSenderAccount] = useState("gmail1");
-    const [htmlPreview, setHtmlPreview] = useState("");
-    const [previewLoading, setPreviewLoading] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
     const fetchHotelsForCity = async (city) => {
@@ -73,31 +71,6 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
         }
     }, [open, hotels.length]);
 
-    const fetchPreview = async () => {
-        if (!quotation) return;
-        setPreviewLoading(true);
-        try {
-            const endpoint = type === "quick" 
-                ? `/quickQT/${quotation._id}/email/hotel-confirmation/preview`
-                : `/customQT/${quotation._id}/email/hotel-confirmation/preview`;
-            
-            const res = await axios.post(endpoint, { 
-                companyId: selectedCompanyId,
-                customText: { additionalNote: customMessage } 
-            });
-            setHtmlPreview(type === "quick" ? res.data?.data?.html : res.data?.data?.html);
-        } catch (err) {
-            console.error("Failed to fetch preview:", err);
-        } finally {
-            setPreviewLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (open && quotation && selectedCompanyId) {
-            fetchPreview();
-        }
-    }, [open, selectedCompanyId, customMessage, hotels]);
 
     useEffect(() => {
         if (open && quotation) {
@@ -252,7 +225,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
 
                 <Box sx={{ mb: 3, p: 2, bgcolor: "#f0f7ff", borderRadius: 1, border: "1px solid #cce3ff" }}>
                     <Typography variant="subtitle2" sx={{ mb: 2, color: "#1a237e", fontWeight: "bold" }}>
-                        Email Configuration & Preview
+                        Email Configuration
                     </Typography>
                     
                     <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -313,36 +286,6 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                         </Grid>
                     </Grid>
 
-                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, fontWeight: "bold", color: "text.secondary" }}>
-                        LIVE PREVIEW
-                    </Typography>
-                    <Paper 
-                        variant="outlined" 
-                        sx={{ 
-                            p: 1.5, 
-                            maxHeight: 300, 
-                            overflow: "auto", 
-                            bgcolor: "#fff",
-                            position: "relative",
-                            minHeight: 100
-                        }}
-                    >
-                        {previewLoading && (
-                            <Box sx={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, bgcolor: "rgba(255,255,255,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
-                                <CircularProgress size={24} />
-                            </Box>
-                        )}
-                        {htmlPreview ? (
-                            <Box 
-                                sx={{ zoom: 0.8 }}
-                                dangerouslySetInnerHTML={{ __html: htmlPreview }} 
-                            />
-                        ) : (
-                            <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
-                                No preview available. Fill details to generate.
-                            </Typography>
-                        )}
-                    </Paper>
                 </Box>
 
                 {hotels.map((hotel, index) => (
