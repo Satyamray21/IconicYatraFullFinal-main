@@ -228,9 +228,6 @@ const formik = useFormik({
   useEffect(() => {
     if (formik.values.country) {
       dispatch(fetchStatesByCountry(formik.values.country));
-      formik.setFieldValue("state", "");
-      formik.setFieldValue("city", "");
-      dispatch(clearCities());
     } else {
       dispatch(clearStates());
       dispatch(clearCities());
@@ -293,6 +290,16 @@ const formik = useFormik({
       handleAddNewClick(name);
     } else {
       formik.setFieldValue(name, value);
+
+      if (name === "country") {
+        formik.setFieldValue("state", "");
+        formik.setFieldValue("city", "");
+        dispatch(clearCities());
+      }
+      if (name === "state") {
+        formik.setFieldValue("city", "");
+        dispatch(clearCities());
+      }
     }
   };
 
