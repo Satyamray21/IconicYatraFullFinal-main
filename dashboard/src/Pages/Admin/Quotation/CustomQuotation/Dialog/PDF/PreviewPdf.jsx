@@ -125,7 +125,7 @@ const QuotationPDFDialog = ({
   };
 
   // Compress image to reduce size
-  const compressImage = (base64, maxWidth = 800, quality = 0.7) => {
+  const compressImage = (base64, maxWidth = 700, quality = 0.6) => {
     return new Promise((resolve) => {
       if (!base64) {
         resolve(null);
@@ -169,7 +169,7 @@ const QuotationPDFDialog = ({
 
       if (url.startsWith("data:image")) {
         if (compress) {
-          compressImage(url, 800, 0.7).then(resolve);
+          compressImage(url, 700, 0.6).then(resolve);
         } else {
           resolve(url);
         }
@@ -182,14 +182,14 @@ const QuotationPDFDialog = ({
         const timeoutId = setTimeout(() => {
           console.warn("Image load timeout:", url);
           resolve(null);
-        }, 12000);
+        }, 8000);
         img.onload = () => {
           clearTimeout(timeoutId);
           try {
             const canvas = document.createElement("canvas");
             let width = img.width;
             let height = img.height;
-            const maxWidth = 800;
+            const maxWidth = 700;
             if (width > maxWidth) {
               height = (height * maxWidth) / width;
               width = maxWidth;
@@ -198,7 +198,7 @@ const QuotationPDFDialog = ({
             canvas.height = height;
             const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0, width, height);
-            const base64 = canvas.toDataURL("image/jpeg", 0.7);
+            const base64 = canvas.toDataURL("image/jpeg", 0.6);
             resolve(base64);
           } catch {
             resolve(null);
@@ -235,7 +235,7 @@ const QuotationPDFDialog = ({
             return;
           }
           if (compress) {
-            compressImage(dataUrl, 800, 0.7).then(resolve);
+            compressImage(dataUrl, 700, 0.6).then(resolve);
           } else {
             resolve(dataUrl);
           }
@@ -602,44 +602,54 @@ const QuotationPDFDialog = ({
     selectedCompany?.cancellationPolicy,
   );
 
-  // Pre-load all images as base64 with compression
+  // Pre-load all images as base64 with compression in parallel
   useEffect(() => {
     const loadAllImages = async () => {
       if (!open) return;
 
       setRenderComplete(false);
       const loadedImages = {};
+      const tasks = [];
 
       if (logoUrl && typeof logoUrl === "string" && logoUrl !== "null") {
-        const base64Logo = await convertToBase64(logoUrl, true);
-        if (base64Logo) {
-          loadedImages.logo = base64Logo;
-        }
+        tasks.push(
+          convertToBase64(logoUrl, true).then((res) => {
+            if (res) loadedImages.logo = res;
+          }),
+        );
       }
 
       if (bannerImage && typeof bannerImage === "string") {
-        const base64Banner = await convertToBase64(bannerImage, true);
-        if (base64Banner) loadedImages.banner = base64Banner;
+        tasks.push(
+          convertToBase64(bannerImage, true).then((res) => {
+            if (res) loadedImages.banner = res;
+          }),
+        );
       }
 
-      for (let i = 0; i < days.length; i++) {
-        const day = days[i];
+      days.forEach((day, i) => {
         if (
           day.image &&
           day.image.preview &&
           typeof day.image.preview === "string"
         ) {
-          const base64DayImage = await convertToBase64(day.image.preview, true);
-          if (base64DayImage) loadedImages[`day_${i}`] = base64DayImage;
+          tasks.push(
+            convertToBase64(day.image.preview, true).then((res) => {
+              if (res) loadedImages[`day_${i}`] = res;
+            }),
+          );
         }
-      }
+      });
+
+      await Promise.all(tasks);
 
       setImageElements(loadedImages);
       setImagesLoaded(true);
 
+      // Small delay to ensure browser has rendered the base64 images
       setTimeout(() => {
         setRenderComplete(true);
-      }, 500);
+      }, 100);
     };
 
     if (open) {
@@ -653,7 +663,7 @@ const QuotationPDFDialog = ({
       setError("");
 
       if (!renderComplete) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
       const html2canvas = (await import("html2canvas")).default;
@@ -669,6 +679,7 @@ const QuotationPDFDialog = ({
         unit: "mm",
         format: "a4",
         orientation: "portrait",
+        compress: true,
       });
 
       const pageWidth = 210;
@@ -731,19 +742,21 @@ const QuotationPDFDialog = ({
         const termsLinkPosition = linkRectToMm(termsLinkEl);
         const cancellationLinkPosition = linkRectToMm(cancellationLinkEl);
 
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Reduced delay for rendering
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
         const canvas = await html2canvas(tempContainer, {
-          scale: 2,
+          scale: 1.5, // Reduced scale for smaller size
           backgroundColor: "#ffffff",
           logging: false,
-          useCORS: false,
+          useCORS: true,
           allowTaint: false,
+          imageTimeout: 0,
         });
 
         document.body.removeChild(tempContainer);
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        const imgData = canvas.toDataURL("image/jpeg", 0.7); // Reduced quality for compression
         const imgWidth = pageWidth;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
