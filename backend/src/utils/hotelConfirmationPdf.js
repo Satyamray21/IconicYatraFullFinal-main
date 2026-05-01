@@ -66,6 +66,20 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
         }
       };
 
+      const formatTime = (t) => {
+        if (!t) return "12:00 PM";
+        if (t.includes("AM") || t.includes("PM")) return t;
+        try {
+          const [h, m] = t.split(":");
+          const hr = Number(h);
+          const ampm = hr >= 12 ? "PM" : "AM";
+          const h12 = hr % 12 || 12;
+          return `${h12}:${m} ${ampm}`;
+        } catch (e) {
+          return t;
+        }
+      };
+
       const pad = (n) => String(n || 0).padStart(2, "0");
 
       const details = [
@@ -112,7 +126,9 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
           ["Rooms-", options.roomsLine || "N/A"],
           ["Booking PNR -", `${companyName} (for Confirmation)`],
           ["Check-in Date -", formatDate(h.checkInDate)],
+          ["Check-in Time -", formatTime(h.checkInTime)],
           ["Check Out Date -", formatDate(h.checkOutDate)],
+          ["Check Out Time -", formatTime(h.checkOutTime)],
           ["Room Type-", h.roomType || "Standard"],
           ["Contact No-", `${h.contactNo || "N/A"} (Manager)`],
         ];

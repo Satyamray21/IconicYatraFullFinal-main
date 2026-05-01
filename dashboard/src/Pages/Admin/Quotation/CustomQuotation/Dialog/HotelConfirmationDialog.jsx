@@ -104,7 +104,10 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
             setRecipientEmail(quotation.email || quotation.clientDetails?.email || "");
             // Pre-fill from existing confirmedHotels if any
             if (quotation.confirmedHotels && quotation.confirmedHotels.length > 0) {
-                setHotels(quotation.confirmedHotels);
+                setHotels(quotation.confirmedHotels.map((h, i) => ({
+                    ...h,
+                    id: h.id || h._id || Date.now() + i
+                })));
             } else {
                 // Try to pre-fill from destinations
                 const pkg = quotation.packageSnapshot || quotation.tourDetails || {};
@@ -129,7 +132,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                         roomType: qd.rooms?.roomType || "",
                         noOfRooms: qd.rooms?.numberOfRooms?.toString() || "1",
                         checkInDate: "",
+                        checkInTime: "12:00",
                         checkOutDate: "",
+                        checkOutTime: "10:00",
                         mealPlan: qd.mealPlan || "CP Plan",
                         contactNo: "",
                         bookingPnr: "",
@@ -152,7 +157,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                 roomType: "",
                 noOfRooms: "1",
                 checkInDate: "",
+                checkInTime: "12:00",
                 checkOutDate: "",
+                checkOutTime: "10:00",
                 mealPlan: "",
                 contactNo: "",
                 bookingPnr: "",
@@ -416,24 +423,48 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "noOfRooms", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={3}>
+                            <Grid item xs={12} md={2}>
                                 <TextField
                                     label="Check-in Date"
                                     fullWidth
                                     size="small"
-                                    placeholder="e.g. 07 JUNE 2026"
+                                    type="date"
+                                    InputLabelProps={{ shrink: true }}
                                     value={hotel.checkInDate}
                                     onChange={(e) => handleChange(hotel.id, "checkInDate", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={3}>
+                            <Grid item xs={12} md={2}>
+                                <TextField
+                                    label="Check-in Time"
+                                    fullWidth
+                                    size="small"
+                                    type="time"
+                                    InputLabelProps={{ shrink: true }}
+                                    value={hotel.checkInTime}
+                                    onChange={(e) => handleChange(hotel.id, "checkInTime", e.target.value)}
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={2}>
                                 <TextField
                                     label="Check-out Date"
                                     fullWidth
                                     size="small"
-                                    placeholder="e.g. 09 JUNE 2026"
+                                    type="date"
+                                    InputLabelProps={{ shrink: true }}
                                     value={hotel.checkOutDate}
                                     onChange={(e) => handleChange(hotel.id, "checkOutDate", e.target.value)}
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={2}>
+                                <TextField
+                                    label="Check-out Time"
+                                    fullWidth
+                                    size="small"
+                                    type="time"
+                                    InputLabelProps={{ shrink: true }}
+                                    value={hotel.checkOutTime}
+                                    onChange={(e) => handleChange(hotel.id, "checkOutTime", e.target.value)}
                                 />
                             </Grid>
                             <Grid item xs={12} md={4}>
