@@ -110,7 +110,7 @@ const FlightQuotationPDFDialog = ({
     }
     return result;
   };
-   const normalizeWebUrl = (value) => {
+  const normalizeWebUrl = (value) => {
     if (value === undefined || value === null) return "";
     const s = String(value).trim();
     if (!s || s === "N/A") return "";
@@ -271,7 +271,7 @@ const FlightQuotationPDFDialog = ({
 
   const quotationData = quotation || {};
   const selectedCompany = companyOptions.find((c) => c?._id === selectedCompanyId) || null;
-  
+
   const customerName = getValue(quotationData, "customer.name", "Guest");
   const customerLocation = getValue(quotationData, "customer.location");
   const customerPhone = getValue(quotationData, "customer.phone");
@@ -298,7 +298,7 @@ const FlightQuotationPDFDialog = ({
 
   const getPoliciesArray = (policyValue) => {
     if (Array.isArray(policyValue)) {
-      return policyValue.flatMap(item => 
+      return policyValue.flatMap(item =>
         typeof item === "string" ? item.split("\n").filter(line => line.trim()) : item
       );
     }
@@ -330,18 +330,18 @@ const FlightQuotationPDFDialog = ({
   const cancellationPolicyFromQuot = getPoliciesArray(getValue(quotationData, "policies.cancellationPolicy", []));
   const termsConditions = getValue(quotationData, "policies.termsAndConditions", "");
 
-  const finalInclusionArray = policiesInclusions.length > 0 ? policiesInclusions : 
+  const finalInclusionArray = policiesInclusions.length > 0 ? policiesInclusions :
     (globalPolicyDefaults.inclusions && globalPolicyDefaults.inclusions.length > 0 ? globalPolicyDefaults.inclusions : defaultInclusions);
-  const finalExclusionArray = policiesExclusions.length > 0 ? policiesExclusions : 
+  const finalExclusionArray = policiesExclusions.length > 0 ? policiesExclusions :
     (globalPolicyDefaults.exclusions && globalPolicyDefaults.exclusions.length > 0 ? globalPolicyDefaults.exclusions : defaultExclusions);
   const finalPaymentPolicy = paymentPolicy || globalPolicyDefaults.paymentPolicy;
-  const finalCancellationArray = cancellationPolicyFromQuot.length > 0 ? cancellationPolicyFromQuot : 
+  const finalCancellationArray = cancellationPolicyFromQuot.length > 0 ? cancellationPolicyFromQuot :
     (globalPolicyDefaults.cancellationPolicy ? globalPolicyDefaults.cancellationPolicy.split("\n").filter(line => line.trim()) : []);
   const finalTermsConditions = termsConditions || globalPolicyDefaults.termsAndConditions;
 
   const companyWebsiteUrl = selectedCompany?.companyWebsite || footerWebsite || "https://www.iconicyatra.com";
   const companyCancellationUrl = selectedCompany?.cancellationPolicy || "https://www.iconicyatra.com/cancellationandrefundpolicy";
- const companyTermsUrl = normalizeWebUrl(selectedCompany?.termsConditions) || companyWebsiteUrl;
+  const companyTermsUrl = normalizeWebUrl(selectedCompany?.termsConditions) || companyWebsiteUrl;
   const companyPaymentLink = normalizeWebUrl(selectedCompany?.paymentLink);
   const netBankingPayeeName =
     String(selectedCompany?.companyName || "").trim() ||
@@ -435,7 +435,7 @@ const FlightQuotationPDFDialog = ({
       const opt = {
         margin: [10, 5, 10, 5],
         filename: `${customerName.replace(/\s/g, "_")}_Flight_Quotation_${reference || Date.now()}.pdf`,
-        image: { type: "jpeg", quality: 0.8 }, 
+        image: { type: "jpeg", quality: 0.8 },
         html2canvas: {
           scale: 2, // Reverting to 2 for better quality/reliability
           useCORS: true,
@@ -457,7 +457,7 @@ const FlightQuotationPDFDialog = ({
       console.log("Starting html2pdf generation...");
       const pdfBlob = await html2pdf().set(opt).from(clone).output("blob");
       console.log("PDF generation complete. Blob size:", pdfBlob?.size);
-      
+
       if (shouldDownload) {
         await html2pdf().set(opt).from(clone).save();
       }
@@ -500,9 +500,9 @@ const FlightQuotationPDFDialog = ({
       to: String(quotationData?.customer?.email || "").trim(),
       previewPdfMode: emailContentMode === "short",
     });
-    console.log("handleSendMailWithPdf: onSendMail called with payload", { 
+    console.log("handleSendMailWithPdf: onSendMail called with payload", {
       hasAttachment: !!payload?.contentBase64,
-      to: quotationData?.customer?.email 
+      to: quotationData?.customer?.email
     });
   };
 
@@ -584,17 +584,17 @@ const FlightQuotationPDFDialog = ({
 
   // Flight Details Table Component - Fixed fare column width with page break avoidance
   const FlightDetailsTable = () => (
-    <div style={{ 
-      overflowX: "auto", 
+    <div style={{
+      overflowX: "auto",
       marginBottom: "25px",
       pageBreakInside: "avoid",
       breakInside: "avoid",
       position: "relative"
     }}>
-      <div style={{ 
-        marginBottom: "16px", 
-        display: "flex", 
-        alignItems: "center", 
+      <div style={{
+        marginBottom: "16px",
+        display: "flex",
+        alignItems: "center",
         gap: "8px",
         pageBreakAfter: "avoid",
         breakAfter: "avoid"
@@ -608,12 +608,12 @@ const FlightQuotationPDFDialog = ({
         pageBreakInside: "avoid",
         breakInside: "avoid"
       }}>
-        <table style={{ 
-          width: "100%", 
-          borderCollapse: "collapse", 
-          background: "#fff", 
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)", 
-          borderRadius: "8px", 
+        <table style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          background: "#fff",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          borderRadius: "8px",
           overflow: "hidden",
           tableLayout: "fixed"
         }}>
@@ -628,7 +628,7 @@ const FlightQuotationPDFDialog = ({
               <th style={{ color: "white", padding: "12px 8px", textAlign: "left", fontWeight: "bold", width: "12%" }}>Departure Date</th>
               <th style={{ color: "white", padding: "12px 8px", textAlign: "left", fontWeight: "bold", width: "12%" }}>Departure Time</th>
               <th style={{ color: "white", padding: "12px 8px", textAlign: "right", fontWeight: "bold", width: "16%" }}>Fare</th>
-              
+
             </tr>
           </thead>
           <tbody>
@@ -743,7 +743,7 @@ const FlightQuotationPDFDialog = ({
           </div>
         )}
         <div ref={printRef} style={{ display: imagesLoaded && renderComplete ? "block" : "none" }}>
-          
+
           {/* PAGE 1: Header, Customer Details, Passenger Details, Flight Details */}
           <div className="pdf-page" style={{ padding: "30px", background: "#fff", minHeight: "297mm", pageBreakAfter: "always", breakAfter: "page" }}>
             {/* Header with Logo */}
@@ -751,13 +751,13 @@ const FlightQuotationPDFDialog = ({
               {imageElements.logo ? (
                 <img src={imageElements.logo} alt="Company Logo" style={{ height: "70px", width: "auto", marginBottom: "15px" }} />
               ) : (
-                <div style={{ 
-                  width: "70px", 
-                  height: "70px", 
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", 
-                  borderRadius: "50%", 
-                  display: "inline-flex", 
-                  alignItems: "center", 
+                <div style={{
+                  width: "70px",
+                  height: "70px",
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  borderRadius: "50%",
+                  display: "inline-flex",
+                  alignItems: "center",
                   justifyContent: "center",
                   marginBottom: "15px"
                 }}>
@@ -783,10 +783,10 @@ const FlightQuotationPDFDialog = ({
             </div>
 
             {/* Customer Details Card */}
-            <div style={{ 
-              padding: "20px", 
-              background: "linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%)", 
-              borderRadius: "12px", 
+            <div style={{
+              padding: "20px",
+              background: "linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%)",
+              borderRadius: "12px",
               marginBottom: "20px",
               border: "1px solid #e0e0e0"
             }}>
@@ -807,10 +807,10 @@ const FlightQuotationPDFDialog = ({
             </div>
 
             {/* Passenger Details */}
-            <div style={{ 
-              padding: "18px", 
-              background: "#fff", 
-              borderRadius: "12px", 
+            <div style={{
+              padding: "18px",
+              background: "#fff",
+              borderRadius: "12px",
               border: "1px solid #e0e0e0",
               marginBottom: "20px"
             }}>
@@ -843,12 +843,12 @@ const FlightQuotationPDFDialog = ({
 
           {/* PAGE 2: Policies + Terms & Conditions + Footer */}
           <div className="pdf-page" style={{ padding: "30px", background: "#fff", minHeight: "297mm" }}>
-            <div style={{ 
-              fontWeight: "bold", 
-              fontSize: "22px", 
-              marginBottom: "25px", 
-              borderBottom: "3px solid #667eea", 
-              paddingBottom: "10px", 
+            <div style={{
+              fontWeight: "bold",
+              fontSize: "22px",
+              marginBottom: "25px",
+              borderBottom: "3px solid #667eea",
+              paddingBottom: "10px",
               color: "#333",
               display: "flex",
               alignItems: "center",
@@ -874,78 +874,72 @@ const FlightQuotationPDFDialog = ({
                 </div>
               </div>
             )}
-   {netBankingPayeeName && (
-                    <div style={{ marginBottom: "35px" }}>
-                      <div
-                        style={{
-                          fontWeight: "bold",
-                          fontSize: "20px",
-                          marginBottom: "16px",
-                          borderBottom: "3px solid #667eea",
-                          paddingBottom: "10px",
-                          color: "#333",
-                        }}
+            {netBankingPayeeName && (
+              <div style={{ marginBottom: "35px" }}>
+                <div
+                  style={{
+                    fontWeight: "bold",
+                    fontSize: "20px",
+                    marginBottom: "16px",
+                    borderBottom: "3px solid #667eea",
+                    paddingBottom: "10px",
+                    color: "#333",
+                  }}
+                >
+                  🏦 Net Banking / NEFT / RTGS
+                </div>
+                <div
+                  style={{
+                    padding: "18px",
+                    background: "#f3f6ff",
+                    borderRadius: "12px",
+                    borderLeft: "4px solid #667eea",
+                    fontSize: "14px",
+                    lineHeight: "1.7",
+                    color: "#333",
+                  }}
+                >
+                  <div style={{ marginBottom: "10px" }}>
+                    Please transfer funds in favor of{" "}
+                    <strong style={{ color: "#667eea" }}>
+                      {netBankingPayeeName}
+                    </strong>
+                    . Use this name exactly as the account / beneficiary name when
+                    paying via net banking, NEFT, RTGS, or IMPS.
+                  </div>
+                  {companyPaymentLink && (
+                    <div style={{ marginTop: "12px" }}>
+                      <span style={{ fontWeight: "600" }}>Online payment: </span>
+                      <Link
+                        href={companyPaymentLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        underline="hover"
+                        sx={{ fontWeight: "bold", wordBreak: "break-all" }}
                       >
-                        🏦 Net Banking / NEFT / RTGS
-                      </div>
-                      <div
-                        style={{
-                          padding: "18px",
-                          background: "#f3f6ff",
-                          borderRadius: "12px",
-                          borderLeft: "4px solid #667eea",
-                          fontSize: "14px",
-                          lineHeight: "1.7",
-                          color: "#333",
-                        }}
-                      >
-                        <div style={{ marginBottom: "10px" }}>
-                          Please transfer funds in favor of{" "}
-                          <strong style={{ color: "#667eea" }}>
-                            {netBankingPayeeName}
-                          </strong>
-                          . Use this name exactly as the account / beneficiary name when
-                          paying via net banking, NEFT, RTGS, or IMPS.
-                        </div>
-                        {companyPaymentLink && (
-                          <div style={{ marginTop: "12px" }}>
-                            <span style={{ fontWeight: "600" }}>Online payment: </span>
-                            <Link
-                              href={companyPaymentLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              underline="hover"
-                              sx={{ fontWeight: "bold", wordBreak: "break-all" }}
-                            >
-                              {companyPaymentLink}
-                            </Link>
-                          </div>
-                        )}
-                      </div>
+                        {companyPaymentLink}
+                      </Link>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
             {/* Cancellation & Refund Policy with Link */}
             <div style={{ marginBottom: "25px", breakInside: "avoid", pageBreakInside: "avoid" }}>
               <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2, color: "#e65100", display: "flex", alignItems: "center", gap: "8px" }}>
                 <MoneyOff /> Cancellation & Refund Policy
               </Typography>
               <div style={{ padding: "15px", background: "#fff3e0", borderRadius: "12px", borderLeft: "4px solid #e65100" }}>
-                {finalCancellationArray.map((item, idx) => (
-                  <div key={idx} style={{ fontSize: "13px", marginLeft: item.startsWith("•") ? "20px" : "0px", marginBottom: "6px", lineHeight: "1.6" }}>
-                    {item}
-                  </div>
-                ))}
-                <div style={{ marginTop: "12px", paddingTop: "8px", borderTop: "1px dashed #e0a800", fontSize: "13px", textAlign: "center" }}>
-                  Full cancellation & refund policy:{" "}
-                  <a 
-                    href={companyCancellationUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "#1565c0", textDecoration: "underline", fontWeight: "bold" }}
-                  >
-                    {companyCancellationUrl}
-                  </a>
-                </div>
+                Full cancellation & refund policy:{" "}
+                <a
+                  href={companyCancellationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#1565c0", textDecoration: "underline", fontWeight: "bold" }}
+                >
+                  {companyCancellationUrl}
+                </a>
+
               </div>
             </div>
 
@@ -958,25 +952,25 @@ const FlightQuotationPDFDialog = ({
                 <div style={{ fontSize: "14px", color: "#555", lineHeight: "1.6", padding: "8px" }}>
                   As per company website{" "}
                   <a
-              data-pdf-link="terms"
-              href={
-                companyTermsUrl !== "#" ? companyTermsUrl : companyWebsiteUrl
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: "#667eea",
-                textDecoration: "underline",
-                fontWeight: "bold",
-                wordBreak: "break-all",
-              }}
-            >
-              {companyTermsUrl !== "#"
-                ? companyTermsUrl
-                : companyWebsiteUrl !== "#"
-                  ? companyWebsiteUrl
-                  : "www.iconicyatra.com"}
-            </a>
+                    data-pdf-link="terms"
+                    href={
+                      companyTermsUrl !== "#" ? companyTermsUrl : companyWebsiteUrl
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "#667eea",
+                      textDecoration: "underline",
+                      fontWeight: "bold",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {companyTermsUrl !== "#"
+                      ? companyTermsUrl
+                      : companyWebsiteUrl !== "#"
+                        ? companyWebsiteUrl
+                        : "www.iconicyatra.com"}
+                  </a>
                 </div>
               </div>
             </div>
