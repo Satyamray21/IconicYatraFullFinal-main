@@ -91,8 +91,10 @@ import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import QuickEditAllDialog from "./Dialog/QuickEditAllDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
+import HotelConfirmationDialog from "../CustomQuotation/Dialog/HotelConfirmationDialog";
 import {
   effectiveQuickPayableTotal,
+
   mapApiAdditionalServicesToState,
   serializeAdditionalServicesForApi,
   sumBillableAdditionalServices,
@@ -1197,6 +1199,7 @@ const QuickFinalize = () => {
     message: "",
     severity: "success",
   });
+  const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
   const [itineraryDialog, setItineraryDialog] = useState({
     open: false,
     mode: "add",
@@ -1998,6 +2001,7 @@ const QuickFinalize = () => {
       taxType: "",
     });
   };
+
 
   const handleAddFlightOpen = () => setOpenAddFlight(true);
   const handleAddFlightClose = () => setOpenAddFlight(false);
@@ -3230,6 +3234,16 @@ const QuickFinalize = () => {
                     >
                       Edit Vendors
                     </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      startIcon={<CheckCircle />}
+                      sx={{ ml: 1 }}
+                      onClick={() => setOpenHotelConfirmation(true)}
+                    >
+                      Hotel Confirmation
+                    </Button>
                   </Box>
 
                   {finalizedVendors.length ? (
@@ -4060,6 +4074,13 @@ const QuickFinalize = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <HotelConfirmationDialog
+        open={openHotelConfirmation}
+        onClose={() => setOpenHotelConfirmation(false)}
+        quotation={currentQuotation}
+        type="quick"
+      />
     </Box>
   );
 };

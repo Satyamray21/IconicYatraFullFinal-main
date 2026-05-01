@@ -11,6 +11,9 @@ import {
     updatePackageCalculations,
     previewCustomQuotationMail,
     sendCustomQuotationMail,
+    saveConfirmedHotels,
+    sendHotelConfirmationMail,
+    previewHotelConfirmation,
 } from "../../controllers/quotation/customQuotation.controller.js";
 import { upload } from "../../middleware/imageMulter.middleware.js";
 import { requirePermission } from "../../middleware/staffPermission.middleware.js";
@@ -32,6 +35,9 @@ router.post(
 
 router.patch("/:quotationId/finalize", requirePermission("canEditQuotation"), finalizeCustomQuotation);
 router.patch("/:quotationId/package-calculations", requirePermission("canEditQuotation"), updatePackageCalculations);
+router.post("/:id/save-confirmed-hotels", requirePermission("canEditQuotation"), saveConfirmedHotels);
+router.post("/:id/email/hotel-confirmation", requirePermission("canEditQuotation"), sendHotelConfirmationMail);
+router.post("/:id/email/hotel-confirmation/preview", requirePermission("canEditQuotation"), previewHotelConfirmation);
 router.post("/:quotationId/email/preview", requirePermission("canEditQuotation"), previewCustomQuotationMail);
 router.post("/:quotationId/email/send", requirePermission("canEditQuotation"), sendCustomQuotationMail);
 router.get("/:quotationId", requirePermission("canAccessQuotations"), getCustomQuotationById);

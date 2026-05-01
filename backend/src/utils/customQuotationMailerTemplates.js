@@ -1048,3 +1048,110 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     },
   };
 }
+export function buildHotelConfirmationEmail(quotation, options = {}) {
+  const td = quotation?.tourDetails || {};
+  const qd = td?.quotationDetails || {};
+  const pkg = adaptQuickQuotationForCustomMailer(quotation); // Use adapter for consistency if needed
+  const companyName = safe(options.companyName, "Iconic Travel");
+  const companyWebsite = safe(options.companyWebsite, "http://iconictravel.in");
+  const companyMobile = safe(options.companyMobile, "+91-8130883907");
+  const companyAddress = safe(options.companyAddress, "2nd floor, B Block B-25 Sector- 64, Noida Uttar Pradesh 201301");
+  
+  const guestName = safe(quotation?.clientDetails?.clientName || quotation?.customerName, "Guest");
+  const bookingId = safe(quotation?.quotationId || quotation?.quickQuotationId, "Booking Id");
+  const adults = toNum(quotation?.adults || qd?.adults);
+  const children = toNum(quotation?.children || qd?.children);
+  const kids = toNum(quotation?.kids || qd?.kids);
+  const infants = toNum(quotation?.infants || qd?.infants);
+  
+  const guestsLine = `${adults} Adults, ${children + kids} Child (${children > 0 ? children + 'y' : ''}${kids > 0 ? ', ' + kids + 'y' : ''})`;
+  const roomsLine = `${qd?.rooms?.numberOfRooms || 1} ${safe(qd?.rooms?.sharingType, "Double sharing")}`;
+  const packageType = safe(quotation?.finalizedPackage || "Family Tour Package");
+  
+  const destinations = qd?.destinations || pkg?.destinationNights || [];
+  const duration = nightsAndDays(destinations);
+  
+  const arrivalDate = fmtDate(td?.arrivalDate || quotation?.arrivalDate);
+  const departureDate = fmtDate(td?.departureDate || quotation?.departureDate);
+  const pickupPoint = safe(td?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint, "Siliguri Airport/Railway Station**");
+  const dropPoint = safe(td?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint, "Siliguri Airport/Railway Station**");
+  const mealPlan = safe(qd?.mealPlan || quotation?.mealPlan, "CPI Plan (Breakfast only)");
+
+  const confirmedHotels = quotation.confirmedHotels || [];
+  
+  const hotelSections = confirmedHotels.map((h, i) => `
+    <div style="margin-bottom: 20px;">
+        <p style="font-weight: bold; margin-bottom: 5px;">${i + 1}: ${safe(h.hotelName)} in ${safe(h.city)} (${h.nights || 1} Night)</p>
+        <p style="margin: 2px 0;"><b>Address -</b> ${safe(h.hotelAddress)}</p>
+        <p style="margin: 2px 0;"><b>Guest Name -</b> ${guestName}</p>
+        <p style="margin: 2px 0;"><b>Person -</b> ${guestsLine}</p>
+        <p style="margin: 2px 0;"><b>Rooms -</b> ${safe(h.noOfRooms)}</p>
+        <p style="margin: 2px 0;"><b>Booking PNR -</b> ${safe(h.bookingPnr, "Iconic Travel (for Confirmation)")}</p>
+        <p style="margin: 2px 0;"><b>Check-in Date -</b> ${safe(h.checkInDate)}, Time – 12: 00 PM</p>
+        <p style="margin: 2px 0;"><b>Check Out Date -</b> ${safe(h.checkOutDate)}, Time – 11:00 AM</p>
+        <p style="margin: 2px 0;"><b>Room Type -</b> ${safe(h.roomType)}</p>
+        <p style="margin: 2px 0;"><b>Contact No -</b> ${safe(h.contactNo)} (Manager)</p>
+    </div>
+  `).join("");
+
+  return `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; color: #333; line-height: 1.5; max-width: 800px; margin: 0 auto; border: 1px solid #eee; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #1a237e; margin: 0; font-size: 24px; text-transform: uppercase;">Hotel Confirmation Voucher</h1>
+            <p style="color: #666; margin: 5px 0;">${companyName}</p>
+        </div>
+
+        <p>Dear ${guestName},</p>
+        <p>Thank you for choosing ${companyName}, we are pleased to inform you to start planning your way for the following to be confirmed successfully.</p>
+        
+        ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
+
+        <p style="font-weight: bold; font-size: 16px; color: #1a237e; margin-top: 20px;">
+            ${td.quotationTitle || "Tour Package"}
+        </p>
+        
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+            <p style="font-weight: bold; color: #d32f2f; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px;">INCLUSIONS OF PACKAGE:</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 3px 0; width: 180px;"><b>Guest Name -</b></td><td>${guestName}</td></tr>
+                <tr><td style="padding: 3px 0;"><b>Booking Id -</b></td><td>${bookingId}</td></tr>
+                <tr><td style="padding: 3px 0;"><b>Persons -</b></td><td>${guestsLine}</td></tr>
+                <tr><td style="padding: 3px 0;"><b>No of Rooms -</b></td><td>${roomsLine}</td></tr>
+                <tr><td style="padding: 3px 0;"><b>Package Type -</b></td><td>${packageType}</td></tr>
+                <tr><td style="padding: 3px 0;"><b>Duration -</b></td><td>${duration.nights} Nights ${duration.days} Days</td></tr>
+                <tr><td style="padding: 3px 0;"><b>Date of Journey -</b></td><td>${arrivalDate}, Time - standard**</td></tr>
+                <tr><td style="padding: 3px 0;"><b>Tour End Date -</b></td><td>${departureDate}, Time - standard**</td></tr>
+                <tr><td style="padding: 3px 0;"><b>Pick Up Point -</b></td><td>${pickupPoint}</td></tr>
+                <tr><td style="padding: 3px 0;"><b>Drop Point -</b></td><td>${dropPoint}</td></tr>
+                <tr><td style="padding: 3px 0;"><b>Meal Plan -</b></td><td>${mealPlan}</td></tr>
+            </table>
+        </div>
+
+        <p style="font-weight: bold; color: #d32f2f; font-size: 16px; margin-top: 25px; border-bottom: 2px solid #d32f2f; padding-bottom: 5px;">FINAL HOTEL NAMES WITH CONFIRMATION</p>
+        
+        ${hotelSections || '<p style="font-style: italic; color: #888;">No hotels confirmed yet.</p>'}
+
+        <div style="background-color: #fffde7; padding: 15px; border-radius: 5px; margin-top: 25px; border: 1px solid #fff59d;">
+            <p style="margin: 0; font-size: 13px;"><b>Child Policy -</b> Above 05y Childs are payable and this depends on the hotel if they charge or not if not included in room sharing.</p>
+        </div>
+
+        <div style="margin-top: 20px; font-size: 13px; color: #555;">
+            <p style="margin: 5px 0;"><b>NOTE -</b> ALL AMENDMENTS ARE PAYABLE BY GUEST WHEN RESERVATION TEAM WILL SENT TO YOU.</p>
+            <p style="margin: 5px 0;"><b>NOTE -</b> if any hotels do not provide Meals Breakfast/Lunch/Dinner, which are given in your booking then we will provide refunds as per company policy and If any Extra Meals provided by hotel then charges applicable & payable by guest to the company with GST (5%) extra. Thanks</p>
+        </div>
+
+        <div style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+            <p style="margin: 2px 0;"><b>Warm & Regards,</b></p>
+            <p style="margin: 2px 0; font-weight: bold; color: #1a237e;">${companyName}</p>
+            <p style="margin: 2px 0;">Reservation Team</p>
+            <p style="margin: 2px 0;">Mobile: ${companyMobile} (WhatsApp)</p>
+            <p style="margin: 2px 0;">Website: <a href="${companyWebsite}" style="color: #1976d2; text-decoration: none;">${companyWebsite}</a></p>
+            <p style="margin: 2px 0; font-size: 12px; color: #777;">Reg. Address & Corporate Office: ${companyAddress}</p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px; font-weight: bold; color: #1a237e;">
+            THANK YOU FOR CHOOSING ${companyName.toUpperCase()}!!!
+        </div>
+    </div>
+  `;
+}
