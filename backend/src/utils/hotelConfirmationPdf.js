@@ -29,12 +29,15 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
 
       // --- Package Title ---
       doc.fillColor("#ff0000").fontSize(13).font("Helvetica-Bold").text(packageTitle);
-      
+
       if (destinationSummary && destinationSummary !== "()") {
         doc.fillColor("#000000").fontSize(11).font("Helvetica").text(destinationSummary);
       }
 
       const stayLocations = options.stayLocations || [];
+      const totalNights = stayLocations.reduce((sum, loc) => sum + (Number(loc.nights) || 0), 0);
+      const totalDays = totalNights + 1;
+
       if (stayLocations.length > 0) {
         const stayText = `(${stayLocations.map(loc => `${loc.city || loc.cityName} ${loc.nights}N`).join(", ")})`;
         if (stayText !== "()") {
@@ -46,7 +49,7 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
 
       // --- Inclusions Section ---
       doc.fillColor("#ff0000").fontSize(13).font("Helvetica-Bold").text("INCLUSIONS OF PACKAGE:");
-      
+
       const startY = doc.y + 5;
       const col1 = 40;
       const col2 = 160;
@@ -63,13 +66,15 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
         }
       };
 
+      const pad = (n) => String(n || 0).padStart(2, "0");
+
       const details = [
         ["Guest Name -", guestName],
         ["Booking Id -", bookingId],
         ["Persons-", options.guestsLine || `${quotation.adults || 0} Adults, ${quotation.children || 0} Child`],
         ["No of Rooms-", options.roomsLine || "01 Double Sharing"],
         ["Package Type -", options.packageType || "Family Tour Package"],
-        ["Duration-", `${options.duration?.nights || 0} Nights ${options.duration?.days || 0} Days`],
+        ["Duration-", ` ${pad(totalNights)} Nights ${pad(totalDays)} Days`],
         ["Date of Journey-", `${formatDate(options.startDate)}, Time - standard**`],
         ["Tour End Date-", `${formatDate(options.endDate)}, Time - standard**`],
         ["Pick Up Point-", options.pickupPoint || "Siliguri Airport/Railway Station**"],
@@ -92,7 +97,7 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
       confirmedHotels.forEach((h, i) => {
         if (doc.y > 650) doc.addPage();
 
-        doc.fillColor("#ff0000").fontSize(12).font("Helvetica-Bold").text(`${i + 1}: ${h.hotelName} in ${h.city} (${h.nights || 1} Night)`, 40);
+        doc.fillColor("#ff0000").fontSize(12).font("Helvetica-Bold").text(`${i + 1}: ${h.hotelName} in ${h.city} (${pad(h.nights)} Night)`, 40);
         doc.moveDown(0.2);
 
         const hStartY = doc.y;
