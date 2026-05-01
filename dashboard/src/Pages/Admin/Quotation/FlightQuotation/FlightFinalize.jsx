@@ -30,6 +30,13 @@ import {
   ListItem,
   ListItemText,
   IconButton,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import {
   Flight,
@@ -92,11 +99,13 @@ const FlightFinalize = () => {
   const [autoGeneratePdfForMail, setAutoGeneratePdfForMail] = useState(false);
   const [emailToPrefill, setEmailToPrefill] = useState("");
   const [editDialog, setEditDialog] = useState({
-    open: false,
-    field: "",
-    title: "",
     value: "",
   });
+
+  const [gstType, setGstType] = useState("Included");
+  const [gstPercentage, setGstPercentage] = useState(0);
+  const [gstAmount, setGstAmount] = useState(0);
+  const [baseFare, setBaseFare] = useState(0);
 
   const { id } = useParams();
   const dispatch = useDispatch();
@@ -120,6 +129,10 @@ const FlightFinalize = () => {
         0,
       );
       setTotalFinalFare(Number(quotation.finalFare || 0) || computedTotal);
+      setBaseFare(Number(quotation.baseFare || 0) || computedTotal);
+      setGstType(quotation.gstType || "Included");
+      setGstPercentage(quotation.gstPercentage || 0);
+      setGstAmount(quotation.gstAmount || 0);
       setIsFinalized(quotation.status === "Confirmed");
       setInvoiceGenerated(quotation.status === "Confirmed");
     }
@@ -135,12 +148,23 @@ const FlightFinalize = () => {
   // Keep total fare in sync with per-flight fare edits.
   useEffect(() => {
     if (!quotation) return;
-    const computedTotal = (finalFareList || []).reduce(
+    const computedBase = (finalFareList || []).reduce(
       (sum, fare) => sum + Number(fare || 0),
       0,
     );
-    setTotalFinalFare(computedTotal);
-  }, [finalFareList, quotation]);
+    setBaseFare(computedBase);
+
+    let computedGst = 0;
+    let finalTotal = computedBase;
+
+    if (gstType === "Excluded") {
+      computedGst = (computedBase * Number(gstPercentage)) / 100;
+      finalTotal = computedBase + computedGst;
+    }
+
+    setGstAmount(computedGst);
+    setTotalFinalFare(finalTotal);
+  }, [finalFareList, quotation, gstType, gstPercentage]);
 
   useEffect(() => {
     const loadMailCompanies = async () => {
@@ -178,7 +202,11 @@ const FlightFinalize = () => {
           flightQuotationId: quotation.flightQuotationId,
           pnrList,
           finalFareList,
-          finalFare: getComputedFareTotal(),
+          baseFare,
+          gstType,
+          gstPercentage: Number(gstPercentage),
+          gstAmount,
+          finalFare: totalFinalFare,
         })
       ).unwrap();
 
@@ -215,7 +243,11 @@ const FlightFinalize = () => {
           formData: {
             pnrList,
             finalFareList,
-            finalFare: computedTotal,
+            baseFare,
+            gstType,
+            gstPercentage: Number(gstPercentage),
+            gstAmount,
+            finalFare: totalFinalFare,
           },
         }),
       ).unwrap();
@@ -647,6 +679,10 @@ const FlightFinalize = () => {
       terms: terms,
     },
     footer: footer,
+    baseFare: baseFare,
+    gstType: gstType,
+    gstPercentage: gstPercentage,
+    gstAmount: gstAmount,
   };
 
   const emailType = emailTemplateType === "booking" ? "booking" : "normal";
@@ -800,6 +836,13 @@ const FlightFinalize = () => {
                         <Typography variant="h5" color="primary" gutterBottom>
                           {formatCurrency(totalFinalFare)}
                         </Typography>
+                        {gstType === "Excluded" && (
+                          <Box sx={{ mb: 1 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Base: {formatCurrency(baseFare)} | GST ({gstPercentage}%): {formatCurrency(gstAmount)}
+                            </Typography>
+                          </Box>
+                        )}
                         <Typography variant="body1">
                           Reference No: {quotation.flightQuotationId}
                         </Typography>
@@ -814,7 +857,7 @@ const FlightFinalize = () => {
                           Total Flights: {flightData.length}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Total Fare: {formatCurrency(totalFinalFare)}
+                          Total {gstType === "Included" ? "Fare (Incl. GST)" : "Fare"}: {formatCurrency(totalFinalFare)}
                         </Typography>
                       </Box>
                     </AccordionDetails>
@@ -1182,6 +1225,64 @@ const FlightFinalize = () => {
                 </Grid>
               </Grid>
             ))}
+
+            {/* GST Section */}
+            <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 0.5 }}>
+                GST Calculation
+              </Typography>
+              <RadioGroup
+                row
+                value={gstType}
+                onChange={(e) => setGstType(e.target.value)}
+                sx={{ mb: 1 }}
+              >
+                <FormControlLabel value="Included" control={<Radio size="small" />} label="Include GST" />
+                <FormControlLabel value="Excluded" control={<Radio size="small" />} label="Exclude GST" />
+              </RadioGroup>
+            </Grid>
+
+            {gstType === "Excluded" && (
+              <Grid size={{ xs: 12 }} sx={{ mb: 1 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>GST Percentage (%)</InputLabel>
+                  <Select
+                    value={gstPercentage}
+                    label="GST Percentage (%)"
+                    onChange={(e) => setGstPercentage(e.target.value)}
+                  >
+                    <MenuItem value={0}>0%</MenuItem>
+                    <MenuItem value={5}>5%</MenuItem>
+                    <MenuItem value={12}>12%</MenuItem>
+                    <MenuItem value={18}>18%</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="Base Fare (₹)"
+                type="number"
+                fullWidth
+                value={baseFare}
+                InputProps={{ readOnly: true }}
+                variant="outlined"
+                size="small"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="GST Amount (₹)"
+                type="number"
+                fullWidth
+                value={gstAmount.toFixed(2)}
+                InputProps={{ readOnly: true }}
+                variant="outlined"
+                size="small"
+              />
+            </Grid>
+
             <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
               <TextField
                 label="Total Final Fare (₹)"
@@ -1191,6 +1292,7 @@ const FlightFinalize = () => {
                 InputProps={{ readOnly: true }}
                 variant="outlined"
                 size="small"
+                sx={{ backgroundColor: "grey.100" }}
               />
             </Grid>
           </Grid>

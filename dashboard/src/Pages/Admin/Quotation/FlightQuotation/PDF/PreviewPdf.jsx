@@ -609,8 +609,22 @@ const FlightQuotationPDFDialog = ({
                 <td style={{ padding: "10px 8px", textAlign: "right", fontWeight: "500", wordWrap: "break-word" }}>{formatCurrency(flight.fare)}</td>
               </tr>
             ))}
+            {quotationData.gstType === "Excluded" && (
+              <>
+                <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                  <td colSpan={8} style={{ padding: "10px", textAlign: "right", fontWeight: "bold" }}>Base Fare</td>
+                  <td style={{ padding: "10px", textAlign: "right" }}>{formatCurrency(quotationData.baseFare)}</td>
+                </tr>
+                <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                  <td colSpan={8} style={{ padding: "10px", textAlign: "right", fontWeight: "bold" }}>GST ({quotationData.gstPercentage}%)</td>
+                  <td style={{ padding: "10px", textAlign: "right" }}>{formatCurrency(quotationData.gstAmount)}</td>
+                </tr>
+              </>
+            )}
             <tr style={{ background: "#1976d2" }}>
-              <td colSpan={8} style={{ padding: "12px", textAlign: "right", color: "white", fontWeight: "bold" }}>Total Fare</td>
+              <td colSpan={8} style={{ padding: "12px", textAlign: "right", color: "white", fontWeight: "bold" }}>
+                {quotationData.gstType === "Included" ? "Total Fare (Incl. GST)" : "Total Fare"}
+              </td>
               <td style={{ padding: "12px", textAlign: "right", color: "white", fontWeight: "bold" }}>{formattedTotalFare}</td>
             </tr>
           </tbody>
