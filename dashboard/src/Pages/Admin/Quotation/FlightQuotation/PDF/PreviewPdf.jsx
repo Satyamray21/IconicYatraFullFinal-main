@@ -297,12 +297,32 @@ const FlightQuotationPDFDialog = ({
   const footerContactDesignation = selectedCompany?.authorizedSignatory?.designation || "";
 
   const getPoliciesArray = (policyValue) => {
-    if (Array.isArray(policyValue)) return policyValue;
+    if (Array.isArray(policyValue)) {
+      return policyValue.flatMap(item => 
+        typeof item === "string" ? item.split("\n").filter(line => line.trim()) : item
+      );
+    }
     if (typeof policyValue === "string" && policyValue.trim()) {
       return policyValue.split("\n").filter(line => line.trim());
     }
     return [];
   };
+
+  const defaultInclusions = [
+    "Return economy class airfare",
+    "Airport taxes",
+    "Hotel accommodation on twin sharing basis",
+    "Daily breakfast",
+    "All transfers and sightseeing by private vehicle",
+    "All current hotel taxes"
+  ];
+
+  const defaultExclusions = [
+    "Any items of personal nature",
+    "Travel insurance",
+    "Anything not mentioned in inclusions",
+    "Meals/Seats/Extra Baggage for flight"
+  ];
 
   const policiesInclusions = getPoliciesArray(getValue(quotationData, "policies.inclusionPolicy", []));
   const policiesExclusions = getPoliciesArray(getValue(quotationData, "policies.exclusionPolicy", []));
@@ -310,8 +330,10 @@ const FlightQuotationPDFDialog = ({
   const cancellationPolicyFromQuot = getPoliciesArray(getValue(quotationData, "policies.cancellationPolicy", []));
   const termsConditions = getValue(quotationData, "policies.termsAndConditions", "");
 
-  const finalInclusionArray = policiesInclusions.length > 0 ? policiesInclusions : (globalPolicyDefaults.inclusions || []);
-  const finalExclusionArray = policiesExclusions.length > 0 ? policiesExclusions : (globalPolicyDefaults.exclusions || []);
+  const finalInclusionArray = policiesInclusions.length > 0 ? policiesInclusions : 
+    (globalPolicyDefaults.inclusions && globalPolicyDefaults.inclusions.length > 0 ? globalPolicyDefaults.inclusions : defaultInclusions);
+  const finalExclusionArray = policiesExclusions.length > 0 ? policiesExclusions : 
+    (globalPolicyDefaults.exclusions && globalPolicyDefaults.exclusions.length > 0 ? globalPolicyDefaults.exclusions : defaultExclusions);
   const finalPaymentPolicy = paymentPolicy || globalPolicyDefaults.paymentPolicy;
   const finalCancellationArray = cancellationPolicyFromQuot.length > 0 ? cancellationPolicyFromQuot : 
     (globalPolicyDefaults.cancellationPolicy ? globalPolicyDefaults.cancellationPolicy.split("\n").filter(line => line.trim()) : []);
@@ -327,10 +349,10 @@ const FlightQuotationPDFDialog = ({
       ? String(footerCompany).trim()
       : "");
   const getTripTypeText = (type) => {
-    if (type === "oneway") return "One Way Trip";
+    if (type === "oneway") return "One Way";
     if (type === "roundtrip") return "Round Trip";
-    if (type === "multicity") return "Multi City Trip";
-    return "One Way Trip";
+    if (type === "multicity") return "Multi City";
+    return "One Way";
   };
 
   useEffect(() => {
@@ -796,17 +818,21 @@ const FlightQuotationPDFDialog = ({
                 <Group sx={{ mr: 1, verticalAlign: "middle" }} /> Passenger Details
               </Typography>
               <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <Typography variant="body2" color="textSecondary">Adults</Typography>
                   <Typography variant="body1" fontWeight="bold">{adults}</Typography>
                 </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <Typography variant="body2" color="textSecondary">Children</Typography>
                   <Typography variant="body1" fontWeight="bold">{children}</Typography>
                 </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <Typography variant="body2" color="textSecondary">Infants</Typography>
                   <Typography variant="body1" fontWeight="bold">{infants}</Typography>
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <Typography variant="body2" color="textSecondary">Trip Type</Typography>
+                  <Typography variant="body1" fontWeight="bold">{getTripTypeText(tripType)}</Typography>
                 </Grid>
               </Grid>
             </div>

@@ -12,6 +12,15 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const fmtTripType = (type) => {
+  if (!type) return "";
+  const t = String(type).toLowerCase();
+  if (t === "oneway") return "One Way";
+  if (t === "roundtrip") return "Round Trip";
+  if (t === "multicity") return "Multi City";
+  return type;
+};
+
 const fmtDate = (dateString) => {
   if (!dateString) return "";
   if (typeof dateString === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
@@ -193,7 +202,7 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
     </p>
       <p><b>Quotation ID:</b> ${safe(quotation?.flightQuotationId, "-")}</p>
       <p><b>Passenger:</b> ${safe(quotation?.personalDetails?.fullName, "Guest")}</p>
-      <p><b>Trip Type:</b> ${safe(quotation?.tripType, "-")}</p>
+      <p><b>Trip Type:</b> ${fmtTripType(quotation?.tripType)}</p>
       <p><b>${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? "Base Fare" : "Total Fare"}(May vary on the time/date of booking):</b> INR ${INR.format(quotation?.gstType === "Excluded" ? (quotation?.baseFare || totals.total) : totals.total)}</p>
       ${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? `<p><b>GST (${quotation.gstPercentage}%):</b> INR ${INR.format(quotation.gstAmount)}</p><p><b>Total Fare (Incl. GST):</b> INR ${INR.format(totals.total)}</p>` : ""}
       <br/>
@@ -242,7 +251,7 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
       <p style="color:red; font-weight:bold;">${safe(customText.opening, `BOOKING CONFIRMATION FROM ${companyName.toUpperCase()}!!!`)}</p>
       <p><b>BOOKING ID:</b> ${safe(quotation?.flightQuotationId, "-")}</p>
       <p><b>Passenger:</b> ${safe(quotation?.personalDetails?.fullName, "Guest")}</p>
-      <p><b>Trip Type:</b> ${safe(quotation?.tripType, "-")}</p>
+      <p><b>Trip Type:</b> ${fmtTripType(quotation?.tripType)}</p>
       <br/>
       <p style="color:#d32f2f; font-weight:bold;">PAYMENT STATUS:</p>
       <p><b>${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? "Base Fare" : "Package Cost"}:</b> INR ${INR.format(quotation?.gstType === "Excluded" ? (quotation?.baseFare || totals.total) : totals.total)}</p>
