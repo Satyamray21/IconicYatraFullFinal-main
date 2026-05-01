@@ -363,6 +363,28 @@ const FlightFinalize = () => {
     }).format(amount);
   };
 
+  const displayDate = (date) => {
+    if (!date) return "N/A";
+    if (typeof date === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(date)) return date;
+    try {
+      const d = new Date(date);
+      return isNaN(d.getTime()) ? date : d.toLocaleDateString("en-IN");
+    } catch {
+      return date;
+    }
+  };
+
+  const displayTime = (time) => {
+    if (!time) return "N/A";
+    if (typeof time === "string" && (time.includes("AM") || time.includes("PM"))) return time;
+    try {
+      const d = new Date(time);
+      return isNaN(d.getTime()) ? time : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return time;
+    }
+  };
+
   // Get guest info string
   const getGuestInfoString = () => {
     const adults = quotation.adults || 0;
@@ -916,10 +938,10 @@ const FlightFinalize = () => {
                               <TableCell>{flight.flightNo || "N/A"}</TableCell>
                               <TableCell>{pnrList[index] || "N/A"}</TableCell>
                               <TableCell>
-                                {flight.departureDate ? new Date(flight.departureDate).toLocaleDateString() : "N/A"}
+                                {displayDate(flight.departureDate)}
                               </TableCell>
                               <TableCell>
-                                {flight.departureTime ? new Date(flight.departureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A"}
+                                {displayTime(flight.departureTime)}
                               </TableCell>
                               <TableCell>{formatCurrency(finalFareList[index] || flight.fare)}</TableCell>
 

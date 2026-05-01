@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { format } from "date-fns";
 import {
   Box,
   Grid,
@@ -211,7 +212,25 @@ const PreviewDialog = React.memo(({ open, data, onClose }) => {
                     {data.flightDetails?.[0]?.flightNo || "-"}
                   </Typography>
                 </Box>
+              </Box>
 
+              <Box display="flex" justifyContent="space-between">
+                <Box>
+                  <Typography variant="body2" color="textSecondary">
+                    Departure Date
+                  </Typography>
+                  <Typography variant="body1" fontWeight="500">
+                    {data.flightDetails?.[0]?.departureDate || "-"}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: "center" }}>
+                  <Typography variant="body2" color="textSecondary">
+                    Departure Time
+                  </Typography>
+                  <Typography variant="body1" fontWeight="500">
+                    {data.flightDetails?.[0]?.departureTime || "-"}
+                  </Typography>
+                </Box>
                 <Box sx={{ textAlign: "right" }}>
                   <Typography variant="body2" color="textSecondary">
                     Fare
@@ -310,7 +329,25 @@ const PreviewDialog = React.memo(({ open, data, onClose }) => {
                           {leg?.flightNo || "-"}
                         </Typography>
                       </Box>
+                    </Box>
 
+                    <Box display="flex" justifyContent="space-between">
+                      <Box>
+                        <Typography variant="body2" color="textSecondary">
+                          Departure Date
+                        </Typography>
+                        <Typography variant="body1" fontWeight="500">
+                          {leg?.departureDate || "-"}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="body2" color="textSecondary">
+                          Departure Time
+                        </Typography>
+                        <Typography variant="body1" fontWeight="500">
+                          {leg?.departureTime || "-"}
+                        </Typography>
+                      </Box>
                       <Box sx={{ textAlign: "right" }}>
                         <Typography variant="body2" color="textSecondary">
                           Fare
@@ -506,8 +543,8 @@ const QuotationFlightForm = () => {
         preferredAirline: values.airline,
         flightNo: values.flightNo,
         fare: Number(values.fare),
-        departureDate: values.departureDate,
-        departureTime: values.departureTime,
+        departureDate: values.departureDate ? format(values.departureDate, "dd/MM/yyyy") : "",
+        departureTime: values.departureTime ? format(values.departureTime, "hh:mm a") : "",
       });
 
       // Add return flight for roundtrip
@@ -519,8 +556,8 @@ const QuotationFlightForm = () => {
           preferredAirline: values.returnAirline,
           flightNo: values.returnFlightNo,
           fare: Number(values.returnFare || 0),
-          departureDate: values.returnDate,
-          departureTime: values.returnTime,
+          departureDate: values.returnDate ? format(values.returnDate, "dd/MM/yyyy") : "",
+          departureTime: values.returnTime ? format(values.returnTime, "hh:mm a") : "",
         });
       }
 
@@ -536,8 +573,8 @@ const QuotationFlightForm = () => {
             preferredAirline: city.airline,
             flightNo: city.flightNo,
             fare: Number(city.fare || 0),
-            departureDate: city.date,
-            departureTime: city.time,
+            departureDate: city.date ? format(city.date, "dd/MM/yyyy") : "",
+            departureTime: city.time ? format(city.time, "hh:mm a") : "",
           });
         });
       }
@@ -590,8 +627,8 @@ const QuotationFlightForm = () => {
       preferredAirline: v.airline,
       flightNo: v.flightNo,
       fare: v.fare,
-      departureDate: v.departureDate,
-      departureTime: v.departureTime,
+      departureDate: v.departureDate ? format(v.departureDate, "dd/MM/yyyy") : "",
+      departureTime: v.departureTime ? format(v.departureTime, "hh:mm a") : "",
     });
 
     // Roundtrip
@@ -603,8 +640,8 @@ const QuotationFlightForm = () => {
         preferredAirline: v.returnAirline,
         flightNo: v.returnFlightNo,
         fare: v.returnFare,
-        departureDate: v.returnDate,
-        departureTime: v.returnTime,
+        departureDate: v.returnDate ? format(v.returnDate, "dd/MM/yyyy") : "",
+        departureTime: v.returnTime ? format(v.returnTime, "hh:mm a") : "",
       });
     }
 
@@ -617,8 +654,8 @@ const QuotationFlightForm = () => {
           preferredAirline: c.airline,
           flightNo: c.flightNo,
           fare: c.fare,
-          departureDate: c.date,
-          departureTime: c.time,
+          departureDate: c.date ? format(c.date, "dd/MM/yyyy") : "",
+          departureTime: c.time ? format(c.time, "hh:mm a") : "",
         });
       });
     }
@@ -898,7 +935,7 @@ const QuotationFlightForm = () => {
               "AirDeccan",
               "GoAir",
             ].map((item) => (
-              <MenuItem key={item} value={`airline${item}`}>
+              <MenuItem key={item} value={item}>
                 {item}
               </MenuItem>
             ))}
