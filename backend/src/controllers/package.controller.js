@@ -12,7 +12,7 @@ import { getCache, setCache, clearPattern } from "../utils/cache.js";
 // ----------------------
 function calculateStatus(validFrom, validTill, isNewPackage = false) {
     const now = new Date();
-    
+
     // Reset time part for accurate date comparison
     now.setHours(0, 0, 0, 0);
 
@@ -25,11 +25,11 @@ function calculateStatus(validFrom, validTill, isNewPackage = false) {
     if (validFrom && validTill) {
         const fromDate = new Date(validFrom);
         const tillDate = new Date(validTill);
-        
+
         // Reset time for both dates
         fromDate.setHours(0, 0, 0, 0);
         tillDate.setHours(0, 0, 0, 0);
-        
+
         return now >= fromDate && now <= tillDate ? "active" : "deactive";
     }
 
@@ -229,7 +229,7 @@ function normalizeDates(data) {
         const tillDate = new Date(data.validTill);
         tillDate.setHours(23, 59, 59, 999);
         data.validTill = tillDate;
-        
+
         // Ensure validTill is after validFrom
         if (data.validFrom && tillDate <= data.validFrom) {
             // Add one day to validFrom
@@ -500,7 +500,7 @@ export const updateStep1 = asyncHandler(async (req, res) => {
             message: "destinationCountry is required for International tours"
         });
     }
-     if (data.perPerson !== undefined) {
+    if (data.perPerson !== undefined) {
         data.perPerson = parseInt(data.perPerson) || 1;
     }
     if (Array.isArray(data.days)) {
@@ -729,7 +729,7 @@ export const getById = asyncHandler(async (req, res) => {
     packageData.status = calculateStatus(packageData.validFrom, packageData.validTill);
 
     const responseData = normalizePackageUrls(packageData);
-    
+
     await setCache(cacheKey, responseData, 604800);
     console.log(`[DB] Package by ID fetched from MongoDB: ${cacheKey}`);
     res.json({ fromCache: false, ...responseData });
@@ -740,11 +740,14 @@ export const getById = asyncHandler(async (req, res) => {
 // ----------------------
 export const listPackages = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, tourType, search, status } = req.query;
-    const cacheKey = `packages:list:${page}:${limit}:${tourType || 'all'}:${search || 'none'}:${status || 'all'}`;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const dateStr = now.toISOString().split('T')[0];
+    const cacheKey = `packages:list:${page}:${limit}:${tourType || 'all'}:${search || 'none'}:${status || 'all'}:${dateStr}`;
 
     const cachedData = await getCache(cacheKey);
     if (cachedData) {
-        console.log(`[Cache] Package list fetched from Redis: ${cacheKey}`);
+        console.log(`[Cache Hit] Package list fetched from Redis: ${cacheKey}`);
         return res.json({ fromCache: true, ...cachedData });
     }
 
@@ -800,58 +803,66 @@ export const listPackages = asyncHandler(async (req, res) => {
 // GET PACKAGES BY TOUR TYPE (NEW FUNCTION)
 // ----------------------
 export const getPackagesByTourType = async (req, res) => {
-  try {
-    const { tourType } = req.params;
-    const { page = 1, limit = 9, status = "active" } = req.query;
-    const cacheKey = `packages:tourType:${tourType}:${page}:${limit}:${status}`;
+    try {
+        const { tourType } = req.params;
+        const { page = 1, limit = 9, status = "active" } = req.query;
+        
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const dateStr = now.toISOString().split('T')[0];
+        const cacheKey = `packages:tourType:${tourType}:${page}:${limit}:${status}:${dateStr}`;
 
-    const cachedData = await getCache(cacheKey);
-    if (cachedData) {
-        console.log(`[Cache] Packages by tour type fetched from Redis: ${cacheKey}`);
-        return res.json({ fromCache: true, ...cachedData });
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+            console.log(`[Cache Hit] Packages by tour type fetched from Redis: ${cacheKey}`);
+            return res.json({ fromCache: true, ...cachedData });
+        }
+
+        const formattedTourType =
+            tourType.toLowerCase() === "domestic"
+                ? "Domestic"
+                : "International";
+
+        const skip = (page - 1) * limit;
+
+        // Build filter object
+        const filter = {
+            tourType: formattedTourType
+        };
+
+        // Add status filter if provided (defaults to "active")
+        if (status) {
+            filter.status = status;
+        }
+
+        const [packagesDocs, totalPackages] = await Promise.all([
+            Package.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(Number(limit))
+                .lean(),
+            Package.countDocuments(filter)
+        ]);
+
+        const packages = packagesDocs.map(pkg => normalizePackageUrls(pkg));
+
+        const response = {
+            packages,
+            totalPackages,
+            totalPages: Math.ceil(totalPackages / limit),
+            currentPage: Number(page),
+            filters: {
+                tourType: formattedTourType,
+                status: status || "all"
+            }
+        };
+
+        await setCache(cacheKey, response, 604800);
+        console.log(`[DB] Packages by tour type fetched from MongoDB: ${cacheKey}`);
+        res.json({ fromCache: false, ...response });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-
-    const formattedTourType =
-      tourType.toLowerCase() === "domestic"
-        ? "Domestic"
-        : "International";
-
-    const skip = (page - 1) * limit;
-    
-    // Build filter object
-    const filter = {
-      tourType: formattedTourType
-    };
-    
-    // Add status filter if provided (defaults to "active")
-    if (status) {
-      filter.status = status;
-    }
-
-    const packages = await Package.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit));
-
-    const totalPackages = await Package.countDocuments(filter);
-
-    const response = {
-      packages,
-      totalPackages,
-      totalPages: Math.ceil(totalPackages / limit),
-      currentPage: Number(page),
-      filters: {
-        tourType: formattedTourType,
-        status: status || "all"
-      }
-    };
-
-    await setCache(cacheKey, response, 604800);
-    console.log(`[DB] Packages by tour type fetched from MongoDB: ${cacheKey}`);
-    res.json({ fromCache: false, ...response });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 };
 
 
@@ -859,69 +870,74 @@ export const getPackagesByTourType = async (req, res) => {
 
 
 export const getPackagesByCategory = async (req, res) => {
-  try {
-    const { packageCategory } = req.params;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const { status = "active" } = req.query;
-    const cacheKey = `packages:category:${packageCategory}:${page}:${limit}:${status}`;
+    try {
+        const { packageCategory } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const { status = "active" } = req.query;
+        
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const dateStr = now.toISOString().split('T')[0];
+        const cacheKey = `packages:category:${packageCategory}:${page}:${limit}:${status}:${dateStr}`;
 
-    const cachedData = await getCache(cacheKey);
-    if (cachedData) {
-        console.log(`[Cache] Packages by category fetched from Redis: ${cacheKey}`);
-        return res.status(200).json({ fromCache: true, ...cachedData });
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+            console.log(`[Cache Hit] Packages by category fetched from Redis: ${cacheKey}`);
+            return res.status(200).json({ fromCache: true, ...cachedData });
+        }
+
+        const skip = (page - 1) * limit;
+
+        // Build filter object
+        const filter = {
+            packageCategory: { $regex: `^${packageCategory}$`, $options: "i" }
+        };
+
+        // Add status filter if provided
+        if (status) {
+            filter.status = status;
+        }
+
+        // For active packages, also check dates (optional - depending on your business logic)
+        if (status === "active") {
+            filter.validFrom = { $lte: now };
+            filter.validTill = { $gte: now };
+        }
+
+        const [packagesDocs, totalPackages] = await Promise.all([
+            Package.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Package.countDocuments(filter)
+        ]);
+
+        const packages = packagesDocs.map(pkg => normalizePackageUrls(pkg));
+
+        const response = {
+            success: true,
+            totalPackages,
+            currentPage: page,
+            totalPages: Math.ceil(totalPackages / limit),
+            filters: {
+                packageCategory,
+                status: status || "all"
+            },
+            packages
+        };
+
+        await setCache(cacheKey, response, 604800);
+        console.log(`[DB] Packages by category fetched from MongoDB: ${cacheKey}`);
+        res.status(200).json({ fromCache: false, ...response });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
-
-    const skip = (page - 1) * limit;
-
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    // Build filter object
-    const filter = {
-      packageCategory: { $regex: `^${packageCategory}$`, $options: "i" }
-    };
-    
-    // Add status filter if provided
-    if (status) {
-      filter.status = status;
-    }
-
-    // For active packages, also check dates (optional - depending on your business logic)
-    if (status === "active") {
-      filter.validFrom = { $lte: now };
-      filter.validTill = { $gte: now };
-    }
-
-    const totalPackages = await Package.countDocuments(filter);
-
-    const packages = await Package.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const response = {
-      success: true,
-      totalPackages,
-      currentPage: page,
-      totalPages: Math.ceil(totalPackages / limit),
-      filters: {
-        packageCategory,
-        status: status || "all"
-      },
-      packages
-    };
-
-    await setCache(cacheKey, response, 604800);
-    console.log(`[DB] Packages by category fetched from MongoDB: ${cacheKey}`);
-    res.status(200).json({ fromCache: false, ...response });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
 };
 
 
@@ -1058,6 +1074,11 @@ export const makeAllPopular = asyncHandler(async (req, res) => {
         description: `All packages marked as popular by ${req.user?.name || 'System'}`,
         user: req.user?.name || "System",
     });
+
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
 
     res.json({
         message: "All packages marked as popular",
