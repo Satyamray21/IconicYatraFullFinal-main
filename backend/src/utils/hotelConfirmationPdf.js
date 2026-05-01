@@ -2,10 +2,12 @@ import PDFDocument from "pdfkit";
 
 export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
   const companyName = options.companyName || "Iconic Travel";
-  const companyMobile = options.companyMobile || "+91-8130883907";
-  const companyEmail = options.companyEmail || "info@iconictravel.in";
-  const companyWebsite = options.companyWebsite || "www.iconictravel.in";
-  const companyAddress = options.companyAddress || "Noida, Uttar Pradesh";
+  const companyMobile = options.phone || options.companyMobile || "8130883907";
+  const companyEmail = options.email || options.companyEmail || "info@iconictravel.in";
+  const companyWebsite = options.companyWebsite || options.companyWebsite || "www.iconictravel.in";
+  const companyAddress = options.address || options.companyAddress || "B-38, 2nd Floor, Sector-64, Noida, U.P. 201301";
+  const termsConditions = options.termsConditions || "";
+  const cancellationPolicy = options.cancellationPolicy || "";
 
   const guestName = quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
   const bookingId = quotation?.quotationId || quotation?.quickQuotationId || "Booking Id";
@@ -166,6 +168,21 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
 
       doc.fillColor("#000000").font("Helvetica-Bold").text("Website: ", { continued: true });
       doc.fillColor("#0000ff").font("Helvetica").text(companyWebsite, { link: companyWebsite, underline: true });
+
+      if (termsConditions) {
+        doc.fillColor("#000000").font("Helvetica-Bold").text("Terms & Conditions: ", { continued: true });
+        doc.fillColor("#0000ff").font("Helvetica").text(termsConditions, { link: termsConditions, underline: true });
+      }
+
+      if (cancellationPolicy) {
+        doc.fillColor("#000000").font("Helvetica-Bold").text("Cancellation Policy: ", { continued: true });
+        doc.fillColor("#0000ff").font("Helvetica").text(cancellationPolicy, { link: cancellationPolicy, underline: true });
+      }
+
+      if (options.paymentLink) {
+        doc.fillColor("#000000").font("Helvetica-Bold").text("Pay Online: ", { continued: true });
+        doc.fillColor("#0000ff").font("Helvetica").text(options.paymentLink, { link: options.paymentLink, underline: true });
+      }
 
       doc.moveDown(1);
       doc.fillColor("#ff0000").fontSize(11).font("Helvetica-Bold").text("Reg. Address & Corporate Office: ", { continued: true });
