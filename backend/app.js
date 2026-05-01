@@ -165,6 +165,9 @@ app.use("/api/v1/dashboard", verifyToken, dashboardRouter);
 
 import reminderRouter from "./src/routers/reminder.router.js";
 app.use("/api/v1/reminders", verifyToken, reminderRouter);
+
+import notificationRouter from "./src/routers/notification.router.js";
+app.use("/api/v1/notifications", notificationRouter);
 // ==========================================
 // ✅ Fix: Load JSON without import
 const swaggerDocument = JSON.parse(

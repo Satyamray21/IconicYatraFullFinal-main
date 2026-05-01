@@ -9,6 +9,7 @@ import { LeadOptions } from "../models/leadOptions.model.js"
 import { calculateAccommodation } from "../utils/calculateAccommondation.js"
 import { logActivity } from "../utils/ActivityLog.js"
 import { getCache, setCache, clearPattern, deleteCache } from '../utils/cache.js';
+import { Notification } from '../models/Notification.model.js';
 
 //  Helper for single-value fields
 const handleAddMoreValue = (valueObj) => {
@@ -226,6 +227,14 @@ export const createLead = asyncHandler(async (req, res) => {
     user: req.user?.name || req.user?.staffUserId || "System",
   });
 
+  if (assignedTo) {
+    await Notification.create({
+      recipient: assignedTo,
+      message: `You have been assigned a new lead: ${leadId}`,
+      refId: leadId,
+    });
+  }
+
   // Clear leads and dashboard cache
   await Promise.all([
     clearPattern('leads:*'),
@@ -349,6 +358,14 @@ export const updateLead = asyncHandler(async (req, res) => {
       description: `Lead ${leadId} (${existingLead.personalDetails.fullName}) was updated by ${req.user?.name || req.user?.staffUserId || 'System'}`,
       user: req.user?.name || req.user?.staffUserId || "System",
     });
+
+    if (officialDetail?.assignedTo && officialDetail.assignedTo !== existingLead.officialDetail.assignedTo) {
+      await Notification.create({
+        recipient: officialDetail.assignedTo,
+        message: `A lead has been reassigned to you: ${leadId}`,
+        refId: leadId,
+      });
+    }
 
     console.log("✅ Lead updated and saved successfully");
     res.status(200).json(new ApiResponse(200, existingLead, "Lead updated successfully"));
@@ -585,3 +602,20 @@ export const addLeadOption = asyncHandler(async (req, res) => {
     .status(201)
     .json(new ApiResponse(201, { fieldName, value }, "Option added successfully"));
 });
+
+export const getLeadsByStaff = asyncHandler(async (req, res) => {
+  const { staffName } = req.params;
+
+  if (!staffName) {
+    throw new ApiError(400, "Staff name is required");
+  }
+
+  const leads = await Lead.find({ "officialDetail.assignedTo": staffName })
+    .select("leadId personalDetails.fullName officialDetail.assignedTo createdAt status")
+    .sort({ createdAt: -1 });
+
+  return res.status(200).json(
+    new ApiResponse(200, leads, `Leads assigned to ${staffName} fetched successfully`)
+  );
+});
+
