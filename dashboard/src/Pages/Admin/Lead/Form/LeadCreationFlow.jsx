@@ -8,7 +8,7 @@ import { useDispatch } from "react-redux";
 
 const LeadCreationFlow = () => {
   const [step, setStep] = useState(1);
-  const [leadData, setLeadData] = useState(null);
+  const [leadData, setLeadData] = useState({});
   const dispatch = useDispatch();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -21,11 +21,12 @@ const LeadCreationFlow = () => {
   const navigate = useNavigate();
 
   const handleSaveAndContinue = (basicLeadData) => {
-    setLeadData(basicLeadData);
+    setLeadData((prev) => ({ ...prev, ...basicLeadData }));
     setStep(2);
   };
 
-  const handleBackToStepOne = () => {
+  const handleBackToStepOne = (currentTourData) => {
+    setLeadData((prev) => ({ ...prev, ...currentTourData }));
     setStep(1);
   };
 
@@ -76,7 +77,7 @@ const LeadCreationFlow = () => {
     leadData={leadData}
     onComplete={handleComplete}
     isSubmitting={isSubmitting}
-    onBack={() => setStep(1)}
+    onBack={handleBackToStepOne}
   />
 )}
 

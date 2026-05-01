@@ -75,6 +75,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
   const initialData = leadData || location.state?.leadData || {};
 
   const formik = useFormik({
+    enableReinitialize: true,
     initialValues: {
       tourType: "Domestic",
       country: "",
@@ -840,7 +841,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
         <Box mt={2} display="flex" justifyContent="center" gap={2}>
           <Button
             variant="outlined"
-            onClick={onBack}
+            onClick={() => onBack(values)}
           >
             Back
           </Button>
