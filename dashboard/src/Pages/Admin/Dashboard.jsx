@@ -252,11 +252,9 @@ const Dashboard = () => {
     }
   };
 
-  const filteredActivities = stats?.recentActivities?.filter(log => {
-    if (activityFilter === "all") return true;
-    if (activityFilter === "Quotation") return log.model.toLowerCase().includes("quotation") || log.model === "Vehicle";
-    return log.model === activityFilter;
-  }) || [];
+  const filteredActivities = stats?.recentActivities?.filter(log =>
+    activityFilter === "all" ? true : log.model === activityFilter
+  ) || [];
 
   const leadPieData = stats?.leads
     ? [
@@ -355,7 +353,7 @@ const Dashboard = () => {
           {/* Primary Stats Grid */}
           <Grid container spacing={3} mb={6}>
             <Grid size={{ xs: 12, sm: 6, md: 4.5 }}>
-              <StatCard title="Annual Revenue" value={`₹${(stats?.invoices?.revenue || 0).toLocaleString()}`} icon={<TrendingUp />} color="#1976d2" trend="up" trendValue="+14.2%" delay={0.1} />
+              <StatCard title="Gross Income" value={`₹${(stats?.invoices?.revenue || 0).toLocaleString()}`} icon={<TrendingUp />} color="#1976d2" trend="up" trendValue="+14.2%" delay={0.1} />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
               <StatCard title="Pipeline Leads" value={stats?.leads?.total || 0} icon={<Assignment />} color="#2196f3" trend="up" delay={0.2} trendValue="+5.1%" />
@@ -394,7 +392,7 @@ const Dashboard = () => {
                 <CardContent>
                   <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
                     <Box>
-                      <Typography variant="h6" fontWeight={800} sx={{ color: "#1a1a2e" }}>Financial Performance</Typography>
+                      <Typography variant="h6" fontWeight={800} sx={{ color: "#1a1a2e" }}>Gross Income Performance</Typography>
                       <Typography variant="caption" sx={{ color: "rgba(0,0,0,0.5)" }}>Monthly revenue metrics across all invoices</Typography>
                     </Box>
                     <Box display="flex" gap={1}>
@@ -437,7 +435,7 @@ const Dashboard = () => {
                             color: "#1a1a2e",
                             padding: "8px 16px"
                           }}
-                          formatter={(value) => [`₹${value.toLocaleString()}`, 'Revenue']}
+                          formatter={(value) => [`₹${value.toLocaleString()}`, 'Gross Income']}
                           cursor={{ stroke: 'rgba(139, 92, 246, 0.2)', strokeWidth: 2 }}
                         />
                         <Area
@@ -644,10 +642,9 @@ const Dashboard = () => {
                       <Menu anchorEl={filterAnchorEl} open={Boolean(filterAnchorEl)} onClose={handleFilterClose}>
                         <MenuItem onClick={() => { setActivityFilter("all"); handleFilterClose(); }}>All Activity</MenuItem>
                         <MenuItem onClick={() => { setActivityFilter("Lead"); handleFilterClose(); }}>Lead Updates</MenuItem>
-                        <MenuItem onClick={() => { setActivityFilter("Quotation"); handleFilterClose(); }}>Quotation Updates</MenuItem>
+                        <MenuItem onClick={() => { setActivityFilter("Payment"); handleFilterClose(); }}>Payment Logs</MenuItem>
                         <MenuItem onClick={() => { setActivityFilter("Package"); handleFilterClose(); }}>Package Logs</MenuItem>
                         <MenuItem onClick={() => { setActivityFilter("Invoice"); handleFilterClose(); }}>Invoice Logs</MenuItem>
-                        <MenuItem onClick={() => { setActivityFilter("Payment"); handleFilterClose(); }}>Payment Logs</MenuItem>
                       </Menu>
                       <DatePicker
                         value={selectedDate}
@@ -670,7 +667,7 @@ const Dashboard = () => {
                     </Box>
                   </Box>
 
-                  <Box sx={{ position: "relative", maxHeight: 600, overflowY: "auto", pr: 1, '&::-webkit-scrollbar': { width: '6px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.1)', borderRadius: '10px' } }}>
+                  <Box sx={{ position: "relative" }}>
                     <List sx={{ p: 0 }}>
                       {filteredActivities.length > 0 ? (
                         filteredActivities.map((log, idx) => (
@@ -683,27 +680,10 @@ const Dashboard = () => {
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                bgcolor: 
-                                  log.model === 'Lead' ? 'rgba(25,118,210,0.08)' : 
-                                  log.model === 'Payment' ? 'rgba(16,185,129,0.08)' : 
-                                  log.model.toLowerCase().includes('quotation') ? 'rgba(139, 92, 246, 0.08)' :
-                                  log.model === 'Invoice' ? 'rgba(245, 158, 11, 0.08)' :
-                                  log.model === 'Package' ? 'rgba(236, 72, 153, 0.08)' :
-                                  'rgba(0,0,0,0.04)',
-                                color: 
-                                  log.model === 'Lead' ? '#1976d2' : 
-                                  log.model === 'Payment' ? '#10b981' : 
-                                  log.model.toLowerCase().includes('quotation') ? '#8B5CF6' :
-                                  log.model === 'Invoice' ? '#f59e0b' :
-                                  log.model === 'Package' ? '#ec4899' :
-                                  'rgba(0,0,0,0.5)'
+                                bgcolor: log.model === 'Lead' ? 'rgba(25,118,210,0.08)' : (log.model === 'Payment' ? 'rgba(16,185,129,0.08)' : 'rgba(0,0,0,0.04)'),
+                                color: log.model === 'Lead' ? '#1976d2' : (log.model === 'Payment' ? '#10b981' : 'rgba(0,0,0,0.5)')
                               }}>
-                                {log.model === 'Lead' ? <Assignment sx={{ fontSize: 18 }} /> : 
-                                 log.model === 'Payment' ? <Payments sx={{ fontSize: 18 }} /> : 
-                                 log.model.toLowerCase().includes('quotation') ? <Receipt sx={{ fontSize: 18 }} /> :
-                                 log.model === 'Invoice' ? <Article sx={{ fontSize: 18 }} /> :
-                                 log.model === 'Package' ? <Event sx={{ fontSize: 18 }} /> :
-                                 <History sx={{ fontSize: 18 }} />}
+                                {log.model === 'Lead' ? <Assignment sx={{ fontSize: 18 }} /> : (log.model === 'Payment' ? <Payments sx={{ fontSize: 18 }} /> : <History sx={{ fontSize: 18 }} />)}
                               </Box>
                             </ListItemIcon>
                             <ListItemText
@@ -716,20 +696,8 @@ const Dashboard = () => {
                               secondary={
                                 <Box display="flex" flexWrap="wrap" alignItems="center" gap={1.5} mt={1.5}>
                                   <Chip label={log.model} size="small" sx={{
-                                    bgcolor: 
-                                      log.model === 'Lead' ? 'rgba(25,118,210,0.08)' : 
-                                      log.model === 'Payment' ? 'rgba(16,185,129,0.08)' : 
-                                      log.model.toLowerCase().includes('quotation') ? 'rgba(139, 92, 246, 0.08)' :
-                                      log.model === 'Invoice' ? 'rgba(245, 158, 11, 0.08)' :
-                                      log.model === 'Package' ? 'rgba(236, 72, 153, 0.08)' :
-                                      'rgba(0,0,0,0.04)',
-                                    color: 
-                                      log.model === 'Lead' ? '#1976d2' : 
-                                      log.model === 'Payment' ? '#10b981' : 
-                                      log.model.toLowerCase().includes('quotation') ? '#8B5CF6' :
-                                      log.model === 'Invoice' ? '#f59e0b' :
-                                      log.model === 'Package' ? '#ec4899' :
-                                      'rgba(0,0,0,0.6)',
+                                    bgcolor: log.model === 'Lead' ? 'rgba(25,118,210,0.08)' : (log.model === 'Payment' ? 'rgba(16,185,129,0.08)' : 'rgba(0,0,0,0.04)'),
+                                    color: log.model === 'Lead' ? '#1976d2' : (log.model === 'Payment' ? '#10b981' : 'rgba(0,0,0,0.6)'),
                                     height: 20, fontSize: 10, fontWeight: 800, textTransform: "uppercase", borderRadius: 1
                                   }} />
                                   <Chip label={log.action} size="small" sx={{

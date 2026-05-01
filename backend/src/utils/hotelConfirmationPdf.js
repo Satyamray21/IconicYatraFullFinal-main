@@ -100,7 +100,13 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
 
       details.forEach(([label, value], i) => {
         doc.fillColor("#000000").fontSize(11).font("Helvetica-Bold").text(label, col1, startY + i * rowHeight);
-        doc.font("Helvetica").text(value, col2, startY + i * rowHeight);
+        
+        // Make Guest Name and journey dates bold
+        if (label === "Guest Name -" || label === "Date of Journey-" || label === "Tour End Date-") {
+          doc.font("Helvetica-Bold").text(value, col2, startY + i * rowHeight);
+        } else {
+          doc.font("Helvetica").text(value, col2, startY + i * rowHeight);
+        }
       });
 
       doc.y = startY + (details.length * rowHeight) + 30;
@@ -137,7 +143,12 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
 
         hDetails.forEach(([label, value], j) => {
           doc.fillColor("#000000").fontSize(10).font("Helvetica-Bold").text(label, hCol1, hStartY + j * hRowH);
-          doc.font("Helvetica").text(value, hCol2, hStartY + j * hRowH);
+          
+          if (label === "Guest Name -" || label === "Booking PNR -" || label === "Room Type-" || label === "Contact No-") {
+            doc.font("Helvetica-Bold").text(value, hCol2, hStartY + j * hRowH);
+          } else {
+            doc.font("Helvetica").text(value, hCol2, hStartY + j * hRowH);
+          }
         });
 
         doc.y = hStartY + hDetails.length * hRowH + 20;
