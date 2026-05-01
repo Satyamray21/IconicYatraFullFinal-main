@@ -134,14 +134,20 @@ export const createHotelStep1 = async (req, res) => {
 // ----------------------
 export const getHotels = async (req, res) => {
     try {
-        const cacheKey = 'hotels:list:all';
+        const { city } = req.query;
+        const cacheKey = city ? `hotels:list:city:${city.toLowerCase()}` : 'hotels:list:all';
         const cachedData = await getCache(cacheKey);
         if (cachedData) {
             console.log(`[Cache] Hotel list fetched from Redis`);
             return res.status(200).json({ fromCache: true, success: true, data: cachedData });
         }
 
-        const hotels = await Hotel.find();
+        const query = {};
+        if (city) {
+            query['location.city'] = { $regex: new RegExp(`^${city.trim()}$`, 'i') };
+        }
+
+        const hotels = await Hotel.find(query);
         await setCache(cacheKey, hotels, 3600);
         console.log(`[DB] Hotel list fetched from MongoDB`);
         res.status(200).json({ fromCache: false, success: true, data: hotels });

@@ -87,6 +87,22 @@ const quickQuotationSchema = new mongoose.Schema(
                 remarks: { type: String, trim: true, default: "" },
             },
         ],
+        /** Confirmed hotel details for the hotel confirmation mailer */
+        confirmedHotels: [
+            {
+                hotelName: { type: String },
+                hotelAddress: { type: String },
+                city: { type: String },
+                nights: { type: Number },
+                roomType: { type: String },
+                noOfRooms: { type: String },
+                checkInDate: { type: String },
+                checkOutDate: { type: String },
+                mealPlan: { type: String },
+                contactNo: { type: String },
+                bookingPnr: { type: String },
+            }
+        ],
     },
     { timestamps: true }
 );

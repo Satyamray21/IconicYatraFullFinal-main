@@ -14,9 +14,11 @@ import {
   buildCustomQuotationNormalEmail,
   buildCustomQuotationPdfPreviewEmail,
   buildCustomQuotationBookingEmail,
+  buildHotelConfirmationEmail,
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
 import ReceivedVoucher from "../../models/payment.model.js";
+import { buildHotelConfirmationPdf } from "../../utils/hotelConfirmationPdf.js";
 
 // Counter Schema and Model - defined in the same file
 const counterSchema = new mongoose.Schema({
@@ -1024,3 +1026,150 @@ export const updatePackageCalculations = asyncHandler(async (req, res) => {
     await clearPattern('dashboard:stats:*');
   }
 });
+export const saveConfirmedHotels = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmedHotels } = req.body;
+
+    const quotation = await CustomQuotation.findById(id);
+    if (!quotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    quotation.confirmedHotels = confirmedHotels;
+    await quotation.save();
+
+    res.status(200).json(new ApiResponse(200, quotation, "Confirmed hotels saved successfully"));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const sendHotelConfirmationMail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { toEmail, customText, senderAccount } = req.body;
+
+    const quotation = await CustomQuotation.findById(id).lean();
+    if (!quotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    const company = await resolveCompanyForEmail({ 
+      companyId: req.user?.companyId, 
+      companyName: req.body.companyName || "Iconic Travel" 
+    });
+
+    if (!company) {
+      return res.status(404).json({ message: "Company settings not found" });
+    }
+
+    const meta = await loadBookingPaymentDefaults(quotation);
+    const options = {
+      ...meta,
+      ...company,
+      ...customText,
+      guestsLine: `${Number(quotation?.clientDetails?.adults || 0)} Adults, ${Number(quotation?.clientDetails?.children || 0) + Number(quotation?.clientDetails?.kids || 0)} Child`,
+      roomsLine: `${quotation?.tourDetails?.quotationDetails?.rooms?.numberOfRooms || 1} ${quotation?.tourDetails?.quotationDetails?.rooms?.sharingType || "Double sharing"}`,
+      packageType: quotation?.finalizedPackage || "Family Tour Package",
+      duration: {
+        nights: (quotation?.tourDetails?.quotationDetails?.destinations || []).reduce((sum, d) => sum + (Number(d?.nights) || 0), 0),
+        days: (quotation?.tourDetails?.quotationDetails?.destinations || []).reduce((sum, d) => sum + (Number(d?.nights) || 0), 0) + 1
+      },
+      pickupPoint: quotation?.tourDetails?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint,
+      dropPoint: quotation?.tourDetails?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint,
+      mealPlan: quotation?.tourDetails?.quotationDetails?.mealPlan || quotation?.mealPlan
+    };
+
+    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
+    
+    const { user, pass } = resolveMailAuth(senderAccount);
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user, pass },
+    });
+
+    const mailOptions = {
+      from: `"${options.companyName}" <${user}>`,
+      to: toEmail || quotation.clientDetails?.email,
+      subject: `Hotel Confirmation Voucher - ${quotation.quotationId}`,
+      html: `
+        <p>Dear ${guestName},</p>
+        <p>Please find attached the <b>Hotel Confirmation Voucher</b> for your upcoming trip.</p>
+        <p>Thank you for choosing ${options.companyName}.</p>
+        <br/>
+        ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
+        <br/>
+        <p>Best Regards,</p>
+        <p><b>${options.companyName}</b></p>
+      `,
+      attachments: [
+        {
+          filename: `Hotel_Confirmation_${quotation.quotationId}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        }
+      ]
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json(new ApiResponse(200, null, "Hotel confirmation mail sent successfully"));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const previewHotelConfirmation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { customText } = req.body;
+
+    const quotation = await CustomQuotation.findById(id).lean();
+    if (!quotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    const company = await resolveCompanyForEmail({ 
+      companyId: req.body.companyId || req.user?.companyId, 
+      companyName: req.body.companyName || "Iconic Travel" 
+    });
+
+    const meta = await loadBookingPaymentDefaults(quotation);
+    const td = quotation?.tourDetails || {};
+    const qd = td?.quotationDetails || {};
+    const destinations = qd?.destinations || [];
+
+    const adults = Number(quotation?.clientDetails?.adults || qd?.adults) || 0;
+    const children = Number(quotation?.clientDetails?.children || qd?.children) || 0;
+    const kids = Number(quotation?.clientDetails?.kids || qd?.kids) || 0;
+
+    const options = {
+      ...meta,
+      ...company,
+      ...customText,
+      guestsLine: `${adults} Adults, ${children + kids} Child`,
+      roomsLine: `${qd?.rooms?.numberOfRooms || 1} ${qd?.rooms?.sharingType || "Double sharing"}`,
+      packageType: quotation?.finalizedPackage || "Family Tour Package",
+      duration: {
+        nights: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0),
+        days: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0) + 1
+      },
+      startDate: td?.arrivalDate,
+      endDate: td?.departureDate,
+      packageTitle: td?.quotationTitle,
+      destinationSummary: td?.destinationSummary,
+      stayLocations: quotation?.pickupDrop || [],
+      pickupPoint: td?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint,
+      dropPoint: td?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint,
+      mealPlan: qd?.mealPlan || quotation?.mealPlan
+    };
+
+    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    res.status(200).json(new ApiResponse(200, { html: htmlBody }, "Preview generated"));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

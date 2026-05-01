@@ -73,6 +73,7 @@ import AddServiceDialog from "../VehicleQuotation/Dialog/AddServiceDialog";
 import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
+import HotelConfirmationDialog from "./Dialog/HotelConfirmationDialog";
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -507,6 +508,7 @@ const CustomFinalize = () => {
         message: "",
         severity: "success"
     });
+    const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
     const { data: company, status } = useSelector((state) => state.companyUI);
     const [itineraryDialog, setItineraryDialog] = useState({
         open: false,
@@ -2812,6 +2814,16 @@ useEffect(() => {
                                         >
                                             Edit Vendors
                                         </Button>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="secondary"
+                                            startIcon={<CheckCircle />}
+                                            sx={{ ml: 1 }}
+                                            onClick={() => setOpenHotelConfirmation(true)}
+                                        >
+                                            Hotel Confirmation
+                                        </Button>
                                     </Box>
 
                                     {finalizedVendors.length ? (
@@ -3625,6 +3637,13 @@ useEffect(() => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <HotelConfirmationDialog
+                open={openHotelConfirmation}
+                onClose={() => setOpenHotelConfirmation(false)}
+                quotation={selectedQuotation}
+                type="custom"
+            />
         </Box>
     );
 };
