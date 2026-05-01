@@ -29,23 +29,39 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
 
       // --- Package Title ---
       doc.fillColor("#ff0000").fontSize(13).font("Helvetica-Bold").text(packageTitle);
-      doc.fillColor("#000000").fontSize(11).font("Helvetica").text(destinationSummary);
+      
+      if (destinationSummary && destinationSummary !== "()") {
+        doc.fillColor("#000000").fontSize(11).font("Helvetica").text(destinationSummary);
+      }
 
       const stayLocations = options.stayLocations || [];
       if (stayLocations.length > 0) {
         const stayText = `(${stayLocations.map(loc => `${loc.city || loc.cityName} ${loc.nights}N`).join(", ")})`;
-        doc.fillColor("#000000").fontSize(10).font("Helvetica").text(stayText);
+        if (stayText !== "()") {
+          doc.fillColor("#000000").fontSize(10).font("Helvetica").text(stayText);
+        }
       }
 
       doc.moveDown(1);
 
       // --- Inclusions Section ---
       doc.fillColor("#ff0000").fontSize(13).font("Helvetica-Bold").text("INCLUSIONS OF PACKAGE:");
-
+      
       const startY = doc.y + 5;
       const col1 = 40;
       const col2 = 160;
       const rowHeight = 16;
+
+      const formatDate = (d) => {
+        if (!d || d === "standard**") return d;
+        try {
+          const date = new Date(d);
+          if (isNaN(date.getTime())) return d;
+          return date.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+        } catch (e) {
+          return d;
+        }
+      };
 
       const details = [
         ["Guest Name -", guestName],
@@ -54,8 +70,8 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
         ["No of Rooms-", options.roomsLine || "01 Double Sharing"],
         ["Package Type -", options.packageType || "Family Tour Package"],
         ["Duration-", `${options.duration?.nights || 0} Nights ${options.duration?.days || 0} Days`],
-        ["Date of Journey-", `${options.startDate || "standard**"}, Time - standard**`],
-        ["Tour End Date-", `${options.endDate || "standard**"}, Time - standard**`],
+        ["Date of Journey-", `${formatDate(options.startDate)}, Time - standard**`],
+        ["Tour End Date-", `${formatDate(options.endDate)}, Time - standard**`],
         ["Pick Up Point-", options.pickupPoint || "Siliguri Airport/Railway Station**"],
         ["Drop Point -", options.dropPoint || "Siliguri Airport/Railway Station**"],
         ["Meal Plan -", options.mealPlan || "CPI Plan (Breakfast only)"],
@@ -66,22 +82,23 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
         doc.font("Helvetica").text(value, col2, startY + i * rowHeight);
       });
 
-
+      doc.y = startY + (details.length * rowHeight) + 30;
 
       // --- Final Hotel Names ---
-      doc.fillColor("#2e7d32").fontSize(13).font("Helvetica-Bold").text("FINAL HOTEL NAMES WITH CONFIRMATION", { align: "left" });
-      doc.moveDown(1);
+      doc.fillColor("#2e7d32").fontSize(13).font("Helvetica-Bold").text("FINAL HOTEL NAMES WITH CONFIRMATION", 40, doc.y, { align: "left" });
+      doc.moveDown(0.5);
 
       const confirmedHotels = quotation.confirmedHotels || [];
       confirmedHotels.forEach((h, i) => {
-        if (doc.y > 700) doc.addPage();
+        if (doc.y > 650) doc.addPage();
 
-        doc.fillColor("#ff0000").fontSize(12).font("Helvetica-Bold").text(`${i + 1}: ${h.hotelName} in ${h.city} (${h.nights || 1} Night)`);
+        doc.fillColor("#ff0000").fontSize(12).font("Helvetica-Bold").text(`${i + 1}: ${h.hotelName} in ${h.city} (${h.nights || 1} Night)`, 40);
+        doc.moveDown(0.2);
 
-        const hStartY = doc.y + 2;
+        const hStartY = doc.y;
         const hCol1 = 40;
         const hCol2 = 160;
-        const hRowH = 14;
+        const hRowH = 15;
 
         const hDetails = [
           ["Address -", h.hotelAddress || "N/A"],
@@ -89,8 +106,8 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
           ["Person-", options.guestsLine || "N/A"],
           ["Rooms-", options.roomsLine || "N/A"],
           ["Booking PNR -", `${companyName} (for Confirmation)`],
-          ["Check-in Date -", h.checkInDate || "Standard"],
-          ["Check Out Date -", h.checkOutDate || "Standard"],
+          ["Check-in Date -", formatDate(h.checkInDate)],
+          ["Check Out Date -", formatDate(h.checkOutDate)],
           ["Room Type-", h.roomType || "Standard"],
           ["Contact No-", `${h.contactNo || "N/A"} (Manager)`],
         ];
@@ -100,7 +117,7 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
           doc.font("Helvetica").text(value, hCol2, hStartY + j * hRowH);
         });
 
-        doc.y = hStartY + hDetails.length * hRowH + 15;
+        doc.y = hStartY + hDetails.length * hRowH + 20;
       });
 
       // --- Child Policy / Notes ---
