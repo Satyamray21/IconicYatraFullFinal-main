@@ -12,10 +12,22 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const fmtDate = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
+const fmtDate = (dateString) => {
+  if (!dateString) return "";
+  if (typeof dateString === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+    const [day, month, year] = dateString.split("/");
+    const d = new Date(`${year}-${month}-${day}`);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    }
+    return dateString;
+  }
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return String(dateString);
   return d.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -23,10 +35,13 @@ const fmtDate = (iso) => {
   });
 };
 
-const fmtTime = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
+const fmtTime = (timeString) => {
+  if (!timeString) return "";
+  if (typeof timeString === "string" && (timeString.includes("AM") || timeString.includes("PM"))) {
+    return timeString;
+  }
+  const d = new Date(timeString);
+  if (Number.isNaN(d.getTime())) return String(timeString);
   return d.toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
@@ -123,6 +138,9 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
 };
 
 const flightTotals = (quotation = {}) => {
+  if (quotation?.finalFare !== undefined && quotation?.finalFare !== null) {
+    return { total: toNum(quotation.finalFare) };
+  }
   const fareList =
     Array.isArray(quotation?.finalFareList) && quotation.finalFareList.length
       ? quotation.finalFareList

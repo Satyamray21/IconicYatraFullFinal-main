@@ -304,11 +304,11 @@ const FlightQuotationPDFDialog = ({
     return [];
   };
 
-  const policiesInclusions = getPoliciesArray(getValue(quotationData, "policies.inclusions", []));
-  const policiesExclusions = getPoliciesArray(getValue(quotationData, "policies.exclusions", []));
+  const policiesInclusions = getPoliciesArray(getValue(quotationData, "policies.inclusionPolicy", []));
+  const policiesExclusions = getPoliciesArray(getValue(quotationData, "policies.exclusionPolicy", []));
   const paymentPolicy = getValue(quotationData, "policies.paymentPolicy", "");
   const cancellationPolicyFromQuot = getPoliciesArray(getValue(quotationData, "policies.cancellationPolicy", []));
-  const termsConditions = getValue(quotationData, "policies.terms", "");
+  const termsConditions = getValue(quotationData, "policies.termsAndConditions", "");
 
   const finalInclusionArray = policiesInclusions.length > 0 ? policiesInclusions : globalPolicyDefaults.inclusions;
   const finalExclusionArray = policiesExclusions.length > 0 ? policiesExclusions : globalPolicyDefaults.exclusions;

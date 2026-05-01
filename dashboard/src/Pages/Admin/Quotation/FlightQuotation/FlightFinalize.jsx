@@ -595,10 +595,9 @@ const FlightFinalize = () => {
       title: "Inclusion Policy",
       icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
       content: (flightPolicies?.inclusionPolicy?.length ? flightPolicies.inclusionPolicy : [
-        "All flights as per itinerary.",
-        "Airport taxes and fees included.",
-        "24/7 customer support during travel.",
-        "Flight changes allowed as per airline policy."
+        "Economy class airfare",
+        "Applicable airport taxes",
+        "Standard baggage allowance as per airline policy"
       ]),
       field: "policies.inclusionPolicy",
       isArray: true,
@@ -607,10 +606,12 @@ const FlightFinalize = () => {
       title: "Exclusion Policy",
       icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
       content: (flightPolicies?.exclusionPolicy?.length ? flightPolicies.exclusionPolicy : [
-        "Meals on board (unless specified).",
-        "Extra baggage charges.",
-        "Travel insurance.",
-        "Airport transfers."
+        "Any meals or snacks not specified in the inclusions",
+        "Seat selection and preferred seating charges",
+        "Extra baggage charges beyond the standard allowance",
+        "Travel Insurance",
+        "Any items of personal nature (tips, laundry, etc.)",
+        "Anything not explicitly mentioned in the inclusions"
       ]),
       field: "policies.exclusionPolicy",
       isArray: true,
@@ -620,7 +621,7 @@ const FlightFinalize = () => {
       icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
       content: (flightPolicies?.paymentPolicy?.length
         ? flightPolicies.paymentPolicy.join("\n")
-        : "100% payment required at the time of booking confirmation."),
+        : "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.\n20% at reservation + 100% Flight/Train cost\n60% after booking confirmation\nBalance before departure"),
       field: "policies.paymentPolicy",
       isArray: false,
     },
@@ -639,7 +640,7 @@ const FlightFinalize = () => {
 
   const terms = flightPolicies?.termsAndConditions?.length
     ? flightPolicies.termsAndConditions.join("\n")
-    : "1. This is only a Quote. Availability is checked only on confirmation.\n2. Rates are subject to change without prior notice.\n3. All disputes are subject to Noida Jurisdiction only.\n4. Passengers must carry valid ID proof and booking reference.";
+    : "Fares are subject to availability at the time of booking\nTickets are non-refundable and non-changeable unless specified otherwise\nPassport must be valid for at least 6 months from the date of travel";
 
   // Prepare data for PDF dialog
   const quotationForPdf = {

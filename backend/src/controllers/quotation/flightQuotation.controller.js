@@ -77,6 +77,33 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
     // ✅ Generate unique Flight Quotation ID
     const flightQuotationId = await generateFlightQuotationId();
 
+    const defaultPolicies = {
+        inclusionPolicy: [
+            "Economy class airfare",
+            "Applicable airport taxes",
+            "Standard baggage allowance as per airline policy"
+        ],
+        exclusionPolicy: [
+            "Any meals or snacks not specified in the inclusions",
+            "Seat selection and preferred seating charges",
+            "Extra baggage charges beyond the standard allowance",
+            "Travel Insurance",
+            "Any items of personal nature (tips, laundry, etc.)",
+            "Anything not explicitly mentioned in the inclusions"
+        ],
+        paymentPolicy: [
+            "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.",
+            "20% at reservation + 100% Flight/Train cost",
+            "60% after booking confirmation",
+            "Balance before departure"
+        ],
+        termsAndConditions: [
+            "Fares are subject to availability at the time of booking",
+            "Tickets are non-refundable and non-changeable unless specified otherwise",
+            "Passport must be valid for at least 6 months from the date of travel"
+        ]
+    };
+
     // ✅ Create quotation
     const quotation = await FlightQuotation.create({
         flightQuotationId,
@@ -91,7 +118,8 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
         personalDetails,
         status: status || "New",
         quotation_type: "flight",
-        leadId: lead.leadId
+        leadId: lead.leadId,
+        policies: defaultPolicies
     });
 
     await logActivity({
