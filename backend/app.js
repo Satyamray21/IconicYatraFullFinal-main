@@ -128,6 +128,9 @@ app.use("/api/v1/companyUI", companyUiRouter);
 import vehicleQuotationRouter from "./src/routers/quotation/vehicleQuotation.router.js";
 app.use("/api/v1/vehicleQT", verifyToken, vehicleQuotationRouter);
 
+import unifiedQuotationRouter from "./src/routers/quotation/unifiedQuotation.router.js";
+app.use("/api/v1/quotations", verifyToken, unifiedQuotationRouter);
+
 import galleryRoutes from "./src/routers/gallery.routes.js";
 
 app.use("/api/v1/gallery", galleryRoutes);

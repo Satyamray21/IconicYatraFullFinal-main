@@ -14,6 +14,7 @@ import {
     saveConfirmedHotels,
     sendHotelConfirmationMail,
     previewHotelConfirmation,
+    getQuotationList,
 } from "../../controllers/quotation/customQuotation.controller.js";
 import { upload } from "../../middleware/imageMulter.middleware.js";
 import { requirePermission } from "../../middleware/staffPermission.middleware.js";
@@ -22,6 +23,7 @@ const router = Router();
 
 router.post("/", requirePermission("canCreateQuotation"), createCustomQuotation);
 router.get("/", requirePermission("canAccessQuotations"), getAllCustomQuotations);
+router.get("/list/search", requirePermission("canAccessQuotations"), getQuotationList);
 
 router.post(
     "/update-step",
