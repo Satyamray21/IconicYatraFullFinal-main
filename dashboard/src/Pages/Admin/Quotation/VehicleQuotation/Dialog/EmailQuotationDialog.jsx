@@ -84,7 +84,6 @@ const EmailQuotationDialog = ({
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
         <DialogTitle>Email</DialogTitle>
         <Formik
-          enableReinitialize
           initialValues={initialValues}
           validationSchema={validationSchema}
           onSubmit={handleSubmit}
