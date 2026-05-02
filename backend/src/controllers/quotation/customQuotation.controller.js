@@ -1188,3 +1188,31 @@ export const previewHotelConfirmation = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Get a simplified list of quotations for selection dropdowns
+export const getQuotationList = asyncHandler(async (req, res) => {
+  const { search } = req.query;
+  let query = {};
+  
+  if (search) {
+    query = {
+      $or: [
+        { quotationId: { $regex: search, $options: "i" } },
+        { "clientDetails.clientName": { $regex: search, $options: "i" } }
+      ]
+    };
+  }
+
+  const quotations = await CustomQuotation.find(query)
+    .select("_id quotationId clientDetails.clientName")
+    .limit(20)
+    .sort({ createdAt: -1 });
+
+  const formattedQuotations = quotations.map(q => ({
+    _id: q._id,
+    quotationId: q.quotationId,
+    clientName: q.clientDetails?.clientName || "N/A"
+  }));
+
+  return res.status(200).json(new ApiResponse(200, formattedQuotations, "Quotation list fetched successfully"));
+});

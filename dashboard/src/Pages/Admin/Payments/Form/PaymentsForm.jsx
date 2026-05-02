@@ -26,6 +26,7 @@ import { toast } from "react-toastify";
 import { createVoucher } from "../../../../features/payment/paymentSlice";
 import axios from "../../../../utils/axios";
 import PartySelector from "./PartySelector"
+import QuotationSelector from "./QuotationSelector";
 import { getAllBankDetails } from "../../../../features/bank/bankSlice";
 
 
@@ -84,6 +85,7 @@ const PaymentsForm = () => {
                 : "",
             amount: "",
             paymentLinkUsed: false,
+            quotationRef: "",
         }),
         [quotationRefParam, partyFromUrl]
     );
@@ -118,7 +120,7 @@ const PaymentsForm = () => {
                     particulars: values.particulars,
                     amount: values.amount,
                     invoice: getNextInvoiceNumber(),
-                    ...(quotationRefParam ? { quotationRef: quotationRefParam } : {}),
+                    quotationRef: values.quotationRef || quotationRefParam || undefined,
                 };
 
                 await dispatch(createVoucher(payload)).unwrap();
@@ -397,6 +399,13 @@ useEffect(() => {
                                 </Box>
                             </Grid>
                         )}
+
+                        <Grid size={{ xs: 12 }}>
+                            <QuotationSelector 
+                                formik={formik} 
+                                prefillQuotationId={quotationRefParam}
+                            />
+                        </Grid>
 
                         <Grid size={{ xs: 12 }}>
                             <TextField

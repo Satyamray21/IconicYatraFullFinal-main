@@ -25,6 +25,7 @@ import { toast } from "react-toastify";
 import { updateVoucher } from "../../../../features/payment/paymentSlice";
 import axios from "../../../../utils/axios";
 import PartySelector from "./PartySelector";
+import QuotationSelector from "./QuotationSelector";
 import { getAllBankDetails } from "../../../../features/bank/bankSlice";
 const paymentModes = ["Cash", "Yes Bank", "Kotak"];
 const paymentLink = "https://iconicyatra.com/payment";
@@ -55,6 +56,7 @@ const EditPaymentForm = () => {
             particulars: "",
             amount: "",
             paymentLinkUsed: false,
+            quotationRef: "",
         },
         validationSchema: Yup.object({
             date: Yup.string().required("Date is required"),
@@ -132,6 +134,7 @@ const EditPaymentForm = () => {
                         amount: voucher.amount || "",
                         paymentLinkUsed: voucher.paymentLinkUsed || false,
                         paymentScreenshot: voucher.paymentScreenshot || "",
+                        quotationRef: voucher.quotationRef || "",
                     });
 
                     if (voucher.paymentScreenshot) {
@@ -404,6 +407,11 @@ const EditPaymentForm = () => {
                             </Box>
                         </Grid>
                     )}
+
+                    {/* Quotation Reference */}
+                    <Grid size={{ xs: 12 }}>
+                        <QuotationSelector formik={formik} />
+                    </Grid>
 
                     {/* Amount */}
                     <Grid size={{ xs: 12 }}>
