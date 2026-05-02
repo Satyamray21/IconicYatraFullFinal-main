@@ -904,20 +904,11 @@ useEffect(() => {
         quotation?.finalizedVendorsWithAmounts,
     ]);
 
-    useEffect(() => {
-        const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
-        setQuotation((prev) => ({
-            ...prev,
-            footer: {
-                ...prev.footer,
-                received: `₹ ${receivedFromClient.toLocaleString("en-IN")}`,
-                balance:
-                    packageTotalForFooter != null
-                        ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}`
-                        : prev.footer.balance,
-            },
-        }));
-    }, [paymentHistory, packageTotalForFooter]);
+    const { receivedFromClient, paidToVendor } = React.useMemo(() => summarizeVoucherAmounts(paymentHistory), [paymentHistory]);
+    const paymentReceivedDisplay = `₹ ${receivedFromClient.toLocaleString("en-IN")}`;
+    const paymentBalanceDisplay = packageTotalForFooter != null 
+        ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}` 
+        : "₹ 0";
 
     // Update the transformApiData function to handle the actual API response structure
     const transformApiData = (apiData) => {
@@ -2285,7 +2276,7 @@ useEffect(() => {
     const infoMap = {
         call: `📞 ${quotation.footer.phone}`,
         email: `✉️ ${quotation.footer.email}`,
-        payment: `Received from client: ${quotation.footer.received}\n Balance due: ${quotation.footer.balance}`,
+        payment: `Received from client: ${paymentReceivedDisplay}\n Balance due: ${paymentBalanceDisplay}`,
         quotation: `Total Quotation Cost: ${
             packageTotalForFooter != null
                 ? `₹ ${Math.round(packageTotalForFooter).toLocaleString("en-IN")}`
