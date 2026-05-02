@@ -4,7 +4,7 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
   const companyName = options.companyName || "Iconic Travel";
   const companyMobile = options.phone || options.companyMobile || "8130883907";
   const companyEmail = options.email || options.companyEmail || "info@iconictravel.in";
-  const companyWebsite = options.companyWebsite || options.companyWebsite || "www.iconictravel.in";
+  const companyWebsite = options.companyWebsite || options.website || "www.iconictravel.in";
   const companyAddress = options.address || options.companyAddress || "B-38, 2nd Floor, Sector-64, Noida, U.P. 201301";
   const termsConditions = options.termsConditions || "";
   const cancellationPolicy = options.cancellationPolicy || "";
