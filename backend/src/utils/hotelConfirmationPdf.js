@@ -160,6 +160,7 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
       // --- Child Policy / Notes ---
       if (doc.y > 650) doc.addPage();
       doc.moveDown(1);
+      doc.x = 40;
       doc.fillColor("#ff0000").fontSize(12).font("Helvetica-Bold").text("Child Policy- ", { continued: true });
       doc.fillColor("#000000").font("Helvetica").text("Above 05y Childs are payable and this depends on the hotel if they charge or not if not included in room sharing.");
 
@@ -173,6 +174,7 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
 
       // --- Footer ---
       doc.moveDown(2);
+      doc.x = 40;
       doc.fillColor("#ff0000").fontSize(12).font("Helvetica-Bold").text("Warm & Regards,");
       doc.text(companyName);
       doc.text("Reservation Team");
