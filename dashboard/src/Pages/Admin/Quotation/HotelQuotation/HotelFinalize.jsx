@@ -64,6 +64,7 @@ import EditDialog from "../VehicleQuotation/Dialog/EditDialog";
 import AddServiceDialog from "../VehicleQuotation/Dialog/AddServiceDialog";
 import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import { fetchHotelQuotationById } from "../../../../features/quotation/hotelQuotation";
+import axios from "../../../../utils/axios";
 
 // Helper function to format date
 const formatDate = (dateString) => {
@@ -102,6 +103,8 @@ const HotelFinalize = () => {
     const [vendor, setVendor] = useState("");
     const [isFinalized, setIsFinalized] = useState(false);
     const [invoiceGenerated, setInvoiceGenerated] = useState(false);
+    const [paymentHistory, setPaymentHistory] = useState([]);
+    const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
 
     // Dialog states
     const [editDialog, setEditDialog] = useState({
@@ -158,12 +161,38 @@ const HotelFinalize = () => {
         { value: "non", label: "Non", rate: 0 },
     ];
 
+    const apiEntityId = React.useMemo(() => {
+        if (quotation?.hotelQuotationId) return String(quotation.hotelQuotationId);
+        if (quotation?._id) return String(quotation._id);
+        if (id && /^[a-f\d]{24}$/i.test(String(id))) return String(id);
+        return id;
+    }, [quotation?.hotelQuotationId, quotation?._id, id]);
+
+    const loadPaymentHistory = React.useCallback(async () => {
+        if (!apiEntityId) return;
+        setPaymentHistoryLoading(true);
+        try {
+            const res = await axios.get(
+                `/payment/by-quotation/${encodeURIComponent(apiEntityId)}`,
+            );
+            setPaymentHistory(res.data?.data || []);
+        } catch (e) {
+            setPaymentHistory([]);
+        } finally {
+            setPaymentHistoryLoading(false);
+        }
+    }, [apiEntityId]);
+
     // Fetch quotation data when component mounts or ID changes
     useEffect(() => {
         if (id) {
             dispatch(fetchHotelQuotationById(id));
         }
     }, [dispatch, id]);
+
+    useEffect(() => {
+        loadPaymentHistory();
+    }, [apiEntityId, loadPaymentHistory]);
 
     // Transform API data to component format
     const transformQuotationData = (apiData) => {
@@ -533,10 +562,30 @@ const HotelFinalize = () => {
     };
 
     // Constants for UI rendering
+    const formatCurrency = (amount) => {
+        if (!amount && amount !== 0) return "₹ 0";
+        return new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency: "INR",
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(amount);
+    };
+
+    const totalReceived = paymentHistory.reduce((acc, v) => {
+        const isReceive = v?.drCr === "Cr" || v?.paymentType === "Receive Voucher" || v?.particulars?.toLowerCase().includes("receive");
+        return isReceive ? acc + (parseFloat(v.amount) || 0) : acc;
+    }, 0);
+    // Note: quotationData.pricing.total might be a string like "₹ 3,340". We should try to get a numeric total.
+    // However, since HotelFinalize seems to have hardcoded strings in its transform function, this is tricky.
+    // For now, let's use the numeric total if possible.
+    const numericTotal = parseFloat(String(quotationData.pricing.total).replace(/[^0-9.]/g, "")) || 0;
+    const balanceAmount = Math.max(0, numericTotal - totalReceived);
+
     const infoMap = {
         call: `📞 ${quotationData.footer.phone}`,
         email: `✉️ ${quotationData.footer.email}`,
-        payment: `Received: ${quotationData.footer.received}\n Balance: ${quotationData.footer.balance}`,
+        payment: `Received: ${formatCurrency(totalReceived)}\n Balance: ${formatCurrency(balanceAmount)}`,
         quotation: `Total Quotation Cost: ${quotationData.pricing.total}`,
         guest: `No. of Guests: ${quotationData.hotel.guests}`,
     };

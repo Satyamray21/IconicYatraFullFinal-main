@@ -232,6 +232,13 @@ const VehicleQuotationPage = () => {
     (state) => state.vehicleQuotation,
   );
   const { data: company, status } = useSelector((state) => state.companyUI);
+
+  const apiEntityId = React.useMemo(() => {
+    if (q?.vehicle?.vehicleQuotationId) return String(q.vehicle.vehicleQuotationId);
+    if (q?.vehicle?._id) return String(q.vehicle._id);
+    if (id && /^[a-f\d]{24}$/i.test(String(id))) return String(id);
+    return id;
+  }, [q?.vehicle?.vehicleQuotationId, q?.vehicle?._id, id]);
   // Initialize local itinerary from API data
   useEffect(() => {
     if (q?.vehicle?.itinerary) {
@@ -324,11 +331,11 @@ const VehicleQuotationPage = () => {
   }, [dispatch, id]);
 
   const loadPaymentHistory = async () => {
-    if (!id) return;
+    if (!apiEntityId) return;
     setPaymentHistoryLoading(true);
     try {
       const res = await axios.get(
-        `/payment/by-quotation/${encodeURIComponent(id)}`,
+        `/payment/by-quotation/${encodeURIComponent(apiEntityId)}`,
       );
       setPaymentHistory(res.data?.data || []);
     } catch (e) {
@@ -396,7 +403,7 @@ const VehicleQuotationPage = () => {
   useEffect(() => {
     loadPaymentHistory();
     loadMailCompanies();
-  }, [id]);
+  }, [apiEntityId]);
 
   const actions = [
     "Finalize",

@@ -101,6 +101,8 @@ const FlightFinalize = () => {
   const [editDialog, setEditDialog] = useState({
     value: "",
   });
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
 
   const [gstType, setGstType] = useState("Included");
   const [gstPercentage, setGstPercentage] = useState(0);
@@ -114,6 +116,13 @@ const FlightFinalize = () => {
   );
   const quotation = quotationDetails?.quotation || null;
   const lead = quotationDetails?.lead || null;
+
+  const apiEntityId = React.useMemo(() => {
+    if (quotation?.flightQuotationId) return String(quotation.flightQuotationId);
+    if (quotation?._id) return String(quotation._id);
+    if (id && /^[a-f\d]{24}$/i.test(String(id))) return String(id);
+    return id;
+  }, [quotation?.flightQuotationId, quotation?._id, id]);
   // Load flight data whenever quotation changes
   useEffect(() => {
     if (quotation) {
@@ -144,6 +153,25 @@ const FlightFinalize = () => {
       dispatch(getFlightQuotationById(id));
     }
   }, [id, dispatch]);
+
+  const loadPaymentHistory = React.useCallback(async () => {
+    if (!apiEntityId) return;
+    setPaymentHistoryLoading(true);
+    try {
+      const res = await axios.get(
+        `/payment/by-quotation/${encodeURIComponent(apiEntityId)}`,
+      );
+      setPaymentHistory(res.data?.data || []);
+    } catch (e) {
+      setPaymentHistory([]);
+    } finally {
+      setPaymentHistoryLoading(false);
+    }
+  }, [apiEntityId]);
+
+  useEffect(() => {
+    loadPaymentHistory();
+  }, [apiEntityId, loadPaymentHistory]);
 
   // Keep total fare in sync with per-flight fare edits.
   useEffect(() => {
@@ -515,10 +543,16 @@ const FlightFinalize = () => {
     }
   };
 
+  const totalReceived = paymentHistory.reduce((acc, v) => {
+    const isReceive = v?.drCr === "Cr" || v?.paymentType === "Receive Voucher" || v?.particulars?.toLowerCase().includes("receive");
+    return isReceive ? acc + (parseFloat(v.amount) || 0) : acc;
+  }, 0);
+  const balanceAmount = totalFinalFare - totalReceived;
+
   const infoMap = {
     call: `📞 ${getCustomerMobile()}`,
     email: `✉️ ${getCustomerEmail()}`,
-    payment: `Received: 0\n Balance: ${formatCurrency(totalFinalFare)}`,
+    payment: `Received: ${formatCurrency(totalReceived)}\n Balance: ${formatCurrency(balanceAmount)}`,
     quotation: `Total Quotation Cost: ${formatCurrency(totalFinalFare)}`,
     guest: getGuestInfoString(),
     location: `📍 ${getCustomerLocation()}`,
