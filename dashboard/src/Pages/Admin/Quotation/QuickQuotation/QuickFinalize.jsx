@@ -130,16 +130,28 @@ function linesToPolicyArray(v) {
 function buildQuickMongoSetFromEditDialog(editDialog, newValue) {
   const parseDateTimeFromText = (value) => {
     const raw = String(value || "");
+    // Updated regex to support AM/PM
     const m = raw.match(
-      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2}))?\)/i,
+      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?\)/i,
     );
     if (!m) return { dateIso: "", time: "" };
+
     const dd = String(m[1]).padStart(2, "0");
     const mm = String(m[2]).padStart(2, "0");
     const yyyy = String(m[3]).length === 2 ? `20${m[3]}` : String(m[3]);
-    const hh = m[4] ? String(m[4]).padStart(2, "0") : "";
+    let hhNum = m[4] ? parseInt(m[4], 10) : null;
     const min = m[5] ? String(m[5]).padStart(2, "0") : "";
+    const ampm = m[6] ? m[6].toUpperCase() : null;
+
+    // Convert AM/PM to 24h for storage
+    if (hhNum !== null && ampm) {
+      if (ampm === "PM" && hhNum < 12) hhNum += 12;
+      if (ampm === "AM" && hhNum === 12) hhNum = 0;
+    }
+
+    const hh = hhNum !== null ? String(hhNum).padStart(2, "0") : "";
     const dateIso = `${yyyy}-${mm}-${dd}T00:00:00.000Z`;
+
     return {
       dateIso: Number.isNaN(new Date(dateIso).getTime()) ? "" : dateIso,
       time: hh && min ? `${hh}:${min}` : "",
@@ -572,9 +584,15 @@ const formatDateTime = (dateString) => {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const yyyy = date.getFullYear();
-  const hh = String(date.getHours()).padStart(2, "0");
+  
+  let hh = date.getHours();
+  const ampm = hh >= 12 ? "PM" : "AM";
+  hh = hh % 12;
+  hh = hh ? hh : 12; // the hour '0' should be '12'
+  const hhStr = String(hh).padStart(2, "0");
   const min = String(date.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${yyyy} at ${hh}:${min}`;
+
+  return `${dd}/${mm}/${yyyy} at ${hhStr}:${min} ${ampm}`;
 };
 
 const formatDateWithOptionalTime = (dateValue, timeValue) => {
@@ -624,7 +642,13 @@ const normalizePointLabel = (text) => {
   return uniqueParts.join(" - ") || "—";
 };
 
-const editablePickupDropPoint = (value) => normalizePointLabel(value);
+const editablePickupDropPoint = (value) => {
+  // Don't use normalizePointLabel here because it strips parentheses
+  // which contain the date/time the user needs to edit.
+  return String(value || "")
+    .replace(/^((arrival|departure)\s*:\s*)+/i, "")
+    .trim();
+};
 
 /** True when `days` is a list of day objects (not a night-count number from snapshot). */
 function isQuickPackageDayObjectArray(days) {
