@@ -8,6 +8,9 @@ import { getNextLeadId } from "../utils/getNextLeadId.js";
 import { LeadOptions } from "../models/leadOptions.model.js"
 import { calculateAccommodation } from "../utils/calculateAccommondation.js"
 import { logActivity } from "../utils/ActivityLog.js"
+import { getCache, setCache, clearPattern, deleteCache } from '../utils/cache.js';
+import { Notification } from '../models/Notification.model.js';
+
 //  Helper for single-value fields
 const handleAddMoreValue = (valueObj) => {
   if (typeof valueObj === "string") return valueObj;
@@ -38,12 +41,14 @@ const saveAddMoreValue = async (fieldName, value) => {
       const exists = await LeadOptions.findOne({ fieldName, value: v.trim() });
       if (!exists) {
         await LeadOptions.create({ fieldName, value: v.trim() });
+        await deleteCache('leads:options');
       }
     }
   } else {
     const exists = await LeadOptions.findOne({ fieldName, value: value.trim() });
     if (!exists) {
       await LeadOptions.create({ fieldName, value: value.trim() });
+      await deleteCache('leads:options');
     }
   }
 };
@@ -215,24 +220,46 @@ export const createLead = asyncHandler(async (req, res) => {
     status: "Active",
   });
   await logActivity({
-    action: "Created",
+    action: "CREATE",
     model: "Lead",
-    referenceId: leadId,
-    description: `Lead ${leadId} created successfully by ${req.user?.name || 'System'}`,
-    performedBy: req.user?.name || "System",
+    refId: leadId,
+    description: `Lead ${leadId} (${personalDetails.fullName}) was created by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+    user: req.user?.name || req.user?.staffUserId || "System",
   });
+
+  if (assignedTo) {
+    await Notification.create({
+      recipient: assignedTo,
+      message: `You have been assigned a new lead: ${leadId}`,
+      refId: leadId,
+    });
+  }
+
+  // Clear leads and dashboard cache
+  await Promise.all([
+    clearPattern('leads:*'),
+    clearPattern('dashboard:stats:*')
+  ]);
 
   return res
     .status(201)
     .json(new ApiResponse(201, newLead, "Lead created successfully"));
+
 });
 
 
 
 // view Lead
 export const viewAllLeads = asyncHandler(async (req, res) => {
+  const cacheKey = 'leads:all';
+  const cachedLeads = await getCache(cacheKey);
+  if (cachedLeads) {
+    return res.status(200).json(new ApiResponse(200, cachedLeads, "All leads fetched from cache"));
+  }
+
   try {
-     const lead = await Lead.find().sort({ createdAt: -1 });
+    const lead = await Lead.find().sort({ createdAt: -1 });
+    await setCache(cacheKey, lead, 3600); // Cache for 1 hour
     res.status(200)
       .json(new ApiResponse(200, lead, "All leads fetched successfully"))
   }
@@ -241,6 +268,7 @@ export const viewAllLeads = asyncHandler(async (req, res) => {
     throw new ApiError(404, {}, "No lead found")
   }
 })
+
 //update Lead
 export const updateLead = asyncHandler(async (req, res) => {
   const { leadId } = req.params;
@@ -315,8 +343,33 @@ export const updateLead = asyncHandler(async (req, res) => {
 
   try {
     await existingLead.save();
+
+    // Clear relevant caches
+    await Promise.all([
+      clearPattern('leads:*'),
+      clearPattern('dashboard:stats:*'),
+      deleteCache(`leads:id:${leadId}`)
+    ]);
+
+    await logActivity({
+      action: "UPDATE",
+      model: "Lead",
+      refId: leadId,
+      description: `Lead ${leadId} (${existingLead.personalDetails.fullName}) was updated by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+      user: req.user?.name || req.user?.staffUserId || "System",
+    });
+
+    if (officialDetail?.assignedTo && officialDetail.assignedTo !== existingLead.officialDetail.assignedTo) {
+      await Notification.create({
+        recipient: officialDetail.assignedTo,
+        message: `A lead has been reassigned to you: ${leadId}`,
+        refId: leadId,
+      });
+    }
+
     console.log("✅ Lead updated and saved successfully");
     res.status(200).json(new ApiResponse(200, existingLead, "Lead updated successfully"));
+
   } catch (error) {
     console.error("❌ Error saving lead:", error);
     throw new ApiError(500, error.message || "Failed to update lead");
@@ -325,8 +378,15 @@ export const updateLead = asyncHandler(async (req, res) => {
 
 //view Data wise 
 export const viewAllLeadsReports = asyncHandler(async (req, res) => {
+  const cacheKey = 'leads:reports';
+  const cachedReports = await getCache(cacheKey);
+  if (cachedReports) {
+    return res.status(200).json(new ApiResponse(200, cachedReports, "Leads reports fetched from cache"));
+  }
+
   try {
     const leads = await Lead.find();
+
 
     const now = new Date();
 
@@ -380,9 +440,12 @@ export const viewAllLeadsReports = asyncHandler(async (req, res) => {
       { title: "Last 12 Months", ...last12 },
     ];
 
+    await setCache(cacheKey, stats, 1800); // Cache reports for 30 minutes
+
     res
       .status(200)
       .json(new ApiResponse(200, stats, "All leads fetched successfully"));
+
   } catch (err) {
     console.log("Error", err.message);
     throw new ApiError(404, {}, "No lead found");
@@ -404,14 +467,22 @@ export const deleteLead = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Lead not found");
   }
   await logActivity({
-    action: "Deleted",
+    action: "DELETE",
     model: "Lead",
-    referenceId: leadId,
-    description: `Lead ${leadId} deleted by ${req.user?.name || 'System'}`,
-    performedBy: req.user?.name || "System",
+    refId: leadId,
+    description: `Lead ${leadId} (${deletedLead.personalDetails.fullName}) deleted by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+    user: req.user?.name || req.user?.staffUserId || "System",
   });
 
+  // Clear relevant caches
+  await Promise.all([
+    clearPattern('leads:*'),
+    clearPattern('dashboard:stats:*'),
+    deleteCache(`leads:id:${leadId}`)
+  ]);
+
   res.status(200).json(new ApiResponse(200, {}, "Lead deleted successfully"));
+
 });
 
 //view by LeadId 
@@ -420,13 +491,24 @@ export const viewByLeadId = asyncHandler(async (req, res) => {
   if (!leadId) {
     throw new ApiError(400, "leadId is required");
   }
+
+  const cacheKey = `leads:id:${leadId}`;
+  const cachedLead = await getCache(cacheKey);
+  if (cachedLead) {
+    return res.status(200).json(new ApiResponse(200, cachedLead, "Lead fetched from cache"));
+  }
+
   const lead = await Lead.findOne({ leadId });
   if (!lead) {
     throw new ApiError(404, "Lead not found");
   }
+
+  await setCache(cacheKey, lead, 3600);
+
   res.status(200)
     .json(new ApiResponse(200, lead, "Lead fetched successfully by given Id"));
 })
+
 //change in Status
 export const changeLeadStatus = asyncHandler(async (req, res) => {
   const { leadId } = req.params;
@@ -465,12 +547,20 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
 
   lead.status = status;
   await lead.save();
+
+  // Clear relevant caches
+  await Promise.all([
+    clearPattern('leads:*'),
+    clearPattern('dashboard:stats:*'),
+    deleteCache(`leads:id:${leadId}`)
+  ]);
+
   await logActivity({
     action: "Status Changed",
     model: "Lead",
-    referenceId: leadId,
-    description: `Lead ${leadId} status changed from ${currentStatus} to ${status} by ${req.user?.name || 'System'}`,
-    performedBy: req.user?.name || "System",
+    refId: leadId,
+    description: `Lead ${leadId} (${lead.personalDetails.fullName}) status changed from ${currentStatus} to ${status} by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+    user: req.user?.name || req.user?.staffUserId || "System",
   });
 
   return res
@@ -479,7 +569,14 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
 });
 
 export const getLeadOptions = asyncHandler(async (req, res) => {
+  const cacheKey = 'leads:options';
+  const cachedOptions = await getCache(cacheKey);
+  if (cachedOptions) {
+    return res.status(200).json(new ApiResponse(200, cachedOptions, "Lead options fetched from cache"));
+  }
+
   const options = await LeadOptions.find().sort({ fieldName: 1, value: 1 });
+  await setCache(cacheKey, options, 3600);
 
   return res.status(200).json(
     new ApiResponse(200, options, "Lead options fetched successfully")
@@ -496,9 +593,29 @@ export const addLeadOption = asyncHandler(async (req, res) => {
 
   if (!exists) {
     await LeadOptions.create({ fieldName, value });
+    // Invalidate options cache
+    await deleteCache('leads:options');
   }
+
 
   return res
     .status(201)
     .json(new ApiResponse(201, { fieldName, value }, "Option added successfully"));
 });
+
+export const getLeadsByStaff = asyncHandler(async (req, res) => {
+  const { staffName } = req.params;
+
+  if (!staffName) {
+    throw new ApiError(400, "Staff name is required");
+  }
+
+  const leads = await Lead.find({ "officialDetail.assignedTo": staffName })
+    .select("leadId personalDetails.fullName officialDetail.assignedTo createdAt status")
+    .sort({ createdAt: -1 });
+
+  return res.status(200).json(
+    new ApiResponse(200, leads, `Leads assigned to ${staffName} fetched successfully`)
+  );
+});
+

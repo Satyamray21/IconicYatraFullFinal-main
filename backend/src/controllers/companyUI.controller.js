@@ -2,6 +2,7 @@ import CompanyUI from "../models/companyUI.model.js";
 import Bank from "../models/bankDetails.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import mongoose from "mongoose";
+import { getCache, setCache, deleteCache } from "../utils/cache.js";
 
 const COMPANY_ID = new mongoose.Types.ObjectId(
   "000000000000000000000001"
@@ -12,6 +13,14 @@ const COMPANY_ID = new mongoose.Types.ObjectId(
 // ============================================
 export const getCompany = async (req, res) => {
   try {
+    const cacheKey = "company:ui:data";
+    const cachedData = await getCache(cacheKey);
+    if (cachedData) {
+      console.log(`[Cache Hit] Company UI data fetched from Redis: ${cacheKey}`);
+      return res.json({ fromCache: true, ...cachedData });
+    }
+
+    console.log(`[Cache Miss] Company UI data fetched from MongoDB: ${cacheKey}`);
     const company = await CompanyUI.findById(COMPANY_ID);
 
     if (!company) {
@@ -22,10 +31,13 @@ export const getCompany = async (req, res) => {
       accountHolderName: { $regex: "^Iconic Yatra$", $options: "i" },
     });
 
-    res.json({
+    const responseData = {
       company,
       bankDetails,
-    });
+    };
+
+    await setCache(cacheKey, responseData, 1296000); // Cache for 15 days
+    res.json({ fromCache: false, ...responseData });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -292,6 +304,7 @@ export const upsertCompany = async (req, res) => {
       }
     );
 
+    await deleteCache("company:ui:data");
     res.json(company);
   } catch (error) {
     console.error("Error in upsertCompany:", error);

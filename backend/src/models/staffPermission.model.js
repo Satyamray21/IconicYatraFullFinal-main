@@ -15,8 +15,8 @@ const staffPermissionSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["Admin", "Manager", "Staff"],
       required: true,
+      enum: ["Admin", "Manager", "Staff"],
     },
     credentials: {
       username: {
@@ -44,6 +44,8 @@ const staffPermissionSchema = new mongoose.Schema(
       },
     },
     permissions: {
+      canAccessDashboard: { type: Boolean, default: false },
+
       canAccessLeads: { type: Boolean, default: false },
       canCreateLead: { type: Boolean, default: false },
       canEditLead: { type: Boolean, default: false },
@@ -62,6 +64,23 @@ const staffPermissionSchema = new mongoose.Schema(
       canAccessInvoices: { type: Boolean, default: false },
       canCreateInvoice: { type: Boolean, default: false },
       canEditInvoice: { type: Boolean, default: false },
+
+      canAccessQuotations: { type: Boolean, default: false },
+      canCreateQuotation: { type: Boolean, default: false },
+      canEditQuotation: { type: Boolean, default: false },
+      canDeleteQuotation: { type: Boolean, default: false },
+
+      canAccessEnquiries: { type: Boolean, default: false },
+      canManageEnquiries: { type: Boolean, default: false },
+
+      canAccessDestinations: { type: Boolean, default: false },
+      canManageDestinations: { type: Boolean, default: false },
+
+      canAccessAssociates: { type: Boolean, default: false },
+      canManageAssociates: { type: Boolean, default: false },
+
+      canAccessPayments: { type: Boolean, default: false },
+      canManagePayments: { type: Boolean, default: false },
       
       canAccessReports: { type: Boolean, default: false },
       canAccessUsers: { type: Boolean, default: false },
@@ -78,6 +97,8 @@ const staffPermissionSchema = new mongoose.Schema(
       canCreateBlog: { type: Boolean, default: false },
       canEditBlog: { type: Boolean, default: false },
       canDeleteBlog: { type: Boolean, default: false },
+
+      canAccessSettings: { type: Boolean, default: false },
     },
     status: {
       type: String,

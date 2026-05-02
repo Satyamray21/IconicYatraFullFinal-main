@@ -13,24 +13,57 @@ import {
   Link,
   alpha,
   useTheme,
+  Avatar,
+  Chip,
+  IconButton,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import LockIcon from "@mui/icons-material/Lock";
+import ShieldIcon from "@mui/icons-material/Shield";
+import PersonIcon from "@mui/icons-material/Person";
 import StaffAccessPermission from "../Profile/components/StaffAccessPermission";
 import api from "../../../utils/axios";
+import { motion } from "framer-motion";
+
+const GlassCard = ({ children, sx }) => (
+  <Card
+    sx={{
+      borderRadius: 4,
+      background: "#ffffff",
+      border: "1px solid #e2e8f0",
+      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+      transition: "all 0.3s ease",
+      "&:hover": {
+        boxShadow: "0 4px 12px rgba(25, 118, 210, 0.1)",
+        borderColor: "#1976d2",
+      },
+      ...sx,
+    }}
+  >
+    {children}
+  </Card>
+);
 
 const StaffPermissionPage = () => {
   const { staffId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const theme = useTheme();
-  
+
   const staffData = location.state?.staffData;
   const [staff, setStaff] = useState(staffData || null);
   const [loading, setLoading] = useState(!staffData);
   const [error, setError] = useState(null);
 
-  // Fetch staff profile (same as GET /api/v1/staff/:id) when not passed via navigation state
+  // Color constants
+  const primaryBlue = "#1976d2";
+  const lightBlue = "#f5f9ff";
+  const textColor = "#1a202c";
+  const subTextColor = "#64748b";
+  const borderColor = "#e2e8f0";
+  const hoverBlue = "#1565c0";
+
+  // Fetch staff profile when not passed via navigation state
   useEffect(() => {
     if (!staff && staffId) {
       const fetchStaff = async () => {
@@ -50,123 +83,191 @@ const StaffPermissionPage = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight={400}>
-          <CircularProgress />
-        </Box>
-      </Container>
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+        sx={{
+          bgcolor: "#ffffff",
+        }}
+      >
+        <CircularProgress sx={{ color: primaryBlue }} />
+      </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4, mb: 6 }}>
-      {/* Breadcrumbs */}
-      <Breadcrumbs sx={{ mb: 3 }}>
-        <Link 
-          component="button" 
-          variant="body2" 
-          color="primary"
-          onClick={() => navigate(-1)}
-          sx={{ cursor: "pointer" }}
+    <Box
+      sx={{
+        minHeight: "100vh",
+        bgcolor: "#ffffff",
+        py: 4,
+      }}
+    >
+      <Container maxWidth="lg">
+        {/* Header & Breadcrumbs */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
         >
-          Staff Management
-        </Link>
-        <Typography color="textSecondary">
-          Access & Permissions
-        </Typography>
-      </Breadcrumbs>
-
-      {/* Back Button */}
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate(-1)}
-        sx={{ mb: 3 }}
-        variant="outlined"
-      >
-        Back to Staff List
-      </Button>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Staff Info Header Card */}
-      {staff && (
-        <Card
-          elevation={0}
-          sx={{
-            mb: 4,
-            p: 3,
-            borderRadius: 3,
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            background: `linear-gradient(145deg, ${alpha(theme.palette.primary.main, 0.02)} 0%, ${alpha(theme.palette.primary.main, 0.01)} 100%)`,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <LockIcon
+          <Breadcrumbs sx={{ mb: 2 }}>
+            <Link
+              component="button"
+              variant="body2"
+              onClick={() => navigate("/admin/staff")}
               sx={{
-                fontSize: 40,
-                color: theme.palette.primary.main,
+                color: subTextColor,
+                textDecoration: "none",
+                "&:hover": { color: primaryBlue }
               }}
-            />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h5" fontWeight={700} sx={{ color: theme.palette.primary.main }}>
-                {staff.personalDetails?.fullName}
-              </Typography>
-              <Box sx={{ display: "flex", gap: 3, mt: 1 }}>
-                <Box>
-                  <Typography variant="body2" color="textSecondary">
-                    Staff ID
-                  </Typography>
-                  <Typography variant="body1" fontWeight={600}>
-                    {staff.staffId}
-                  </Typography>
+            >
+              Staff Management
+            </Link>
+            <Typography variant="body2" sx={{ color: textColor }}>
+              Access & Permissions
+            </Typography>
+          </Breadcrumbs>
+
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate(-1)}
+            sx={{
+              mb: 4,
+              color: primaryBlue,
+              borderColor: borderColor,
+              "&:hover": {
+                borderColor: primaryBlue,
+                bgcolor: alpha(primaryBlue, 0.04)
+              }
+            }}
+            variant="outlined"
+          >
+            Back to Staff List
+          </Button>
+        </motion.div>
+
+        {/* Error Alert */}
+        {error && (
+          <Alert
+            severity="error"
+            sx={{
+              mb: 3,
+              bgcolor: alpha("#d32f2f", 0.04),
+              color: "#d32f2f",
+              borderRadius: 2,
+              border: `1px solid ${alpha("#d32f2f", 0.2)}`
+            }}
+            onClose={() => setError(null)}
+          >
+            {error}
+          </Alert>
+        )}
+
+        {/* Staff Identity Header */}
+        {staff && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <GlassCard
+              sx={{
+                mb: 4,
+                p: 3,
+                background: lightBlue,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
+                <Avatar
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    background: `linear-gradient(135deg, ${primaryBlue}, ${hoverBlue})`,
+                    boxShadow: `0 4px 14px 0 ${alpha(primaryBlue, 0.3)}`
+                  }}
+                >
+                  <PersonIcon sx={{ fontSize: 40 }} />
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Box display="flex" alignItems="center" gap={1.5} flexWrap="wrap">
+                    <Typography variant="h4" fontWeight={800} sx={{ color: textColor, letterSpacing: "-0.5px" }}>
+                      {staff.personalDetails?.fullName}
+                    </Typography>
+                    <Chip
+                      label={staff.personalDetails?.userRole || "Staff"}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(primaryBlue, 0.1),
+                        color: primaryBlue,
+                        fontWeight: 600,
+                        border: `1px solid ${alpha(primaryBlue, 0.3)}`
+                      }}
+                    />
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 4, mt: 2, flexWrap: "wrap" }}>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: subTextColor, textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>
+                        Staff ID
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600} sx={{ color: textColor }}>
+                        {staff.staffId}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: subTextColor, textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>
+                        Email Address
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600} sx={{ color: textColor }}>
+                        {staff.personalDetails?.email}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: subTextColor, textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>
+                        Contact
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600} sx={{ color: textColor }}>
+                        {staff.personalDetails?.phone}
+                      </Typography>
+                    </Box>
+                  </Box>
                 </Box>
                 <Box>
-                  <Typography variant="body2" color="textSecondary">
-                    Role
-                  </Typography>
-                  <Typography variant="body1" fontWeight={600}>
-                    {staff.personalDetails?.userRole}
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="body2" color="textSecondary">
-                    Email
-                  </Typography>
-                  <Typography variant="body1" fontWeight={600}>
-                    {staff.personalDetails?.email}
-                  </Typography>
+                  <ShieldIcon sx={{ fontSize: 60, color: alpha(primaryBlue, 0.1) }} />
                 </Box>
               </Box>
-            </Box>
+            </GlassCard>
+          </motion.div>
+        )}
+
+        {/* Permissions Management Component */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <GlassCard sx={{ overflow: "hidden" }}>
+            <CardContent sx={{ p: 0 }}>
+              <StaffAccessPermission staffId={staffId} staffData={staff} isDark={false} />
+            </CardContent>
+          </GlassCard>
+        </motion.div>
+
+        {/* Footer info */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, delay: 0.5 }}
+        >
+          <Box sx={{ mt: 4, textAlign: "center" }}>
+            <Typography variant="body2" sx={{ color: subTextColor }}>
+              Admin Privilege Control System v2.0 • Secured by Iconic Yatra Infrastructure
+            </Typography>
           </Box>
-        </Card>
-      )}
-
-      {/* Permissions Management Component */}
-      <Card
-        elevation={0}
-        sx={{
-          borderRadius: 3,
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-        }}
-      >
-        <CardContent sx={{ p: 0 }}>
-          <StaffAccessPermission staffId={staffId} staffData={staff} />
-        </CardContent>
-      </Card>
-
-      {/* Help Text */}
-      <Alert severity="info" sx={{ mt: 4, borderRadius: 2 }}>
-        <Typography variant="body2">
-          <strong>Tips:</strong> Generate new credentials to reset staff password. Update permissions to control what modules this staff member can access. View login history to track all login attempts with geolocation data.
-        </Typography>
-      </Alert>
-    </Container>
+        </motion.div>
+      </Container>
+    </Box>
   );
 };
 

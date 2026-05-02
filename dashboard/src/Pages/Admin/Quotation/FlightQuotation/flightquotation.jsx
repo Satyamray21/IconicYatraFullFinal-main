@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { format } from "date-fns";
 import {
   Box,
   Grid,
@@ -60,9 +61,416 @@ const validationSchema = Yup.object({
   email: Yup.string().email("Invalid email").required("Email is required"),
 });
 
+// Preview Dialog Component - Extracted to prevent re-renders
+const PreviewDialog = React.memo(({ open, data, onClose }) => {
+  if (!data || !data.flightDetails || data.flightDetails.length === 0)
+    return null;
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: 2,
+          overflow: "hidden",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          background: "linear-gradient(135deg, #1976d2 0%, #004ba0 100%)",
+          color: "white",
+          py: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Box display="flex" alignItems="center">
+          <FlightTakeoff sx={{ mr: 1, fontSize: 28 }} />
+          <Typography variant="h5" component="div" fontWeight="600">
+            Iconic Yatra
+          </Typography>
+        </Box>
+        <Typography variant="h6" component="div">
+          Flight Quotation Preview
+        </Typography>
+      </DialogTitle>
+
+      <DialogContent sx={{ p: 0 }}>
+        <Box>
+          {/* Header with trip type and client */}
+          <Box sx={{ p: 3, pb: 2, background: "#f9f9f9" }}>
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              alignItems="flex-start"
+            >
+              <Chip
+                label={data.tripType?.toUpperCase()}
+                color="primary"
+                variant="outlined"
+                sx={{ fontWeight: "bold", fontSize: "0.9rem" }}
+              />
+              <Box textAlign="right">
+                <Typography variant="body2" color="textSecondary">
+                  Prepared for
+                </Typography>
+                <Typography variant="h6" color="primary" fontWeight="600">
+                  {data.clientName || "-"}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          {/* Flight Details (first leg) */}
+          <Box sx={{ p: 3 }}>
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{ display: "flex", alignItems: "center" }}
+            >
+              <FlightTakeoff sx={{ mr: 1, color: "primary.main" }} />
+              Flight Details
+            </Typography>
+
+            <Paper
+              variant="outlined"
+              sx={{ p: 2, mb: 2, background: "#fafafa" }}
+            >
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Box>
+                  <Typography variant="body2" color="textSecondary">
+                    From
+                  </Typography>
+                  <Typography variant="h6" fontWeight="600">
+                    {data.flightDetails?.[0]?.from || "-"}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ textAlign: "center", flex: 1 }}>
+                  <FlightTakeoff
+                    sx={{
+                      color: "success.main",
+                      fontSize: 20,
+                      verticalAlign: "middle",
+                    }}
+                  />
+                  <Box
+                    sx={{
+                      display: "inline-block",
+                      height: "2px",
+                      width: "40px",
+                      bgcolor: "grey.300",
+                      mx: 1,
+                      verticalAlign: "middle",
+                    }}
+                  />
+                  <FlightLand
+                    sx={{
+                      color: "error.main",
+                      fontSize: 20,
+                      verticalAlign: "middle",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ textAlign: "right" }}>
+                  <Typography variant="body2" color="textSecondary">
+                    To
+                  </Typography>
+                  <Typography variant="h6" fontWeight="600">
+                    {data.flightDetails?.[0]?.to || "-"}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Box display="flex" justifyContent="space-between">
+                <Box>
+                  <Typography variant="body2" color="textSecondary">
+                    Airline
+                  </Typography>
+                  <Typography variant="body1" fontWeight="500">
+                    {data.flightDetails?.[0]?.preferredAirline || "-"}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ textAlign: "center" }}>
+                  <Typography variant="body2" color="textSecondary">
+                    Flight No
+                  </Typography>
+                  <Typography variant="body1" fontWeight="500">
+                    {data.flightDetails?.[0]?.flightNo || "-"}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box display="flex" justifyContent="space-between">
+                <Box>
+                  <Typography variant="body2" color="textSecondary">
+                    Departure Date
+                  </Typography>
+                  <Typography variant="body1" fontWeight="500">
+                    {data.flightDetails?.[0]?.departureDate || "-"}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: "center" }}>
+                  <Typography variant="body2" color="textSecondary">
+                    Departure Time
+                  </Typography>
+                  <Typography variant="body1" fontWeight="500">
+                    {data.flightDetails?.[0]?.departureTime || "-"}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: "right" }}>
+                  <Typography variant="body2" color="textSecondary">
+                    Fare
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    fontWeight="500"
+                    color="primary"
+                  >
+                    {data.flightDetails?.[0]?.fare || "-"}
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+
+            {/* Return / extra legs */}
+            {/* Next flights / Multi-city legs */}
+            {data.flightDetails.length > 1 && (
+              <>
+                <Typography
+                  variant="h6"
+                  gutterBottom
+                  sx={{ display: "flex", alignItems: "center", mt: 3 }}
+                >
+                  <FlightLand sx={{ mr: 1, color: "primary.main" }} />
+                  {data.tripType === "multicity"
+                    ? "Multi-City Flight Details"
+                    : "Return / Next Flight"}
+                </Typography>
+
+                {data.flightDetails.slice(1).map((leg, idx) => (
+                  <Paper
+                    key={idx}
+                    variant="outlined"
+                    sx={{ p: 2, mb: 2, background: "#fafafa" }}
+                  >
+                    <Box
+                      display="flex"
+                      justifyContent="space-between"
+                      alignItems="center"
+                    >
+                      <Box>
+                        <Typography variant="body2" color="textSecondary">
+                          From
+                        </Typography>
+                        <Typography variant="h6" fontWeight="600">
+                          {leg?.from || "-"}
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ textAlign: "center", flex: 1 }}>
+                        <FlightTakeoff
+                          sx={{ color: "success.main", fontSize: 20 }}
+                        />
+                        <Box
+                          sx={{
+                            display: "inline-block",
+                            height: "2px",
+                            width: "40px",
+                            bgcolor: "grey.300",
+                            mx: 1,
+                          }}
+                        />
+                        <FlightLand
+                          sx={{ color: "error.main", fontSize: 20 }}
+                        />
+                      </Box>
+
+                      <Box sx={{ textAlign: "right" }}>
+                        <Typography variant="body2" color="textSecondary">
+                          To
+                        </Typography>
+                        <Typography variant="h6" fontWeight="600">
+                          {leg?.to || "-"}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    <Divider sx={{ my: 2 }} />
+
+                    <Box display="flex" justifyContent="space-between">
+                      <Box>
+                        <Typography variant="body2" color="textSecondary">
+                          Airline
+                        </Typography>
+                        <Typography variant="body1" fontWeight="500">
+                          {leg?.preferredAirline || "-"}
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="body2" color="textSecondary">
+                          Flight No
+                        </Typography>
+                        <Typography variant="body1" fontWeight="500">
+                          {leg?.flightNo || "-"}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    <Box display="flex" justifyContent="space-between">
+                      <Box>
+                        <Typography variant="body2" color="textSecondary">
+                          Departure Date
+                        </Typography>
+                        <Typography variant="body1" fontWeight="500">
+                          {leg?.departureDate || "-"}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ textAlign: "center" }}>
+                        <Typography variant="body2" color="textSecondary">
+                          Departure Time
+                        </Typography>
+                        <Typography variant="body1" fontWeight="500">
+                          {leg?.departureTime || "-"}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ textAlign: "right" }}>
+                        <Typography variant="body2" color="textSecondary">
+                          Fare
+                        </Typography>
+                        <Typography
+                          variant="body1"
+                          fontWeight="500"
+                          color="primary"
+                        >
+                          {leg?.fare || "-"}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Paper>
+                ))}
+              </>
+            )}
+
+            {/* Passengers */}
+            <Box sx={{ mt: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ display: "flex", alignItems: "center" }}
+              >
+                <AirlineSeatReclineNormal
+                  sx={{ mr: 1, color: "primary.main" }}
+                />
+                Passengers
+              </Typography>
+
+              <Box display="flex" gap={2}>
+                <Chip
+                  avatar={<Avatar>{data.adults || 0}</Avatar>}
+                  label="Adults"
+                  variant="outlined"
+                  color="primary"
+                />
+                <Chip
+                  avatar={<Avatar>{data.childs || 0}</Avatar>}
+                  label="Children"
+                  variant="outlined"
+                  color="secondary"
+                />
+                <Chip
+                  avatar={<Avatar>{data.infants || 0}</Avatar>}
+                  label="Infants"
+                  variant="outlined"
+                />
+              </Box>
+            </Box>
+
+            {/* Message */}
+            {data.message && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  Message
+                </Typography>
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 2, background: "#f9f9f9" }}
+                >
+                  <Typography variant="body2">{data.message}</Typography>
+                </Paper>
+              </Box>
+            )}
+
+            {/* Personal Details */}
+            <Box sx={{ mt: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ display: "flex", alignItems: "center" }}
+              >
+                <Person sx={{ mr: 1, color: "primary.main" }} />
+                Personal Details
+              </Typography>
+
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Box display="flex" alignItems="center" mb={1}>
+                  <Person sx={{ mr: 1, color: "action.active" }} />
+                  <Typography variant="body1">
+                    {data.fullName || "-"}
+                  </Typography>
+                </Box>
+
+                <Box display="flex" alignItems="center" mb={1}>
+                  <Phone sx={{ mr: 1, color: "action.active" }} />
+                  <Typography variant="body1">
+                    {data.mobile || "-"}
+                  </Typography>
+                </Box>
+
+                <Box display="flex" alignItems="center">
+                  <Email sx={{ mr: 1, color: "action.active" }} />
+                  <Typography variant="body1">{data.email || "-"}</Typography>
+                </Box>
+              </Paper>
+            </Box>
+          </Box>
+        </Box>
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button
+          onClick={onClose}
+          variant="outlined"
+          startIcon={<Close />}
+        >
+          Close
+        </Button>
+        <Button variant="contained" onClick={() => window.print()}>
+          Print Quotation
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+});
+
 const QuotationFlightForm = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const theme = useTheme();
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -110,6 +518,7 @@ const QuotationFlightForm = () => {
     initialValues,
     validationSchema,
     onSubmit: async (values) => {
+      setIsSubmitting(true);
       const payload = {
         tripType: values.tripType,
         clientDetails: {
@@ -134,8 +543,8 @@ const QuotationFlightForm = () => {
         preferredAirline: values.airline,
         flightNo: values.flightNo,
         fare: Number(values.fare),
-        departureDate: values.departureDate,
-        departureTime: values.departureTime,
+        departureDate: values.departureDate ? format(values.departureDate, "dd/MM/yyyy") : "",
+        departureTime: values.departureTime ? format(values.departureTime, "hh:mm a") : "",
       });
 
       // Add return flight for roundtrip
@@ -147,8 +556,8 @@ const QuotationFlightForm = () => {
           preferredAirline: values.returnAirline,
           flightNo: values.returnFlightNo,
           fare: Number(values.returnFare || 0),
-          departureDate: values.returnDate,
-          departureTime: values.returnTime,
+          departureDate: values.returnDate ? format(values.returnDate, "dd/MM/yyyy") : "",
+          departureTime: values.returnTime ? format(values.returnTime, "hh:mm a") : "",
         });
       }
 
@@ -164,13 +573,14 @@ const QuotationFlightForm = () => {
             preferredAirline: city.airline,
             flightNo: city.flightNo,
             fare: Number(city.fare || 0),
-            departureDate: city.date,
-            departureTime: city.time,
+            departureDate: city.date ? format(city.date, "dd/MM/yyyy") : "",
+            departureTime: city.time ? format(city.time, "hh:mm a") : "",
           });
         });
       }
 
       await dispatch(createFlightQuotation(payload));
+      setIsSubmitting(false);
       formik.resetForm();
       navigate("/quotation", { replace: true });
     },
@@ -206,7 +616,7 @@ const QuotationFlightForm = () => {
     formik.setFieldValue("additionalCities", updatedCities);
   };
 
-  const handlePreview = () => {
+  const handlePreview = useCallback(() => {
     const v = formik.values;
     const flightDetails = [];
 
@@ -217,8 +627,8 @@ const QuotationFlightForm = () => {
       preferredAirline: v.airline,
       flightNo: v.flightNo,
       fare: v.fare,
-      departureDate: v.departureDate,
-      departureTime: v.departureTime,
+      departureDate: v.departureDate ? format(v.departureDate, "dd/MM/yyyy") : "",
+      departureTime: v.departureTime ? format(v.departureTime, "hh:mm a") : "",
     });
 
     // Roundtrip
@@ -230,8 +640,8 @@ const QuotationFlightForm = () => {
         preferredAirline: v.returnAirline,
         flightNo: v.returnFlightNo,
         fare: v.returnFare,
-        departureDate: v.returnDate,
-        departureTime: v.returnTime,
+        departureDate: v.returnDate ? format(v.returnDate, "dd/MM/yyyy") : "",
+        departureTime: v.returnTime ? format(v.returnTime, "hh:mm a") : "",
       });
     }
 
@@ -244,8 +654,8 @@ const QuotationFlightForm = () => {
           preferredAirline: c.airline,
           flightNo: c.flightNo,
           fare: c.fare,
-          departureDate: c.date,
-          departureTime: c.time,
+          departureDate: c.date ? format(c.date, "dd/MM/yyyy") : "",
+          departureTime: c.time ? format(c.time, "hh:mm a") : "",
         });
       });
     }
@@ -262,9 +672,20 @@ const QuotationFlightForm = () => {
       mobile: v.mobile,
       email: v.email,
     });
+    
+    // Small delay to ensure state update before opening dialog
+    setTimeout(() => {
+      setPreviewOpen(true);
+    }, 0);
+  }, [formik.values]);
 
-    setPreviewOpen(true);
-  };
+  const handleClosePreview = useCallback(() => {
+    setPreviewOpen(false);
+    // Optional: Clear preview data after closing
+    setTimeout(() => {
+      setPreviewData(null);
+    }, 300);
+  }, []);
 
   const handleClientChange = (event) => {
     const selectedClientName = event.target.value;
@@ -301,7 +722,7 @@ const QuotationFlightForm = () => {
   };
 
   // Reusable Flight details block
-  const renderFlightDetails = (isReturn = false, values = formik.values) => {
+  const renderFlightDetails = useCallback((isReturn = false, values = formik.values) => {
     const prefix = isReturn ? "return" : "";
     const fromField = isReturn ? "returnFrom" : "from";
     const toField = isReturn ? "returnTo" : "to";
@@ -452,9 +873,9 @@ const QuotationFlightForm = () => {
         </Grid>
       </Grid>
     );
-  };
+  }, [formik]);
 
-  const renderAdditionalCity = (city, index) => (
+  const renderAdditionalCity = useCallback((city, index) => (
     <Paper key={index} sx={{ p: 3, mb: 3, position: "relative" }}>
       <IconButton
         sx={{ position: "absolute", top: 8, right: 8 }}
@@ -514,7 +935,7 @@ const QuotationFlightForm = () => {
               "AirDeccan",
               "GoAir",
             ].map((item) => (
-              <MenuItem key={item} value={`airline${item}`}>
+              <MenuItem key={item} value={item}>
                 {item}
               </MenuItem>
             ))}
@@ -576,377 +997,7 @@ const QuotationFlightForm = () => {
         </Grid>
       </Grid>
     </Paper>
-  );
-
-  // Preview dialog (self-contained, safe)
-  const PreviewDialog = ({ data }) => {
-    if (!data || !data.flightDetails || data.flightDetails.length === 0)
-      return null;
-
-    return (
-      <Dialog
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            overflow: "hidden",
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            background: "linear-gradient(135deg, #1976d2 0%, #004ba0 100%)",
-            color: "white",
-            py: 2,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Box display="flex" alignItems="center">
-            <FlightTakeoff sx={{ mr: 1, fontSize: 28 }} />
-            <Typography variant="h5" component="div" fontWeight="600">
-              Iconic Yatra
-            </Typography>
-          </Box>
-          <Typography variant="h6" component="div">
-            Flight Quotation Preview
-          </Typography>
-        </DialogTitle>
-
-        <DialogContent sx={{ p: 0 }}>
-          <Box>
-            {/* Header with trip type and client */}
-            <Box sx={{ p: 3, pb: 2, background: "#f9f9f9" }}>
-              <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="flex-start"
-              >
-                <Chip
-                  label={data.tripType?.toUpperCase()}
-                  color="primary"
-                  variant="outlined"
-                  sx={{ fontWeight: "bold", fontSize: "0.9rem" }}
-                />
-                <Box textAlign="right">
-                  <Typography variant="body2" color="textSecondary">
-                    Prepared for
-                  </Typography>
-                  <Typography variant="h6" color="primary" fontWeight="600">
-                    {data.clientName || "-"}
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-
-            {/* Flight Details (first leg) */}
-            <Box sx={{ p: 3 }}>
-              <Typography
-                variant="h6"
-                gutterBottom
-                sx={{ display: "flex", alignItems: "center" }}
-              >
-                <FlightTakeoff sx={{ mr: 1, color: "primary.main" }} />
-                Flight Details
-              </Typography>
-
-              <Paper
-                variant="outlined"
-                sx={{ p: 2, mb: 2, background: "#fafafa" }}
-              >
-                <Box
-                  display="flex"
-                  justifyContent="space-between"
-                  alignItems="center"
-                >
-                  <Box>
-                    <Typography variant="body2" color="textSecondary">
-                      From
-                    </Typography>
-                    <Typography variant="h6" fontWeight="600">
-                      {data.flightDetails?.[0]?.from || "-"}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ textAlign: "center", flex: 1 }}>
-                    <FlightTakeoff
-                      sx={{
-                        color: "success.main",
-                        fontSize: 20,
-                        verticalAlign: "middle",
-                      }}
-                    />
-                    <Box
-                      sx={{
-                        display: "inline-block",
-                        height: "2px",
-                        width: "40px",
-                        bgcolor: "grey.300",
-                        mx: 1,
-                        verticalAlign: "middle",
-                      }}
-                    />
-                    <FlightLand
-                      sx={{
-                        color: "error.main",
-                        fontSize: 20,
-                        verticalAlign: "middle",
-                      }}
-                    />
-                  </Box>
-
-                  <Box sx={{ textAlign: "right" }}>
-                    <Typography variant="body2" color="textSecondary">
-                      To
-                    </Typography>
-                    <Typography variant="h6" fontWeight="600">
-                      {data.flightDetails?.[0]?.to || "-"}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                <Box display="flex" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="body2" color="textSecondary">
-                      Airline
-                    </Typography>
-                    <Typography variant="body1" fontWeight="500">
-                      {data.flightDetails?.[0]?.preferredAirline || "-"}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ textAlign: "center" }}>
-                    <Typography variant="body2" color="textSecondary">
-                      Flight No
-                    </Typography>
-                    <Typography variant="body1" fontWeight="500">
-                      {data.flightDetails?.[0]?.flightNo || "-"}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ textAlign: "right" }}>
-                    <Typography variant="body2" color="textSecondary">
-                      Fare
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      fontWeight="500"
-                      color="primary"
-                    >
-                      {data.flightDetails?.[0]?.fare || "-"}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Paper>
-
-              {/* Return / extra legs */}
-              {/* Next flights / Multi-city legs */}
-              {data.flightDetails.length > 1 && (
-                <>
-                  <Typography
-                    variant="h6"
-                    gutterBottom
-                    sx={{ display: "flex", alignItems: "center", mt: 3 }}
-                  >
-                    <FlightLand sx={{ mr: 1, color: "primary.main" }} />
-                    {data.tripType === "multicity"
-                      ? "Multi-City Flight Details"
-                      : "Return / Next Flight"}
-                  </Typography>
-
-                  {data.flightDetails.slice(1).map((leg, idx) => (
-                    <Paper
-                      key={idx}
-                      variant="outlined"
-                      sx={{ p: 2, mb: 2, background: "#fafafa" }}
-                    >
-                      <Box
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                      >
-                        <Box>
-                          <Typography variant="body2" color="textSecondary">
-                            From
-                          </Typography>
-                          <Typography variant="h6" fontWeight="600">
-                            {leg?.from || "-"}
-                          </Typography>
-                        </Box>
-
-                        <Box sx={{ textAlign: "center", flex: 1 }}>
-                          <FlightTakeoff
-                            sx={{ color: "success.main", fontSize: 20 }}
-                          />
-                          <Box
-                            sx={{
-                              display: "inline-block",
-                              height: "2px",
-                              width: "40px",
-                              bgcolor: "grey.300",
-                              mx: 1,
-                            }}
-                          />
-                          <FlightLand
-                            sx={{ color: "error.main", fontSize: 20 }}
-                          />
-                        </Box>
-
-                        <Box sx={{ textAlign: "right" }}>
-                          <Typography variant="body2" color="textSecondary">
-                            To
-                          </Typography>
-                          <Typography variant="h6" fontWeight="600">
-                            {leg?.to || "-"}
-                          </Typography>
-                        </Box>
-                      </Box>
-
-                      <Divider sx={{ my: 2 }} />
-
-                      <Box display="flex" justifyContent="space-between">
-                        <Box>
-                          <Typography variant="body2" color="textSecondary">
-                            Airline
-                          </Typography>
-                          <Typography variant="body1" fontWeight="500">
-                            {leg?.preferredAirline || "-"}
-                          </Typography>
-                        </Box>
-
-                        <Box sx={{ textAlign: "center" }}>
-                          <Typography variant="body2" color="textSecondary">
-                            Flight No
-                          </Typography>
-                          <Typography variant="body1" fontWeight="500">
-                            {leg?.flightNo || "-"}
-                          </Typography>
-                        </Box>
-
-                        <Box sx={{ textAlign: "right" }}>
-                          <Typography variant="body2" color="textSecondary">
-                            Fare
-                          </Typography>
-                          <Typography
-                            variant="body1"
-                            fontWeight="500"
-                            color="primary"
-                          >
-                            {leg?.fare || "-"}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </Paper>
-                  ))}
-                </>
-              )}
-
-              {/* Passengers */}
-              <Box sx={{ mt: 3 }}>
-                <Typography
-                  variant="h6"
-                  gutterBottom
-                  sx={{ display: "flex", alignItems: "center" }}
-                >
-                  <AirlineSeatReclineNormal
-                    sx={{ mr: 1, color: "primary.main" }}
-                  />
-                  Passengers
-                </Typography>
-
-                <Box display="flex" gap={2}>
-                  <Chip
-                    avatar={<Avatar>{data.adults || 0}</Avatar>}
-                    label="Adults"
-                    variant="outlined"
-                    color="primary"
-                  />
-                  <Chip
-                    avatar={<Avatar>{data.childs || 0}</Avatar>}
-                    label="Children"
-                    variant="outlined"
-                    color="secondary"
-                  />
-                  <Chip
-                    avatar={<Avatar>{data.infants || 0}</Avatar>}
-                    label="Infants"
-                    variant="outlined"
-                  />
-                </Box>
-              </Box>
-
-              {/* Message */}
-              {data.message && (
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Message
-                  </Typography>
-                  <Paper
-                    variant="outlined"
-                    sx={{ p: 2, background: "#f9f9f9" }}
-                  >
-                    <Typography variant="body2">{data.message}</Typography>
-                  </Paper>
-                </Box>
-              )}
-
-              {/* Personal Details */}
-              <Box sx={{ mt: 3 }}>
-                <Typography
-                  variant="h6"
-                  gutterBottom
-                  sx={{ display: "flex", alignItems: "center" }}
-                >
-                  <Person sx={{ mr: 1, color: "primary.main" }} />
-                  Personal Details
-                </Typography>
-
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Box display="flex" alignItems="center" mb={1}>
-                    <Person sx={{ mr: 1, color: "action.active" }} />
-                    <Typography variant="body1">
-                      {data.fullName || "-"}
-                    </Typography>
-                  </Box>
-
-                  <Box display="flex" alignItems="center" mb={1}>
-                    <Phone sx={{ mr: 1, color: "action.active" }} />
-                    <Typography variant="body1">
-                      {data.mobile || "-"}
-                    </Typography>
-                  </Box>
-
-                  <Box display="flex" alignItems="center">
-                    <Email sx={{ mr: 1, color: "action.active" }} />
-                    <Typography variant="body1">{data.email || "-"}</Typography>
-                  </Box>
-                </Paper>
-              </Box>
-            </Box>
-          </Box>
-        </DialogContent>
-
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={() => setPreviewOpen(false)}
-            variant="outlined"
-            startIcon={<Close />}
-          >
-            Close
-          </Button>
-          <Button variant="contained" onClick={() => window.print()}>
-            Print Quotation
-          </Button>
-        </DialogActions>
-      </Dialog>
-    );
-  };
+  ), [formik.values.additionalCities, handleAdditionalCityChange, deleteCity]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -1157,8 +1208,13 @@ const QuotationFlightForm = () => {
         </Paper>
 
         <Box display="flex" gap={2}>
-          <Button type="submit" variant="contained" color="primary">
-            Save
+          <Button 
+            type="submit" 
+            variant="contained" 
+            color="primary"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Saving..." : "Save"}
           </Button>
           <Button
             variant="outlined"
@@ -1178,7 +1234,11 @@ const QuotationFlightForm = () => {
           </Button>
         </Box>
 
-        <PreviewDialog data={previewData} />
+        <PreviewDialog 
+          open={previewOpen} 
+          data={previewData} 
+          onClose={handleClosePreview}
+        />
       </form>
     </LocalizationProvider>
   );

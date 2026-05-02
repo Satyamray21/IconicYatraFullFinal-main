@@ -1,5 +1,6 @@
 import Hotel from "../models/hotel.model.js";
 import { findHotelByIdOrHotelId } from "../utils/findHotelById.js";
+import { getCache, setCache, clearPattern } from "../utils/cache.js";
 
 // Helper: parse JSON safely
 const tryParseJSON = (value) => {
@@ -111,6 +112,12 @@ export const createHotelStep1 = async (req, res) => {
         const hotel = new Hotel(hotelData);
         const savedHotel = await hotel.save();
 
+        // Invalidate caches
+        await Promise.all([
+            clearPattern('hotels:*'),
+            clearPattern('dashboard:stats:*')
+        ]);
+
         res.status(201).json({
             success: true,
             message: "Hotel basic details saved successfully",
@@ -119,6 +126,34 @@ export const createHotelStep1 = async (req, res) => {
     } catch (error) {
         console.error("❌ Hotel create error:", error);
         res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// ----------------------
+// Get All Hotels
+// ----------------------
+export const getHotels = async (req, res) => {
+    try {
+        const { city } = req.query;
+        const cacheKey = city ? `hotels:list:city:${city.toLowerCase()}` : 'hotels:list:all';
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+            console.log(`[Cache] Hotel list fetched from Redis`);
+            return res.status(200).json({ fromCache: true, success: true, data: cachedData });
+        }
+
+        const query = {};
+        if (city) {
+            query['location.city'] = { $regex: new RegExp(`^${city.trim()}$`, 'i') };
+        }
+
+        const hotels = await Hotel.find(query);
+        await setCache(cacheKey, hotels, 3600);
+        console.log(`[DB] Hotel list fetched from MongoDB`);
+        res.status(200).json({ fromCache: false, success: true, data: hotels });
+    } catch (error) {
+        console.error("❌ Error fetching hotels:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -634,15 +669,7 @@ export const updateHotel = async (req, res) => {
 // ----------------------
 // Get All Hotels
 // ----------------------
-export const getHotels = async (req, res) => {
-    try {
-        const hotels = await Hotel.find();
-        res.status(200).json({ success: true, data: hotels });
-    } catch (error) {
-        console.error("❌ Error fetching hotels:", error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
+
 
 // ----------------------
 // Get Single Hotel
@@ -671,6 +698,12 @@ export const deleteHotel = async (req, res) => {
 
         await hotel.deleteOne();
 
+        // Invalidate caches
+        await Promise.all([
+            clearPattern('hotels:*'),
+            clearPattern('dashboard:stats:*')
+        ]);
+
         res.status(200).json({ success: true, message: "Hotel deleted successfully" });
     } catch (error) {
         console.error("❌ Error deleting hotel:", error);
@@ -694,6 +727,12 @@ export const updateStatus = async (req, res) => {
 
         hotel.status = status;
         await hotel.save();
+
+        // Invalidate caches
+        await Promise.all([
+            clearPattern('hotels:*'),
+            clearPattern('dashboard:stats:*')
+        ]);
 
         res.status(200).json({
             success: true,

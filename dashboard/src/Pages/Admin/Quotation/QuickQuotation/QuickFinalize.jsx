@@ -91,8 +91,10 @@ import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import QuickEditAllDialog from "./Dialog/QuickEditAllDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
+import HotelConfirmationDialog from "../CustomQuotation/Dialog/HotelConfirmationDialog";
 import {
   effectiveQuickPayableTotal,
+
   mapApiAdditionalServicesToState,
   serializeAdditionalServicesForApi,
   sumBillableAdditionalServices,
@@ -1197,6 +1199,7 @@ const QuickFinalize = () => {
     message: "",
     severity: "success",
   });
+  const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
   const [itineraryDialog, setItineraryDialog] = useState({
     open: false,
     mode: "add",
@@ -1635,6 +1638,12 @@ const QuickFinalize = () => {
     const n = effectiveQuickPayableTotal(currentQuotation, services);
     return Number.isFinite(n) ? n : null;
   }, [currentQuotation, services]);
+  const { receivedFromClient, paidToVendor } = useMemo(() => summarizeVoucherAmounts(paymentHistory), [paymentHistory]);
+  const paymentReceivedDisplay = `₹ ${receivedFromClient.toLocaleString("en-IN")}`;
+  const paymentBalanceDisplay = packageTotalForFooter != null 
+    ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}` 
+    : "₹ 0";
+
   const finalizedVendors = React.useMemo(() => {
     const vendorAmountRows = Array.isArray(quotation?.finalizedVendorsWithAmounts)
       ? quotation.finalizedVendorsWithAmounts
@@ -1669,20 +1678,6 @@ const QuickFinalize = () => {
     quotation?.finalizedVendorDetails,
     quotation?.finalizedVendorsWithAmounts,
   ]);
-  useEffect(() => {
-    const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
-    setQuotation((prev) => ({
-      ...prev,
-      footer: {
-        ...prev.footer,
-        received: `₹ ${receivedFromClient.toLocaleString("en-IN")}`,
-        balance:
-          packageTotalForFooter != null
-            ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}`
-            : prev.footer.balance,
-      },
-    }));
-  }, [paymentHistory, packageTotalForFooter]);
 
   const finalizePackageOptions = useMemo(() => {
     const pkg =
@@ -1998,6 +1993,7 @@ const QuickFinalize = () => {
       taxType: "",
     });
   };
+
 
   const handleAddFlightOpen = () => setOpenAddFlight(true);
   const handleAddFlightClose = () => setOpenAddFlight(false);
@@ -2729,7 +2725,7 @@ const QuickFinalize = () => {
   const infoMap = {
     call: `📞 ${quotation.footer.phone}`,
     email: `✉️ ${quotation.customer?.email}`,
-    payment: `Received: ${quotation.footer.received}\n Balance: ${quotation.footer.balance}`,
+    payment: `Received: ${paymentReceivedDisplay}\n Balance: ${paymentBalanceDisplay}`,
     quotation: `Total Quotation Cost: ${quotation.pricing.total}`,
     guest: `Guests: ${quotation.hotel.guests}`,
   };
@@ -3229,6 +3225,16 @@ const QuickFinalize = () => {
                       onClick={() => setOpenBankDialog(true)}
                     >
                       Edit Vendors
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      startIcon={<CheckCircle />}
+                      sx={{ ml: 1 }}
+                      onClick={() => setOpenHotelConfirmation(true)}
+                    >
+                      Hotel Confirmation
                     </Button>
                   </Box>
 
@@ -4060,6 +4066,13 @@ const QuickFinalize = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <HotelConfirmationDialog
+        open={openHotelConfirmation}
+        onClose={() => setOpenHotelConfirmation(false)}
+        quotation={currentQuotation}
+        type="quick"
+      />
     </Box>
   );
 };

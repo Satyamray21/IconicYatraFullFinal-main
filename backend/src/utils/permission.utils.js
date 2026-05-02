@@ -69,6 +69,8 @@ export const comparePassword = async (password, hash) => {
  */
 export const getDefaultPermissionsByRole = (role) => {
   const basePermissions = {
+    canAccessDashboard: false,
+
     canAccessLeads: false,
     canCreateLead: false,
     canEditLead: false,
@@ -88,6 +90,23 @@ export const getDefaultPermissionsByRole = (role) => {
     canCreateInvoice: false,
     canEditInvoice: false,
 
+    canAccessQuotations: false,
+    canCreateQuotation: false,
+    canEditQuotation: false,
+    canDeleteQuotation: false,
+
+    canAccessEnquiries: false,
+    canManageEnquiries: false,
+
+    canAccessDestinations: false,
+    canManageDestinations: false,
+
+    canAccessAssociates: false,
+    canManageAssociates: false,
+
+    canAccessPayments: false,
+    canManagePayments: false,
+
     canAccessReports: false,
     canAccessUsers: false,
     canCreateUser: false,
@@ -96,6 +115,7 @@ export const getDefaultPermissionsByRole = (role) => {
 
     canAccessStaff: false,
     canManageStaff: false,
+    
     canAccessGallery: false,
     canEditGallery: false,
 
@@ -103,12 +123,15 @@ export const getDefaultPermissionsByRole = (role) => {
     canCreateBlog: false,
     canEditBlog: false,
     canDeleteBlog: false,
+
+    canAccessSettings: false,
   };
 
   // Apply role-based defaults
   if (role === "Admin") {
     return {
       ...basePermissions,
+      canAccessDashboard: true,
       canAccessLeads: true,
       canCreateLead: true,
       canEditLead: true,
@@ -128,6 +151,23 @@ export const getDefaultPermissionsByRole = (role) => {
       canCreateInvoice: true,
       canEditInvoice: true,
 
+      canAccessQuotations: true,
+      canCreateQuotation: true,
+      canEditQuotation: true,
+      canDeleteQuotation: true,
+
+      canAccessEnquiries: true,
+      canManageEnquiries: true,
+
+      canAccessDestinations: true,
+      canManageDestinations: true,
+
+      canAccessAssociates: true,
+      canManageAssociates: true,
+
+      canAccessPayments: true,
+      canManagePayments: true,
+
       canAccessReports: true,
       canAccessUsers: true,
       canCreateUser: true,
@@ -143,10 +183,13 @@ export const getDefaultPermissionsByRole = (role) => {
       canCreateBlog: true,
       canEditBlog: true,
       canDeleteBlog: true,
+
+      canAccessSettings: true,
     };
   } else if (role === "Manager") {
     return {
       ...basePermissions,
+      canAccessDashboard: true,
       canAccessLeads: true,
       canCreateLead: true,
       canEditLead: true,
@@ -163,6 +206,20 @@ export const getDefaultPermissionsByRole = (role) => {
       canCreateInvoice: true,
       canEditInvoice: true,
 
+      canAccessQuotations: true,
+      canCreateQuotation: true,
+      canEditQuotation: true,
+
+      canAccessEnquiries: true,
+      canManageEnquiries: true,
+
+      canAccessDestinations: true,
+      canManageDestinations: true,
+
+      canAccessAssociates: true,
+      
+      canAccessPayments: true,
+
       canAccessReports: true,
       canAccessStaff: true,
       canAccessGallery: true,
@@ -175,16 +232,17 @@ export const getDefaultPermissionsByRole = (role) => {
   } else if (role === "Staff") {
     return {
       ...basePermissions,
+      canAccessDashboard: true,
       canAccessLeads: true,
       canCreateLead: true,
       canEditLead: true,
 
       canAccessPackages: true,
-
       canAccessBookings: true,
-
       canAccessInvoices: true,
-
+      canAccessQuotations: true,
+      canCreateQuotation: true,
+      canAccessEnquiries: true,
       canAccessBlogs: true,
     };
   }
@@ -197,6 +255,12 @@ export const getDefaultPermissionsByRole = (role) => {
  */
 export const getPermissionModules = () => {
   return [
+    {
+      name: "Dashboard",
+      permissions: [
+        { key: "canAccessDashboard", label: "Access Admin Dashboard" },
+      ],
+    },
     {
       name: "Leads",
       permissions: [
@@ -216,6 +280,15 @@ export const getPermissionModules = () => {
       ],
     },
     {
+      name: "Quotations",
+      permissions: [
+        { key: "canAccessQuotations", label: "View All Quotations" },
+        { key: "canCreateQuotation", label: "Create Quotation" },
+        { key: "canEditQuotation", label: "Edit Quotation" },
+        { key: "canDeleteQuotation", label: "Delete Quotation" },
+      ],
+    },
+    {
       name: "Bookings",
       permissions: [
         { key: "canAccessBookings", label: "View Bookings" },
@@ -230,6 +303,34 @@ export const getPermissionModules = () => {
         { key: "canAccessInvoices", label: "View Invoices" },
         { key: "canCreateInvoice", label: "Create Invoice" },
         { key: "canEditInvoice", label: "Edit Invoice" },
+      ],
+    },
+    {
+      name: "Payments",
+      permissions: [
+        { key: "canAccessPayments", label: "View Payment History" },
+        { key: "canManagePayments", label: "Manage Payments & Slips" },
+      ],
+    },
+    {
+      name: "Enquiries",
+      permissions: [
+        { key: "canAccessEnquiries", label: "View Enquiries" },
+        { key: "canManageEnquiries", label: "Manage Enquiries" },
+      ],
+    },
+    {
+      name: "Destinations",
+      permissions: [
+        { key: "canAccessDestinations", label: "View Destinations" },
+        { key: "canManageDestinations", label: "Manage Destinations" },
+      ],
+    },
+    {
+      name: "Associates",
+      permissions: [
+        { key: "canAccessAssociates", label: "View Associates" },
+        { key: "canManageAssociates", label: "Manage Associates" },
       ],
     },
     {
@@ -251,14 +352,14 @@ export const getPermissionModules = () => {
       name: "Staff Management",
       permissions: [
         { key: "canAccessStaff", label: "View Staff" },
-        { key: "canManageStaff", label: "Manage Staff" },
+        { key: "canManageStaff", label: "Manage Staff Permissions" },
       ],
     },
     {
       name: "Gallery",
       permissions: [
         { key: "canAccessGallery", label: "View Gallery" },
-        { key: "canEditGallery", label: "Edit Gallery" },
+        { key: "canEditGallery", label: "Edit Gallery Content" },
       ],
     },
     {
@@ -268,6 +369,12 @@ export const getPermissionModules = () => {
         { key: "canCreateBlog", label: "Create Blog" },
         { key: "canEditBlog", label: "Edit Blog" },
         { key: "canDeleteBlog", label: "Delete Blog" },
+      ],
+    },
+    {
+      name: "Settings",
+      permissions: [
+        { key: "canAccessSettings", label: "Access System Settings" },
       ],
     },
   ];

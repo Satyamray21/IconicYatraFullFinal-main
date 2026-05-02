@@ -51,6 +51,7 @@ const HotelCard = () => {
 
   // Edit Modal states
   const [editOpen, setEditOpen] = useState(false);
+  const [cityFilter, setCityFilter] = useState("");
   const [formData, setFormData] = useState({
     hotelName: "",
     hotelType: "",
@@ -62,8 +63,8 @@ const HotelCard = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchHotels());
-  }, [dispatch]);
+    dispatch(fetchHotels({ city: cityFilter }));
+  }, [dispatch, cityFilter]);
 
   // Handle Menu
   const handleMenuOpen = (event, hotel) => {
@@ -142,13 +143,22 @@ const HotelCard = () => {
         <Typography variant="h4" gutterBottom>
           Hotel List
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => navigate("/hotelform")}
-        >
-          Add Hotel
-        </Button>
+        <Box display="flex" gap={2}>
+          <TextField
+            label="Filter by City"
+            size="small"
+            value={cityFilter}
+            onChange={(e) => setCityFilter(e.target.value)}
+            sx={{ width: 250 }}
+          />
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => navigate("/hotelform")}
+          >
+            Add Hotel
+          </Button>
+        </Box>
       </Box>
 
       <Paper sx={{ overflow: "hidden" }}>

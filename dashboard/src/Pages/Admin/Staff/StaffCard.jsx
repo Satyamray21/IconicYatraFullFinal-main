@@ -35,6 +35,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import LockIcon from "@mui/icons-material/Lock";
 import HistoryIcon from "@mui/icons-material/History";
+import ListAltIcon from "@mui/icons-material/ListAlt";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllStaff, deleteStaff } from "../../../features/staff/staffSlice";
 import { isStaffSession } from "../../../features/user/userSlice";
@@ -89,6 +90,50 @@ const StaffCard = () => {
     loading: false,
     error: null,
   });
+
+  const [assignedLeadsDialog, setAssignedLeadsDialog] = useState({
+    open: false,
+    staffName: "",
+    rows: [],
+    loading: false,
+    error: null,
+  });
+
+  const openAssignedLeads = async (row) => {
+    setAssignedLeadsDialog({
+      open: true,
+      staffName: row.staffName,
+      rows: [],
+      loading: true,
+      error: null,
+    });
+    try {
+      const { data } = await axios.get(
+        `/lead/assigned-to/${encodeURIComponent(row.staffName)}`
+      );
+      setAssignedLeadsDialog((prev) => ({
+        ...prev,
+        rows: data?.data || [],
+        loading: false,
+      }));
+    } catch (e) {
+      setAssignedLeadsDialog((prev) => ({
+        ...prev,
+        loading: false,
+        error: e.response?.data?.message || "Failed to fetch leads",
+      }));
+    }
+  };
+
+  const closeAssignedLeads = () => {
+    setAssignedLeadsDialog({
+      open: false,
+      staffName: "",
+      rows: [],
+      loading: false,
+      error: null,
+    });
+  };
 
   const openStaffLoginHistory = async (row) => {
     setStaffLoginDialog({
@@ -255,6 +300,19 @@ const StaffCard = () => {
               </IconButton>
             </Tooltip>
           )}
+          <Tooltip title="View Assigned Leads">
+            <IconButton
+              color="secondary"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                openAssignedLeads(params.row);
+              }}
+              disabled={loading}
+            >
+              <ListAltIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <IconButton
             color="error"
             size="small"
@@ -427,6 +485,69 @@ const StaffCard = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={closeStaffLoginHistory}>Close</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Assigned Leads Dialog */}
+        <Dialog
+          open={assignedLeadsDialog.open}
+          onClose={closeAssignedLeads}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>Leads Assigned to — {assignedLeadsDialog.staffName}</DialogTitle>
+          <DialogContent dividers>
+            {assignedLeadsDialog.loading ? (
+              <Box display="flex" justifyContent="center" py={4}>
+                <CircularProgress />
+              </Box>
+            ) : assignedLeadsDialog.error ? (
+              <Alert severity="error">{assignedLeadsDialog.error}</Alert>
+            ) : assignedLeadsDialog.rows.length === 0 ? (
+              <Typography color="text.secondary" align="center" py={2}>
+                No leads assigned to this staff member.
+              </Typography>
+            ) : (
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "action.hover" }}>
+                      <TableCell>Lead ID</TableCell>
+                      <TableCell>Customer Name</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Assigned Date</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {assignedLeadsDialog.rows.map((lead) => (
+                      <TableRow key={lead.leadId}>
+                        <TableCell>{lead.leadId}</TableCell>
+                        <TableCell>{lead.personalDetails?.fullName}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={lead.status}
+                            size="small"
+                            color={
+                              lead.status === "Confirmed"
+                                ? "success"
+                                : lead.status === "Cancelled"
+                                ? "error"
+                                : "primary"
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {new Date(lead.createdAt).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeAssignedLeads}>Close</Button>
           </DialogActions>
         </Dialog>
 

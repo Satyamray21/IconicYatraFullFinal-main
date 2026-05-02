@@ -39,7 +39,7 @@ import {
   Close,
   Send
 } from "@mui/icons-material";
-import { fetchPackageById, clearSelected } from "../Features/packageSlice";
+import { fetchPackageById } from "../Features/packageSlice";
 
 const PackageDetail = () => {
   const { packageId } = useParams();
@@ -131,13 +131,12 @@ const PackageDetail = () => {
   );
 
   useEffect(() => {
-    if (packageId) {
+    // Only fetch if we don't have the selected package or it's a different one
+    // This prevents unnecessary API calls when navigating back/forth
+    if (packageId && (!selected || selected._id !== packageId)) {
       dispatch(fetchPackageById(packageId));
     }
-    return () => {
-      dispatch(clearSelected());
-    };
-  }, [dispatch, packageId]);
+  }, [dispatch, packageId, selected]);
 
   const handleBackClick = () => {
     navigate(-1);
@@ -151,10 +150,21 @@ const PackageDetail = () => {
     setQueryDialogOpen(false);
   };
 
-  if (loading) {
+  if (loading || (!selected && !error)) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
-        <CircularProgress />
+      <Box sx={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+      }}>
+        <Box sx={{ textAlign: "center", color: "white" }}>
+          <CircularProgress sx={{ color: "white", mb: 2 }} />
+          <Typography variant="h6" fontWeight="300">
+            Loading Amazing Package...
+          </Typography>
+        </Box>
       </Box>
     );
   }
@@ -166,24 +176,6 @@ const PackageDetail = () => {
           Back
         </Button>
         <Alert severity="error">{error}</Alert>
-      </Container>
-    );
-  }
-
-  if (!selected) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Button startIcon={<ArrowBack />} onClick={handleBackClick} sx={{ mb: 2 }}>
-          Back
-        </Button>
-        <Paper elevation={3} sx={{ p: 4, textAlign: "center" }}>
-          <Typography variant="h4" color="error" gutterBottom>
-            Package Not Found
-          </Typography>
-          <Button variant="contained" component={Link} to="/domestic">
-            Browse All Packages
-          </Button>
-        </Paper>
       </Container>
     );
   }

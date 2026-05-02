@@ -2,6 +2,8 @@ import { Vehicle } from "../../models/quotation/vehicle.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { clearPattern } from "../../utils/cache.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 import { Lead } from "../../models/lead.model.js";
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
@@ -144,6 +146,15 @@ export const createVehicle = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Failed to create vehicle quotation");
   }
 
+  await logActivity({
+    action: "CREATE",
+    model: "VehicleQuotation",
+    refId: vehicleQuotationId,
+    description: `Vehicle Quotation ${vehicleQuotationId} (${clientName}) created by ${req.user?.name || 'System'}`,
+    user: req.user?.name || "System",
+  });
+
+  await clearPattern('dashboard:stats:*');
   return res
     .status(201)
     .json(
@@ -257,6 +268,7 @@ export const updateVehicle = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Vehicle quotation not found");
   }
 
+  await clearPattern('dashboard:stats:*');
   return res
     .status(200)
     .json(
@@ -276,6 +288,16 @@ export const deleteVehicle = asyncHandler(async (req, res) => {
   if (!deletedVehicle) {
     throw new ApiError(404, "Vehicle quotation not found");
   }
+
+  await logActivity({
+    action: "DELETE",
+    model: "VehicleQuotation",
+    refId: vehicleQuotationId,
+    description: `Vehicle Quotation ${vehicleQuotationId} (${deletedVehicle.basicsDetails?.clientName || 'Guest'}) deleted by ${req.user?.name || 'System'}`,
+    user: req.user?.name || "System",
+  });
+
+  await clearPattern('dashboard:stats:*');
 
   return res
     .status(200)
@@ -378,6 +400,7 @@ export const updateVehicleQuotationByQuotationId = asyncHandler(
       "personalDetails.fullName": updatedVehicle.basicsDetails.clientName,
     });
 
+    await clearPattern('dashboard:stats:*');
     return res
       .status(200)
       .json(
@@ -418,6 +441,7 @@ export const finalizeVehicleQuotation = asyncHandler(async (req, res) => {
 
   await vehicle.save();
 
+  await clearPattern('dashboard:stats:*');
   return res
     .status(200)
     .json(

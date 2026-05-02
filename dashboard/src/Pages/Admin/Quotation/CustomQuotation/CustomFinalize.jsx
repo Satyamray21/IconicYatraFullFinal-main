@@ -73,6 +73,7 @@ import AddServiceDialog from "../VehicleQuotation/Dialog/AddServiceDialog";
 import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
+import HotelConfirmationDialog from "./Dialog/HotelConfirmationDialog";
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -507,6 +508,7 @@ const CustomFinalize = () => {
         message: "",
         severity: "success"
     });
+    const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
     const { data: company, status } = useSelector((state) => state.companyUI);
     const [itineraryDialog, setItineraryDialog] = useState({
         open: false,
@@ -902,20 +904,11 @@ useEffect(() => {
         quotation?.finalizedVendorsWithAmounts,
     ]);
 
-    useEffect(() => {
-        const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
-        setQuotation((prev) => ({
-            ...prev,
-            footer: {
-                ...prev.footer,
-                received: `₹ ${receivedFromClient.toLocaleString("en-IN")}`,
-                balance:
-                    packageTotalForFooter != null
-                        ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}`
-                        : prev.footer.balance,
-            },
-        }));
-    }, [paymentHistory, packageTotalForFooter]);
+    const { receivedFromClient, paidToVendor } = React.useMemo(() => summarizeVoucherAmounts(paymentHistory), [paymentHistory]);
+    const paymentReceivedDisplay = `₹ ${receivedFromClient.toLocaleString("en-IN")}`;
+    const paymentBalanceDisplay = packageTotalForFooter != null 
+        ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}` 
+        : "₹ 0";
 
     // Update the transformApiData function to handle the actual API response structure
     const transformApiData = (apiData) => {
@@ -2283,7 +2276,7 @@ useEffect(() => {
     const infoMap = {
         call: `📞 ${quotation.footer.phone}`,
         email: `✉️ ${quotation.footer.email}`,
-        payment: `Received from client: ${quotation.footer.received}\n Balance due: ${quotation.footer.balance}`,
+        payment: `Received from client: ${paymentReceivedDisplay}\n Balance due: ${paymentBalanceDisplay}`,
         quotation: `Total Quotation Cost: ${
             packageTotalForFooter != null
                 ? `₹ ${Math.round(packageTotalForFooter).toLocaleString("en-IN")}`
@@ -2811,6 +2804,16 @@ useEffect(() => {
                                             onClick={() => setOpenBankDialog(true)}
                                         >
                                             Edit Vendors
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="secondary"
+                                            startIcon={<CheckCircle />}
+                                            sx={{ ml: 1 }}
+                                            onClick={() => setOpenHotelConfirmation(true)}
+                                        >
+                                            Hotel Confirmation
                                         </Button>
                                     </Box>
 
@@ -3625,6 +3628,13 @@ useEffect(() => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <HotelConfirmationDialog
+                open={openHotelConfirmation}
+                onClose={() => setOpenHotelConfirmation(false)}
+                quotation={selectedQuotation}
+                type="custom"
+            />
         </Box>
     );
 };

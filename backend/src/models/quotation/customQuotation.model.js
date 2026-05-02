@@ -171,6 +171,24 @@ const customQuotationSchema = new mongoose.Schema(
         finalizedAt: {
             type: Date,
         },
+        /** Confirmed hotel details for the hotel confirmation mailer */
+        confirmedHotels: [
+            {
+                hotelName: { type: String },
+                hotelAddress: { type: String },
+                city: { type: String },
+                nights: { type: Number },
+                roomType: { type: String },
+                noOfRooms: { type: String },
+                checkInDate: { type: String },
+                checkInTime: { type: String },
+                checkOutDate: { type: String },
+                checkOutTime: { type: String },
+                mealPlan: { type: String },
+                contactNo: { type: String },
+                bookingPnr: { type: String },
+            }
+        ],
     },
     { timestamps: true }
 );

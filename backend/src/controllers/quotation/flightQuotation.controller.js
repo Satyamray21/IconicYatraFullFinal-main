@@ -2,6 +2,8 @@ import { FlightQuotation } from "../../models/quotation/flightQuotation.model.js
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { clearPattern } from "../../utils/cache.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 import { Lead } from "../../models/lead.model.js"
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
@@ -75,6 +77,33 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
     // ✅ Generate unique Flight Quotation ID
     const flightQuotationId = await generateFlightQuotationId();
 
+    const defaultPolicies = {
+        inclusionPolicy: [
+            "Economy class airfare",
+            "Applicable airport taxes",
+            "Standard baggage allowance as per airline policy"
+        ],
+        exclusionPolicy: [
+            "Any meals or snacks not specified in the inclusions",
+            "Seat selection and preferred seating charges",
+            "Extra baggage charges beyond the standard allowance",
+            "Travel Insurance",
+            "Any items of personal nature (tips, laundry, etc.)",
+            "Anything not explicitly mentioned in the inclusions"
+        ],
+        paymentPolicy: [
+            "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.",
+            "20% at reservation + 100% Flight/Train cost",
+            "60% after booking confirmation",
+            "Balance before departure"
+        ],
+        termsAndConditions: [
+            "Fares are subject to availability at the time of booking",
+            "Tickets are non-refundable and non-changeable unless specified otherwise",
+            "Passport must be valid for at least 6 months from the date of travel"
+        ]
+    };
+
     // ✅ Create quotation
     const quotation = await FlightQuotation.create({
         flightQuotationId,
@@ -89,10 +118,20 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
         personalDetails,
         status: status || "New",
         quotation_type: "flight",
-        leadId: lead.leadId
+        leadId: lead.leadId,
+        policies: defaultPolicies
+    });
+
+    await logActivity({
+        action: "CREATE",
+        model: "FlightQuotation",
+        refId: flightQuotationId,
+        description: `Flight Quotation ${flightQuotationId} (${clientDetails.clientName}) created by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
     });
 
     // ✅ Send response with quotation + full lead info
+    await clearPattern('dashboard:stats:*');
     return res.status(201).json(
         new ApiResponse(201, {
             quotation,
@@ -185,6 +224,7 @@ export const updateFlightQuotationById = asyncHandler(async (req, res) => {
 
     if (!quotation) throw new ApiError(404, "Flight quotation not found");
 
+    await clearPattern('dashboard:stats:*');
     return res
         .status(200)
         .json(new ApiResponse(200, quotation, "Flight quotation updated successfully"));
@@ -197,6 +237,16 @@ export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
 
     if (!quotation) throw new ApiError(404, "Flight quotation not found");
 
+    await logActivity({
+        action: "DELETE",
+        model: "FlightQuotation",
+        refId: flightQuotationId,
+        description: `Flight Quotation ${flightQuotationId} (${quotation.clientDetails?.clientName || 'Guest'}) deleted by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
+
     return res
         .status(200)
         .json(new ApiResponse(200, {}, "Flight quotation deleted successfully"));
@@ -206,7 +256,7 @@ export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
 // ✅ Confirm Flight Quotation API
 export const confirmFlightQuotation = asyncHandler(async (req, res) => {
     const { flightQuotationId } = req.params;
-    const { pnrList, finalFareList, finalFare } = req.body;
+    const { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount } = req.body;
 
     const quotation = await FlightQuotation.findOne({ flightQuotationId });
 
@@ -240,16 +290,31 @@ export const confirmFlightQuotation = asyncHandler(async (req, res) => {
             throw new ApiError(400, "Final fare list length must match flight details length");
         }
         quotation.finalFareList = finalFareList;
-
-        // ✅ Update total final fare
-        quotation.finalFare = finalFare
-            ? Number(finalFare) // ✅ Use manual value if provided
-            : finalFareList.reduce((sum, fare) => sum + Number(fare || 0), 0);
     }
+
+    // ✅ Update GST and Fare fields
+    if (baseFare !== undefined) quotation.baseFare = baseFare;
+    if (gstType) quotation.gstType = gstType;
+    if (gstPercentage !== undefined) quotation.gstPercentage = gstPercentage;
+    if (gstAmount !== undefined) quotation.gstAmount = gstAmount;
+
+    // ✅ Update total final fare
+    quotation.finalFare = finalFare
+        ? Number(finalFare) // ✅ Use manual value if provided
+        : (Number(baseFare || 0) + Number(gstAmount || 0)) || finalFareList.reduce((sum, fare) => sum + Number(fare || 0), 0);
 
     quotation.status = "Confirmed";
     await quotation.save();
 
+    await logActivity({
+        action: "CONFIRM",
+        model: "FlightQuotation",
+        refId: flightQuotationId,
+        description: `Flight Quotation ${flightQuotationId} (${quotation.clientDetails?.clientName || 'Guest'}) confirmed by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
     return res.status(200).json(
         new ApiResponse(200, quotation, "Flight quotation confirmed successfully")
     );

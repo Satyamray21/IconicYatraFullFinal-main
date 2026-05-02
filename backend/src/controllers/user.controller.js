@@ -382,6 +382,7 @@ export const login = async (req, res) => {
     const token = jwt.sign(
       {
         id: staff._id.toString(),
+        name: staff.personalDetails?.fullName,
         role: permission.role,
         staffUserId: permission.staffUserId,
         loginId: loginId,
