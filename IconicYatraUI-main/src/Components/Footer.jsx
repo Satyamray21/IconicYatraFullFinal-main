@@ -84,7 +84,7 @@ const Footer = () => {
     <Box
       sx={{
         width: "100%",
-        background: "linear-gradient(135deg, #1f3c65 0%, #2c5282 100%)",
+        background: company?.company?.footerColor || "linear-gradient(135deg, #1f3c65 0%, #2c5282 100%)",
         color: "#fff",
         px: { xs: 3, sm: 5 },
         pt: 6,
