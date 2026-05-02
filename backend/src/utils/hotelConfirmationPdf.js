@@ -12,7 +12,10 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
   const guestName = quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
   const bookingId = quotation?.quotationId || quotation?.quickQuotationId || "Booking Id";
 
-  const packageTitle = options.packageTitle || `${quotation?.tourDetails?.quotationTitle || "Tour Package"} ${options.duration?.nights || 0} Nights ${options.duration?.days || 0} Days`;
+  let packageTitle = options.packageTitle || quotation?.tourDetails?.quotationTitle || "Tour Package";
+  if (!packageTitle.includes("Nights") && !packageTitle.includes("Days")) {
+    packageTitle += ` ${options.duration?.nights || 0} Nights ${options.duration?.days || 0} Days`;
+  }
   const destinationSummary = options.destinationSummary || `(${quotation?.tourDetails?.destinationSummary || ""})`;
 
   return new Promise((resolve, reject) => {

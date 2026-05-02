@@ -1065,20 +1065,33 @@ export const sendHotelConfirmationMail = async (req, res) => {
     }
 
     const meta = await loadBookingPaymentDefaults(quotation);
+    const td = quotation?.tourDetails || {};
+    const qd = td?.quotationDetails || {};
+    const destinations = qd?.destinations || [];
+
+    const adults = Number(quotation?.clientDetails?.adults || qd?.adults) || 0;
+    const children = Number(quotation?.clientDetails?.children || qd?.children) || 0;
+    const kids = Number(quotation?.clientDetails?.kids || qd?.kids) || 0;
+
     const options = {
       ...meta,
       ...company,
       ...customText,
-      guestsLine: `${Number(quotation?.clientDetails?.adults || 0)} Adults, ${Number(quotation?.clientDetails?.children || 0) + Number(quotation?.clientDetails?.kids || 0)} Child`,
-      roomsLine: `${quotation?.tourDetails?.quotationDetails?.rooms?.numberOfRooms || 1} ${quotation?.tourDetails?.quotationDetails?.rooms?.sharingType || "Double sharing"}`,
+      guestsLine: `${adults} Adults, ${children + kids} Child`,
+      roomsLine: `${qd?.rooms?.numberOfRooms || 1} ${qd?.rooms?.sharingType || "Double sharing"}`,
       packageType: quotation?.finalizedPackage || "Family Tour Package",
       duration: {
-        nights: (quotation?.tourDetails?.quotationDetails?.destinations || []).reduce((sum, d) => sum + (Number(d?.nights) || 0), 0),
-        days: (quotation?.tourDetails?.quotationDetails?.destinations || []).reduce((sum, d) => sum + (Number(d?.nights) || 0), 0) + 1
+        nights: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0),
+        days: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0) + 1
       },
-      pickupPoint: quotation?.tourDetails?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint,
-      dropPoint: quotation?.tourDetails?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint,
-      mealPlan: quotation?.tourDetails?.quotationDetails?.mealPlan || quotation?.mealPlan
+      startDate: td?.arrivalDate,
+      endDate: td?.departureDate,
+      packageTitle: td?.quotationTitle,
+      destinationSummary: td?.destinationSummary,
+      stayLocations: quotation?.pickupDrop || [],
+      pickupPoint: td?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint,
+      dropPoint: td?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint,
+      mealPlan: qd?.mealPlan || quotation?.mealPlan
     };
 
     const htmlBody = buildHotelConfirmationEmail(quotation, options);
