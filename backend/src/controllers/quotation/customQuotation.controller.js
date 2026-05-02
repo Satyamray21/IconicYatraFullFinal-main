@@ -1056,7 +1056,7 @@ export const sendHotelConfirmationMail = async (req, res) => {
     }
 
     const company = await resolveCompanyForEmail({ 
-      companyId: req.user?.companyId, 
+      companyId: req.body.companyId || req.user?.companyId, 
       companyName: req.body.companyName || "Iconic Travel" 
     });
 
@@ -1090,6 +1090,8 @@ export const sendHotelConfirmationMail = async (req, res) => {
       service: "gmail",
       auth: { user, pass },
     });
+
+    const guestName = quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
 
     const mailOptions = {
       from: `"${options.companyName}" <${user}>`,
