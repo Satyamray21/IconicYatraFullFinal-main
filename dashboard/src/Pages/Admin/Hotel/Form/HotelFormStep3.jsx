@@ -144,7 +144,12 @@ const HotelFormStep3 = ({ hotelId, onNext, onBack }) => {
 
                 // ✅ DIRECT JSON DATA BHEJO - FormData mat use karo
                 const requestData = {
-                    tempMattressCost: values.tempMattressCost
+                    tempMattressCost: values.tempMattressCost.map(item => ({
+                        ...item,
+                        adult: parseFloat(item.adult) || 0,
+                        children: parseFloat(item.children) || 0,
+                        kidWithoutMattress: parseFloat(item.kidWithoutMattress) || 0
+                    }))
                 };
 
                 console.log("🔹 Sending JSON data:", requestData);
