@@ -130,6 +130,8 @@ const HotelFinalize = () => {
     const [openBankDialog, setOpenBankDialog] = useState(false);
     const [openAddFlight, setOpenAddFlight] = useState(false);
     const [flights, setFlights] = useState([]);
+    const [mailCompanies, setMailCompanies] = useState([]);
+    const [emailAccounts, setEmailAccounts] = useState([]);
 
     // Bank details state
     const [accountType, setAccountType] = useState("company");
@@ -193,6 +195,27 @@ const HotelFinalize = () => {
     useEffect(() => {
         loadPaymentHistory();
     }, [apiEntityId, loadPaymentHistory]);
+
+    useEffect(() => {
+        const fetchMailCompanies = async () => {
+            try {
+                const res = await axios.get("/company");
+                setMailCompanies(Array.isArray(res?.data?.data) ? res.data.data : []);
+            } catch {
+                setMailCompanies([]);
+            }
+        };
+        const fetchEmailAccounts = async () => {
+            try {
+                const res = await axios.get("/email-accounts");
+                setEmailAccounts(Array.isArray(res?.data?.data) ? res.data.data : []);
+            } catch {
+                setEmailAccounts([]);
+            }
+        };
+        fetchMailCompanies();
+        fetchEmailAccounts();
+    }, []);
 
     // Transform API data to component format
     const transformQuotationData = (apiData) => {
@@ -1260,6 +1283,8 @@ const HotelFinalize = () => {
                 open={openEmailDialog}
                 onClose={handleEmailClose}
                 customer={quotationData.customer}
+                companyOptions={mailCompanies}
+                emailAccountOptions={emailAccounts}
             />
 
             <MakePaymentDialog

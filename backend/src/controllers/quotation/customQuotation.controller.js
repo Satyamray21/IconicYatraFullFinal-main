@@ -8,6 +8,7 @@ import { logActivity } from "../../utils/ActivityLog.js";
 import mongoose from "mongoose";
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
+import EmailAccount from "../../models/emailAccount.model.js";
 import Bank from "../../models/bankDetails.js";
 import GlobalSettings from "../../models/globalSettings.model.js";
 import {
@@ -542,7 +543,35 @@ const resolveCompanyForEmail = async ({ companyId, companyName }) => {
   return null;
 };
 
-const resolveMailAuth = (senderAccount) => {
+const resolveMailAuth = async (senderAccount, selectedCompany) => {
+  // 1. If senderAccount is a valid MongoDB ID, look up in EmailAccount
+  if (senderAccount && senderAccount.length === 24) {
+    try {
+      const account = await EmailAccount.findById(senderAccount).lean();
+      if (account) {
+        return {
+          user: account.email,
+          pass: account.appPassword,
+          service: account.service,
+          host: account.host,
+          port: account.port,
+          secure: account.secure,
+        };
+      }
+    } catch (e) {
+      console.warn("EmailAccount lookup failed:", e.message);
+    }
+  }
+
+  // 2. If company has its own email and app password, use them
+  if (selectedCompany?.email && selectedCompany?.emailAppPassword) {
+    return {
+      user: selectedCompany.email,
+      pass: selectedCompany.emailAppPassword,
+      service: "gmail",
+    };
+  }
+
   const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
 
   const user = useSecondary
@@ -556,7 +585,7 @@ const resolveMailAuth = (senderAccount) => {
     process.env.EMAIL_PASS
     : process.env.app_pass || process.env.EMAIL_PASS;
 
-  return { user, pass };
+  return { user, pass, service: "gmail" };
 };
 
 
@@ -833,7 +862,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
       ? `Booking Confirmation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`
       : `Quotation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`);
 
-  const auth = resolveMailAuth(senderAccount);
+  const auth = await resolveMailAuth(senderAccount, selectedCompany);
   if (!auth.user || !auth.pass) {
     throw new ApiError(
       500,
@@ -842,13 +871,8 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   }
 
   const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: auth.user,
-      pass: auth.pass,
-    },
+    ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
+    auth: { user: auth.user, pass: auth.pass },
   });
 
   const providedPdfAttachment =
