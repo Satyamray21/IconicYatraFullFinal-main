@@ -1336,9 +1336,9 @@ useEffect(() => {
             return;
         }
         setEmailTemplateType("normal");
-        const defaultCompany = mailCompanies?.[0];
+        const defaultCompanyId = company?._id || mailCompanies?.[0]?._id;
         try {
-            await refreshEmailTemplates(defaultCompany?._id);
+            await refreshEmailTemplates(defaultCompanyId);
         } catch (e) {
             setSnackbar({
                 open: true,
@@ -1448,8 +1448,8 @@ useEffect(() => {
             message: tpl?.message || "",
             signature: "Warm Regards,\nReservation Team\nIconic Travel",
             mailType: type,
-            senderAccount: "gmail1",
-            companyId: mailCompanies?.[0]?._id || "",
+            senderAccount: "",
+            companyId: company?._id || mailCompanies?.[0]?._id || "",
             nextPayableAmount: "",
             paymentDueDate: "",
         };
@@ -3543,22 +3543,24 @@ useEffect(() => {
                 onClose={handleAddFlightClose}
                 onSave={handleAddFlight}
             />
-            <EmailQuotationDialog
-                open={openEmailDialog}
-                onClose={handleEmailClose}
-                customer={quotation.customer}
-                onSend={handleEmailSend}
-                onCompanyChange={async (companyId, mailType) => {
-                    const templates = await refreshEmailTemplates(companyId);
-                    const type = mailType === "booking" ? "booking" : "normal";
-                    return templates?.[type] || { subject: "", message: "" };
-                }}
-                initialValuesOverride={emailInitialValues}
-                templateBodies={emailTemplateBodies}
-                companyOptions={mailCompanies}
-                emailAccountOptions={emailAccounts}
-                hasPdfAttachment={!!pdfAttachmentForMail}
-            />
+            {openEmailDialog && (
+                <EmailQuotationDialog
+                    open={openEmailDialog}
+                    onClose={handleEmailClose}
+                    customer={quotation.customer}
+                    onSend={handleEmailSend}
+                    onCompanyChange={async (companyId, mailType) => {
+                        const templates = await refreshEmailTemplates(companyId);
+                        const type = mailType === "booking" ? "booking" : "normal";
+                        return templates?.[type] || { subject: "", message: "" };
+                    }}
+                    initialValuesOverride={emailInitialValues}
+                    templateBodies={emailTemplateBodies}
+                    companyOptions={mailCompanies}
+                    emailAccountOptions={emailAccounts}
+                    hasPdfAttachment={!!pdfAttachmentForMail}
+                />
+            )}
             <TransactionSummaryDialog
                 open={openTransactionDialog}
                 onClose={() => setOpenTransactionDialog(false)}
