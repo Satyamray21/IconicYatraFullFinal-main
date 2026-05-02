@@ -84,6 +84,7 @@ const hotelSchema = new mongoose.Schema({
         roomDetails: [{
             roomType: { type: String },
             mealPlan: { type: String, enum: ["EP", "CP", "MAP", "AP"] },
+            price: { type: Number },
             images: [{ type: String }],
             mattressCost: {
                 mealPlan: { type: String, enum: ["EP", "CP", "MAP", "AP"] },

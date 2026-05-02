@@ -497,54 +497,62 @@ export const updateHotelStep4 = async (req, res) => {
             // Combine data into final rooms structure
             hotel.rooms = tempRoomDetails.map((season, seasonIndex) => {
                 const seasonData = season || {};
+                const finalRoomDetails = [];
 
                 console.log(`🔹 Processing season ${seasonIndex}:`, seasonData.seasonType);
+
+                (seasonData.roomDetails || []).forEach((roomDetail, roomIndex) => {
+                    const roomData = roomDetail || {};
+                    const roomType = roomData.roomType || `Room ${roomIndex + 1}`;
+
+                    // Iterate through all possible meal plans
+                    ["ep", "cp", "map", "ap"].forEach(planKey => {
+                        const price = parseFloat(roomData[planKey]);
+                        
+                        // Only add if price is entered and > 0
+                        if (!isNaN(price) && price > 0) {
+                            const mealPlan = planKey.toUpperCase();
+                            
+                            // Find matching mattress cost for THIS room type AND meal plan
+                            const mattressCost = tempMattressCost.find(mc =>
+                                mc && mc.roomType === roomType && mc.mealPlan === mealPlan
+                            );
+
+                            // Find matching peak costs for THIS room type
+                            const peakCosts = tempPeakCost.filter(pc =>
+                                pc && pc.roomType === roomType
+                            );
+
+                            console.log(`🔹 Adding Room Entry: ${roomType} - ${mealPlan} - Price: ${price}`);
+
+                            finalRoomDetails.push({
+                                roomType: roomType,
+                                mealPlan: mealPlan,
+                                price: price,
+                                images: roomData.images || [],
+                                mattressCost: mattressCost ? {
+                                    mealPlan: mattressCost.mealPlan || mealPlan,
+                                    adult: parseFloat(mattressCost.adult) || 0,
+                                    children: parseFloat(mattressCost.children) || 0,
+                                    kidWithoutMattress: parseFloat(mattressCost.kidWithoutMattress) || 0
+                                } : undefined,
+                                peakCost: peakCosts.map(pc => ({
+                                    title: pc.title || "Peak Cost",
+                                    validFrom: pc.validFrom,
+                                    validTill: pc.validTill,
+                                    surcharge: parseFloat(pc.surcharge) || 0,
+                                    note: pc.note || ""
+                                }))
+                            });
+                        }
+                    });
+                });
 
                 return {
                     seasonType: seasonData.seasonType || `Season ${seasonIndex + 1}`,
                     validFrom: seasonData.validFrom,
                     validTill: seasonData.validTill,
-                    roomDetails: (seasonData.roomDetails || []).map((roomDetail, roomIndex) => {
-                        const roomData = roomDetail || {};
-                        const roomType = roomData.roomType || `Room ${roomIndex + 1}`;
-
-                        console.log(`🔹 Processing room ${roomIndex}:`, roomType);
-
-                        // Find matching mattress cost
-                        const mattressCost = tempMattressCost.find(mc =>
-                            mc && mc.roomType && mc.roomType === roomType
-                        );
-
-                        // Find matching peak costs
-                        const peakCosts = tempPeakCost.filter(pc =>
-                            pc && pc.roomType && pc.roomType === roomType
-                        );
-
-                        console.log(`🔹 Room ${roomType}:`, {
-                            hasMattressCost: !!mattressCost,
-                            peakCostsCount: peakCosts.length,
-                            images: roomData.images?.length || 0
-                        });
-
-                        return {
-                            roomType: roomType,
-                            mealPlan: roomData.mealPlan || "EP",
-                            images: roomData.images || [],
-                            mattressCost: mattressCost ? {
-                                mealPlan: mattressCost.mealPlan || "EP",
-                                adult: mattressCost.adult || 0,
-                                children: mattressCost.children || 0,
-                                kidWithoutMattress: mattressCost.kidWithoutMattress || 0
-                            } : undefined,
-                            peakCost: peakCosts.map(pc => ({
-                                title: pc.title || "Peak Cost",
-                                validFrom: pc.validFrom,
-                                validTill: pc.validTill,
-                                surcharge: pc.surcharge || 0,
-                                note: pc.note || ""
-                            }))
-                        };
-                    })
+                    roomDetails: finalRoomDetails
                 };
             });
 
