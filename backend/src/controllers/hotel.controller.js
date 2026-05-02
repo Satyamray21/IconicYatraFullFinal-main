@@ -513,17 +513,26 @@ export const updateHotelStep4 = async (req, res) => {
                         if (!isNaN(price) && price > 0) {
                             const mealPlan = planKey.toUpperCase();
                             
-                            // Find matching mattress cost for THIS room type AND meal plan
-                            const mattressCost = tempMattressCost.find(mc =>
-                                mc && mc.roomType === roomType && mc.mealPlan === mealPlan
+                            // Find matching mattress cost for THIS room type AND meal plan (Case-insensitive)
+                            let mattressCost = tempMattressCost.find(mc =>
+                                mc && 
+                                mc.roomType?.toLowerCase().trim() === roomType.toLowerCase().trim() && 
+                                mc.mealPlan?.toUpperCase().trim() === mealPlan.toUpperCase().trim()
                             );
+
+                            // Fallback: If no meal-plan specific mattress cost, take the first one for this room type
+                            if (!mattressCost) {
+                                mattressCost = tempMattressCost.find(mc =>
+                                    mc && mc.roomType?.toLowerCase().trim() === roomType.toLowerCase().trim()
+                                );
+                            }
 
                             // Find matching peak costs for THIS room type
                             const peakCosts = tempPeakCost.filter(pc =>
-                                pc && pc.roomType === roomType
+                                pc && pc.roomType?.toLowerCase().trim() === roomType.toLowerCase().trim()
                             );
 
-                            console.log(`🔹 Adding Room Entry: ${roomType} - ${mealPlan} - Price: ${price}`);
+                            console.log(`🔹 Room ${roomType} (${mealPlan}): Mattress Cost Found? ${!!mattressCost}`);
 
                             finalRoomDetails.push({
                                 roomType: roomType,
