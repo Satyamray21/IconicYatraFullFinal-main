@@ -591,7 +591,18 @@ useEffect(() => {
             setMailCompanies([]);
         }
     };
+    const fetchEmailAccounts = async () => {
+        try {
+            const res = await axios.get("/email-accounts");
+            const list = res?.data?.data || [];
+            setEmailAccounts(Array.isArray(list) ? list : []);
+        } catch (err) {
+            console.error("Failed to fetch email accounts:", err);
+            setEmailAccounts([]);
+        }
+    };
     fetchMailCompanies();
+    fetchEmailAccounts();
 }, []);
     // Dynamic quotation state from API
     const [quotation, setQuotation] = useState({
@@ -673,6 +684,7 @@ useEffect(() => {
         booking: { subject: "", message: "" },
     });
     const [mailCompanies, setMailCompanies] = useState([]);
+    const [emailAccounts, setEmailAccounts] = useState([]);
     const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
     const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
     const [openBankDialog, setOpenBankDialog] = useState(false);
@@ -3544,6 +3556,8 @@ useEffect(() => {
                 initialValuesOverride={emailInitialValues}
                 templateBodies={emailTemplateBodies}
                 companyOptions={mailCompanies}
+                emailAccountOptions={emailAccounts}
+                hasPdfAttachment={!!pdfAttachmentForMail}
             />
             <TransactionSummaryDialog
                 open={openTransactionDialog}

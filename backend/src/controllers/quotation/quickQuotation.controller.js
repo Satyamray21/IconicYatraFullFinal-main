@@ -1,6 +1,7 @@
 import QuickQuotation from "../../models/quotation/quickQuotation.model.js";
 import Package from "../../models/package.model.js";
 import Company from "../../models/company.model.js";
+import EmailAccount from "../../models/emailAccount.model.js";
 import { uploadOnCloudinary } from "../../utils/cloudinary.js";
 import ReceivedVoucher from "../../models/payment.model.js";
 import GlobalSettings from "../../models/globalSettings.model.js";
@@ -485,7 +486,28 @@ const resolveCompanyForEmail = async ({ companyId, companyName }) => {
   return null;
 };
 
-const resolveMailAuth = (senderAccount) => {
+const resolveMailAuth = async (senderAccount, selectedCompany) => {
+  // 1. If senderAccount is a valid MongoDB ID, look up in EmailAccount
+  if (senderAccount && senderAccount.length === 24) {
+    try {
+      const account = await EmailAccount.findById(senderAccount).lean();
+      if (account) {
+        return { user: account.email, pass: account.appPassword };
+      }
+    } catch (e) {
+      console.warn("EmailAccount lookup failed:", e.message);
+    }
+  }
+
+  // 2. If company has its own email and app password (legacy/direct), use them
+  if (selectedCompany?.email && selectedCompany?.emailAppPassword) {
+    return {
+      user: selectedCompany.email,
+      pass: selectedCompany.emailAppPassword,
+    };
+  }
+
+  // 3. Fallback to environment variables (gmail1/gmail2)
   const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
   const user = useSecondary
     ? process.env.gmail2 || process.env.gmail
@@ -814,7 +836,7 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
       ? `Booking Confirmation ${shortRef} - ${guestName}`
       : `Quotation ${shortRef} - ${guestName}`);
 
-  const auth = resolveMailAuth(senderAccount);
+  const auth = await resolveMailAuth(senderAccount, selectedCompany);
   if (!auth.user || !auth.pass) {
     throw new ApiError(
       500,
@@ -823,9 +845,7 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
   }
 
   const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
+    ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
     auth: { user: auth.user, pass: auth.pass },
   });
 
@@ -1270,11 +1290,10 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
 
     const htmlBody = buildHotelConfirmationEmail(quotation, options);
     const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
-    const { user, pass } = resolveMailAuth(senderAccount);
-
+    const auth = await resolveMailAuth(senderAccount);
     const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user, pass },
+      ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
+      auth: { user: auth.user, pass: auth.pass },
     });
 
     const guestName = quotation?.customerName || "Guest";

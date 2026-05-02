@@ -1314,6 +1314,7 @@ const QuickFinalize = () => {
     booking: { subject: "", message: "" },
   });
   const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailAccounts, setEmailAccounts] = useState([]);
   const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
   const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
   const [policyInputs, setPolicyInputs] = useState({
@@ -1577,7 +1578,18 @@ const QuickFinalize = () => {
         setMailCompanies([]);
       }
     };
+    const loadEmailAccounts = async () => {
+      try {
+        const res = await axios.get("/email-accounts");
+        const list = res?.data?.data || [];
+        setEmailAccounts(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.error("Failed to load email accounts:", err);
+        setEmailAccounts([]);
+      }
+    };
     loadCompanies();
+    loadEmailAccounts();
   }, []);
 
   useEffect(() => {
@@ -4008,6 +4020,8 @@ const QuickFinalize = () => {
         initialValuesOverride={emailInitialValues}
         templateBodies={emailTemplateBodies}
         companyOptions={mailCompanies}
+        emailAccountOptions={emailAccounts}
+        hasPdfAttachment={!!pdfAttachmentForMail}
       />
       <TransactionSummaryDialog
         open={openTransactionDialog}

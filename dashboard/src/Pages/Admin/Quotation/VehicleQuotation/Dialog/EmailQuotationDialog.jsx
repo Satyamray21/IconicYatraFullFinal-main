@@ -29,6 +29,7 @@ const EmailQuotationDialog = ({
   initialValuesOverride,
   templateBodies,
   companyOptions = [],
+  emailAccountOptions = [],
   hasPdfAttachment = false,
 }) => {
   const validationSchema = Yup.object({
@@ -53,7 +54,7 @@ const EmailQuotationDialog = ({
     message: "",
     signature: "",
     mailType: "normal",
-    senderAccount: "gmail1",
+    senderAccount: emailAccountOptions[0]?._id || "",
     companyId: "",
     nextPayableAmount: "",
     paymentDueDate: null,
@@ -155,15 +156,32 @@ const EmailQuotationDialog = ({
                           onChange={async (e) => {
                             const companyId = e.target.value;
                             setFieldValue("companyId", companyId);
+
+                            // Find first available account for this company
+                            const firstAvailable = emailAccountOptions.find((acc) => {
+                              const accCompanyId = acc.companyId?._id || acc.companyId;
+                              return accCompanyId === companyId;
+                            });
+                            if (firstAvailable) {
+                              setFieldValue("senderAccount", firstAvailable._id);
+                            } else {
+                              setFieldValue("senderAccount", "");
+                            }
+
                             if (typeof onCompanyChange === "function") {
                               const nextType = values.mailType || "normal";
-                              const tpl = await onCompanyChange(companyId, nextType);
-                              if (tpl?.subject !== undefined) setFieldValue("subject", tpl.subject);
-                              if (tpl?.message !== undefined) setFieldValue("message", tpl.message);
+                              const { subject: s, message: m } =
+                                await onCompanyChange(companyId, nextType);
+                              if (s) setFieldValue("subject", s);
+                              if (m) setFieldValue("message", m);
                             }
                           }}
                           error={touched.companyId && Boolean(errors.companyId)}
-                          helperText={touched.companyId && errors.companyId}
+                          helperText={
+                            touched.companyId &&
+                            (errors.companyId ||
+                              `Company Email: ${companyOptions.find((c) => c._id === values.companyId)?.email || "N/A"}`)
+                          }
                         >
                           {companyOptions.map((company) => (
                             <MenuItem key={company._id} value={company._id}>
@@ -173,17 +191,49 @@ const EmailQuotationDialog = ({
                         </TextField>
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <Field
+                          <Field
                           as={TextField}
                           select
                           fullWidth
                           name="senderAccount"
                           label="Send From"
                           error={touched.senderAccount && Boolean(errors.senderAccount)}
-                          helperText={touched.senderAccount && errors.senderAccount}
+                          SelectProps={{
+                            renderValue: (selected) => {
+                              const acc = emailAccountOptions.find((a) => a._id === selected);
+                              return acc ? `${acc.label || acc.displayName} <${acc.email}>` : "Select Sender";
+                            },
+                          }}
+                          helperText={
+                            (touched.senderAccount && errors.senderAccount) ||
+                            (values.senderAccount &&
+                            emailAccountOptions.find((a) => a._id === values.senderAccount)
+                              ? `Selected Sender: ${
+                                  emailAccountOptions.find((a) => a._id === values.senderAccount)?.email
+                                }`
+                              : "")
+                          }
                         >
-                          <MenuItem value="gmail1">Gmail 1</MenuItem>
-                          <MenuItem value="gmail2">Gmail 2</MenuItem>
+                          {emailAccountOptions
+                            .filter((acc) => {
+                              const accCompanyId = acc.companyId?._id || acc.companyId;
+                              if (values.companyId) {
+                                return accCompanyId === values.companyId;
+                              }
+                              return !accCompanyId;
+                            })
+                            .map((account) => (
+                              <MenuItem key={account._id} value={account._id}>
+                                <Box>
+                                  <Typography variant="body1" fontWeight="bold">
+                                    {account.label || account.displayName || "No Label"}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {account.email}
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+                            ))}
                         </Field>
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
