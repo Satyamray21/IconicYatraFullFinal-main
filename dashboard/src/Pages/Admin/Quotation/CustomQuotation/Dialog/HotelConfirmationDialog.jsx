@@ -36,7 +36,8 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
     const [customMessage, setCustomMessage] = useState("");
     const [mailCompanies, setMailCompanies] = useState([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState("");
-    const [senderAccount, setSenderAccount] = useState("gmail1");
+    const [emailAccounts, setEmailAccounts] = useState([]);
+    const [senderAccount, setSenderAccount] = useState("");
     const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
     const fetchHotelsForCity = async (city) => {
@@ -58,18 +59,47 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                 const res = await axios.get("/company");
                 const list = res.data?.data || [];
                 setMailCompanies(list);
-                if (list.length > 0) setSelectedCompanyId(list[0]._id);
+                if (list.length > 0) {
+                    const firstCompanyId = list[0]._id;
+                    setSelectedCompanyId(firstCompanyId);
+                }
             } catch (err) {
                 console.error("Failed to fetch mail companies:", err);
             }
         };
 
+        const fetchEmailAccounts = async () => {
+            try {
+                const res = await axios.get("/email-accounts");
+                const accounts = Array.isArray(res?.data?.data) ? res.data.data : [];
+                setEmailAccounts(accounts);
+                
+                // If company was already selected or just fetched, try to set initial sender account
+                if (selectedCompanyId) {
+                    const firstAcc = accounts.find(acc => (acc.companyId?._id || acc.companyId) === selectedCompanyId);
+                    if (firstAcc) setSenderAccount(firstAcc._id);
+                }
+            } catch (err) {
+                console.error("Failed to fetch email accounts:", err);
+            }
+        };
+
         if (open) {
             fetchMailCompanies();
+            fetchEmailAccounts();
             const uniqueCities = [...new Set(hotels.map(h => h.city).filter(Boolean))];
             uniqueCities.forEach(city => fetchHotelsForCity(city));
         }
     }, [open, hotels.length]);
+
+    // Update sender account when company selection changes (and emailAccounts are already loaded)
+    useEffect(() => {
+        if (selectedCompanyId && emailAccounts.length > 0) {
+            const firstAcc = emailAccounts.find(acc => (acc.companyId?._id || acc.companyId) === selectedCompanyId);
+            if (firstAcc) setSenderAccount(firstAcc._id);
+            else setSenderAccount("");
+        }
+    }, [selectedCompanyId, emailAccounts.length]);
 
 
     useEffect(() => {
@@ -255,9 +285,38 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                 value={senderAccount}
                                 onChange={(e) => setSenderAccount(e.target.value)}
                                 sx={{ bgcolor: "#fff" }}
+                                SelectProps={{
+                                    renderValue: (selected) => {
+                                        const acc = emailAccounts.find((a) => a._id === selected);
+                                        return acc ? `${acc.label || acc.displayName} <${acc.email}>` : "Select Sender";
+                                    },
+                                }}
+                                helperText={
+                                    senderAccount && emailAccounts.find((a) => a._id === senderAccount)
+                                        ? `Selected: ${emailAccounts.find((a) => a._id === senderAccount)?.email}`
+                                        : ""
+                                }
                             >
-                                <MenuItem value="gmail1">Gmail Account 1</MenuItem>
-                                <MenuItem value="gmail2">Gmail Account 2</MenuItem>
+                                {emailAccounts
+                                    .filter((acc) => {
+                                        const accCompanyId = acc.companyId?._id || acc.companyId;
+                                        if (selectedCompanyId) {
+                                            return accCompanyId === selectedCompanyId;
+                                        }
+                                        return !accCompanyId;
+                                    })
+                                    .map((account) => (
+                                        <MenuItem key={account._id} value={account._id}>
+                                            <Box>
+                                                <Typography variant="body2" fontWeight="bold">
+                                                    {account.label || account.displayName || "No Label"}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {account.email}
+                                                </Typography>
+                                            </Box>
+                                        </MenuItem>
+                                    ))}
                             </TextField>
                         </Grid>
                         <Grid size={{ xs: 12, md: 6 }}>
