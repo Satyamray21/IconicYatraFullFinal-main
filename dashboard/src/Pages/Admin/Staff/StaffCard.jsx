@@ -333,7 +333,7 @@ const StaffCard = () => {
         {/* Stat Cards */}
         <Grid container spacing={2}>
           {stats.map((item, index) => (
-            <Grid key={index} item xs={12} sm={6} md={4} lg={2.4}>
+            <Grid key={index} size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
               <Card
                 sx={{
                   backgroundColor: "#0b6396ff",
@@ -531,8 +531,8 @@ const StaffCard = () => {
                               lead.status === "Confirmed"
                                 ? "success"
                                 : lead.status === "Cancelled"
-                                ? "error"
-                                : "primary"
+                                  ? "error"
+                                  : "primary"
                             }
                           />
                         </TableCell>

@@ -42,7 +42,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
     const fetchHotelsForCity = async (city) => {
         const trimmedCity = (city || "").trim();
         if (!trimmedCity || hotelsMap[trimmedCity]) return;
-        
+
         try {
             const res = await axios.get(`/all-hotel?city=${encodeURIComponent(trimmedCity)}`);
             const cityHotels = res.data?.data || [];
@@ -86,11 +86,11 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                 const pkg = quotation.packageSnapshot || quotation.tourDetails || {};
                 const qd = pkg.quotationDetails || quotation.tourDetails?.quotationDetails || {};
                 const destinations = qd.destinations || pkg.destinationNights || pkg.stayLocations || [];
-                
+
                 const initialHotels = destinations.map((d, i) => {
                     const cityName = d.cityName || d.destination || d.city || "";
                     const nights = d.nights || 0;
-                    
+
                     // Try to guess hotel name from standard/deluxe/superior
                     const finalizedCat = (quotation.finalizedPackage || "Standard").toLowerCase();
                     const hotelNames = d[`${finalizedCat}Hotels`] || [];
@@ -149,7 +149,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
             hotels.map((h) => {
                 if (h.id === id) {
                     const updated = { ...h, [field]: value };
-                    
+
                     // If city changed, fetch hotels for new city
                     if (field === "city" && value) {
                         fetchHotelsForCity(value);
@@ -174,12 +174,12 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
     const handleSave = async () => {
         setLoading(true);
         try {
-            const endpoint = type === "quick" 
+            const endpoint = type === "quick"
                 ? `/quickQT/${quotation._id}/save-confirmed-hotels`
                 : `/customQT/${quotation._id}/save-confirmed-hotels`;
-            
+
             await axios.post(endpoint, { confirmedHotels: hotels });
-            
+
             setSnackbar({ open: true, message: "Hotel details saved successfully", severity: "success" });
         } catch (error) {
             setSnackbar({ open: true, message: error.response?.data?.message || "Failed to save", severity: "error" });
@@ -191,17 +191,17 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
     const handleSendMail = async () => {
         setSending(true);
         try {
-            const endpoint = type === "quick" 
+            const endpoint = type === "quick"
                 ? `/quickQT/${quotation._id}/email/hotel-confirmation`
                 : `/customQT/${quotation._id}/email/hotel-confirmation`;
-            
-            await axios.post(endpoint, { 
+
+            await axios.post(endpoint, {
                 toEmail: recipientEmail,
                 companyId: selectedCompanyId,
                 senderAccount: senderAccount,
-                customText: { additionalNote: customMessage } 
+                customText: { additionalNote: customMessage }
             });
-            
+
             setSnackbar({ open: true, message: "Hotel confirmation mail sent!", severity: "success" });
         } catch (error) {
             setSnackbar({ open: true, message: error.response?.data?.message || "Failed to send mail", severity: "error" });
@@ -227,9 +227,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                     <Typography variant="subtitle2" sx={{ mb: 2, color: "#1a237e", fontWeight: "bold" }}>
                         Email Configuration
                     </Typography>
-                    
+
                     <Grid container spacing={2} sx={{ mb: 2 }}>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                                 select
                                 fullWidth
@@ -246,7 +246,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                 ))}
                             </TextField>
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                                 select
                                 fullWidth
@@ -260,7 +260,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                 <MenuItem value="gmail2">Gmail Account 2</MenuItem>
                             </TextField>
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                                 size="small"
                                 fullWidth
@@ -271,7 +271,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                 sx={{ bgcolor: "#fff" }}
                             />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                                 size="small"
                                 fullWidth
@@ -290,17 +290,17 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
 
                 {hotels.map((hotel, index) => (
                     <Paper key={hotel.id || index} variant="outlined" sx={{ p: 2, mb: 2, position: "relative" }}>
-                        <IconButton 
-                            size="small" 
-                            color="error" 
+                        <IconButton
+                            size="small"
+                            color="error"
                             sx={{ position: "absolute", top: 8, right: 8 }}
                             onClick={() => handleRemoveHotel(hotel.id)}
                         >
                             <DeleteIcon />
                         </IconButton>
-                        
+
                         <Grid container spacing={2}>
-                            <Grid item xs={12} md={4}>
+                            <Grid size={{ xs: 12, md: 4 }}>
                                 <Autocomplete
                                     freeSolo
                                     size="small"
@@ -318,7 +318,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     )}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={4}>
+                            <Grid size={{ xs: 12, md: 4 }}>
                                 <TextField
                                     label="City"
                                     fullWidth
@@ -327,7 +327,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "city", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={4}>
+                            <Grid size={{ xs: 12, md: 4 }}>
                                 <TextField
                                     label="Nights"
                                     fullWidth
@@ -337,7 +337,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "nights", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                                 <TextField
                                     label="Hotel Address"
                                     fullWidth
@@ -348,7 +348,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "hotelAddress", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={3}>
+                            <Grid size={{ xs: 12, md: 3 }}>
                                 <TextField
                                     label="Room Type"
                                     fullWidth
@@ -357,7 +357,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "roomType", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={3}>
+                            <Grid size={{ xs: 12, md: 3 }}>
                                 <TextField
                                     label="No of Rooms"
                                     fullWidth
@@ -366,7 +366,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "noOfRooms", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={2}>
+                            <Grid size={{ xs: 12, md: 2 }}>
                                 <TextField
                                     label="Check-in Date"
                                     fullWidth
@@ -377,7 +377,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "checkInDate", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={2}>
+                            <Grid size={{ xs: 12, md: 2 }}>
                                 <TextField
                                     label="Check-in Time"
                                     fullWidth
@@ -388,7 +388,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "checkInTime", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={2}>
+                            <Grid size={{ xs: 12, md: 2 }}>
                                 <TextField
                                     label="Check-out Date"
                                     fullWidth
@@ -399,7 +399,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "checkOutDate", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={2}>
+                            <Grid size={{ xs: 12, md: 2 }}>
                                 <TextField
                                     label="Check-out Time"
                                     fullWidth
@@ -410,7 +410,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "checkOutTime", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={4}>
+                            <Grid size={{ xs: 12, md: 4 }}>
                                 <TextField
                                     label="Meal Plan"
                                     fullWidth
@@ -419,7 +419,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "mealPlan", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={4}>
+                            <Grid size={{ xs: 12, md: 4 }}>
                                 <TextField
                                     label="Contact No (Manager)"
                                     fullWidth
@@ -428,7 +428,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                     onChange={(e) => handleChange(hotel.id, "contactNo", e.target.value)}
                                 />
                             </Grid>
-                            <Grid item xs={12} md={4}>
+                            <Grid size={{ xs: 12, md: 4 }}>
                                 <TextField
                                     label="Booking PNR / Confirmation"
                                     fullWidth
@@ -449,19 +449,19 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Button onClick={onClose} color="inherit">Cancel</Button>
-                <Button 
-                    startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />} 
-                    variant="contained" 
-                    color="primary" 
+                <Button
+                    startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
+                    variant="contained"
+                    color="primary"
                     onClick={handleSave}
                     disabled={loading}
                 >
                     Save Details
                 </Button>
-                <Button 
-                    startIcon={sending ? <CircularProgress size={20} /> : <EmailIcon />} 
-                    variant="contained" 
-                    color="success" 
+                <Button
+                    startIcon={sending ? <CircularProgress size={20} /> : <EmailIcon />}
+                    variant="contained"
+                    color="success"
                     onClick={handleSendMail}
                     disabled={sending || loading || hotels.length === 0}
                 >
@@ -469,9 +469,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                 </Button>
             </DialogActions>
 
-            <Snackbar 
-                open={snackbar.open} 
-                autoHideDuration={6000} 
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={6000}
                 onClose={() => setSnackbar({ ...snackbar, open: false })}
             >
                 <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
