@@ -20,6 +20,7 @@ import {
 } from "../../utils/customQuotationMailerTemplates.js";
 import ReceivedVoucher from "../../models/payment.model.js";
 import { buildHotelConfirmationPdf } from "../../utils/hotelConfirmationPdf.js";
+import { buildPaymentReceiptPdf } from "../../utils/paymentReceiptPdf.js";
 
 // Counter Schema and Model - defined in the same file
 const counterSchema = new mongoose.Schema({
@@ -1072,7 +1073,7 @@ export const saveConfirmedHotels = async (req, res) => {
 export const sendHotelConfirmationMail = async (req, res) => {
   try {
     const { id } = req.params;
-    const { toEmail, customText, senderAccount } = req.body;
+    const { toEmail, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
 
     const quotation = await CustomQuotation.findById(id).lean();
     if (!quotation) {
@@ -1152,6 +1153,24 @@ export const sendHotelConfirmationMail = async (req, res) => {
         }
       ]
     };
+
+    if (receiptPdf && receiptPdf.contentBase64) {
+      mailOptions.attachments.push({
+        filename: receiptPdf.filename || "Payment_Receipt.pdf",
+        content: Buffer.from(receiptPdf.contentBase64, "base64"),
+        contentType: "application/pdf",
+      });
+    } else if (paymentVoucherId) {
+      const voucher = await ReceivedVoucher.findById(paymentVoucherId).populate("companyId");
+      if (voucher) {
+        const receiptPdfBuffer = await buildPaymentReceiptPdf(voucher, voucher.companyId || company);
+        mailOptions.attachments.push({
+          filename: `Payment_Receipt_${voucher.invoiceId || paymentVoucherId}.pdf`,
+          content: receiptPdfBuffer,
+          contentType: "application/pdf",
+        });
+      }
+    }
 
     await transporter.sendMail(mailOptions);
 
