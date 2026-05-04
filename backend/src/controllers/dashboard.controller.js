@@ -19,8 +19,8 @@ import { startOfMonth, endOfMonth, subMonths, format, startOfDay, endOfDay } fro
 import { getCache, setCache } from '../utils/cache.js';
 
 export const getDashboardStats = asyncHandler(async (req, res) => {
-  const { activityDate } = req.query;
-  const cacheKey = `dashboard:stats:${activityDate || 'all'}`;
+  const { activityDate, activityType, activityPage = 1, reminderPage = 1 } = req.query;
+  const cacheKey = `dashboard:stats:${activityDate || 'all'}:${activityType || 'all'}:ap${activityPage}:rp${reminderPage}`;
 
   // Try to get from cache
   const cachedData = await getCache(cacheKey);
@@ -183,20 +183,34 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
   // 6. Activities (Recent or Date-filtered)
   let activityFilter = {};
-  let activityLimit = 50;
 
   if (activityDate) {
     const start = startOfDay(new Date(activityDate));
     const end = endOfDay(new Date(activityDate));
-    activityFilter = {
-      timestamp: { $gte: start, $lte: end }
-    };
-    activityLimit = 50;
+    activityFilter.timestamp = { $gte: start, $lte: end };
   }
 
-  const recentActivities = await ActivityLog.find(activityFilter)
-    .sort({ timestamp: -1 })
-    .limit(activityLimit);
+  if (activityType && activityType !== 'all') {
+    if (activityType === 'Quotation') {
+      // Special case for Quotation to include related models if needed
+      activityFilter.model = { $regex: /Quotation|Vehicle/i };
+    } else {
+      activityFilter.model = activityType;
+    }
+  }
+
+  const pageNum = parseInt(activityPage) || 1;
+  const activityLimitSize = parseInt(req.query.activityLimit) || 50;
+  const activitySkip = (pageNum - 1) * activityLimitSize;
+
+  const [recentActivities, totalActivities] = await Promise.all([
+    ActivityLog.find(activityFilter)
+      .sort({ timestamp: -1 })
+      .skip(activitySkip)
+      .limit(activityLimitSize)
+      .lean(),
+    ActivityLog.countDocuments(activityFilter)
+  ]);
 
   // 7. Others (Enquiries, Blogs, Hotels)
   const [enquiries, blogs, hotels] = await Promise.all([
@@ -205,12 +219,22 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     Hotel.countDocuments()
   ]);
 
-  // 8. Upcoming Reminders & Appointments
-  // Fix: Include reminders from the start of today, not just from the current hour/minute
-  const reminders = await Reminder.find({
+  // 8. Upcoming Reminders & Appointments (Paginated)
+  const rPageNum = parseInt(reminderPage) || 1;
+  const reminderLimit = parseInt(req.query.reminderLimit) || 10;
+  const reminderSkip = (rPageNum - 1) * reminderLimit;
+
+  const reminderQuery = {
     status: 'pending',
     dateTime: { $gte: startOfDay(today) }
-  }).sort({ createdAt: -1 }).limit(10);
+  };
+
+  const [reminders, totalReminders] = await Promise.all([
+    Reminder.find(reminderQuery)
+      .sort({ dateTime: -1 }) // Latest first
+      .lean(),
+    Reminder.countDocuments(reminderQuery)
+  ]);
 
   // 9. Dynamic Action Items (System Suggested)
   const tenDaysAgo = new Date();
@@ -263,6 +287,12 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       suggestedAction: 'mail_quotation'
     }));
 
+  const allRemindersList = [...reminders, ...leadsNeedQuotation, ...draftQuotations]
+    .sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+  const totalRemindersCount = allRemindersList.length;
+  const paginatedReminders = allRemindersList.slice(reminderSkip, reminderSkip + reminderLimit);
+
   const stats = {
     leads: formattedLeadStats,
     quotations: {
@@ -285,7 +315,21 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       blogs,
       hotels
     },
-    reminders: [...reminders, ...leadsNeedQuotation, ...draftQuotations].sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime)).slice(0, 15),
+    reminders: paginatedReminders,
+    pagination: {
+      reminders: {
+        total: totalRemindersCount,
+        page: reminderPage,
+        limit: reminderLimit,
+        pages: Math.ceil(totalRemindersCount / reminderLimit)
+      },
+      activities: {
+        total: totalActivities,
+        page: activityPage,
+        limit: activityLimitSize,
+        pages: Math.ceil(totalActivities / activityLimitSize)
+      }
+    },
     actionItems: {
       leadsNeedQuotation: leadsNeedQuotation.length,
       draftQuotations: draftQuotations.length
