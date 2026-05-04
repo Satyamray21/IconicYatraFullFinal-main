@@ -91,10 +91,8 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
 
         const fetchReceipts = async () => {
             try {
-                // quotation.quotationId for custom, or quotation._id for quick if stored that way
-                // Looking at payment.model.js, quotationRef is indexed.
-                // In finalize pages, they use quotation._id (the Mongo ID) for quotationRef
-                const ref = quotation?._id;
+                // Use human-readable quotationId/quickQuotationId as the ref for payments
+                const ref = quotation?.quotationId || quotation?.quickQuotationId || quotation?._id;
                 if (!ref) return;
 
                 const res = await axios.get(`/payment/by-quotation/${ref}`);
@@ -117,7 +115,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
             const uniqueCities = [...new Set(hotels.map(h => h.city).filter(Boolean))];
             uniqueCities.forEach(city => fetchHotelsForCity(city));
         }
-    }, [open, hotels.length]);
+    }, [open, hotels.length, quotation?._id]);
 
     // Update sender account when company selection changes (and emailAccounts are already loaded)
     useEffect(() => {
