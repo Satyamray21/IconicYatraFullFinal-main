@@ -206,10 +206,62 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   ]);
 
   // 8. Upcoming Reminders & Appointments
+  // Fix: Include reminders from the start of today, not just from the current hour/minute
   const reminders = await Reminder.find({
     status: 'pending',
-    dateTime: { $gte: today }
+    dateTime: { $gte: startOfDay(today) }
   }).sort({ dateTime: 1 }).limit(10);
+
+  // 9. Dynamic Action Items (System Suggested)
+  const tenDaysAgo = new Date();
+  tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+
+  const [recentLeads, quickQs, customQs, flightQs, fullQs, hotelQs, vehicleQs] = await Promise.all([
+    Lead.find({ createdAt: { $gte: tenDaysAgo }, status: 'Active' }).select('personalDetails.emailId personalDetails.fullName createdAt').lean(),
+    QuickQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('email customerName finalizeStatus createdAt').lean(),
+    CustomQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean(),
+    FlightQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean(),
+    fullQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean(),
+    HotelQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean(),
+    Vehicle.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean()
+  ]);
+
+  const qEmails = new Set();
+  const allQs = [...quickQs, ...customQs, ...flightQs, ...fullQs, ...hotelQs, ...vehicleQs];
+  
+  allQs.forEach(q => {
+    const email = q.email || q.clientDetails?.email;
+    if (email) qEmails.add(email.toLowerCase().trim());
+  });
+
+  const leadsNeedQuotation = recentLeads
+    .filter(l => {
+      const email = l.personalDetails?.emailId;
+      return email && !qEmails.has(email.toLowerCase().trim());
+    })
+    .map(l => ({
+      _id: `suggested_lead_${l._id}`,
+      title: `Create Quotation for ${l.personalDetails.fullName}`,
+      description: `New lead from ${format(l.createdAt, 'dd MMM')} needs a quotation.`,
+      type: 'task',
+      priority: 'high',
+      dateTime: l.createdAt,
+      status: 'pending',
+      suggestedAction: 'create_quotation'
+    }));
+
+  const draftQuotations = allQs
+    .filter(q => q.finalizeStatus === 'draft' || q.isDraft === true)
+    .map(q => ({
+      _id: `suggested_quote_${q._id}`,
+      title: `Finalize/Mail Quote for ${q.customerName || q.clientDetails?.clientName}`,
+      description: `Quotation created on ${format(q.createdAt, 'dd MMM')} is still in draft.`,
+      type: 'reminder',
+      priority: 'medium',
+      dateTime: q.createdAt,
+      status: 'pending',
+      suggestedAction: 'mail_quotation'
+    }));
 
   const stats = {
     leads: formattedLeadStats,
@@ -233,7 +285,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       blogs,
       hotels
     },
-    reminders
+    reminders: [...reminders, ...leadsNeedQuotation, ...draftQuotations].sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime)).slice(0, 15),
+    actionItems: {
+      leadsNeedQuotation: leadsNeedQuotation.length,
+      draftQuotations: draftQuotations.length
+    }
   };
 
   // Cache the results for 5 minutes

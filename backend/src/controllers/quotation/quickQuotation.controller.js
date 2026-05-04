@@ -887,6 +887,14 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
         ? [providedPdfAttachment || generatedPdfAttachment].filter(Boolean)
         : [],
     });
+
+    await logActivity({
+      action: "Status Changed",
+      model: "QuickQuotation",
+      refId: shortRef,
+      description: `Quotation ${shortRef} mailed to ${to} (${type})`,
+      user: req.user?.name || "Admin",
+    });
   } catch (error) {
     console.error("Quick QT mail error:", error);
     throw new ApiError(500, "Failed to send email");
@@ -1290,7 +1298,7 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
 
     const htmlBody = buildHotelConfirmationEmail(quotation, options);
     const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
-    const auth = await resolveMailAuth(senderAccount);
+    const auth = await resolveMailAuth(senderAccount, company);
     const transporter = nodemailer.createTransport({
       ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
       auth: { user: auth.user, pass: auth.pass },
@@ -1299,7 +1307,7 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
     const guestName = quotation?.customerName || "Guest";
 
     const mailOptions = {
-      from: `"${options.companyName}" <${user}>`,
+      from: `"${options.companyName}" <${auth.user}>`,
       to: toEmail || quotation.email,
       subject: `Hotel Confirmation Voucher - ${quotation.quickQuotationId}`,
       html: `
