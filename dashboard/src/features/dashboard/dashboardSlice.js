@@ -5,11 +5,7 @@ export const fetchDashboardStats = createAsyncThunk(
   "dashboard/fetchDashboardStats",
   async (params = {}, { rejectWithValue }) => {
     try {
-      const { activityDate } = params;
-      const url = activityDate 
-        ? `/dashboard/stats?activityDate=${activityDate}` 
-        : "/dashboard/stats";
-      const response = await axios.get(url);
+      const response = await axios.get("/dashboard/stats", { params });
       return response.data.data;
     } catch (err) {
       return rejectWithValue(

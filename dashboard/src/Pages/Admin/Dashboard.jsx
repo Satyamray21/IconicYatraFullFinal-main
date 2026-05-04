@@ -49,8 +49,10 @@ import {
   Add,
   FilterList,
   Today,
-  Payments,
   CalendarToday,
+  Payments,
+  ChevronLeft,
+  ChevronRight,
 } from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchDashboardStats, createReminder, updateReminderStatus } from "../../features/dashboard/dashboardSlice";
@@ -209,14 +211,24 @@ const Dashboard = () => {
   const [newReminderData, setNewReminderData] = useState({ title: "", type: "reminder", priority: "medium", dateTime: dayjs() });
 
   const [selectedDate, setSelectedDate] = useState(null);
+  const [reminderPage, setReminderPage] = useState(1);
+  const [activityPage, setActivityPage] = useState(1);
 
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
   useEffect(() => {
     dispatch(fetchDashboardStats({
-      activityDate: selectedDate ? selectedDate.format("YYYY-MM-DD") : null
+      activityDate: selectedDate ? selectedDate.format("YYYY-MM-DD") : null,
+      reminderPage,
+      activityPage,
+      activityType: activityFilter
     }));
-  }, [dispatch, selectedDate]);
+  }, [dispatch, selectedDate, reminderPage, activityPage, activityFilter]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setActivityPage(1);
+  }, [activityFilter, selectedDate]);
 
   const handleMenuClick = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
@@ -252,11 +264,7 @@ const Dashboard = () => {
     }
   };
 
-  const filteredActivities = stats?.recentActivities?.filter(log => {
-    if (activityFilter === "all") return true;
-    if (activityFilter === "Quotation") return log.model.toLowerCase().includes("quotation") || log.model === "Vehicle";
-    return log.model === activityFilter;
-  }) || [];
+  const filteredActivities = stats?.recentActivities || [];
 
   const leadPieData = stats?.leads
     ? [
@@ -655,6 +663,31 @@ const Dashboard = () => {
                       )}
                     </AnimatePresence>
                   </List>
+
+                  {/* Reminder Pagination */}
+                  {stats?.pagination?.reminders?.pages > 1 && (
+                    <Box display="flex" justifyContent="center" alignItems="center" gap={2} mt={3}>
+                      <IconButton
+                        size="small"
+                        disabled={reminderPage <= 1}
+                        onClick={() => setReminderPage(prev => prev - 1)}
+                        sx={{ bgcolor: "rgba(25,118,210,0.05)" }}
+                      >
+                        <ChevronLeft />
+                      </IconButton>
+                      <Typography variant="caption" fontWeight={800} sx={{ color: "rgba(0,0,0,0.5)" }}>
+                        Page {stats.pagination.reminders.page} of {stats.pagination.reminders.pages}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        disabled={reminderPage >= stats.pagination.reminders.pages}
+                        onClick={() => setReminderPage(prev => prev + 1)}
+                        sx={{ bgcolor: "rgba(25,118,210,0.05)" }}
+                      >
+                        <ChevronRight />
+                      </IconButton>
+                    </Box>
+                  )}
                 </CardContent>
               </GlassCard>
             </Grid>
@@ -787,6 +820,31 @@ const Dashboard = () => {
                       )}
                     </List>
                   </Box>
+
+                  {/* Activity Pagination */}
+                  {stats?.pagination?.activities?.pages > 1 && (
+                    <Box display="flex" justifyContent="center" alignItems="center" gap={2} mt={3}>
+                      <IconButton
+                        size="small"
+                        disabled={activityPage <= 1}
+                        onClick={() => setActivityPage(prev => prev - 1)}
+                        sx={{ bgcolor: "rgba(25,118,210,0.05)" }}
+                      >
+                        <ChevronLeft />
+                      </IconButton>
+                      <Typography variant="caption" fontWeight={800} sx={{ color: "rgba(0,0,0,0.5)" }}>
+                        Page {stats.pagination.activities.page} of {stats.pagination.activities.pages}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        disabled={activityPage >= stats.pagination.activities.pages}
+                        onClick={() => setActivityPage(prev => prev + 1)}
+                        sx={{ bgcolor: "rgba(25,118,210,0.05)" }}
+                      >
+                        <ChevronRight />
+                      </IconButton>
+                    </Box>
+                  )}
                 </CardContent>
               </GlassCard>
             </Grid>
