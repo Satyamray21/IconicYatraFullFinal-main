@@ -420,7 +420,12 @@ const TransactionSummaryDialog = ({
                 </TableRow>
               ) : rows?.length ? (
                 rows.map((v, index) => (
-                  <TableRow key={v._id || index} hover>
+                  <TableRow 
+                    key={v._id || index} 
+                    hover
+                    onClick={() => window.open(`/invoice-view/${v._id}`, '_blank')}
+                    sx={{ cursor: "pointer" }}
+                  >
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{v.receiptNumber}</TableCell>
                     <TableCell>{v.invoiceId}</TableCell>
@@ -447,14 +452,24 @@ const TransactionSummaryDialog = ({
                       ₹{(Number(v.amount) || 0).toLocaleString("en-IN")}
                     </TableCell>
                     <TableCell align="center">
-                      <IconButton 
-                        size="small" 
-                        color="primary" 
-                        onClick={() => onPreview(v)}
-                        title="Preview Receipt"
-                      >
-                        <Visibility fontSize="small" />
-                      </IconButton>
+                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                        <IconButton 
+                          size="small" 
+                          color="primary" 
+                          onClick={() => onPreview(v)}
+                          title="Preview Receipt"
+                        >
+                          <Visibility fontSize="small" />
+                        </IconButton>
+                        <IconButton 
+                          size="small" 
+                          color="info" 
+                          onClick={() => window.open(`/payments-form/${v._id}`, '_blank')}
+                          title="Edit Payment"
+                        >
+                          <Edit fontSize="small" />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))
