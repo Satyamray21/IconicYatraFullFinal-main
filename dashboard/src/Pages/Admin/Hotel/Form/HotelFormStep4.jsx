@@ -359,9 +359,8 @@ const HotelFormStep4 = ({ hotelId, onBack, onClose }) => {
                             size="small"
                             label="Surcharge Amount *"
                             name="surcharge"
-                            type="number"
                             value={formik.values.surcharge}
-                            onChange={formik.handleChange}
+                            onChange={(e) => formik.setFieldValue("surcharge", e.target.value)}
                             onBlur={formik.handleBlur}
                             error={formik.touched.surcharge && Boolean(formik.errors.surcharge)}
                             helperText={formik.touched.surcharge && formik.errors.surcharge}

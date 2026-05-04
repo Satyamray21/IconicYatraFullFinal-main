@@ -52,7 +52,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   ]);
 
   const currentMonthLeads = await Lead.countDocuments({ createdAt: { $gte: currentMonthStart } });
-  
+
   const leadTrendValue = calculateTrend(currentMonthLeads, prevMonthLeads);
 
   const formattedLeadStats = {
@@ -107,7 +107,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
   // 3. Tour/Package Stats & Trend
   const packages = await Package.find({}, 'status validFrom validTill createdAt');
-  
+
   const tourStats = {
     total: packages.length,
     active: 0,
@@ -210,7 +210,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   const reminders = await Reminder.find({
     status: 'pending',
     dateTime: { $gte: startOfDay(today) }
-  }).sort({ dateTime: 1 }).limit(10);
+  }).sort({ createdAt: -1 }).limit(10);
 
   // 9. Dynamic Action Items (System Suggested)
   const tenDaysAgo = new Date();
@@ -228,7 +228,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
   const qEmails = new Set();
   const allQs = [...quickQs, ...customQs, ...flightQs, ...fullQs, ...hotelQs, ...vehicleQs];
-  
+
   allQs.forEach(q => {
     const email = q.email || q.clientDetails?.email;
     if (email) qEmails.add(email.toLowerCase().trim());
