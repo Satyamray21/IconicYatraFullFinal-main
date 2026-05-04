@@ -31,21 +31,37 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
   console.log(`[Cache Miss] Dashboard stats fetched from MongoDB: ${cacheKey}`);
 
-  // 1. Lead Stats
-  const leadStats = await Lead.aggregate([
-    {
-      $group: {
-        _id: "$status",
-        count: { $sum: 1 }
-      }
-    }
+  // --- Trend Calculations ---
+  const today = new Date();
+  const currentMonthStart = startOfMonth(today);
+  const prevMonthStart = startOfMonth(subMonths(today, 1));
+  const prevMonthEnd = endOfMonth(subMonths(today, 1));
+
+  // Helper for trend calculation
+  const calculateTrend = (current, previous) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return Math.round(((current - previous) / previous) * 100);
+  };
+
+  // 1. Lead Stats & Trend
+  const [leadStats, prevMonthLeads] = await Promise.all([
+    Lead.aggregate([
+      { $group: { _id: "$status", count: { $sum: 1 } } }
+    ]),
+    Lead.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } })
   ]);
+
+  const currentMonthLeads = await Lead.countDocuments({ createdAt: { $gte: currentMonthStart } });
+  
+  const leadTrendValue = calculateTrend(currentMonthLeads, prevMonthLeads);
 
   const formattedLeadStats = {
     total: 0,
     active: 0,
     confirmed: 0,
-    cancelled: 0
+    cancelled: 0,
+    trend: leadTrendValue >= 0 ? "up" : "down",
+    trendValue: `${leadTrendValue >= 0 ? "+" : ""}${leadTrendValue}%`
   };
 
   leadStats.forEach(stat => {
@@ -56,7 +72,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     else if (status === 'cancelled') formattedLeadStats.cancelled = stat.count;
   });
 
-  // 2. Quotation Stats (Aggregate from all models)
+  // 2. Quotation Stats & Trend
   const [customQ, flightQ, fullQ, hotelQ, quickQ, vehicleQ] = await Promise.all([
     CustomQuotation.countDocuments(),
     FlightQuotation.countDocuments(),
@@ -66,23 +82,52 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     Vehicle.countDocuments()
   ]);
 
+  const [prevCustomQ, prevFlightQ, prevFullQ, prevHotelQ, prevQuickQ, prevVehicleQ] = await Promise.all([
+    CustomQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    FlightQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    fullQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    HotelQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    QuickQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    Vehicle.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } })
+  ]);
+
+  const currentMonthQuotations = await Promise.all([
+    CustomQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    FlightQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    fullQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    HotelQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    QuickQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    Vehicle.countDocuments({ createdAt: { $gte: currentMonthStart } })
+  ]).then(counts => counts.reduce((a, b) => a + b, 0));
+
+  const prevMonthQuotationsTotal = prevCustomQ + prevFlightQ + prevFullQ + prevHotelQ + prevQuickQ + prevVehicleQ;
+  const quotationTrendValue = calculateTrend(currentMonthQuotations, prevMonthQuotationsTotal);
+
   const totalQuotations = customQ + flightQ + fullQ + hotelQ + quickQ + vehicleQ;
 
-  // 3. Tour/Package Stats
-  const packages = await Package.find({}, 'status validFrom validTill');
-  const today = new Date();
-
+  // 3. Tour/Package Stats & Trend
+  const packages = await Package.find({}, 'status validFrom validTill createdAt');
+  
   const tourStats = {
     total: packages.length,
     active: 0,
     upcoming: 0,
-    completed: 0
+    completed: 0,
+    trend: "up",
+    trendValue: "+0%"
   };
+
+  let currentMonthTours = 0;
+  let prevMonthTours = 0;
 
   packages.forEach(pkg => {
     const status = pkg.status?.toLowerCase();
     const startDate = pkg.validFrom ? new Date(pkg.validFrom) : null;
     const endDate = pkg.validTill ? new Date(pkg.validTill) : null;
+    const createdAt = new Date(pkg.createdAt);
+
+    if (createdAt >= currentMonthStart) currentMonthTours++;
+    if (createdAt >= prevMonthStart && createdAt <= prevMonthEnd) prevMonthTours++;
 
     if (status === 'confirmed' || status === 'active') {
       if (startDate && startDate > today) tourStats.upcoming++;
@@ -93,9 +138,29 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     }
   });
 
-  // 4. Invoice & Revenue Stats
+  const tourTrendValue = calculateTrend(currentMonthTours, prevMonthTours);
+  tourStats.trend = tourTrendValue >= 0 ? "up" : "down";
+  tourStats.trendValue = `${tourTrendValue >= 0 ? "+" : ""}${tourTrendValue}%`;
+
+  // 4. Invoice & Revenue Stats & Trend
   const invoices = await Invoice.find({}, 'totalAmount invoiceDate createdAt');
   const totalRevenue = invoices.reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
+
+  const currentMonthRevenue = invoices
+    .filter(inv => {
+      const date = inv.invoiceDate ? new Date(inv.invoiceDate) : new Date(inv.createdAt);
+      return date >= currentMonthStart;
+    })
+    .reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
+
+  const prevMonthRevenue = invoices
+    .filter(inv => {
+      const date = inv.invoiceDate ? new Date(inv.invoiceDate) : new Date(inv.createdAt);
+      return date >= prevMonthStart && date <= prevMonthEnd;
+    })
+    .reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
+
+  const revenueTrendValue = calculateTrend(currentMonthRevenue, prevMonthRevenue);
 
   // 5. Monthly Revenue (Last 6 months)
   const monthlyRevenue = [];
@@ -126,7 +191,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     activityFilter = {
       timestamp: { $gte: start, $lte: end }
     };
-    activityLimit = 50; // Show more when filtering by date
+    activityLimit = 50;
   }
 
   const recentActivities = await ActivityLog.find(activityFilter)
@@ -150,13 +215,17 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     leads: formattedLeadStats,
     quotations: {
       total: totalQuotations,
-      details: { customQ, flightQ, fullQ, hotelQ, quickQ, vehicleQ }
+      details: { customQ, flightQ, fullQ, hotelQ, quickQ, vehicleQ },
+      trend: quotationTrendValue >= 0 ? "up" : "down",
+      trendValue: `${quotationTrendValue >= 0 ? "+" : ""}${quotationTrendValue}%`
     },
     tours: tourStats,
     invoices: {
       total: invoices.length,
       revenue: totalRevenue,
-      monthlyRevenue
+      monthlyRevenue,
+      trend: revenueTrendValue >= 0 ? "up" : "down",
+      trendValue: `${revenueTrendValue >= 0 ? "+" : ""}${revenueTrendValue}%`
     },
     recentActivities,
     others: {
