@@ -1121,17 +1121,17 @@ export const sendHotelConfirmationMail = async (req, res) => {
     const htmlBody = buildHotelConfirmationEmail(quotation, options);
     const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
     
-    const { user, pass } = resolveMailAuth(senderAccount);
+    const auth = await resolveMailAuth(senderAccount, company);
 
     const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user, pass },
+      ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
+      auth: { user: auth.user, pass: auth.pass },
     });
 
     const guestName = quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
 
     const mailOptions = {
-      from: `"${options.companyName}" <${user}>`,
+      from: `"${options.companyName}" <${auth.user}>`,
       to: toEmail || quotation.clientDetails?.email,
       subject: `Hotel Confirmation Voucher - ${quotation.quotationId}`,
       html: `
