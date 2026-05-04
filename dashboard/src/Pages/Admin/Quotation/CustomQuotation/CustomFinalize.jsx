@@ -74,6 +74,7 @@ import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 import HotelConfirmationDialog from "./Dialog/HotelConfirmationDialog";
+import ReceiptPreviewDialog from "../../../../Components/ReceiptPreviewDialog";
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -190,6 +191,7 @@ const TransactionSummaryDialog = ({
     loading,
     rows,
     quotationRef,
+    onPreview,
 }) => {
     const totals = summarizeVoucherAmounts(rows);
 
@@ -203,6 +205,7 @@ const TransactionSummaryDialog = ({
         "Payment Bank",
         "Dr/Cr",
         "Amount",
+        "Actions",
     ];
 
     return (
@@ -337,6 +340,16 @@ const TransactionSummaryDialog = ({
                                         </TableCell>
                                         <TableCell align="right">
                                             ₹{(Number(v.amount) || 0).toLocaleString("en-IN")}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <IconButton 
+                                                size="small" 
+                                                color="primary" 
+                                                onClick={() => onPreview(v)}
+                                                title="Preview Receipt"
+                                            >
+                                                <Visibility fontSize="small" />
+                                            </IconButton>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -509,6 +522,13 @@ const CustomFinalize = () => {
         severity: "success"
     });
     const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
+    const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState(null);
+    const [openReceiptPreview, setOpenReceiptPreview] = useState(false);
+
+    const handleOpenReceiptPreview = (voucher) => {
+        setSelectedVoucherForPreview(voucher);
+        setOpenReceiptPreview(true);
+    };
     const { data: company, status } = useSelector((state) => state.companyUI);
     const [itineraryDialog, setItineraryDialog] = useState({
         open: false,
@@ -3567,6 +3587,14 @@ useEffect(() => {
                 loading={paymentHistoryLoading}
                 rows={paymentHistory}
                 quotationRef={id}
+                onPreview={handleOpenReceiptPreview}
+            />
+
+            <ReceiptPreviewDialog 
+                open={openReceiptPreview}
+                onClose={() => setOpenReceiptPreview(false)}
+                voucher={selectedVoucherForPreview}
+                quotation={quotation}
             />
 
             {/* Invoice PDF Dialog */}

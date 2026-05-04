@@ -3,6 +3,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import Company from "../models/company.model.js";
 import { logActivity } from "../utils/ActivityLog.js";
 import { clearPattern } from "../utils/cache.js";
+import { buildPaymentReceiptPdf } from "../utils/paymentReceiptPdf.js";
 
 // @desc    Create a new voucher
 export const createVoucher = asyncHandler(async (req, res) => {
@@ -219,4 +220,21 @@ export const getCompanyTotalPayments = asyncHandler(async (req, res) => {
         success: true,
         data: result
     });
+});
+
+// @desc    Generate and download payment receipt PDF
+export const generateReceiptPdf = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const voucher = await ReceivedVoucher.findById(id).populate("companyId");
+    
+    if (!voucher) {
+        res.status(404);
+        throw new Error("Voucher not found");
+    }
+
+    const pdfBuffer = await buildPaymentReceiptPdf(voucher, voucher.companyId || {});
+    
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=Receipt_${voucher.invoiceId || id}.pdf`);
+    res.send(pdfBuffer);
 });

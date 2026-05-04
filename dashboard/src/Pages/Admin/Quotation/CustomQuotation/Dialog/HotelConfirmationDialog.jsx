@@ -25,6 +25,8 @@ import {
 import { Delete as DeleteIcon, Add as AddIcon, Email as EmailIcon, Save as SaveIcon, Search as SearchIcon } from "@mui/icons-material";
 import { Autocomplete } from "@mui/material";
 import axios from "../../../../../utils/axios";
+import InvoiceView from "../../../../../Components/InvoiceView";
+import html2pdf from "html2pdf.js";
 
 const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) => {
     const [hotels, setHotels] = useState([]);
@@ -38,7 +40,10 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
     const [selectedCompanyId, setSelectedCompanyId] = useState("");
     const [emailAccounts, setEmailAccounts] = useState([]);
     const [senderAccount, setSenderAccount] = useState("");
+    const [receipts, setReceipts] = useState([]);
+    const [selectedReceiptId, setSelectedReceiptId] = useState("");
     const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+    const receiptHiddenRef = React.useRef();
 
     const fetchHotelsForCity = async (city) => {
         const trimmedCity = (city || "").trim();
@@ -84,9 +89,31 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
             }
         };
 
+        const fetchReceipts = async () => {
+            try {
+                // quotation.quotationId for custom, or quotation._id for quick if stored that way
+                // Looking at payment.model.js, quotationRef is indexed.
+                // In finalize pages, they use quotation._id (the Mongo ID) for quotationRef
+                const ref = quotation?._id;
+                if (!ref) return;
+
+                const res = await axios.get(`/payment/by-quotation/${ref}`);
+                const list = res.data?.data || [];
+                // Filter only Receive Vouchers
+                const receiveVouchers = list.filter(v => v.paymentType === "Receive Voucher");
+                setReceipts(receiveVouchers);
+                if (receiveVouchers.length > 0) {
+                    setSelectedReceiptId(receiveVouchers[0]._id); // Latest first due to backend sort
+                }
+            } catch (err) {
+                console.error("Failed to fetch receipts:", err);
+            }
+        };
+
         if (open) {
             fetchMailCompanies();
             fetchEmailAccounts();
+            fetchReceipts();
             const uniqueCities = [...new Set(hotels.map(h => h.city).filter(Boolean))];
             uniqueCities.forEach(city => fetchHotelsForCity(city));
         }
@@ -221,6 +248,34 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
     const handleSendMail = async () => {
         setSending(true);
         try {
+            let receiptPdfAttachment = null;
+
+            if (selectedReceiptId) {
+                // Wait for the hidden InvoiceView to potentially render/load
+                // We'll give it a small timeout or just try to capture it
+                const element = document.getElementById("hidden-receipt-container");
+                if (element) {
+                    const opt = {
+                        margin: 0.3,
+                        filename: `Receipt_${selectedReceiptId}.pdf`,
+                        image: { type: "jpeg", quality: 0.98 },
+                        html2canvas: { scale: 2, useCORS: true, logging: false },
+                        jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+                    };
+                    
+                    const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob');
+                    const reader = new FileReader();
+                    receiptPdfAttachment = await new Promise((resolve) => {
+                        reader.onloadend = () => resolve({
+                            filename: `Payment_Receipt.pdf`,
+                            contentBase64: reader.result.split(',')[1],
+                            mimeType: "application/pdf"
+                        });
+                        reader.readAsDataURL(pdfBlob);
+                    });
+                }
+            }
+
             const endpoint = type === "quick"
                 ? `/quickQT/${quotation._id}/email/hotel-confirmation`
                 : `/customQT/${quotation._id}/email/hotel-confirmation`;
@@ -229,11 +284,16 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                 toEmail: recipientEmail,
                 companyId: selectedCompanyId,
                 senderAccount: senderAccount,
+                // If we have the frontend PDF, we pass it. The backend should prioritize it.
+                receiptPdf: receiptPdfAttachment,
+                // Fallback for backend generation if frontend fails for some reason
+                paymentVoucherId: selectedReceiptId,
                 customText: { additionalNote: customMessage }
             });
 
             setSnackbar({ open: true, message: "Hotel confirmation mail sent!", severity: "success" });
         } catch (error) {
+            console.error("Failed to send mail:", error);
             setSnackbar({ open: true, message: error.response?.data?.message || "Failed to send mail", severity: "error" });
         } finally {
             setSending(false);
@@ -342,6 +402,27 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                 onChange={(e) => setCustomMessage(e.target.value)}
                                 sx={{ bgcolor: "#fff" }}
                             />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                select
+                                fullWidth
+                                size="small"
+                                label="Attach Payment Receipt"
+                                value={selectedReceiptId}
+                                onChange={(e) => setSelectedReceiptId(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                                helperText={receipts.length === 0 ? "No receipts found for this quotation" : "Attach a receipt to the email"}
+                            >
+                                <MenuItem value="">
+                                    <em>None</em>
+                                </MenuItem>
+                                {receipts.map((r) => (
+                                    <MenuItem key={r._id} value={r._id}>
+                                        {r.invoiceId || r.receiptNumber} - ₹{r.amount} ({new Date(r.date).toLocaleDateString()})
+                                    </MenuItem>
+                                ))}
+                            </TextField>
                         </Grid>
                     </Grid>
 
@@ -537,6 +618,15 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                     {snackbar.message}
                 </Alert>
             </Snackbar>
+
+            {/* Hidden container for PDF generation */}
+            <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+                {selectedReceiptId && (
+                    <div id="hidden-receipt-container">
+                        <InvoiceView id={selectedReceiptId} hideButtons={true} />
+                    </div>
+                )}
+            </Box>
         </Dialog>
     );
 };

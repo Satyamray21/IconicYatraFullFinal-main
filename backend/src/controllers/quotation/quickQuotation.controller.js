@@ -15,6 +15,7 @@ import {
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
 import { buildHotelConfirmationPdf } from "../../utils/hotelConfirmationPdf.js";
+import { buildPaymentReceiptPdf } from "../../utils/paymentReceiptPdf.js";
 import nodemailer from "nodemailer";
 import PDFDocument from "pdfkit";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -1249,7 +1250,7 @@ export const saveQuickConfirmedHotels = async (req, res) => {
 export const sendQuickHotelConfirmationMail = async (req, res) => {
   try {
     const mongoId = await resolveQuickQuotationMongoId(req.params.id);
-    const { toEmail, customText, senderAccount } = req.body;
+    const { toEmail, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
 
     const quotation = await QuickQuotation.findById(mongoId).lean();
     if (!quotation) {
@@ -1328,6 +1329,24 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
         }
       ]
     };
+
+    if (receiptPdf && receiptPdf.contentBase64) {
+      mailOptions.attachments.push({
+        filename: receiptPdf.filename || "Payment_Receipt.pdf",
+        content: Buffer.from(receiptPdf.contentBase64, "base64"),
+        contentType: "application/pdf",
+      });
+    } else if (paymentVoucherId) {
+      const voucher = await ReceivedVoucher.findById(paymentVoucherId).populate("companyId");
+      if (voucher) {
+        const receiptPdfBuffer = await buildPaymentReceiptPdf(voucher, voucher.companyId || company);
+        mailOptions.attachments.push({
+          filename: `Payment_Receipt_${voucher.invoiceId || paymentVoucherId}.pdf`,
+          content: receiptPdfBuffer,
+          contentType: "application/pdf",
+        });
+      }
+    }
 
     await transporter.sendMail(mailOptions);
 

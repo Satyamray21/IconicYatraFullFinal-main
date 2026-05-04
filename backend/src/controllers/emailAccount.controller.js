@@ -28,7 +28,7 @@ export const createEmailAccount = asyncHandler(async (req, res) => {
 });
 
 export const getAllEmailAccounts = asyncHandler(async (req, res) => {
-  const accounts = await EmailAccount.find().populate("companyId", "companyName");
+  const accounts = await EmailAccount.find().populate("companyId", "companyName").select("-appPassword");
   return res
     .status(200)
     .json(new ApiResponse(200, accounts, "Email accounts fetched successfully"));
