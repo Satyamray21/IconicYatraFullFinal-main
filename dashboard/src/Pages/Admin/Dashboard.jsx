@@ -355,16 +355,48 @@ const Dashboard = () => {
           {/* Primary Stats Grid */}
           <Grid container spacing={3} mb={6}>
             <Grid size={{ xs: 12, sm: 6, md: 4.5 }}>
-              <StatCard title="Gross Income" value={`₹${(stats?.invoices?.revenue || 0).toLocaleString()}`} icon={<TrendingUp />} color="#1976d2" trend="up" trendValue="+14.2%" delay={0.1} />
+              <StatCard
+                title="Gross Income"
+                value={`₹${(stats?.invoices?.revenue || 0).toLocaleString()}`}
+                icon={<TrendingUp />}
+                color="#1976d2"
+                trend={stats?.invoices?.trend || "up"}
+                trendValue={stats?.invoices?.trendValue || "+0%"}
+                delay={0.1}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
-              <StatCard title="Pipeline Leads" value={stats?.leads?.total || 0} icon={<Assignment />} color="#2196f3" trend="up" delay={0.2} trendValue="+5.1%" />
+              <StatCard
+                title="Pipeline Leads"
+                value={stats?.leads?.total || 0}
+                icon={<Assignment />}
+                color="#2196f3"
+                trend={stats?.leads?.trend || "up"}
+                delay={0.2}
+                trendValue={stats?.leads?.trendValue || "+0%"}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
-              <StatCard title="Active Tours" value={stats?.tours?.active || 0} icon={<FlightTakeoff />} color="#1e88e5" trend="up" delay={0.3} trendValue="+2.8%" />
+              <StatCard
+                title="Active Tours"
+                value={stats?.tours?.active || 0}
+                icon={<FlightTakeoff />}
+                color="#1e88e5"
+                trend={stats?.tours?.trend || "up"}
+                delay={0.3}
+                trendValue={stats?.tours?.trendValue || "+0%"}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
-              <StatCard title="Total Quotes" value={stats?.quotations?.total || 0} icon={<Receipt />} color="#0d47a1" trend="down" delay={0.4} trendValue="-1.2%" />
+              <StatCard
+                title="Total Quotes"
+                value={stats?.quotations?.total || 0}
+                icon={<Receipt />}
+                color="#0d47a1"
+                trend={stats?.quotations?.trend || "up"}
+                delay={0.4}
+                trendValue={stats?.quotations?.trendValue || "+0%"}
+              />
             </Grid>
           </Grid>
 
