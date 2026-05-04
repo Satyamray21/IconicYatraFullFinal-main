@@ -100,86 +100,106 @@ const HotelQuotationMain = () => {
             };
 
             // ✅ PROPERLY FORMATTED stayLocation array
-            const formattedStayLocations = (formData.step2?.stayLocations || []).map((location, index) => ({
-                city: location.city || "Unknown City",
-                order: location.order || index + 1,
-                nights: location.nights || 1,
-                standard: location.standard || {
-                    hotelName: "",
-                    roomType: "",
-                    mealPlan: "",
-                    noNights: 1,
-                    noOfRooms: 0,
-                    mattressForAdult: false,
-                    adultExBed: false,
-                    mattressForChildren: false,
-                    withoutMattress: false
-                },
-                deluxe: location.deluxe || {
-                    hotelName: "",
-                    roomType: "",
-                    mealPlan: "",
-                    noNights: 1,
-                    noOfRooms: 0,
-                    mattressForAdult: false,
-                    adultExBed: false,
-                    mattressForChildren: false,
-                    withoutMattress: false
-                },
-                superior: location.superior || {
-                    hotelName: "",
-                    roomType: "",
-                    mealPlan: "",
-                    noNights: 1,
-                    noOfRooms: 0,
-                    mattressForAdult: false,
-                    adultExBed: false,
-                    mattressForChildren: false,
-                    withoutMattress: false
-                }
-            }));
+            const formattedStayLocations = (formData.step2?.stayLocations || []).map((location, index) => {
+                const cityName = location.name || location.city;
+                const hotelSections = formData.step3?.hotelSections || [];
+                
+                // Find sections for this city
+                const citySections = hotelSections.filter(s => s.city === cityName);
+                
+                const mapSectionToPlan = (s) => {
+                    if (!s) return null;
+                    return {
+                        hotelType: s.hotelType || "",
+                        hotelName: s.hotelName || "",
+                        roomType: s.roomType || "",
+                        mealPlan: s.mealPlan || "",
+                        noNights: parseInt(s.noNights) || location.nights || 1,
+                        noOfRooms: parseInt(s.noRooms) || 0,
+                        mattressForAdult: !!s.mattressAdult,
+                        adultExBed: !!s.costAdultEx,
+                        mattressForChildren: !!s.mattressChild,
+                        adultExMattress: parseInt(s.mattressAdult) || 0,
+                        adultExCost: parseInt(s.costAdultEx) || 0,
+                        childrenExMattress: parseInt(s.mattressChild) || 0,
+                        childrenExCost: parseInt(s.costChildEx) || 0,
+                        withoutMattress: !!s.costWithout,
+                        withoutBedCost: parseInt(s.costWithout) || 0,
+                        roomNight: parseInt(s.noNights) || 0,
+                        costNight: parseInt(s.costRoom) || 0,
+                        totalCost: parseInt(s.totalCost) || 0
+                    };
+                };
 
-            // ✅ If no stay locations from step2, create at least one default
+                const defaultPlan = {
+                    hotelName: "",
+                    roomType: "",
+                    mealPlan: "",
+                    noNights: location.nights || 1,
+                    noOfRooms: 0,
+                    mattressForAdult: false,
+                    adultExBed: false,
+                    mattressForChildren: false,
+                    withoutMattress: false
+                };
+
+                // Logic to decide which section goes where
+                let standard = null, deluxe = null, superior = null;
+
+                if (citySections.length === 1) {
+                    // If only one section, check its type or default to standard
+                    const s = citySections[0];
+                    const type = (s.hotelType || "").toLowerCase();
+                    if (type.includes("deluxe")) deluxe = mapSectionToPlan(s);
+                    else if (type.includes("superior")) superior = mapSectionToPlan(s);
+                    else standard = mapSectionToPlan(s);
+                } else {
+                    // Match by type
+                    standard = mapSectionToPlan(citySections.find(s => (s.hotelType || "").toLowerCase().includes("standard")));
+                    deluxe = mapSectionToPlan(citySections.find(s => (s.hotelType || "").toLowerCase().includes("deluxe")));
+                    superior = mapSectionToPlan(citySections.find(s => (s.hotelType || "").toLowerCase().includes("superior")));
+                }
+
+                return {
+                    city: cityName || "Unknown City",
+                    order: location.order || index + 1,
+                    nights: location.nights || 1,
+                    standard: standard || defaultPlan,
+                    deluxe: deluxe || defaultPlan,
+                    superior: superior || defaultPlan
+                };
+            });
+
+            // ✅ If no stay locations from step2, use cities from step3 if available
             const finalStayLocations = formattedStayLocations.length > 0
                 ? formattedStayLocations
-                : [{
-                    city: formData.step2?.arrivalCity || "Default City",
-                    order: 1,
-                    nights: formData.step2?.nights || 1,
+                : (formData.step3?.hotelSections || []).map((s, index) => ({
+                    city: s.city || "Default City",
+                    order: index + 1,
+                    nights: parseInt(s.noNights) || 1,
                     standard: {
-                        hotelName: "",
-                        roomType: "",
-                        mealPlan: "",
-                        noNights: 1,
-                        noOfRooms: 0,
-                        mattressForAdult: false,
-                        adultExBed: false,
-                        mattressForChildren: false,
-                        withoutMattress: false
+                        hotelType: s.hotelType || "",
+                        hotelName: s.hotelName || "",
+                        roomType: s.roomType || "",
+                        mealPlan: s.mealPlan || "",
+                        noNights: parseInt(s.noNights) || 1,
+                        noOfRooms: parseInt(s.noRooms) || 0,
+                        mattressForAdult: !!s.mattressAdult,
+                        adultExBed: !!s.costAdultEx,
+                        mattressForChildren: !!s.mattressChild,
+                        adultExMattress: parseInt(s.mattressAdult) || 0,
+                        adultExCost: parseInt(s.costAdultEx) || 0,
+                        childrenExMattress: parseInt(s.mattressChild) || 0,
+                        childrenExCost: parseInt(s.costChildEx) || 0,
+                        withoutMattress: !!s.costWithout,
+                        withoutBedCost: parseInt(s.costWithout) || 0,
+                        roomNight: parseInt(s.noNights) || 0,
+                        costNight: parseInt(s.costRoom) || 0,
+                        totalCost: parseInt(s.totalCost) || 0
                     },
-                    deluxe: {
-                        hotelName: "",
-                        roomType: "",
-                        mealPlan: "",
-                        noNights: 1,
-                        noOfRooms: 0,
-                        mattressForAdult: false,
-                        adultExBed: false,
-                        mattressForChildren: false,
-                        withoutMattress: false
-                    },
-                    superior: {
-                        hotelName: "",
-                        roomType: "",
-                        mealPlan: "",
-                        noNights: 1,
-                        noOfRooms: 0,
-                        mattressForAdult: false,
-                        adultExBed: false,
-                        mattressForChildren: false,
-                        withoutMattress: false
-                    }
-                }];
+                    deluxe: { hotelName: "", roomType: "", mealPlan: "", noNights: 1, noOfRooms: 0, mattressForAdult: false, adultExBed: false, mattressForChildren: false, withoutMattress: false },
+                    superior: { hotelName: "", roomType: "", mealPlan: "", noNights: 1, noOfRooms: 0, mattressForAdult: false, adultExBed: false, mattressForChildren: false, withoutMattress: false }
+                }));
 
             console.log("🏨 FORMATTED STAY LOCATIONS:", finalStayLocations);
 
@@ -229,31 +249,38 @@ const HotelQuotationMain = () => {
                 },
                 // ✅ FIXED: Properly formatted stayLocation array
                 stayLocation: finalStayLocations,
+                // ✅ FIXED: Correctly map structured transport data from Step 4
                 vehicleDetails: {
                     basicsDetails: {
-                        clientName: formData.step4.clientName || formData.step1.clientName || "",
-                        vehicleType: formData.step4.vehicleType || "",
-                        tripType: tripTypeMapping[formData.step4.tripType] || "OneWay",
-                        noOfDays: formData.step4.noOfDays?.toString() || "1",
-                        perDayCost: formData.step4.perDayCost?.toString() || "0",
+                        clientName: formData.step4.basicsDetails?.clientName || formData.step1.clientName || "",
+                        vehicleType: formData.step4.basicsDetails?.vehicleType || "",
+                        tripType: formData.step4.basicsDetails?.tripType || "One Way", 
+                        noOfDays: formData.step4.basicsDetails?.noOfDays?.toString() || "1",
+                        perDayCost: formData.step4.costDetails?.perDayCost?.toString() || "0",
                     },
                     costDetails: {
-                        totalCost: formData.step4.totalCost?.toString() || "0",
+                        totalCost: formData.step4.costDetails?.totalCost?.toString() || "0",
+                        perDayCost: formData.step4.costDetails?.perDayCost?.toString() || "0",
+                        ratePerKm: formData.step4.costDetails?.ratePerKm?.toString() || "0",
+                        kmPerDay: formData.step4.costDetails?.kmPerDay?.toString() || "0",
+                        driverAllowance: formData.step4.costDetails?.driverAllowance?.toString() || "0",
+                        tollParking: formData.step4.costDetails?.tollParking?.toString() || "0",
                     },
                     pickupDropDetails: {
-                        pickupDate: formData.step4.pickupDate || formData.step2?.arrivalDate || "",
-                        pickupTime: formData.step4.pickupTime || "",
-                        pickupLocation: formData.step4.pickupLocation || formData.step2?.arrivalLocation || "",
-                        dropDate: formData.step4.dropDate || formData.step2?.departureDate || "",
-                        dropTime: formData.step4.dropTime || "",
-                        dropLocation: formData.step4.dropLocation || formData.step2?.departureLocation || "",
+                        pickupDate: formData.step4.pickupDropDetails?.pickupDate || formData.step2?.arrivalDate || "",
+                        pickupTime: formData.step4.pickupDropDetails?.pickupTime || "",
+                        pickupLocation: formData.step4.pickupDropDetails?.pickupLocation || formData.step2?.arrivalLocation || "",
+                        dropDate: formData.step4.pickupDropDetails?.dropDate || formData.step2?.departureDate || "",
+                        dropTime: formData.step4.pickupDropDetails?.dropTime || "",
+                        dropLocation: formData.step4.pickupDropDetails?.dropLocation || formData.step2?.departureLocation || "",
                     }
                 },
-                quotationInclusion: formData.step4.inclusion || "",
-                quotationExculsion: formData.step4.exclusion || "",
+                // ✅ FIXED: Map correct field names from Step 4
+                quotationInclusion: formData.step4.quotationInclusion || "",
+                quotationExculsion: formData.step4.quotationExculsion || "",
                 paymentPolicies: formData.step4.paymentPolicies || "",
-                CancellationRefund: formData.step4.cancellation || "",
-                termsAndConditions: formData.step4.terms || "",
+                CancellationRefund: formData.step4.CancellationRefund || "",
+                termsAndConditions: formData.step4.termsAndConditions || "",
                 status: 'draft',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()

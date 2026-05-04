@@ -4,6 +4,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
+import mongoose from "mongoose";
 
 // Helper to generate quotationId
 const generateQuotationId = async () => {
@@ -59,10 +60,22 @@ export const getAllHotelQuotations = asyncHandler(async (req, res) => {
 // 📌 Get single quotation by ID
 export const getHotelQuotationById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const quotation = await HotelQuotation.findOne({ hotelQuotationId: id });
+    console.log("Fetching Hotel Quotation with ID:", id);
+    let quotation;
+
+    // Try finding by MongoDB _id if it's a valid ObjectId
+    if (mongoose.Types.ObjectId.isValid(id)) {
+        quotation = await HotelQuotation.findById(id);
+    }
+
+    // If not found by _id, try finding by hotelQuotationId
+    if (!quotation) {
+        quotation = await HotelQuotation.findOne({ hotelQuotationId: id });
+    }
 
     if (!quotation) {
-        throw new ApiError(404, "Hotel Quotation not found");
+        console.error(`Hotel Quotation not found for ID: ${id}`);
+        throw new ApiError(404, `Hotel Quotation not found for ID: ${id}`);
     }
 
     return res
@@ -73,9 +86,19 @@ export const getHotelQuotationById = asyncHandler(async (req, res) => {
 // 📌 Delete quotation
 export const deleteHotelQuotation = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const deleted = await HotelQuotation.findOneAndDelete({
-        hotelQuotationId: id,
-    });
+    let deleted;
+
+    // Try deleting by MongoDB _id
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+        deleted = await HotelQuotation.findByIdAndDelete(id);
+    }
+
+    // If not found, try by hotelQuotationId
+    if (!deleted) {
+        deleted = await HotelQuotation.findOneAndDelete({
+            hotelQuotationId: id,
+        });
+    }
 
     if (!deleted) {
         throw new ApiError(404, "Hotel Quotation not found");

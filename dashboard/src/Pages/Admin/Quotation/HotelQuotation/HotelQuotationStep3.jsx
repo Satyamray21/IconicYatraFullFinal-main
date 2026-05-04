@@ -171,30 +171,33 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
         return roomDetail?.mealPlan || "";
     };
 
-    // Get mattress cost for selected room type
-    const getMattressCost = (roomType, index) => {
+    // Get room detail (including price and mattress cost) for selected room type
+    const getRoomDetail = (roomType, index) => {
         const hotelData = selectedHotelsData[index];
         if (!hotelData?.rooms?.[0]?.roomDetails) return null;
         const roomDetail = hotelData.rooms[0].roomDetails.find(
             room => room.roomType === roomType
         );
-        return roomDetail?.mattressCost || null;
+        return roomDetail || null;
     };
 
     // Auto-calculate total cost function - FIXED
     const calculateTotalCost = (index) => {
-        const noNights = parseInt(formik.values.sections[index].noNights) || 0;
-        const noRooms = parseInt(formik.values.sections[index].noRooms) || 0;
-        const costRoom = parseInt(formik.values.sections[index].costRoom) || 0;
+        const section = formik.values.sections[index];
+        if (!section) return;
+
+        const noNights = parseFloat(section.noNights) || 0;
+        const noRooms = parseFloat(section.noRooms) || 0;
+        const costRoom = parseFloat(section.costRoom) || 0;
 
         console.log(`Calculating for section ${index}:`, { noNights, noRooms, costRoom });
 
         if (noNights > 0 && noRooms > 0 && costRoom > 0) {
             const totalCost = noNights * noRooms * costRoom;
             console.log(`Total cost for section ${index}:`, totalCost);
-            formik.setFieldValue(`sections[${index}].totalCost`, totalCost);
-        } else {
-            formik.setFieldValue(`sections[${index}].totalCost`, "");
+            formik.setFieldValue(`sections[${index}].totalCost`, totalCost.toString());
+        } else if (noNights === 0 || noRooms === 0 || costRoom === 0) {
+            formik.setFieldValue(`sections[${index}].totalCost`, "0");
         }
     };
 
@@ -202,6 +205,7 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
     const formik = useFormik({
         initialValues: {
             sections: [],
+            transport: initialData?.transport || "Yes",
         },
         onSubmit: (values) => {
             console.log("✅ STEP3 - Form submitted with values:", values);
@@ -209,6 +213,7 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
             // ✅ FIXED: onNext call karein proper data ke saath
             const stepData = {
                 hotelSections: values.sections,
+                transport: values.transport,
                 totalHotelCost: values.sections.reduce((total, section) =>
                     total + (parseInt(section.totalCost) || 0), 0
                 )
@@ -350,28 +355,41 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
     };
 
     // Handle room type selection - AUTOMATICALLY SET MEAL PLAN AND COSTS - FIXED
-    const handleRoomTypeSelect = (e, index) => {
-        const roomType = e.target.value;
+    const handleRoomTypeSelect = (e, newValue, index) => {
+        const roomType = newValue;
+        formik.setFieldValue(`sections[${index}].roomType`, roomType || "");
 
-        formik.setFieldValue(`sections[${index}].roomType`, roomType);
+        if (!roomType) return;
 
-        const mealPlan = getMealPlan(roomType, index);
-        formik.setFieldValue(`sections[${index}].mealPlan`, mealPlan);
+        const roomDetail = getRoomDetail(roomType, index);
+        
+        if (roomDetail) {
+            // Set Meal Plan
+            if (roomDetail.mealPlan) {
+                formik.setFieldValue(`sections[${index}].mealPlan`, roomDetail.mealPlan);
+            }
 
-        const mattressCost = getMattressCost(roomType, index);
+            // Set Room Price
+            if (roomDetail.price) {
+                formik.setFieldValue(`sections[${index}].costRoom`, roomDetail.price.toString());
+            }
 
-        if (mattressCost) {
-            // Auto-fill mattress costs from API data
-            formik.setFieldValue(`sections[${index}].mattressAdult`, mattressCost.adult || "");
-            formik.setFieldValue(`sections[${index}].mattressChild`, mattressCost.children || "");
-            formik.setFieldValue(`sections[${index}].costWithout`, mattressCost.kidWithoutMattress || "");
-
-            // ✅ FIX: costRoom ko disabled se enabled karo aur value set karo
-            formik.setFieldValue(`sections[${index}].costRoom`, mattressCost.adult || "");
+            // Set Mattress Costs
+            const mattressCost = roomDetail.mattressCost;
+            if (mattressCost) {
+                formik.setFieldValue(`sections[${index}].mattressAdult`, mattressCost.adult?.toString() || "");
+                formik.setFieldValue(`sections[${index}].mattressChild`, mattressCost.children?.toString() || "");
+                formik.setFieldValue(`sections[${index}].costWithout`, mattressCost.kidWithoutMattress?.toString() || "");
+            }
 
             // Auto-calculate total cost
             setTimeout(() => calculateTotalCost(index), 100);
         }
+    };
+
+    // Handle meal plan selection
+    const handleMealPlanSelect = (e, newValue, index) => {
+        formik.setFieldValue(`sections[${index}].mealPlan`, newValue || "");
     };
 
     // Handle numeric field changes for auto-calculation - FIXED
@@ -403,20 +421,41 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
     const handleRoomsOverride = (e, index) => {
         const value = e.target.value;
         formik.setFieldValue(`sections[${index}].noRooms`, value);
-        setTimeout(() => calculateTotalCost(index), 100);
+        
+        // Use updated value directly for faster calculation
+        const noNights = parseFloat(formik.values.sections[index].noNights) || 0;
+        const costRoom = parseFloat(formik.values.sections[index].costRoom) || 0;
+        const noRooms = parseFloat(value) || 0;
+        
+        if (noNights > 0 && noRooms > 0 && costRoom > 0) {
+            formik.setFieldValue(`sections[${index}].totalCost`, (noNights * noRooms * costRoom).toString());
+        }
     };
 
     // Handle room cost manual override - NEW FUNCTION
     const handleRoomCostOverride = (e, index) => {
         const value = e.target.value;
         formik.setFieldValue(`sections[${index}].costRoom`, value);
-        setTimeout(() => calculateTotalCost(index), 100);
+        
+        const noNights = parseFloat(formik.values.sections[index].noNights) || 0;
+        const noRooms = parseFloat(formik.values.sections[index].noRooms) || 0;
+        const costRoom = parseFloat(value) || 0;
+
+        if (noNights > 0 && noRooms > 0 && costRoom > 0) {
+            formik.setFieldValue(`sections[${index}].totalCost`, (noNights * noRooms * costRoom).toString());
+        }
     };
 
     // ✅ FIXED: Save & Continue function
     const handleSaveAndContinue = () => {
         console.log("💾 STEP3 - Save & Continue clicked");
-        formik.handleSubmit(); // ✅ Formik submit call karein
+        formik.handleSubmit();
+    };
+
+    // ✅ FIXED: Back function to preserve data
+    const handleBack = () => {
+        console.log("⬅️ STEP3 - Back clicked, preserving data");
+        onBack(formik.values);
     };
 
     // Custom option renderer for Select fields with DELETE functionality
@@ -759,40 +798,46 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
                             name={`sections[${index}].hotelType`}
                             value={formik.values.sections[index].hotelType}
                             onChange={formik.handleChange}
-                            disabled
+                            placeholder="e.g. 3 Star, 4 Star"
                         />
                     </Grid>
 
-                    {/* Room Type */}
+                    {/* Room Type - Changed to Autocomplete for custom entry */}
                     <Grid size={{ xs: 12, md: 3 }}>
-                        <TextField
-                            select
-                            fullWidth
-                            label="Room Type"
-                            name={`sections[${index}].roomType`}
+                        <Autocomplete
+                            freeSolo
+                            options={availableRoomTypes}
                             value={formik.values.sections[index].roomType}
-                            onChange={(e) => handleRoomTypeSelect(e, index)}
-                            disabled={!isHotelSelected || isSectionLoading}
-                        >
-                            <MenuItem value="">Select Room Type</MenuItem>
-                            {availableRoomTypes.map((type) => (
-                                <MenuItem key={type} value={type}>
-                                    {type}
-                                </MenuItem>
-                            ))}
-                        </TextField>
+                            onChange={(e, newValue) => handleRoomTypeSelect(e, newValue, index)}
+                            onInputChange={(e, newValue) => formik.setFieldValue(`sections[${index}].roomType`, newValue)}
+                            disabled={!isCitySelected || isSectionLoading}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="Room Type"
+                                    placeholder="Select or type room type"
+                                />
+                            )}
+                        />
                     </Grid>
 
-                    {/* Meal Plan - AUTOMATICALLY FILLED, NO DROPDOWN */}
+                    {/* Meal Plan - Changed to Autocomplete for custom entry */}
                     <Grid size={{ xs: 12, md: 3 }}>
-                        <TextField
-                            fullWidth
-                            label="Meal Plan"
-                            name={`sections[${index}].mealPlan`}
+                        <Autocomplete
+                            freeSolo
+                            options={["EP", "CP", "MAP", "AP"]}
                             value={formik.values.sections[index].mealPlan}
-                            onChange={formik.handleChange}
-                            disabled
-                            helperText="Automatically set from room type"
+                            onChange={(e, newValue) => handleMealPlanSelect(e, newValue, index)}
+                            onInputChange={(e, newValue) => formik.setFieldValue(`sections[${index}].mealPlan`, newValue)}
+                            disabled={!isCitySelected || isSectionLoading}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="Meal Plan"
+                                    placeholder="Select or type meal plan"
+                                    helperText="EP, CP, MAP, AP or custom"
+                                />
+                            )}
                         />
                     </Grid>
 
@@ -803,8 +848,8 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
                             label="Mattress For Adult"
                             name={`sections[${index}].mattressAdult`}
                             value={formik.values.sections[index].mattressAdult}
+                            onChange={formik.handleChange}
                             type="number"
-                            disabled
                         />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
@@ -813,8 +858,8 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
                             label="Mattress For Children"
                             name={`sections[${index}].mattressChild`}
                             value={formik.values.sections[index].mattressChild}
+                            onChange={formik.handleChange}
                             type="number"
-                            disabled
                         />
                     </Grid>
 
@@ -852,8 +897,8 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
                             label="Without Mattress"
                             name={`sections[${index}].costWithout`}
                             value={formik.values.sections[index].costWithout}
+                            onChange={formik.handleChange}
                             type="number"
-                            disabled
                         />
                     </Grid>
 
@@ -877,9 +922,9 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
                             label="Total Cost"
                             name={`sections[${index}].totalCost`}
                             value={formik.values.sections[index].totalCost}
+                            onChange={formik.handleChange}
                             type="number"
-                            disabled
-                            helperText="Auto-calculated: Nights × Rooms × Room Cost"
+                            helperText="Auto-calculated (Nights × Rooms × Room Cost), but can be overridden"
                         />
                     </Grid>
                 </Grid>
@@ -890,6 +935,33 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
     return (
         <Box sx={{ p: 3 }}>
             <form onSubmit={formik.handleSubmit}>
+                {/* Transport Selection */}
+                <Paper sx={{ p: 3, mb: 3, borderLeft: '6px solid', borderColor: 'primary.main', backgroundColor: '#f8fbff' }}>
+                    <Grid container spacing={2} alignItems="center">
+                        <Grid size={{ xs: 12, md: 8 }}>
+                            <Typography variant="h6" color="primary">
+                                Transport Requirement
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Do you need to include vehicle/transport details in this quotation?
+                            </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 4 }}>
+                            <TextField
+                                select
+                                fullWidth
+                                label="Include Transport?"
+                                name="transport"
+                                value={formik.values.transport}
+                                onChange={formik.handleChange}
+                            >
+                                <MenuItem value="Yes">Yes, Include Transport</MenuItem>
+                                <MenuItem value="No">No, Hotel Only</MenuItem>
+                            </TextField>
+                        </Grid>
+                    </Grid>
+                </Paper>
+
                 {formik.values.sections.map((section, index) =>
                     renderHotelSection(section, index)
                 )}
@@ -910,7 +982,7 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
                     <Button
                         variant="outlined"
                         sx={{ px: 4, py: 1.5, borderRadius: 2 }}
-                        onClick={onBack}
+                        onClick={handleBack}
                     >
                         Back
                     </Button>
@@ -918,7 +990,10 @@ const HotelQuotationStep3 = ({ onNext, onBack, initialData, step1Data, step2Data
                     <Button
                         variant="contained"
                         sx={{ px: 4, py: 1.5, borderRadius: 2 }}
-                        onClick={handleSaveAndContinue}
+                        onClick={() => {
+                            console.log("Saving and continuing with values:", formik.values);
+                            formik.handleSubmit();
+                        }}
                     >
                         Save & Continue
                     </Button>
