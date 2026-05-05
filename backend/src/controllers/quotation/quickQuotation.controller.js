@@ -1318,8 +1318,10 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
         <br/>
         ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
         <br/>
+        ${options.signature ? options.signature : `
         <p>Best Regards,</p>
         <p><b>${options.companyName}</b></p>
+        `}
       `,
       attachments: [
         {
