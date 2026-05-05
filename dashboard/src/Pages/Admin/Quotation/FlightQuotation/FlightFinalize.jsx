@@ -89,6 +89,7 @@ const FlightFinalize = () => {
   const [mailMode, setMailMode] = useState("normal");
   const [openEmailDialog, setOpenEmailDialog] = useState(false);
   const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailAccounts, setEmailAccounts] = useState([]);
   const [emailTemplateBodies, setEmailTemplateBodies] = useState({
     normal: { subject: "", message: "" },
     booking: { subject: "", message: "" },
@@ -203,7 +204,16 @@ const FlightFinalize = () => {
         setMailCompanies([]);
       }
     };
+    const fetchEmailAccounts = async () => {
+      try {
+        const res = await axios.get("/email-accounts");
+        setEmailAccounts(Array.isArray(res?.data?.data) ? res.data.data : []);
+      } catch {
+        setEmailAccounts([]);
+      }
+    };
     loadMailCompanies();
+    fetchEmailAccounts();
   }, []);
 
   if (!quotation || !quotation.flightDetails) {
@@ -1226,7 +1236,6 @@ const FlightFinalize = () => {
         open={openEmailDialog}
         onClose={handleEmailClose}
         onSend={handleEmailSend}
-        hasPdfAttachment={!!pdfAttachmentForMail?.contentBase64}
         onCompanyChange={async (companyId, nextMailType) => {
           const templates = await refreshEmailTemplates(companyId);
           const type = nextMailType === "booking" ? "booking" : "normal";
@@ -1235,6 +1244,8 @@ const FlightFinalize = () => {
         initialValuesOverride={emailInitialValues}
         templateBodies={emailTemplateBodies}
         companyOptions={mailCompanies}
+        emailAccountOptions={emailAccounts}
+        hasPdfAttachment={!!pdfAttachmentForMail}
       />
 
       {/* Confirmation Dialog */}

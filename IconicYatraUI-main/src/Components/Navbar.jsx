@@ -139,8 +139,12 @@ const Navbar = () => {
     <Box sx={{ width: "100%" }}>
       <AppBar
         position="static"
-        color="transparent"
-        sx={{ px: 1, boxShadow: "none", borderBottom: "1px solid #eee" }}
+        sx={{ 
+          px: 1, 
+          boxShadow: "none", 
+          borderBottom: "1px solid #eee",
+          background: company?.company?.navColor || "transparent"
+        }}
       >
         <Container maxWidth="xl">
           <Toolbar sx={{ justifyContent: "space-between", py: 1 }}>

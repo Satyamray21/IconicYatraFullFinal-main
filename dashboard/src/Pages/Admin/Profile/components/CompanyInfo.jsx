@@ -24,6 +24,10 @@ import {
   CardContent,
   alpha,
   useTheme,
+  Tabs,
+  Tab,
+  Slider,
+  Stack as MuiStack,
 } from "@mui/material";
 
 import EditIcon from "@mui/icons-material/Edit";
@@ -73,6 +77,34 @@ const CompanyProfile = ({ staffId = null, staffData = null }) => {
     value: "",
   });
 
+  // Gradient state
+  const [colorType, setColorType] = useState(0); // 0: Solid, 1: Gradient
+  const [gradColor1, setGradColor1] = useState("#1f3c65");
+  const [gradColor2, setGradColor2] = useState("#2c5282");
+  const [gradAngle, setGradAngle] = useState(135);
+
+  useEffect(() => {
+    if (editDialog.open && editDialog.field.toLowerCase().includes("color")) {
+      if (editDialog.value.startsWith("linear-gradient")) {
+        setColorType(1);
+        // Parse: linear-gradient(135deg, #1f3c65 0%, #2c5282 100%)
+        const matches = editDialog.value.match(/linear-gradient\((\d+)deg,\s*(#\w+)\s*0%,\s*(#\w+)\s*100%\)/);
+        if (matches) {
+          setGradAngle(parseInt(matches[1]));
+          setGradColor1(matches[2]);
+          setGradColor2(matches[3]);
+        }
+      } else {
+        setColorType(0);
+      }
+    }
+  }, [editDialog.open, editDialog.field, editDialog.value]);
+
+  const updateGradientValue = (c1, c2, angle) => {
+    const newValue = `linear-gradient(${angle}deg, ${c1} 0%, ${c2} 100%)`;
+    setEditDialog(prev => ({ ...prev, value: newValue }));
+  };
+
   useEffect(() => {
     dispatch(getCompany());
   }, [dispatch]);
@@ -101,6 +133,9 @@ const CompanyProfile = ({ staffId = null, staffData = null }) => {
   { key: "invoiceTerms", icon: <DescriptionIcon />, label: "Invoice Terms" },
   { key: "pdfFooter", icon: <DescriptionIcon />, label: "PDF Footer" },
   { key: "currency", icon: <AttachMoneyIcon />, label: "Currency" },
+  { key: "headerColor", icon: <ImageIcon />, label: "Header Color" },
+  { key: "navColor", icon: <ImageIcon />, label: "Navbar Color" },
+  { key: "footerColor", icon: <ImageIcon />, label: "Footer Color" },
   { key: "aboutUs.title", icon: <DescriptionIcon />, label: "About Us Title" },
   { key: "aboutUs.bannerTitle", icon: <ImageIcon />, label: "Banner Title" },
   { key: "aboutUs.bannerDescription", icon: <DescriptionIcon />, label: "Banner Description" },
@@ -1867,18 +1902,125 @@ const handleQrUpload = async () => {
             Edit {formatLabel(editDialog.field)}
           </Typography>
         </DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            margin="normal"
-            value={editDialog.value}
-            onChange={(e) => setEditDialog({ ...editDialog, value: e.target.value })}
-            variant="outlined"
-            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-            multiline={editDialog.field.includes('about') || editDialog.field.includes('note')}
-            rows={editDialog.field.includes('about') || editDialog.field.includes('note') ? 4 : 1}
-            autoFocus
-          />
+        <DialogContent sx={{ mt: 1 }}>
+          {editDialog.field.toLowerCase().includes("color") ? (
+            <Box>
+              <Tabs 
+                value={colorType} 
+                onChange={(e, val) => {
+                  setColorType(val);
+                  if (val === 0) {
+                    setEditDialog(prev => ({ ...prev, value: gradColor1 }));
+                  } else {
+                    updateGradientValue(gradColor1, gradColor2, gradAngle);
+                  }
+                }} 
+                centered
+                sx={{ mb: 2 }}
+              >
+                <Tab label="Solid Color" />
+                <Tab label="Linear Gradient" />
+              </Tabs>
+
+              {colorType === 0 ? (
+                <Box>
+                   <Typography variant="caption" color="textSecondary" gutterBottom>
+                    Select Solid Color
+                  </Typography>
+                  <TextField
+                    type="color"
+                    fullWidth
+                    variant="outlined"
+                    value={editDialog.value.startsWith("linear-gradient") ? gradColor1 : editDialog.value}
+                    onChange={(e) => {
+                      setEditDialog({ ...editDialog, value: e.target.value });
+                      setGradColor1(e.target.value);
+                    }}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                  />
+                </Box>
+              ) : (
+                <Box>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="textSecondary">Color 1</Typography>
+                      <TextField
+                        type="color"
+                        fullWidth
+                        value={gradColor1}
+                        onChange={(e) => {
+                          setGradColor1(e.target.value);
+                          updateGradientValue(e.target.value, gradColor2, gradAngle);
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="textSecondary">Color 2</Typography>
+                      <TextField
+                        type="color"
+                        fullWidth
+                        value={gradColor2}
+                        onChange={(e) => {
+                          setGradColor2(e.target.value);
+                          updateGradientValue(gradColor1, e.target.value, gradAngle);
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="textSecondary">Angle: {gradAngle}°</Typography>
+                      <Slider
+                        value={gradAngle}
+                        min={0}
+                        max={360}
+                        onChange={(e, val) => {
+                          setGradAngle(val);
+                          updateGradientValue(gradColor1, gradColor2, val);
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
+
+              {/* Preview Box */}
+              <Box 
+                sx={{ 
+                  mt: 3, 
+                  height: 60, 
+                  borderRadius: 2, 
+                  background: editDialog.value,
+                  border: '1px solid #ddd',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <Typography variant="body2" sx={{ color: '#fff', textShadow: '0 0 4px rgba(0,0,0,0.5)', fontWeight: 'bold' }}>
+                  Preview
+                </Typography>
+              </Box>
+              
+              <Typography variant="caption" sx={{ mt: 1, display: 'block', wordBreak: 'break-all' }} color="textSecondary">
+                Value: {editDialog.value}
+              </Typography>
+            </Box>
+          ) : (
+            <TextField
+              autoFocus
+              margin="dense"
+              label={formatLabel(editDialog.field)}
+              type="text"
+              fullWidth
+              variant="outlined"
+              value={editDialog.value}
+              onChange={(e) =>
+                setEditDialog({ ...editDialog, value: e.target.value })
+              }
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 }, mt: 2 }}
+              multiline={editDialog.field !== "companyName"}
+              rows={editDialog.field !== "companyName" ? 4 : 1}
+            />
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
           <Button 

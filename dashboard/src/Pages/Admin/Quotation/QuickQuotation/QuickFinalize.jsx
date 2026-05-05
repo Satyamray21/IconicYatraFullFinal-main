@@ -92,6 +92,7 @@ import QuickEditAllDialog from "./Dialog/QuickEditAllDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 import HotelConfirmationDialog from "../CustomQuotation/Dialog/HotelConfirmationDialog";
+import ReceiptPreviewDialog from "../../../../Components/ReceiptPreviewDialog";
 import {
   effectiveQuickPayableTotal,
 
@@ -130,16 +131,28 @@ function linesToPolicyArray(v) {
 function buildQuickMongoSetFromEditDialog(editDialog, newValue) {
   const parseDateTimeFromText = (value) => {
     const raw = String(value || "");
+    // Updated regex to support AM/PM
     const m = raw.match(
-      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2}))?\)/i,
+      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?\)/i,
     );
     if (!m) return { dateIso: "", time: "" };
+
     const dd = String(m[1]).padStart(2, "0");
     const mm = String(m[2]).padStart(2, "0");
     const yyyy = String(m[3]).length === 2 ? `20${m[3]}` : String(m[3]);
-    const hh = m[4] ? String(m[4]).padStart(2, "0") : "";
+    let hhNum = m[4] ? parseInt(m[4], 10) : null;
     const min = m[5] ? String(m[5]).padStart(2, "0") : "";
+    const ampm = m[6] ? m[6].toUpperCase() : null;
+
+    // Convert AM/PM to 24h for storage
+    if (hhNum !== null && ampm) {
+      if (ampm === "PM" && hhNum < 12) hhNum += 12;
+      if (ampm === "AM" && hhNum === 12) hhNum = 0;
+    }
+
+    const hh = hhNum !== null ? String(hhNum).padStart(2, "0") : "";
     const dateIso = `${yyyy}-${mm}-${dd}T00:00:00.000Z`;
+
     return {
       dateIso: Number.isNaN(new Date(dateIso).getTime()) ? "" : dateIso,
       time: hh && min ? `${hh}:${min}` : "",
@@ -270,6 +283,7 @@ const TransactionSummaryDialog = ({
   loading,
   rows,
   quotationRef,
+  onPreview,
 }) => {
   const totals = summarizeVoucherAmounts(rows);
 
@@ -283,6 +297,7 @@ const TransactionSummaryDialog = ({
     "Payment Bank",
     "Dr/Cr",
     "Amount",
+    "Actions",
   ];
 
   return (
@@ -405,7 +420,12 @@ const TransactionSummaryDialog = ({
                 </TableRow>
               ) : rows?.length ? (
                 rows.map((v, index) => (
-                  <TableRow key={v._id || index} hover>
+                  <TableRow 
+                    key={v._id || index} 
+                    hover
+                    onClick={() => window.open(`/invoice-view/${v._id}`, '_blank')}
+                    sx={{ cursor: "pointer" }}
+                  >
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{v.receiptNumber}</TableCell>
                     <TableCell>{v.invoiceId}</TableCell>
@@ -430,6 +450,26 @@ const TransactionSummaryDialog = ({
                     </TableCell>
                     <TableCell align="right">
                       ₹{(Number(v.amount) || 0).toLocaleString("en-IN")}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                        <IconButton 
+                          size="small" 
+                          color="primary" 
+                          onClick={() => onPreview(v)}
+                          title="Preview Receipt"
+                        >
+                          <Visibility fontSize="small" />
+                        </IconButton>
+                        <IconButton 
+                          size="small" 
+                          color="info" 
+                          onClick={() => window.open(`/payments-form/${v._id}`, '_blank')}
+                          title="Edit Payment"
+                        >
+                          <Edit fontSize="small" />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))
@@ -572,9 +612,15 @@ const formatDateTime = (dateString) => {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const yyyy = date.getFullYear();
-  const hh = String(date.getHours()).padStart(2, "0");
+  
+  let hh = date.getHours();
+  const ampm = hh >= 12 ? "PM" : "AM";
+  hh = hh % 12;
+  hh = hh ? hh : 12; // the hour '0' should be '12'
+  const hhStr = String(hh).padStart(2, "0");
   const min = String(date.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${yyyy} at ${hh}:${min}`;
+
+  return `${dd}/${mm}/${yyyy} at ${hhStr}:${min} ${ampm}`;
 };
 
 const formatDateWithOptionalTime = (dateValue, timeValue) => {
@@ -624,7 +670,13 @@ const normalizePointLabel = (text) => {
   return uniqueParts.join(" - ") || "—";
 };
 
-const editablePickupDropPoint = (value) => normalizePointLabel(value);
+const editablePickupDropPoint = (value) => {
+  // Don't use normalizePointLabel here because it strips parentheses
+  // which contain the date/time the user needs to edit.
+  return String(value || "")
+    .replace(/^((arrival|departure)\s*:\s*)+/i, "")
+    .trim();
+};
 
 /** True when `days` is a list of day objects (not a night-count number from snapshot). */
 function isQuickPackageDayObjectArray(days) {
@@ -1200,6 +1252,13 @@ const QuickFinalize = () => {
     severity: "success",
   });
   const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
+  const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState(null);
+  const [openReceiptPreview, setOpenReceiptPreview] = useState(false);
+
+  const handleOpenReceiptPreview = (voucher) => {
+    setSelectedVoucherForPreview(voucher);
+    setOpenReceiptPreview(true);
+  };
   const [itineraryDialog, setItineraryDialog] = useState({
     open: false,
     mode: "add",
@@ -1290,6 +1349,7 @@ const QuickFinalize = () => {
     booking: { subject: "", message: "" },
   });
   const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailAccounts, setEmailAccounts] = useState([]);
   const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
   const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
   const [policyInputs, setPolicyInputs] = useState({
@@ -1553,7 +1613,18 @@ const QuickFinalize = () => {
         setMailCompanies([]);
       }
     };
+    const loadEmailAccounts = async () => {
+      try {
+        const res = await axios.get("/email-accounts");
+        const list = res?.data?.data || [];
+        setEmailAccounts(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.error("Failed to load email accounts:", err);
+        setEmailAccounts([]);
+      }
+    };
     loadCompanies();
+    loadEmailAccounts();
   }, []);
 
   useEffect(() => {
@@ -1768,8 +1839,8 @@ const QuickFinalize = () => {
       message: tpl?.message || "",
       signature: "Warm Regards,\nReservation Team\nIconic Travel",
       mailType: type,
-      senderAccount: "gmail1",
-      companyId: mailCompanies?.[0]?._id || "",
+      senderAccount: "",
+      companyId: company?._id || mailCompanies?.[0]?._id || "",
       nextPayableAmount: "",
       paymentDueDate: "",
     };
@@ -1850,9 +1921,9 @@ const QuickFinalize = () => {
       return;
     }
     setEmailTemplateType("normal");
-    const defaultCompany = mailCompanies?.[0];
+    const defaultCompanyId = company?._id || mailCompanies?.[0]?._id;
     try {
-      await refreshEmailTemplates(defaultCompany?._id);
+      await refreshEmailTemplates(defaultCompanyId);
     } catch (e) {
       setSnackbar({
         open: true,
@@ -3971,26 +4042,38 @@ const QuickFinalize = () => {
         onClose={handleAddFlightClose}
         onSave={handleAddFlight}
       />
-      <EmailQuotationDialog
-        open={openEmailDialog}
-        onClose={handleEmailClose}
-        customer={quotation.customer}
-        onSend={handleEmailSend}
-        onCompanyChange={async (companyId, mailType) => {
-          const templates = await refreshEmailTemplates(companyId);
-          const type = mailType === "booking" ? "booking" : "normal";
-          return templates?.[type] || { subject: "", message: "" };
-        }}
-        initialValuesOverride={emailInitialValues}
-        templateBodies={emailTemplateBodies}
-        companyOptions={mailCompanies}
-      />
+      {openEmailDialog && (
+        <EmailQuotationDialog
+          open={openEmailDialog}
+          onClose={handleEmailClose}
+          customer={quotation.customer}
+          onSend={handleEmailSend}
+          onCompanyChange={async (companyId, mailType) => {
+            const templates = await refreshEmailTemplates(companyId);
+            const type = mailType === "booking" ? "booking" : "normal";
+            return templates?.[type] || { subject: "", message: "" };
+          }}
+          initialValuesOverride={emailInitialValues}
+          templateBodies={emailTemplateBodies}
+          companyOptions={mailCompanies}
+          emailAccountOptions={emailAccounts}
+          hasPdfAttachment={!!pdfAttachmentForMail}
+        />
+      )}
       <TransactionSummaryDialog
         open={openTransactionDialog}
         onClose={() => setOpenTransactionDialog(false)}
         loading={paymentHistoryLoading}
         rows={paymentHistory}
         quotationRef={apiEntityId}
+        onPreview={handleOpenReceiptPreview}
+      />
+
+      <ReceiptPreviewDialog 
+        open={openReceiptPreview}
+        onClose={() => setOpenReceiptPreview(false)}
+        voucher={selectedVoucherForPreview}
+        quotation={currentQuotation}
       />
 
       {/* Invoice PDF Dialog */}

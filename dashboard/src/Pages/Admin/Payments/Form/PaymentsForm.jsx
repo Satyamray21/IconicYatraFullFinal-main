@@ -85,7 +85,7 @@ const PaymentsForm = () => {
                 : "",
             amount: "",
             paymentLinkUsed: false,
-            quotationRef: "",
+            quotationRef: quotationRefParam || "",
         }),
         [quotationRefParam, partyFromUrl]
     );

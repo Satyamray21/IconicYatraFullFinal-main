@@ -283,6 +283,7 @@ const VehicleQuotationPage = () => {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
   const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailAccounts, setEmailAccounts] = useState([]);
   const [selectedMailCompanyId, setSelectedMailCompanyId] = useState("");
   const [emailTemplateBodies, setEmailTemplateBodies] = useState({
     normal: { subject: "", message: "" },
@@ -400,9 +401,19 @@ const VehicleQuotationPage = () => {
     fetchGlobalSettings();
   }, []);
 
+  const fetchEmailAccounts = async () => {
+    try {
+      const res = await axios.get("/email-accounts");
+      setEmailAccounts(Array.isArray(res?.data?.data) ? res.data.data : []);
+    } catch {
+      setEmailAccounts([]);
+    }
+  };
+
   useEffect(() => {
     loadPaymentHistory();
     loadMailCompanies();
+    fetchEmailAccounts();
   }, [apiEntityId]);
 
   const actions = [
@@ -2291,7 +2302,6 @@ const VehicleQuotationPage = () => {
         open={openEmailDialog}
         onClose={handleEmailClose}
         onSend={handleEmailSend}
-        hasPdfAttachment={!!pdfAttachmentForMail?.contentBase64}
         onCompanyChange={async (companyId, mailType) => {
           setSelectedMailCompanyId(companyId);
           const templates = await refreshEmailTemplates(companyId);
@@ -2301,6 +2311,8 @@ const VehicleQuotationPage = () => {
         initialValuesOverride={emailInitialValues}
         templateBodies={emailTemplateBodies}
         companyOptions={mailCompanies}
+        emailAccountOptions={emailAccounts}
+        hasPdfAttachment={!!pdfAttachmentForMail}
       />
 
       <TransactionHistoryDialog

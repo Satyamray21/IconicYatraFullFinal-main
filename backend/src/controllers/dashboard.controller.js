@@ -19,8 +19,8 @@ import { startOfMonth, endOfMonth, subMonths, format, startOfDay, endOfDay } fro
 import { getCache, setCache } from '../utils/cache.js';
 
 export const getDashboardStats = asyncHandler(async (req, res) => {
-  const { activityDate } = req.query;
-  const cacheKey = `dashboard:stats:${activityDate || 'all'}`;
+  const { activityDate, activityType, activityPage = 1, reminderPage = 1 } = req.query;
+  const cacheKey = `dashboard:stats:${activityDate || 'all'}:${activityType || 'all'}:ap${activityPage}:rp${reminderPage}`;
 
   // Try to get from cache
   const cachedData = await getCache(cacheKey);
@@ -31,21 +31,37 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
   console.log(`[Cache Miss] Dashboard stats fetched from MongoDB: ${cacheKey}`);
 
-  // 1. Lead Stats
-  const leadStats = await Lead.aggregate([
-    {
-      $group: {
-        _id: "$status",
-        count: { $sum: 1 }
-      }
-    }
+  // --- Trend Calculations ---
+  const today = new Date();
+  const currentMonthStart = startOfMonth(today);
+  const prevMonthStart = startOfMonth(subMonths(today, 1));
+  const prevMonthEnd = endOfMonth(subMonths(today, 1));
+
+  // Helper for trend calculation
+  const calculateTrend = (current, previous) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return Math.round(((current - previous) / previous) * 100);
+  };
+
+  // 1. Lead Stats & Trend
+  const [leadStats, prevMonthLeads] = await Promise.all([
+    Lead.aggregate([
+      { $group: { _id: "$status", count: { $sum: 1 } } }
+    ]),
+    Lead.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } })
   ]);
+
+  const currentMonthLeads = await Lead.countDocuments({ createdAt: { $gte: currentMonthStart } });
+
+  const leadTrendValue = calculateTrend(currentMonthLeads, prevMonthLeads);
 
   const formattedLeadStats = {
     total: 0,
     active: 0,
     confirmed: 0,
-    cancelled: 0
+    cancelled: 0,
+    trend: leadTrendValue >= 0 ? "up" : "down",
+    trendValue: `${leadTrendValue >= 0 ? "+" : ""}${leadTrendValue}%`
   };
 
   leadStats.forEach(stat => {
@@ -56,7 +72,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     else if (status === 'cancelled') formattedLeadStats.cancelled = stat.count;
   });
 
-  // 2. Quotation Stats (Aggregate from all models)
+  // 2. Quotation Stats & Trend
   const [customQ, flightQ, fullQ, hotelQ, quickQ, vehicleQ] = await Promise.all([
     CustomQuotation.countDocuments(),
     FlightQuotation.countDocuments(),
@@ -66,23 +82,52 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     Vehicle.countDocuments()
   ]);
 
+  const [prevCustomQ, prevFlightQ, prevFullQ, prevHotelQ, prevQuickQ, prevVehicleQ] = await Promise.all([
+    CustomQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    FlightQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    fullQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    HotelQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    QuickQuotation.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    Vehicle.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } })
+  ]);
+
+  const currentMonthQuotations = await Promise.all([
+    CustomQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    FlightQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    fullQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    HotelQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    QuickQuotation.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+    Vehicle.countDocuments({ createdAt: { $gte: currentMonthStart } })
+  ]).then(counts => counts.reduce((a, b) => a + b, 0));
+
+  const prevMonthQuotationsTotal = prevCustomQ + prevFlightQ + prevFullQ + prevHotelQ + prevQuickQ + prevVehicleQ;
+  const quotationTrendValue = calculateTrend(currentMonthQuotations, prevMonthQuotationsTotal);
+
   const totalQuotations = customQ + flightQ + fullQ + hotelQ + quickQ + vehicleQ;
 
-  // 3. Tour/Package Stats
-  const packages = await Package.find({}, 'status validFrom validTill');
-  const today = new Date();
+  // 3. Tour/Package Stats & Trend
+  const packages = await Package.find({}, 'status validFrom validTill createdAt');
 
   const tourStats = {
     total: packages.length,
     active: 0,
     upcoming: 0,
-    completed: 0
+    completed: 0,
+    trend: "up",
+    trendValue: "+0%"
   };
+
+  let currentMonthTours = 0;
+  let prevMonthTours = 0;
 
   packages.forEach(pkg => {
     const status = pkg.status?.toLowerCase();
     const startDate = pkg.validFrom ? new Date(pkg.validFrom) : null;
     const endDate = pkg.validTill ? new Date(pkg.validTill) : null;
+    const createdAt = new Date(pkg.createdAt);
+
+    if (createdAt >= currentMonthStart) currentMonthTours++;
+    if (createdAt >= prevMonthStart && createdAt <= prevMonthEnd) prevMonthTours++;
 
     if (status === 'confirmed' || status === 'active') {
       if (startDate && startDate > today) tourStats.upcoming++;
@@ -93,9 +138,29 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     }
   });
 
-  // 4. Invoice & Revenue Stats
+  const tourTrendValue = calculateTrend(currentMonthTours, prevMonthTours);
+  tourStats.trend = tourTrendValue >= 0 ? "up" : "down";
+  tourStats.trendValue = `${tourTrendValue >= 0 ? "+" : ""}${tourTrendValue}%`;
+
+  // 4. Invoice & Revenue Stats & Trend
   const invoices = await Invoice.find({}, 'totalAmount invoiceDate createdAt');
   const totalRevenue = invoices.reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
+
+  const currentMonthRevenue = invoices
+    .filter(inv => {
+      const date = inv.invoiceDate ? new Date(inv.invoiceDate) : new Date(inv.createdAt);
+      return date >= currentMonthStart;
+    })
+    .reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
+
+  const prevMonthRevenue = invoices
+    .filter(inv => {
+      const date = inv.invoiceDate ? new Date(inv.invoiceDate) : new Date(inv.createdAt);
+      return date >= prevMonthStart && date <= prevMonthEnd;
+    })
+    .reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
+
+  const revenueTrendValue = calculateTrend(currentMonthRevenue, prevMonthRevenue);
 
   // 5. Monthly Revenue (Last 6 months)
   const monthlyRevenue = [];
@@ -118,20 +183,34 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
   // 6. Activities (Recent or Date-filtered)
   let activityFilter = {};
-  let activityLimit = 50;
 
   if (activityDate) {
     const start = startOfDay(new Date(activityDate));
     const end = endOfDay(new Date(activityDate));
-    activityFilter = {
-      timestamp: { $gte: start, $lte: end }
-    };
-    activityLimit = 50; // Show more when filtering by date
+    activityFilter.timestamp = { $gte: start, $lte: end };
   }
 
-  const recentActivities = await ActivityLog.find(activityFilter)
-    .sort({ timestamp: -1 })
-    .limit(activityLimit);
+  if (activityType && activityType !== 'all') {
+    if (activityType === 'Quotation') {
+      // Special case for Quotation to include related models if needed
+      activityFilter.model = { $regex: /Quotation|Vehicle/i };
+    } else {
+      activityFilter.model = activityType;
+    }
+  }
+
+  const pageNum = parseInt(activityPage) || 1;
+  const activityLimitSize = parseInt(req.query.activityLimit) || 50;
+  const activitySkip = (pageNum - 1) * activityLimitSize;
+
+  const [recentActivities, totalActivities] = await Promise.all([
+    ActivityLog.find(activityFilter)
+      .sort({ timestamp: -1 })
+      .skip(activitySkip)
+      .limit(activityLimitSize)
+      .lean(),
+    ActivityLog.countDocuments(activityFilter)
+  ]);
 
   // 7. Others (Enquiries, Blogs, Hotels)
   const [enquiries, blogs, hotels] = await Promise.all([
@@ -140,23 +219,95 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     Hotel.countDocuments()
   ]);
 
-  // 8. Upcoming Reminders & Appointments
-  const reminders = await Reminder.find({
+  // 8. Upcoming Reminders & Appointments (Paginated)
+  const rPageNum = parseInt(reminderPage) || 1;
+  const reminderLimit = parseInt(req.query.reminderLimit) || 10;
+  const reminderSkip = (rPageNum - 1) * reminderLimit;
+
+  const reminderQuery = {
     status: 'pending',
-    dateTime: { $gte: today }
-  }).sort({ dateTime: 1 }).limit(10);
+    dateTime: { $gte: startOfDay(today) }
+  };
+
+  const [reminders, totalReminders] = await Promise.all([
+    Reminder.find(reminderQuery)
+      .sort({ dateTime: -1 }) // Latest first
+      .lean(),
+    Reminder.countDocuments(reminderQuery)
+  ]);
+
+  // 9. Dynamic Action Items (System Suggested)
+  const tenDaysAgo = new Date();
+  tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+
+  const [recentLeads, quickQs, customQs, flightQs, fullQs, hotelQs, vehicleQs] = await Promise.all([
+    Lead.find({ createdAt: { $gte: tenDaysAgo }, status: 'Active' }).select('personalDetails.emailId personalDetails.fullName createdAt').lean(),
+    QuickQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('email customerName finalizeStatus createdAt').lean(),
+    CustomQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean(),
+    FlightQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean(),
+    fullQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean(),
+    HotelQuotation.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean(),
+    Vehicle.find({ createdAt: { $gte: tenDaysAgo } }).select('clientDetails.email clientDetails.clientName isDraft createdAt').lean()
+  ]);
+
+  const qEmails = new Set();
+  const allQs = [...quickQs, ...customQs, ...flightQs, ...fullQs, ...hotelQs, ...vehicleQs];
+
+  allQs.forEach(q => {
+    const email = q.email || q.clientDetails?.email;
+    if (email) qEmails.add(email.toLowerCase().trim());
+  });
+
+  const leadsNeedQuotation = recentLeads
+    .filter(l => {
+      const email = l.personalDetails?.emailId;
+      return email && !qEmails.has(email.toLowerCase().trim());
+    })
+    .map(l => ({
+      _id: `suggested_lead_${l._id}`,
+      title: `Create Quotation for ${l.personalDetails.fullName}`,
+      description: `New lead from ${format(l.createdAt, 'dd MMM')} needs a quotation.`,
+      type: 'task',
+      priority: 'high',
+      dateTime: l.createdAt,
+      status: 'pending',
+      suggestedAction: 'create_quotation'
+    }));
+
+  const draftQuotations = allQs
+    .filter(q => q.finalizeStatus === 'draft' || q.isDraft === true)
+    .map(q => ({
+      _id: `suggested_quote_${q._id}`,
+      title: `Finalize/Mail Quote for ${q.customerName || q.clientDetails?.clientName}`,
+      description: `Quotation created on ${format(q.createdAt, 'dd MMM')} is still in draft.`,
+      type: 'reminder',
+      priority: 'medium',
+      dateTime: q.createdAt,
+      status: 'pending',
+      suggestedAction: 'mail_quotation'
+    }));
+
+  const allRemindersList = [...reminders, ...leadsNeedQuotation, ...draftQuotations]
+    .sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+  const totalRemindersCount = allRemindersList.length;
+  const paginatedReminders = allRemindersList.slice(reminderSkip, reminderSkip + reminderLimit);
 
   const stats = {
     leads: formattedLeadStats,
     quotations: {
       total: totalQuotations,
-      details: { customQ, flightQ, fullQ, hotelQ, quickQ, vehicleQ }
+      details: { customQ, flightQ, fullQ, hotelQ, quickQ, vehicleQ },
+      trend: quotationTrendValue >= 0 ? "up" : "down",
+      trendValue: `${quotationTrendValue >= 0 ? "+" : ""}${quotationTrendValue}%`
     },
     tours: tourStats,
     invoices: {
       total: invoices.length,
       revenue: totalRevenue,
-      monthlyRevenue
+      monthlyRevenue,
+      trend: revenueTrendValue >= 0 ? "up" : "down",
+      trendValue: `${revenueTrendValue >= 0 ? "+" : ""}${revenueTrendValue}%`
     },
     recentActivities,
     others: {
@@ -164,7 +315,25 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       blogs,
       hotels
     },
-    reminders
+    reminders: paginatedReminders,
+    pagination: {
+      reminders: {
+        total: totalRemindersCount,
+        page: reminderPage,
+        limit: reminderLimit,
+        pages: Math.ceil(totalRemindersCount / reminderLimit)
+      },
+      activities: {
+        total: totalActivities,
+        page: activityPage,
+        limit: activityLimitSize,
+        pages: Math.ceil(totalActivities / activityLimitSize)
+      }
+    },
+    actionItems: {
+      leadsNeedQuotation: leadsNeedQuotation.length,
+      draftQuotations: draftQuotations.length
+    }
   };
 
   // Cache the results for 5 minutes

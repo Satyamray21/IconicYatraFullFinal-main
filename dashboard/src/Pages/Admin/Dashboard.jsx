@@ -49,8 +49,10 @@ import {
   Add,
   FilterList,
   Today,
-  Payments,
   CalendarToday,
+  Payments,
+  ChevronLeft,
+  ChevronRight,
 } from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchDashboardStats, createReminder, updateReminderStatus } from "../../features/dashboard/dashboardSlice";
@@ -209,14 +211,24 @@ const Dashboard = () => {
   const [newReminderData, setNewReminderData] = useState({ title: "", type: "reminder", priority: "medium", dateTime: dayjs() });
 
   const [selectedDate, setSelectedDate] = useState(null);
+  const [reminderPage, setReminderPage] = useState(1);
+  const [activityPage, setActivityPage] = useState(1);
 
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
   useEffect(() => {
     dispatch(fetchDashboardStats({
-      activityDate: selectedDate ? selectedDate.format("YYYY-MM-DD") : null
+      activityDate: selectedDate ? selectedDate.format("YYYY-MM-DD") : null,
+      reminderPage,
+      activityPage,
+      activityType: activityFilter
     }));
-  }, [dispatch, selectedDate]);
+  }, [dispatch, selectedDate, reminderPage, activityPage, activityFilter]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setActivityPage(1);
+  }, [activityFilter, selectedDate]);
 
   const handleMenuClick = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
@@ -252,9 +264,7 @@ const Dashboard = () => {
     }
   };
 
-  const filteredActivities = stats?.recentActivities?.filter(log =>
-    activityFilter === "all" ? true : log.model === activityFilter
-  ) || [];
+  const filteredActivities = stats?.recentActivities || [];
 
   const leadPieData = stats?.leads
     ? [
@@ -297,7 +307,7 @@ const Dashboard = () => {
         sx={{
           backgroundColor: "#f0f4f8",
           minHeight: "100vh",
-          width: "100%",
+          width: "100wv",
           position: "relative",
           overflow: "hidden",
           p: { xs: 2, md: 4 },
@@ -353,16 +363,48 @@ const Dashboard = () => {
           {/* Primary Stats Grid */}
           <Grid container spacing={3} mb={6}>
             <Grid size={{ xs: 12, sm: 6, md: 4.5 }}>
-              <StatCard title="Gross Income" value={`₹${(stats?.invoices?.revenue || 0).toLocaleString()}`} icon={<TrendingUp />} color="#1976d2" trend="up" trendValue="+14.2%" delay={0.1} />
+              <StatCard
+                title="Gross Income"
+                value={`₹${(stats?.invoices?.revenue || 0).toLocaleString()}`}
+                icon={<TrendingUp />}
+                color="#1976d2"
+                trend={stats?.invoices?.trend || "up"}
+                trendValue={stats?.invoices?.trendValue || "+0%"}
+                delay={0.1}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
-              <StatCard title="Pipeline Leads" value={stats?.leads?.total || 0} icon={<Assignment />} color="#2196f3" trend="up" delay={0.2} trendValue="+5.1%" />
+              <StatCard
+                title="Pipeline Leads"
+                value={stats?.leads?.total || 0}
+                icon={<Assignment />}
+                color="#2196f3"
+                trend={stats?.leads?.trend || "up"}
+                delay={0.2}
+                trendValue={stats?.leads?.trendValue || "+0%"}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
-              <StatCard title="Active Tours" value={stats?.tours?.active || 0} icon={<FlightTakeoff />} color="#1e88e5" trend="up" delay={0.3} trendValue="+2.8%" />
+              <StatCard
+                title="Active Tours"
+                value={stats?.tours?.active || 0}
+                icon={<FlightTakeoff />}
+                color="#1e88e5"
+                trend={stats?.tours?.trend || "up"}
+                delay={0.3}
+                trendValue={stats?.tours?.trendValue || "+0%"}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
-              <StatCard title="Total Quotes" value={stats?.quotations?.total || 0} icon={<Receipt />} color="#0d47a1" trend="down" delay={0.4} trendValue="-1.2%" />
+              <StatCard
+                title="Total Quotes"
+                value={stats?.quotations?.total || 0}
+                icon={<Receipt />}
+                color="#0d47a1"
+                trend={stats?.quotations?.trend || "up"}
+                delay={0.4}
+                trendValue={stats?.quotations?.trendValue || "+0%"}
+              />
             </Grid>
           </Grid>
 
@@ -375,12 +417,12 @@ const Dashboard = () => {
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <motion.div whileHover={{ scale: 1.02 }} transition={{ type: "spring", stiffness: 300 }}>
-                <MiniStat title="Content Repository" value={stats?.others?.blogs || 0} icon={<Article />} color="#2196f3" />
+                <MiniStat title="Total Blogs" value={stats?.others?.blogs || 0} icon={<Article />} color="#2196f3" />
               </motion.div>
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <motion.div whileHover={{ scale: 1.02 }} transition={{ type: "spring", stiffness: 300 }}>
-                <MiniStat title="Hotel Inventory" value={stats?.others?.hotels || 0} icon={<Hotel />} color="#1e88e5" />
+                <MiniStat title="Total Hotels" value={stats?.others?.hotels || 0} icon={<Hotel />} color="#1e88e5" />
               </motion.div>
             </Grid>
           </Grid>
@@ -392,8 +434,8 @@ const Dashboard = () => {
                 <CardContent>
                   <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
                     <Box>
-                      <Typography variant="h6" fontWeight={800} sx={{ color: "#1a1a2e" }}>Gross Income Performance</Typography>
-                      <Typography variant="caption" sx={{ color: "rgba(0,0,0,0.5)" }}>Monthly revenue metrics across all invoices</Typography>
+                      <Typography variant="h6" fontWeight={800} sx={{ color: "#1a1a2e" }}>Gross Income  Performance</Typography>
+                      <Typography variant="caption" sx={{ color: "rgba(0,0,0,0.5)" }}>Monthly gross income metrics across all invoices</Typography>
                     </Box>
                     <Box display="flex" gap={1}>
                       <Chip label="6 Months" size="small" sx={{ bgcolor: "rgba(139, 92, 246, 0.1)", color: "#8B5CF6", fontWeight: 800, borderRadius: 2 }} />
@@ -621,6 +663,31 @@ const Dashboard = () => {
                       )}
                     </AnimatePresence>
                   </List>
+
+                  {/* Reminder Pagination */}
+                  {stats?.pagination?.reminders?.pages > 1 && (
+                    <Box display="flex" justifyContent="center" alignItems="center" gap={2} mt={3}>
+                      <IconButton
+                        size="small"
+                        disabled={reminderPage <= 1}
+                        onClick={() => setReminderPage(prev => prev - 1)}
+                        sx={{ bgcolor: "rgba(25,118,210,0.05)" }}
+                      >
+                        <ChevronLeft />
+                      </IconButton>
+                      <Typography variant="caption" fontWeight={800} sx={{ color: "rgba(0,0,0,0.5)" }}>
+                        Page {stats.pagination.reminders.page} of {stats.pagination.reminders.pages}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        disabled={reminderPage >= stats.pagination.reminders.pages}
+                        onClick={() => setReminderPage(prev => prev + 1)}
+                        sx={{ bgcolor: "rgba(25,118,210,0.05)" }}
+                      >
+                        <ChevronRight />
+                      </IconButton>
+                    </Box>
+                  )}
                 </CardContent>
               </GlassCard>
             </Grid>
@@ -642,9 +709,10 @@ const Dashboard = () => {
                       <Menu anchorEl={filterAnchorEl} open={Boolean(filterAnchorEl)} onClose={handleFilterClose}>
                         <MenuItem onClick={() => { setActivityFilter("all"); handleFilterClose(); }}>All Activity</MenuItem>
                         <MenuItem onClick={() => { setActivityFilter("Lead"); handleFilterClose(); }}>Lead Updates</MenuItem>
-                        <MenuItem onClick={() => { setActivityFilter("Payment"); handleFilterClose(); }}>Payment Logs</MenuItem>
+                        <MenuItem onClick={() => { setActivityFilter("Quotation"); handleFilterClose(); }}>Quotation Updates</MenuItem>
                         <MenuItem onClick={() => { setActivityFilter("Package"); handleFilterClose(); }}>Package Logs</MenuItem>
                         <MenuItem onClick={() => { setActivityFilter("Invoice"); handleFilterClose(); }}>Invoice Logs</MenuItem>
+                        <MenuItem onClick={() => { setActivityFilter("Payment"); handleFilterClose(); }}>Payment Logs</MenuItem>
                       </Menu>
                       <DatePicker
                         value={selectedDate}
@@ -667,7 +735,7 @@ const Dashboard = () => {
                     </Box>
                   </Box>
 
-                  <Box sx={{ position: "relative" }}>
+                  <Box sx={{ position: "relative", maxHeight: 600, overflowY: "auto", pr: 1, '&::-webkit-scrollbar': { width: '6px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.1)', borderRadius: '10px' } }}>
                     <List sx={{ p: 0 }}>
                       {filteredActivities.length > 0 ? (
                         filteredActivities.map((log, idx) => (
@@ -680,10 +748,27 @@ const Dashboard = () => {
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                bgcolor: log.model === 'Lead' ? 'rgba(25,118,210,0.08)' : (log.model === 'Payment' ? 'rgba(16,185,129,0.08)' : 'rgba(0,0,0,0.04)'),
-                                color: log.model === 'Lead' ? '#1976d2' : (log.model === 'Payment' ? '#10b981' : 'rgba(0,0,0,0.5)')
+                                bgcolor:
+                                  log.model === 'Lead' ? 'rgba(25,118,210,0.08)' :
+                                    log.model === 'Payment' ? 'rgba(16,185,129,0.08)' :
+                                      log.model.toLowerCase().includes('quotation') ? 'rgba(139, 92, 246, 0.08)' :
+                                        log.model === 'Invoice' ? 'rgba(245, 158, 11, 0.08)' :
+                                          log.model === 'Package' ? 'rgba(236, 72, 153, 0.08)' :
+                                            'rgba(0,0,0,0.04)',
+                                color:
+                                  log.model === 'Lead' ? '#1976d2' :
+                                    log.model === 'Payment' ? '#10b981' :
+                                      log.model.toLowerCase().includes('quotation') ? '#8B5CF6' :
+                                        log.model === 'Invoice' ? '#f59e0b' :
+                                          log.model === 'Package' ? '#ec4899' :
+                                            'rgba(0,0,0,0.5)'
                               }}>
-                                {log.model === 'Lead' ? <Assignment sx={{ fontSize: 18 }} /> : (log.model === 'Payment' ? <Payments sx={{ fontSize: 18 }} /> : <History sx={{ fontSize: 18 }} />)}
+                                {log.model === 'Lead' ? <Assignment sx={{ fontSize: 18 }} /> :
+                                  log.model === 'Payment' ? <Payments sx={{ fontSize: 18 }} /> :
+                                    log.model.toLowerCase().includes('quotation') ? <Receipt sx={{ fontSize: 18 }} /> :
+                                      log.model === 'Invoice' ? <Article sx={{ fontSize: 18 }} /> :
+                                        log.model === 'Package' ? <Event sx={{ fontSize: 18 }} /> :
+                                          <History sx={{ fontSize: 18 }} />}
                               </Box>
                             </ListItemIcon>
                             <ListItemText
@@ -696,8 +781,20 @@ const Dashboard = () => {
                               secondary={
                                 <Box display="flex" flexWrap="wrap" alignItems="center" gap={1.5} mt={1.5}>
                                   <Chip label={log.model} size="small" sx={{
-                                    bgcolor: log.model === 'Lead' ? 'rgba(25,118,210,0.08)' : (log.model === 'Payment' ? 'rgba(16,185,129,0.08)' : 'rgba(0,0,0,0.04)'),
-                                    color: log.model === 'Lead' ? '#1976d2' : (log.model === 'Payment' ? '#10b981' : 'rgba(0,0,0,0.6)'),
+                                    bgcolor:
+                                      log.model === 'Lead' ? 'rgba(25,118,210,0.08)' :
+                                        log.model === 'Payment' ? 'rgba(16,185,129,0.08)' :
+                                          log.model.toLowerCase().includes('quotation') ? 'rgba(139, 92, 246, 0.08)' :
+                                            log.model === 'Invoice' ? 'rgba(245, 158, 11, 0.08)' :
+                                              log.model === 'Package' ? 'rgba(236, 72, 153, 0.08)' :
+                                                'rgba(0,0,0,0.04)',
+                                    color:
+                                      log.model === 'Lead' ? '#1976d2' :
+                                        log.model === 'Payment' ? '#10b981' :
+                                          log.model.toLowerCase().includes('quotation') ? '#8B5CF6' :
+                                            log.model === 'Invoice' ? '#f59e0b' :
+                                              log.model === 'Package' ? '#ec4899' :
+                                                'rgba(0,0,0,0.6)',
                                     height: 20, fontSize: 10, fontWeight: 800, textTransform: "uppercase", borderRadius: 1
                                   }} />
                                   <Chip label={log.action} size="small" sx={{
@@ -723,6 +820,31 @@ const Dashboard = () => {
                       )}
                     </List>
                   </Box>
+
+                  {/* Activity Pagination */}
+                  {stats?.pagination?.activities?.pages > 1 && (
+                    <Box display="flex" justifyContent="center" alignItems="center" gap={2} mt={3}>
+                      <IconButton
+                        size="small"
+                        disabled={activityPage <= 1}
+                        onClick={() => setActivityPage(prev => prev - 1)}
+                        sx={{ bgcolor: "rgba(25,118,210,0.05)" }}
+                      >
+                        <ChevronLeft />
+                      </IconButton>
+                      <Typography variant="caption" fontWeight={800} sx={{ color: "rgba(0,0,0,0.5)" }}>
+                        Page {stats.pagination.activities.page} of {stats.pagination.activities.pages}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        disabled={activityPage >= stats.pagination.activities.pages}
+                        onClick={() => setActivityPage(prev => prev + 1)}
+                        sx={{ bgcolor: "rgba(25,118,210,0.05)" }}
+                      >
+                        <ChevronRight />
+                      </IconButton>
+                    </Box>
+                  )}
                 </CardContent>
               </GlassCard>
             </Grid>

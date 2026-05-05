@@ -766,6 +766,11 @@ const QuotationCard = () => {
           navigate(`/quickfinalize/${params.row.originalId}`);
         }
         break;
+      case "Hotel":
+        if (params.row.originalId) {
+          navigate(`/hotelfinalize/${params.row.originalId}`);
+        }
+        break;
       default:
         break;
     }

@@ -19,8 +19,9 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import axios from "../utils/axios"; // ✅ your axios instance
 
 
-const InvoiceView = () => {
-    const { id } = useParams();
+const InvoiceView = ({ id: propId, quotation: propQuotation, hideButtons = false }) => {
+    const { id: paramId } = useParams();
+    const id = propId || paramId;
     const invoiceRef = useRef();
     const [paymentData, setPaymentData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -114,49 +115,51 @@ const InvoiceView = () => {
     return (
         <Box maxWidth="1000px" mx="auto" my={4}>
             {/* === Top Buttons === */}
-            <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-                mb={2}
-                gap={2}
-            >
-                <Button
-                    variant="outlined"
-                    sx={{
-                        color: "#1976d2",
-                        borderColor: "#1976d2",
-                        px: 2.5,
-                        py: 1,
-                        borderRadius: 2,
-                        fontWeight: "bold",
-                        "&:hover": { backgroundColor: "#e3f2fd", borderColor: "#1565c0" },
-                    }}
-                    startIcon={<ShareIcon />}
-                    onClick={handleShare}
+            {!hideButtons && (
+                <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    mb={2}
+                    gap={2}
                 >
-                    Share
-                </Button>
+                    <Button
+                        variant="outlined"
+                        sx={{
+                            color: "#1976d2",
+                            borderColor: "#1976d2",
+                            px: 2.5,
+                            py: 1,
+                            borderRadius: 2,
+                            fontWeight: "bold",
+                            "&:hover": { backgroundColor: "#e3f2fd", borderColor: "#1565c0" },
+                        }}
+                        startIcon={<ShareIcon />}
+                        onClick={handleShare}
+                    >
+                        Share
+                    </Button>
 
-                <Button
-                    variant="contained"
-                    sx={{
-                        background: "linear-gradient(to right, #1976d2, #004ba0)",
-                        color: "#fff",
-                        px: 3,
-                        py: 1.2,
-                        borderRadius: 2,
-                        fontWeight: "bold",
-                        "&:hover": {
-                            background: "linear-gradient(to right, #1565c0, #003c8f)",
-                        },
-                    }}
-                    startIcon={<DownloadIcon />}
-                    onClick={handleDownload}
-                >
-                    Download PDF
-                </Button>
-            </Box>
+                    <Button
+                        variant="contained"
+                        sx={{
+                            background: "linear-gradient(to right, #1976d2, #004ba0)",
+                            color: "#fff",
+                            px: 3,
+                            py: 1.2,
+                            borderRadius: 2,
+                            fontWeight: "bold",
+                            "&:hover": {
+                                background: "linear-gradient(to right, #1565c0, #003c8f)",
+                            },
+                        }}
+                        startIcon={<DownloadIcon />}
+                        onClick={handleDownload}
+                    >
+                        Download PDF
+                    </Button>
+                </Box>
+            )}
 
             {/* === Invoice Paper === */}
             <Box

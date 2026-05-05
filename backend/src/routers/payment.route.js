@@ -7,6 +7,7 @@ import {
     deleteVoucher,
     getCompanyTotalPayments,
     getVouchersByQuotationRef,
+    generateReceiptPdf,
 } from "../controllers/payment.controller.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
@@ -21,5 +22,6 @@ router.route("/:id")
     .get(requirePermission("canAccessPayments"), getVoucherById)
     .put(requirePermission("canManagePayments"), updateVoucher)
     .delete(requirePermission("canManagePayments"), deleteVoucher);
+router.get("/:id/receipt", requirePermission("canAccessPayments"), generateReceiptPdf);
 
 export default router;

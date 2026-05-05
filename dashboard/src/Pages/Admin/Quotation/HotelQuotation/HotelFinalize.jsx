@@ -130,6 +130,8 @@ const HotelFinalize = () => {
     const [openBankDialog, setOpenBankDialog] = useState(false);
     const [openAddFlight, setOpenAddFlight] = useState(false);
     const [flights, setFlights] = useState([]);
+    const [mailCompanies, setMailCompanies] = useState([]);
+    const [emailAccounts, setEmailAccounts] = useState([]);
 
     // Bank details state
     const [accountType, setAccountType] = useState("company");
@@ -194,6 +196,27 @@ const HotelFinalize = () => {
         loadPaymentHistory();
     }, [apiEntityId, loadPaymentHistory]);
 
+    useEffect(() => {
+        const fetchMailCompanies = async () => {
+            try {
+                const res = await axios.get("/company");
+                setMailCompanies(Array.isArray(res?.data?.data) ? res.data.data : []);
+            } catch {
+                setMailCompanies([]);
+            }
+        };
+        const fetchEmailAccounts = async () => {
+            try {
+                const res = await axios.get("/email-accounts");
+                setEmailAccounts(Array.isArray(res?.data?.data) ? res.data.data : []);
+            } catch {
+                setEmailAccounts([]);
+            }
+        };
+        fetchMailCompanies();
+        fetchEmailAccounts();
+    }, []);
+
     // Transform API data to component format
     const transformQuotationData = (apiData) => {
         if (!apiData) return null;
@@ -214,38 +237,75 @@ const HotelFinalize = () => {
         // Calculate total rooms
         const noOfRooms = parseInt(apiData.accommodationDetails?.noOfRooms) || 1;
 
-        // Generate hotel pricing data from stay locations
-        const hotelPricingData = stayLocation.map((location, index) => ({
-            destination: location.city || `Location ${index + 1}`,
-            nights: `${location.nights || 0} N`,
-            standard: location.standard?.hotelName || "Not specified",
-            deluxe: location.deluxe?.hotelName || "Not specified",
-            superior: location.superior?.hotelName || "Not specified",
-        }));
+        // Calculate actual costs
+        let standardTotal = 0;
+        let deluxeTotal = 0;
+        let superiorTotal = 0;
 
-        // Add summary rows
+        // Generate hotel pricing data from stay locations
+        const hotelPricingData = stayLocation.map((location, index) => {
+            const stdCost = parseFloat(location.standard?.totalCost) || 0;
+            const dlxCost = parseFloat(location.deluxe?.totalCost) || 0;
+            const sprCost = parseFloat(location.superior?.totalCost) || 0;
+
+            standardTotal += stdCost;
+            deluxeTotal += dlxCost;
+            superiorTotal += sprCost;
+
+            return {
+                destination: location.city || `Location ${index + 1}`,
+                nights: `${location.nights || 0} N`,
+                standard: location.standard?.hotelName ? `${location.standard.hotelName} (₹${stdCost})` : "Not specified",
+                deluxe: location.deluxe?.hotelName ? `${location.deluxe.hotelName} (₹${dlxCost})` : "Not specified",
+                superior: location.superior?.hotelName ? `${location.superior.hotelName} (₹${sprCost})` : "Not specified",
+            };
+        });
+
+        const transportCost = parseFloat(vehicleDetails?.costDetails?.totalCost) || 0;
+        
+        // Add Transport row if applicable
+        if (transportCost > 0) {
+            hotelPricingData.push({
+                destination: "Transport Cost",
+                nights: "-",
+                standard: `₹ ${transportCost}`,
+                deluxe: `₹ ${transportCost}`,
+                superior: `₹ ${transportCost}`,
+            });
+            standardTotal += transportCost;
+            deluxeTotal += transportCost;
+            superiorTotal += transportCost;
+        }
+
+        // Add summary rows with REAL data
+        const gstRate = 0.05; // 5% GST default
+        const standardGst = standardTotal * gstRate;
+        const deluxeGst = deluxeTotal * gstRate;
+        const superiorGst = superiorTotal * gstRate;
+
         const totalNights = stayLocation.reduce((sum, loc) => sum + (loc.nights || 0), 0);
+        
         hotelPricingData.push(
             {
-                destination: "Quotation Cost",
+                destination: "Sub Total",
                 nights: "-",
-                standard: "₹ 40,366",
-                deluxe: "₹ 440,829",
-                superior: "₹ 92,358",
+                standard: `₹ ${standardTotal.toLocaleString("en-IN")}`,
+                deluxe: `₹ ${deluxeTotal.toLocaleString("en-IN")}`,
+                superior: `₹ ${superiorTotal.toLocaleString("en-IN")}`,
             },
             {
-                destination: "IGST",
+                destination: "GST (5%)",
                 nights: "-",
-                standard: "₹ 2,018.3",
-                deluxe: "₹ 22,041.4",
-                superior: "₹ 4,617.9",
+                standard: `₹ ${standardGst.toLocaleString("en-IN")}`,
+                deluxe: `₹ ${deluxeGst.toLocaleString("en-IN")}`,
+                superior: `₹ ${superiorGst.toLocaleString("en-IN")}`,
             },
             {
-                destination: "Total Quotation Cost",
+                destination: "Grand Total",
                 nights: `${totalNights} N`,
-                standard: "₹ 42,384",
-                deluxe: "₹ 462,870",
-                superior: "₹ 96,976",
+                standard: `₹ ${(standardTotal + standardGst).toLocaleString("en-IN")}`,
+                deluxe: `₹ ${(deluxeTotal + deluxeGst).toLocaleString("en-IN")}`,
+                superior: `₹ ${(superiorTotal + superiorGst).toLocaleString("en-IN")}`,
             }
         );
 
@@ -258,65 +318,59 @@ const HotelFinalize = () => {
             customer: {
                 name: clientDetails.clientName || "N/A",
                 location: clientDetails.sector || "N/A",
-                phone: "+91 7053900957", // Default phone
-                email: "customer@example.com", // Default email
+                phone: apiData.personalDetails?.mobileNumber || "N/A", 
+                email: apiData.personalDetails?.emailId || "N/A",
             },
 
             // Pickup details
             pickup: {
-                arrival: `Arrival: ${pickupDrop.arrivalCity || "N/A"} (${formatDate(pickupDrop.arrivalDate)}) at ${pickupDrop.arrivalLocation || "N/A"}`,
-                departure: `Departure: ${pickupDrop.departureCity || "N/A"} (${formatDate(pickupDrop.departureDate)}) from ${pickupDrop.departureLocation || "N/A"}`,
+                arrival: `Arrival: ${pickupDrop.arrivalCity || "TBD"} (${formatDate(pickupDrop.arrivalDate)})`,
+                departure: `Departure: ${pickupDrop.departureCity || "TBD"} (${formatDate(pickupDrop.departureDate)})`,
             },
 
             // Hotel details
             hotel: {
-                guests: `${totalGuests} ${totalGuests === 1 ? 'Person' : 'Persons'} (${adults} Adults, ${children} Children, ${infants} Infants, ${kids} Kids)`,
+                guests: `${totalGuests} Persons (${adults} A, ${children} C, ${infants} I, ${kids} K)`,
                 rooms: `${noOfRooms} ${noOfRooms === 1 ? 'Room' : 'Rooms'}`,
                 mealPlan: apiData.accommodationDetails?.mealPlan || "Not specified",
                 destination: stayLocation.map(loc => `${loc.nights || 0}N ${loc.city || ''}`).join(", ") || "N/A",
-                itinerary: quotationData.initialNotes || "This is only tentative schedule for sightseeing and travel. Actual sightseeing may get affected due to weather, road conditions, local authority notices, shortage of timing, or off days.",
+                itinerary: quotationData.initialNotes || "No itinerary notes provided.",
             },
 
-            // Vehicle details (if available)
-            vehicles: vehicleDetails.pickupDropDetails ? [{
+            // Vehicle details
+            vehicles: (vehicleDetails.basicsDetails?.vehicleType && vehicleDetails.basicsDetails.vehicleType !== "No Transport") ? [{
+                type: vehicleDetails.basicsDetails.vehicleType,
                 pickup: {
-                    date: formatDate(vehicleDetails.pickupDropDetails.pickupDate),
-                    time: formatTime(vehicleDetails.pickupDropDetails.pickupTime),
+                    date: formatDate(vehicleDetails.pickupDropDetails?.pickupDate),
+                    time: vehicleDetails.pickupDropDetails?.pickupTime || "12:00",
                 },
                 drop: {
-                    date: formatDate(vehicleDetails.pickupDropDetails.dropDate),
-                    time: formatTime(vehicleDetails.pickupDropDetails.dropTime),
+                    date: formatDate(vehicleDetails.pickupDropDetails?.dropDate),
+                    time: vehicleDetails.pickupDropDetails?.dropTime || "12:00",
                 },
             }] : [],
 
-            // Pricing
+            // Pricing (using standard category as default for summary)
             pricing: {
-                discount: "₹ 200",
-                gst: "₹ 140",
-                total: "₹ 3,340",
+                discount: "₹ 0",
+                gst: `₹ ${standardGst.toLocaleString("en-IN")}`,
+                total: `₹ ${(standardTotal + standardGst).toLocaleString("en-IN")}`,
             },
 
             // Policies
             policies: {
-                inclusions: [
-                    "All transfers tours in a Private AC cab.",
-                    "Parking, Toll charges, Fuel and Driver expenses.",
-                    "Hotel Taxes.",
-                    "Car AC off during hill stations.",
-                ],
-                exclusions: apiData.quotationExculsion || "1. Any Cost change...",
-                paymentPolicy: apiData.paymentPolicies || "50% amount to pay at confirmation, balance before 10 days.",
-                cancellationPolicy: apiData.CancellationRefund || "1. Before 15 days: 50%. 2. Within 7 days: 100%.",
-                terms: apiData.termsAndConditions || "1. This is only a Quote. Availability is checked only on confirmation...",
+                inclusions: (apiData.quotationInclusion || "As per itinerary").split('\n').filter(Boolean),
+                exclusions: apiData.quotationExculsion || "Not specified",
+                paymentPolicy: apiData.paymentPolicies || "Not specified",
+                cancellationPolicy: apiData.CancellationRefund || "Not specified",
+                terms: apiData.termsAndConditions || "Not specified",
             },
 
             // Footer
             footer: {
-                contact: `${clientDetails.clientName || "N/A"} | +91 7053900957 (Noida)`,
-                phone: "+91 7053900957",
-                email: "amit.jaiswal@example.com",
-                received: "₹ 1,500",
-                balance: "₹ 1,840",
+                contact: `${clientDetails.clientName || "N/A"}`,
+                phone: apiData.personalDetails?.mobileNumber || "",
+                email: apiData.personalDetails?.emailId || "",
                 company: "Iconic Yatra",
                 address: "Office No 15, Bhawani Market Sec 27, Noida, Uttar Pradesh – 201301",
                 website: "https://www.iconicyatra.com",
@@ -1260,6 +1314,8 @@ const HotelFinalize = () => {
                 open={openEmailDialog}
                 onClose={handleEmailClose}
                 customer={quotationData.customer}
+                companyOptions={mailCompanies}
+                emailAccountOptions={emailAccounts}
             />
 
             <MakePaymentDialog

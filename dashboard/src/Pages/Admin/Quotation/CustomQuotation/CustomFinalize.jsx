@@ -74,6 +74,7 @@ import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 import HotelConfirmationDialog from "./Dialog/HotelConfirmationDialog";
+import ReceiptPreviewDialog from "../../../../Components/ReceiptPreviewDialog";
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -190,6 +191,7 @@ const TransactionSummaryDialog = ({
     loading,
     rows,
     quotationRef,
+    onPreview,
 }) => {
     const totals = summarizeVoucherAmounts(rows);
 
@@ -203,6 +205,7 @@ const TransactionSummaryDialog = ({
         "Payment Bank",
         "Dr/Cr",
         "Amount",
+        "Actions",
     ];
 
     return (
@@ -320,7 +323,12 @@ const TransactionSummaryDialog = ({
                                 </TableRow>
                             ) : rows?.length ? (
                                 rows.map((v, index) => (
-                                    <TableRow key={v._id || index} hover>
+                                    <TableRow 
+                                        key={v._id || index} 
+                                        hover
+                                        onClick={() => window.open(`/invoice-view/${v._id}`, '_blank')}
+                                        sx={{ cursor: "pointer" }}
+                                    >
                                         <TableCell>{index + 1}</TableCell>
                                         <TableCell>{v.receiptNumber}</TableCell>
                                         <TableCell>{v.invoiceId}</TableCell>
@@ -337,6 +345,26 @@ const TransactionSummaryDialog = ({
                                         </TableCell>
                                         <TableCell align="right">
                                             ₹{(Number(v.amount) || 0).toLocaleString("en-IN")}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                                                <IconButton 
+                                                    size="small" 
+                                                    color="primary" 
+                                                    onClick={() => onPreview(v)}
+                                                    title="Preview Receipt"
+                                                >
+                                                    <Visibility fontSize="small" />
+                                                </IconButton>
+                                                <IconButton 
+                                                    size="small" 
+                                                    color="info" 
+                                                    onClick={() => window.open(`/payments-form/${v._id}`, '_blank')}
+                                                    title="Edit Payment"
+                                                >
+                                                    <Edit fontSize="small" />
+                                                </IconButton>
+                                            </Box>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -509,6 +537,13 @@ const CustomFinalize = () => {
         severity: "success"
     });
     const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
+    const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState(null);
+    const [openReceiptPreview, setOpenReceiptPreview] = useState(false);
+
+    const handleOpenReceiptPreview = (voucher) => {
+        setSelectedVoucherForPreview(voucher);
+        setOpenReceiptPreview(true);
+    };
     const { data: company, status } = useSelector((state) => state.companyUI);
     const [itineraryDialog, setItineraryDialog] = useState({
         open: false,
@@ -591,7 +626,18 @@ useEffect(() => {
             setMailCompanies([]);
         }
     };
+    const fetchEmailAccounts = async () => {
+        try {
+            const res = await axios.get("/email-accounts");
+            const list = res?.data?.data || [];
+            setEmailAccounts(Array.isArray(list) ? list : []);
+        } catch (err) {
+            console.error("Failed to fetch email accounts:", err);
+            setEmailAccounts([]);
+        }
+    };
     fetchMailCompanies();
+    fetchEmailAccounts();
 }, []);
     // Dynamic quotation state from API
     const [quotation, setQuotation] = useState({
@@ -673,6 +719,7 @@ useEffect(() => {
         booking: { subject: "", message: "" },
     });
     const [mailCompanies, setMailCompanies] = useState([]);
+    const [emailAccounts, setEmailAccounts] = useState([]);
     const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
     const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
     const [openBankDialog, setOpenBankDialog] = useState(false);
@@ -1324,9 +1371,9 @@ useEffect(() => {
             return;
         }
         setEmailTemplateType("normal");
-        const defaultCompany = mailCompanies?.[0];
+        const defaultCompanyId = company?._id || mailCompanies?.[0]?._id;
         try {
-            await refreshEmailTemplates(defaultCompany?._id);
+            await refreshEmailTemplates(defaultCompanyId);
         } catch (e) {
             setSnackbar({
                 open: true,
@@ -1436,8 +1483,8 @@ useEffect(() => {
             message: tpl?.message || "",
             signature: "Warm Regards,\nReservation Team\nIconic Travel",
             mailType: type,
-            senderAccount: "gmail1",
-            companyId: mailCompanies?.[0]?._id || "",
+            senderAccount: "",
+            companyId: company?._id || mailCompanies?.[0]?._id || "",
             nextPayableAmount: "",
             paymentDueDate: "",
         };
@@ -3531,26 +3578,38 @@ useEffect(() => {
                 onClose={handleAddFlightClose}
                 onSave={handleAddFlight}
             />
-            <EmailQuotationDialog
-                open={openEmailDialog}
-                onClose={handleEmailClose}
-                customer={quotation.customer}
-                onSend={handleEmailSend}
-                onCompanyChange={async (companyId, mailType) => {
-                    const templates = await refreshEmailTemplates(companyId);
-                    const type = mailType === "booking" ? "booking" : "normal";
-                    return templates?.[type] || { subject: "", message: "" };
-                }}
-                initialValuesOverride={emailInitialValues}
-                templateBodies={emailTemplateBodies}
-                companyOptions={mailCompanies}
-            />
+            {openEmailDialog && (
+                <EmailQuotationDialog
+                    open={openEmailDialog}
+                    onClose={handleEmailClose}
+                    customer={quotation.customer}
+                    onSend={handleEmailSend}
+                    onCompanyChange={async (companyId, mailType) => {
+                        const templates = await refreshEmailTemplates(companyId);
+                        const type = mailType === "booking" ? "booking" : "normal";
+                        return templates?.[type] || { subject: "", message: "" };
+                    }}
+                    initialValuesOverride={emailInitialValues}
+                    templateBodies={emailTemplateBodies}
+                    companyOptions={mailCompanies}
+                    emailAccountOptions={emailAccounts}
+                    hasPdfAttachment={!!pdfAttachmentForMail}
+                />
+            )}
             <TransactionSummaryDialog
                 open={openTransactionDialog}
                 onClose={() => setOpenTransactionDialog(false)}
                 loading={paymentHistoryLoading}
                 rows={paymentHistory}
                 quotationRef={id}
+                onPreview={handleOpenReceiptPreview}
+            />
+
+            <ReceiptPreviewDialog 
+                open={openReceiptPreview}
+                onClose={() => setOpenReceiptPreview(false)}
+                voucher={selectedVoucherForPreview}
+                quotation={quotation}
             />
 
             {/* Invoice PDF Dialog */}
