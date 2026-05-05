@@ -631,21 +631,31 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
   }).lean();
   const receivedAmount = sumReceivedFromClient(vouchers);
 
-  const generatedBody =
-    type === "booking"
-      ? buildVehicleQuotationBookingEmail(quotationData, {
-        ...companyMeta,
-        ...(customText?.booking || {}),
-        receivedAmount,
-      })
-      : buildVehicleQuotationPdfPreviewEmail(quotationData, companyMeta);
+  const isBookingMail = type === "booking";
+  const companyMetaWithCustom = {
+    ...companyMeta,
+    receivedAmount,
+    signature: customText?.signature,
+    ...(isBookingMail ? (customText?.booking || {}) : (customText?.normal || {})),
+  };
 
-  const body =
-    type === "booking"
+  const generatedBody = isBookingMail
+      ? buildVehicleQuotationBookingEmail(quotationData, companyMetaWithCustom)
+      : buildVehicleQuotationPdfPreviewEmail(quotationData, companyMetaWithCustom);
+
+  let body = isBookingMail
       ? generatedBody
       : previewPdfMode
-        ? buildVehicleQuotationPdfPreviewEmail(quotationData, companyMeta)
+        ? generatedBody
         : String(bodyHtml || "").trim() || generatedBody;
+
+  // Append signature if bodyHtml was used and signature is provided
+  if (!isBookingMail && !previewPdfMode && bodyHtml && companyMetaWithCustom.signature) {
+    const sig = companyMetaWithCustom.signature.replace(/\n/g, "<br/>");
+    if (!body.includes(sig)) {
+      body += `<br/><br/>${sig}`;
+    }
+  }
 
   const finalSubject =
     subject ||

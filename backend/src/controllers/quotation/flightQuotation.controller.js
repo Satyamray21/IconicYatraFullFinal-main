@@ -465,6 +465,7 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
 
     const vouchers = await ReceivedVoucher.find({ quotationRef: flightQuotationId }).lean();
     const receivedAmount = sumReceivedFromClient(vouchers);
+    const isBookingMail = type === "booking";
     const companyMeta = {
         companyName: selectedCompany?.companyName || "Iconic Travel",
         companyWebsite: selectedCompany?.companyWebsite || "",
@@ -473,15 +474,23 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
         paymentLink: selectedCompany?.paymentLink || "",
         bankDetails: Array.isArray(selectedCompany?.bankDetails) ? selectedCompany.bankDetails : [],
         receivedAmount,
-        ...(customText?.booking || {}),
+        signature: customText?.signature,
+        ...(isBookingMail ? (customText?.booking || {}) : (customText?.normal || {})),
     };
 
     const quotationData = { quotation, lead };
-    const generatedBody =
-        type === "booking"
+    const generatedBody = isBookingMail
             ? buildFlightQuotationBookingEmail(quotationData, companyMeta)
             : buildFlightQuotationNormalEmail(quotationData, companyMeta);
-    const body = String(bodyHtml || "").trim() || generatedBody;
+    let body = String(bodyHtml || "").trim() || generatedBody;
+
+    // Append signature if bodyHtml was used and signature is provided
+    if (!isBookingMail && bodyHtml && companyMeta.signature) {
+        const sig = companyMeta.signature.replace(/\n/g, "<br/>");
+        if (!body.includes(sig)) {
+            body += `<br/><br/>${sig}`;
+        }
+    }
     const finalSubject =
         subject ||
         (type === "booking"

@@ -1433,16 +1433,19 @@ useEffect(() => {
                     senderAccount: values?.senderAccount || "gmail1",
                     companyId: values?.companyId || undefined,
                     companyName: selectedCompany?.companyName || undefined,
-                    customText: isBookingMail
-                        ? {
-                            booking: {
-                                ...(Number.isFinite(nextPayableAmount)
-                                    ? { nextPayableAmount }
-                                    : {}),
-                                ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
-                            },
-                        }
-                        : undefined,
+                    customText: {
+                        signature: values?.signature || undefined,
+                        normal: {
+                            signature: values?.signature || undefined,
+                        },
+                        booking: {
+                            signature: values?.signature || undefined,
+                            ...(Number.isFinite(nextPayableAmount)
+                                ? { nextPayableAmount }
+                                : {}),
+                            ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
+                        },
+                    },
                     previewPdfMode:
                         !isBookingMail &&
                         !!pdfAttachmentForMail?.contentBase64 &&
@@ -1481,7 +1484,7 @@ useEffect(() => {
             subject: tpl?.subject || "",
             greetLine: "Please find below details:",
             message: tpl?.message || "",
-            signature: "Warm Regards,\nReservation Team\nIconic Travel",
+            signature: "",
             mailType: type,
             senderAccount: "",
             companyId: company?._id || mailCompanies?.[0]?._id || "",

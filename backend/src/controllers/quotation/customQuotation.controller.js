@@ -850,12 +850,20 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     customText.normal || {},
     meta,
   );
-  const body =
+  let body =
     type === "booking"
       ? generatedBody
       : previewPdfMode
         ? previewPdfBody
         : String(bodyHtml || "").trim() || generatedBody;
+
+  // Append signature if bodyHtml was used and signature is provided
+  if (type !== "booking" && !previewPdfMode && bodyHtml && customText.normal?.signature) {
+    const sig = customText.normal.signature.replace(/\n/g, "<br/>");
+    if (!body.includes(sig)) {
+      body += `<br/><br/>${sig}`;
+    }
+  }
 
   const finalSubject =
     subject ||
