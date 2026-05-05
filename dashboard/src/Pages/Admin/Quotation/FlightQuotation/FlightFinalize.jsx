@@ -349,10 +349,12 @@ const FlightFinalize = () => {
   };
 
   const openEmailDialogWithTemplates = async (mailType = "normal") => {
-    const defaultCompany = mailCompanies?.[0];
+    const activeCompanyId = selectedCompanyId || mailCompanies?.[0]?._id;
     setEmailTemplateType(mailType === "booking" ? "booking" : "normal");
     try {
-      await refreshEmailTemplates(defaultCompany?._id);
+      if (activeCompanyId) {
+        await refreshEmailTemplates(activeCompanyId);
+      }
     } catch { }
     setOpenEmailDialog(true);
   };
@@ -761,9 +763,12 @@ const FlightFinalize = () => {
     message: emailTemplate?.message || "",
     signature: "",
     mailType: emailType,
-    senderAccount: "gmail1",
-    companyId: mailCompanies?.[0]?._id || "",
-    nextPayableAmount: "",
+    senderAccount:
+      emailAccounts.find((acc) => (acc.companyId?._id || acc.companyId) === selectedCompanyId)?._id ||
+      emailAccounts[0]?._id ||
+      "gmail1",
+    companyId: selectedCompanyId || mailCompanies?.[0]?._id || "",
+    nextPayableAmount: balanceAmount > 0 ? String(balanceAmount) : "",
     paymentDueDate: "",
   };
 

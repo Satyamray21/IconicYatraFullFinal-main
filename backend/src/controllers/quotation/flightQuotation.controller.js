@@ -413,6 +413,7 @@ export const previewFlightQuotationMail = asyncHandler(async (req, res) => {
         paymentLink: selectedCompany?.paymentLink || "",
         bankDetails: Array.isArray(selectedCompany?.bankDetails) ? selectedCompany.bankDetails : [],
         receivedAmount,
+        signature: selectedCompany?.signature || `Warm Regards,\n${selectedCompany?.companyName || "Iconic Travel"}`
     };
 
     const quotationData = { quotation, lead };
@@ -480,7 +481,7 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
         paymentLink: selectedCompany?.paymentLink || "",
         bankDetails: Array.isArray(selectedCompany?.bankDetails) ? selectedCompany.bankDetails : [],
         receivedAmount,
-        signature: customText?.signature,
+        signature: customText?.signature || selectedCompany?.signature || `Warm Regards,\n${selectedCompany?.companyName || "Iconic Travel"}`,
         ...(isBookingMail ? (customText?.booking || {}) : (customText?.normal || {})),
     };
 
@@ -491,7 +492,7 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
     let body = String(bodyHtml || "").trim() || generatedBody;
 
     // Append signature if bodyHtml was used and signature is provided
-    if (!isBookingMail && bodyHtml && companyMeta.signature) {
+    if (bodyHtml && companyMeta.signature) {
         const sig = companyMeta.signature.replace(/\n/g, "<br/>");
         if (!body.includes(sig)) {
             body += `<br/><br/>${sig}`;
