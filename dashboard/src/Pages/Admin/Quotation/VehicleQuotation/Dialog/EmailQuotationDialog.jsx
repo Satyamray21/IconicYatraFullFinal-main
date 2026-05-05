@@ -21,6 +21,32 @@ import dayjs from "dayjs";
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
 
+const SignatureUpdater = ({ senderAccount, emailAccountOptions, setFieldValue }) => {
+  React.useEffect(() => {
+    const acc = emailAccountOptions.find((a) => a._id === senderAccount);
+    if (acc && acc.signature && (acc.signature.name || (acc.signature.mobile && acc.signature.mobile.some(m => m)) || (acc.signature.links && acc.signature.links.some(l => l)))) {
+        let sigHtml = `<div style="margin-top: 15px; font-family: Arial, sans-serif;">`;
+        sigHtml += `<p style="margin: 0;"><b>Warm Regards,</b></p>`;
+        if (acc.signature.name) sigHtml += `<p style="margin: 0;"><b>${acc.signature.name}</b></p>`;
+        if (acc.signature.mobile && acc.signature.mobile.length > 0) {
+            const mobs = acc.signature.mobile.filter(m => m.trim());
+            if (mobs.length > 0) sigHtml += `<p style="margin: 0;">Mobile: ${mobs.join(", ")}</p>`;
+        }
+        if (acc.signature.links && acc.signature.links.length > 0) {
+            const links = acc.signature.links.filter(l => l.trim());
+            if (links.length > 0) {
+                sigHtml += `<p style="margin: 0;">${links.map(l => `<a href="${l}" style="color: #0b5394; text-decoration: none;">${l}</a>`).join(" | ")}</p>`;
+            }
+        }
+        sigHtml += `</div>`;
+        setFieldValue("signature", sigHtml);
+    } else {
+        setFieldValue("signature", "");
+    }
+  }, [senderAccount, emailAccountOptions, setFieldValue]);
+  return null;
+};
+
 const EmailQuotationDialog = ({
   open,
   onClose,
@@ -116,6 +142,7 @@ const EmailQuotationDialog = ({
               return (
                 <Form>
                   <DialogContent dividers>
+                    <SignatureUpdater senderAccount={values.senderAccount} emailAccountOptions={emailAccountOptions} setFieldValue={setFieldValue} />
                     <Alert
                       severity={hasPdfAttachment ? "success" : "warning"}
                       sx={{ mb: 2 }}
@@ -371,15 +398,19 @@ const EmailQuotationDialog = ({
                         <Paper variant="outlined" sx={{ p: 2, maxHeight: 280, overflow: "auto" }}>
                           <Box
                             sx={{ "& p": { m: 0, mb: 1 } }}
-                            dangerouslySetInnerHTML={{ __html: values.message || "<p>No preview</p>" }}
+                            dangerouslySetInnerHTML={{ __html: (values.message || "<p>No preview</p>") + (values.signature || "") }}
                           />
                         </Paper>
                       </Grid>
                       <Grid size={{ xs: 12 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                          Generated Signature (HTML)
+                        </Typography>
                         <Field
                           as={TextField}
                           name="signature"
-                          label="Signature"
+                          multiline
+                          minRows={3}
                           fullWidth
                         />
                       </Grid>
