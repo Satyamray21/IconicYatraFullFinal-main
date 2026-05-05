@@ -515,7 +515,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         <p>
             ${safe(
               customText.signature,
-              `Warm Regards<br/>Reservation Team<br/>${companyName}`,
+              `Warm Regards<br/><b>${companyName}</b>`,
             ).replace(/\n/g, "<br/>")}
         </p>
 
@@ -719,7 +719,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p>
             ${safe(
               customText.signature,
-              `Warm Regards<br/>Reservation Team<br/>${companyName}`,
+              `Warm Regards<br/><b>${companyName}</b>`,
             ).replace(/\n/g, "<br/>")}
         </p>
     </div>
@@ -1141,12 +1141,14 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
         </div>
 
         <div style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
-            <p style="margin: 2px 0;"><b>Warm & Regards,</b></p>
-            <p style="margin: 2px 0; font-weight: bold; color: #1a237e;">${companyName}</p>
-            <p style="margin: 2px 0;">Reservation Team</p>
-            <p style="margin: 2px 0;">Mobile: ${companyMobile} (WhatsApp)</p>
-            <p style="margin: 2px 0;">Website: <a href="${companyWebsite}" style="color: #1976d2; text-decoration: none;">${companyWebsite}</a></p>
-            <p style="margin: 2px 0; font-size: 12px; color: #777;">Reg. Address & Corporate Office: ${companyAddress}</p>
+            ${safe(options.signature, `
+                <p style="margin: 2px 0;"><b>Warm & Regards,</b></p>
+                <p style="margin: 2px 0; font-weight: bold; color: #1a237e;">${companyName}</p>
+                <p style="margin: 2px 0;">Reservation Team</p>
+                <p style="margin: 2px 0;">Mobile: ${companyMobile} (WhatsApp)</p>
+                <p style="margin: 2px 0;">Website: <a href="${companyWebsite}" style="color: #1976d2; text-decoration: none;">${companyWebsite}</a></p>
+                <p style="margin: 2px 0; font-size: 12px; color: #777;">Reg. Address & Corporate Office: ${companyAddress}</p>
+            `).replace(/\n/g, "<br/>")}
         </div>
         
         <div style="text-align: center; margin-top: 30px; font-weight: bold; color: #1a237e;">

@@ -181,34 +181,41 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
       // --- Footer ---
       doc.moveDown(2);
       doc.x = 40;
-      doc.fillColor("#ff0000").fontSize(12).font("Helvetica-Bold").text("Warm & Regards,");
-      doc.text(companyName);
-      doc.text("Reservation Team");
 
-      doc.fillColor("#000000").font("Helvetica-Bold").text("Mobile: ", { continued: true });
-      doc.font("Helvetica").text(`${companyMobile} (WhatsApp)`);
+      if (options.signature) {
+        // Render dynamic signature (strip HTML tags since it's a PDF)
+        const cleanSig = options.signature.replace(/<[^>]*>/g, "\n").replace(/\n\s*\n/g, "\n").trim();
+        doc.fillColor("#000000").fontSize(10).font("Helvetica").text(cleanSig);
+      } else {
+        doc.fillColor("#ff0000").fontSize(12).font("Helvetica-Bold").text("Warm & Regards,");
+        doc.text(companyName);
+        doc.text("Reservation Team");
 
-      doc.fillColor("#000000").font("Helvetica-Bold").text("Website: ", { continued: true });
-      doc.fillColor("#0000ff").font("Helvetica").text(companyWebsite, { link: companyWebsite, underline: true });
+        doc.fillColor("#000000").font("Helvetica-Bold").text("Mobile: ", { continued: true });
+        doc.font("Helvetica").text(`${companyMobile} (WhatsApp)`);
 
-      if (termsConditions) {
-        doc.fillColor("#000000").font("Helvetica-Bold").text("Terms & Conditions: ", { continued: true });
-        doc.fillColor("#0000ff").font("Helvetica").text(termsConditions, { link: termsConditions, underline: true });
+        doc.fillColor("#000000").font("Helvetica-Bold").text("Website: ", { continued: true });
+        doc.fillColor("#0000ff").font("Helvetica").text(companyWebsite, { link: companyWebsite, underline: true });
+
+        if (termsConditions) {
+          doc.fillColor("#000000").font("Helvetica-Bold").text("Terms & Conditions: ", { continued: true });
+          doc.fillColor("#0000ff").font("Helvetica").text(termsConditions, { link: termsConditions, underline: true });
+        }
+
+        if (cancellationPolicy) {
+          doc.fillColor("#000000").font("Helvetica-Bold").text("Cancellation Policy: ", { continued: true });
+          doc.fillColor("#0000ff").font("Helvetica").text(cancellationPolicy, { link: cancellationPolicy, underline: true });
+        }
+
+        if (paymentLink) {
+          doc.fillColor("#000000").font("Helvetica-Bold").text("Pay Online: ", { continued: true });
+          doc.fillColor("#0000ff").font("Helvetica").text(paymentLink, { link: paymentLink, underline: true });
+        }
+
+        doc.moveDown(1);
+        doc.fillColor("#ff0000").fontSize(11).font("Helvetica-Bold").text("Reg. Address & Corporate Office: ", { continued: true });
+        doc.fillColor("#000000").font("Helvetica-Bold").text(companyAddress);
       }
-
-      if (cancellationPolicy) {
-        doc.fillColor("#000000").font("Helvetica-Bold").text("Cancellation Policy: ", { continued: true });
-        doc.fillColor("#0000ff").font("Helvetica").text(cancellationPolicy, { link: cancellationPolicy, underline: true });
-      }
-
-      if (paymentLink) {
-        doc.fillColor("#000000").font("Helvetica-Bold").text("Pay Online: ", { continued: true });
-        doc.fillColor("#0000ff").font("Helvetica").text(paymentLink, { link: paymentLink, underline: true });
-      }
-
-      doc.moveDown(1);
-      doc.fillColor("#ff0000").fontSize(11).font("Helvetica-Bold").text("Reg. Address & Corporate Office: ", { continued: true });
-      doc.fillColor("#000000").font("Helvetica-Bold").text(companyAddress);
 
       doc.moveDown(2);
       doc.fillColor("#2e7d32").fontSize(13).font("Helvetica-Bold").text(`THANK YOU FOR CHOOSING ${companyName.toUpperCase()}!!!`, { align: "left" });

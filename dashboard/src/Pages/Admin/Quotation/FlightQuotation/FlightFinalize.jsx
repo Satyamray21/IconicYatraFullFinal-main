@@ -396,16 +396,19 @@ const FlightFinalize = () => {
         senderAccount: values?.senderAccount || "gmail1",
         companyId: values?.companyId || undefined,
         companyName: selectedCompany?.companyName || undefined,
-        customText: isBookingMail
-          ? {
-            booking: {
-              ...(values?.nextPayableAmount
-                ? { nextPayableAmount: Number(values.nextPayableAmount) }
-                : {}),
-              ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
-            },
-          }
-          : undefined,
+        customText: {
+          signature: values?.signature || undefined,
+          normal: {
+            signature: values?.signature || undefined,
+          },
+          booking: {
+            signature: values?.signature || undefined,
+            ...(values?.nextPayableAmount
+              ? { nextPayableAmount: Number(values.nextPayableAmount) }
+              : {}),
+            ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+          },
+        },
         previewPdfMode:
           !isBookingMail &&
           !!pdfAttachmentForMail?.contentBase64 &&
@@ -745,7 +748,7 @@ const FlightFinalize = () => {
     subject: emailTemplate?.subject || "",
     greetLine: "Please find below details:",
     message: emailTemplate?.message || "",
-    signature: "Warm Regards,\nReservation Team\nIconic Travel",
+    signature: "",
     mailType: emailType,
     senderAccount: "gmail1",
     companyId: mailCompanies?.[0]?._id || "",
