@@ -228,7 +228,7 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
       <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
       <p>${policyLines(paymentPolicy.length ? paymentPolicy : ["Payment policy as per confirmation."]).replace(/\n/g, "<br/>")}</p>
       ${bankHtmlSection(customText?.bankDetails || [], customText?.paymentLink || "")}
-      <p>${safe(customText.signature, `Warm Regards<br/><b>${companyName}</b>`)}</p>
+      <p>${safe(customText.signature, "").replace(/\n/g, "<br/>")}</p>
     </div>
   `;
 }
@@ -292,7 +292,7 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
       <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
       <p>${policyLines(paymentPolicy.length ? paymentPolicy : ["Payment policy as per confirmation."]).replace(/\n/g, "<br/>")}</p>
       ${bankHtmlSection(customText?.bankDetails || [], customText?.paymentLink || "")}
-      <p>${safe(customText.signature, `Warm Regards<br/><b>${companyName}</b>`)}</p>
+      <p>${safe(customText.signature, "").replace(/\n/g, "<br/>")}</p>
     </div>
   `;
 }
