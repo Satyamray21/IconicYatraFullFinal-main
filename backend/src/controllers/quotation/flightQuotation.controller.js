@@ -40,7 +40,9 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
         infants,
         anyMessage,
         personalDetails,
-        status // optional from client
+        status, // optional from client
+        companyId,
+        companyName
     } = req.body;
 
     // ✅ Validate required fields
@@ -120,7 +122,9 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
         status: status || "New",
         quotation_type: "flight",
         leadId: lead.leadId,
-        policies: defaultPolicies
+        policies: defaultPolicies,
+        companyId,
+        companyName
     });
 
     await logActivity({
@@ -257,7 +261,7 @@ export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
 // ✅ Confirm Flight Quotation API
 export const confirmFlightQuotation = asyncHandler(async (req, res) => {
     const { flightQuotationId } = req.params;
-    const { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount } = req.body;
+    const { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount, companyId, companyName } = req.body;
 
     const quotation = await FlightQuotation.findOne({ flightQuotationId });
 
@@ -298,6 +302,8 @@ export const confirmFlightQuotation = asyncHandler(async (req, res) => {
     if (gstType) quotation.gstType = gstType;
     if (gstPercentage !== undefined) quotation.gstPercentage = gstPercentage;
     if (gstAmount !== undefined) quotation.gstAmount = gstAmount;
+    if (companyId) quotation.companyId = companyId;
+    if (companyName) quotation.companyName = companyName;
 
     // ✅ Update total final fare
     quotation.finalFare = finalFare

@@ -92,7 +92,7 @@ const PreviewDialog = React.memo(({ open, data, onClose }) => {
         <Box display="flex" alignItems="center">
           <FlightTakeoff sx={{ mr: 1, fontSize: 28 }} />
           <Typography variant="h5" component="div" fontWeight="600">
-            Iconic Yatra
+            {data.companyName || "Iconic Yatra"}
           </Typography>
         </Box>
         <Typography variant="h6" component="div">
@@ -471,6 +471,7 @@ const QuotationFlightForm = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [companies, setCompanies] = useState([]);
   const theme = useTheme();
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -485,6 +486,20 @@ const QuotationFlightForm = () => {
 
   useEffect(() => {
     dispatch(getAllLeads());
+    const fetchCompanies = async () => {
+      try {
+        const res = await axios.get("/company");
+        const list = Array.isArray(res?.data?.data) ? res.data.data : [];
+        setCompanies(list);
+        if (list.length > 0) {
+          formik.setFieldValue("companyId", list[0]._id);
+          formik.setFieldValue("companyName", list[0].companyName);
+        }
+      } catch (err) {
+        console.error("Failed to fetch companies:", err);
+      }
+    };
+    fetchCompanies();
   }, [dispatch]);
 
   const initialValues = {
@@ -512,6 +527,8 @@ const QuotationFlightForm = () => {
     fullName: "",
     mobile: "",
     email: "",
+    companyId: "",
+    companyName: "",
   };
 
   const formik = useFormik({
@@ -534,6 +551,8 @@ const QuotationFlightForm = () => {
           mobileNumber: values.mobile,
           emailId: values.email,
         },
+        companyId: values.companyId,
+        companyName: values.companyName,
       };
 
       // Always push first flight
@@ -671,6 +690,7 @@ const QuotationFlightForm = () => {
       fullName: v.fullName,
       mobile: v.mobile,
       email: v.email,
+      companyName: v.companyName,
     });
     
     // Small delay to ensure state update before opening dialog
@@ -1033,29 +1053,56 @@ const QuotationFlightForm = () => {
           <Typography variant="subtitle1" gutterBottom>
             Client Details
           </Typography>
-          <TextField
-            id="clientName-id"
-            select
-            fullWidth
-            label="Client Name"
-            name="clientName"
-            value={formik.values.clientName}
-            onChange={handleClientChange}
-            onBlur={formik.handleBlur}
-            error={
-              formik.touched.clientName && Boolean(formik.errors.clientName)
-            }
-            helperText={formik.touched.clientName && formik.errors.clientName}
-          >
-            {leadList.map((lead, index) => (
-              <MenuItem
-                key={index}
-                value={lead?.personalDetails?.fullName || ""}
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                id="clientName-id"
+                select
+                fullWidth
+                label="Client Name"
+                name="clientName"
+                value={formik.values.clientName}
+                onChange={handleClientChange}
+                onBlur={formik.handleBlur}
+                error={
+                  formik.touched.clientName && Boolean(formik.errors.clientName)
+                }
+                helperText={formik.touched.clientName && formik.errors.clientName}
               >
-                {lead?.personalDetails?.fullName || "-"}
-              </MenuItem>
-            ))}
-          </TextField>
+                {leadList.map((lead) => (
+                  <MenuItem
+                    key={lead._id}
+                    value={lead?.personalDetails?.fullName}
+                  >
+                    {lead?.personalDetails?.fullName}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                select
+                label="Branding Company"
+                name="companyId"
+                value={formik.values.companyId}
+                onChange={(e) => {
+                  const selected = companies.find(c => c._id === e.target.value);
+                  formik.setFieldValue("companyId", e.target.value);
+                  formik.setFieldValue("companyName", selected?.companyName || "");
+                }}
+                error={formik.touched.companyId && Boolean(formik.errors.companyId)}
+                helperText={formik.touched.companyId && formik.errors.companyId}
+              >
+                {companies.map((c) => (
+                  <MenuItem key={c._id} value={c._id}>
+                    {c.companyName}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+          </Grid>
         </Paper>
 
         <Grid container spacing={2}>

@@ -46,6 +46,7 @@ const FlightQuotationPDFDialog = ({
   initialEmailContentMode = "short",
   includePdfOnSend = true,
   autoSendForMail = false,
+  initialCompanyId = "",
 }) => {
   const printRef = useRef();
   const autoSendTriggeredRef = useRef(false);
@@ -53,7 +54,7 @@ const FlightQuotationPDFDialog = ({
   const [loading, setLoading] = useState(false);
   const [renderComplete, setRenderComplete] = useState(false);
   const [companyOptions, setCompanyOptions] = useState([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState(initialCompanyId);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [emailContentMode, setEmailContentMode] = useState("short");
   const [imageElements, setImageElements] = useState({});
@@ -229,8 +230,11 @@ const FlightQuotationPDFDialog = ({
         const res = await axios.get("/company");
         const list = Array.isArray(res?.data?.data) ? res.data.data : [];
         setCompanyOptions(list);
-        if (!selectedCompanyId && list.length > 0) {
+        if (!selectedCompanyId && !initialCompanyId && list.length > 0) {
           setSelectedCompanyId(list[0]._id);
+        }
+        if (initialCompanyId) {
+          setSelectedCompanyId(initialCompanyId);
         }
       } catch (err) {
         console.error("Failed to fetch companies for PDF preview:", err);
