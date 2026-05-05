@@ -61,7 +61,7 @@ import {
   PictureAsPdf,
   Edit,
 } from "@mui/icons-material";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "../../../../utils/axios";
 import {
@@ -71,6 +71,7 @@ import {
 } from "../../../../features/quotation/flightQuotationSlice";
 import FlightQuotationPDFDialog from "./PDF/PreviewPdf";
 import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
+import TransactionHistoryDialog from "../VehicleQuotation/Dialog/TransactionHistoryDialog";
 
 const FlightFinalize = () => {
   const [openDialog, setOpenDialog] = useState(false);
@@ -112,11 +113,14 @@ const FlightFinalize = () => {
 
   const { id } = useParams();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { quotationDetails, loading } = useSelector(
     (state) => state.flightQuotation
   );
   const quotation = quotationDetails?.quotation || null;
   const lead = quotationDetails?.lead || null;
+
+  const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
 
   const apiEntityId = React.useMemo(() => {
     if (quotation?.flightQuotationId) return String(quotation.flightQuotationId);
@@ -597,6 +601,8 @@ const FlightFinalize = () => {
     "Edit Finalized Booking",
     "Normal Mail",
     "Booking Mail",
+    "Transaction History",
+    "Make Payment",
   ];
 
   const handleActionClick = (action) => {
@@ -614,6 +620,14 @@ const FlightFinalize = () => {
       case "Booking Mail":
         setMailMode("booking");
         handleEmailOpen("booking");
+        break;
+      case "Transaction History":
+        setOpenTransactionDialog(true);
+        break;
+      case "Make Payment":
+        const clientName = getCustomerName()?.trim() || "";
+        const party = encodeURIComponent(clientName);
+        navigate(`/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`);
         break;
       default:
         console.log("Unknown action:", action);
@@ -1410,6 +1424,14 @@ const FlightFinalize = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <TransactionHistoryDialog
+        open={openTransactionDialog}
+        onClose={() => setOpenTransactionDialog(false)}
+        loading={paymentHistoryLoading}
+        rows={paymentHistory}
+        quotationRef={apiEntityId}
+      />
 
       {/* Success Snackbar */}
       <Snackbar
