@@ -51,6 +51,11 @@ const EmailAccounts = () => {
     port: "",
     secure: true,
     companyId: "",
+    signature: {
+      name: "",
+      mobile: [""],
+      links: [""],
+    },
   });
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -98,6 +103,13 @@ const EmailAccounts = () => {
         port: account.port || "",
         secure: account.secure ?? true,
         companyId: typeof account.companyId === "object" ? account.companyId._id : account.companyId || "",
+        signature: {
+          name: account.signature?.name || "",
+          mobile: Array.isArray(account.signature?.mobile) 
+            ? (account.signature.mobile.length ? account.signature.mobile : [""]) 
+            : (account.signature?.mobile ? [account.signature.mobile] : [""]),
+          links: account.signature?.links?.length ? account.signature.links : [""],
+        },
       });
     } else {
       setEditingId(null);
@@ -111,6 +123,7 @@ const EmailAccounts = () => {
         port: "",
         secure: true,
         companyId: "",
+        signature: { name: "", mobile: [""], links: [""] },
       });
     }
     setOpenDialog(true);
@@ -122,7 +135,59 @@ const EmailAccounts = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name.startsWith("signature.")) {
+      const field = name.split(".")[1];
+      setFormData((prev) => ({
+        ...prev,
+        signature: { ...prev.signature, [field]: value },
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleLinkChange = (index, value) => {
+    setFormData((prev) => {
+      const newLinks = [...prev.signature.links];
+      newLinks[index] = value;
+      return { ...prev, signature: { ...prev.signature, links: newLinks } };
+    });
+  };
+
+  const addLink = () => {
+    setFormData((prev) => ({
+      ...prev,
+      signature: { ...prev.signature, links: [...prev.signature.links, ""] },
+    }));
+  };
+
+  const removeLink = (index) => {
+    setFormData((prev) => {
+      const newLinks = prev.signature.links.filter((_, i) => i !== index);
+      return { ...prev, signature: { ...prev.signature, links: newLinks } };
+    });
+  };
+
+  const handleMobileChange = (index, value) => {
+    setFormData((prev) => {
+      const newMobiles = [...prev.signature.mobile];
+      newMobiles[index] = value;
+      return { ...prev, signature: { ...prev.signature, mobile: newMobiles } };
+    });
+  };
+
+  const addMobile = () => {
+    setFormData((prev) => ({
+      ...prev,
+      signature: { ...prev.signature, mobile: [...prev.signature.mobile, ""] },
+    }));
+  };
+
+  const removeMobile = (index) => {
+    setFormData((prev) => {
+      const newMobiles = prev.signature.mobile.filter((_, i) => i !== index);
+      return { ...prev, signature: { ...prev.signature, mobile: newMobiles } };
+    });
   };
 
   const handleSubmit = async () => {
@@ -342,6 +407,69 @@ const EmailAccounts = () => {
                   />
                 </>
               )}
+            </Box>
+
+            <Typography variant="subtitle1" fontWeight="bold" mt={2}>
+              Email Signature Settings
+            </Typography>
+            <Box display="flex" gap={2}>
+              <TextField
+                label="Signature Name"
+                name="signature.name"
+                value={formData.signature.name}
+                onChange={handleInputChange}
+                sx={{ flex: 1 }}
+                variant="outlined"
+              />
+              <Box flex={1}>
+                <Typography variant="body2" color="textSecondary" mb={1}>
+                  Signature Mobiles
+                </Typography>
+                {formData.signature.mobile.map((mob, index) => (
+                  <Box display="flex" gap={1} mb={1} key={index}>
+                    <TextField
+                      size="small"
+                      placeholder="+91 9876543210"
+                      value={mob}
+                      onChange={(e) => handleMobileChange(index, e.target.value)}
+                      fullWidth
+                    />
+                    {formData.signature.mobile.length > 1 && (
+                      <IconButton size="small" color="error" onClick={() => removeMobile(index)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    )}
+                  </Box>
+                ))}
+                <Button size="small" startIcon={<AddIcon />} onClick={addMobile}>
+                  Add Another Mobile
+                </Button>
+              </Box>
+            </Box>
+            
+            <Box>
+              <Typography variant="body2" color="textSecondary" mb={1}>
+                Signature Links
+              </Typography>
+              {formData.signature.links.map((link, index) => (
+                <Box display="flex" gap={1} mb={1} key={index}>
+                  <TextField
+                    size="small"
+                    placeholder="https://example.com"
+                    value={link}
+                    onChange={(e) => handleLinkChange(index, e.target.value)}
+                    fullWidth
+                  />
+                  {formData.signature.links.length > 1 && (
+                    <IconButton size="small" color="error" onClick={() => removeLink(index)}>
+                      <DeleteIcon />
+                    </IconButton>
+                  )}
+                </Box>
+              ))}
+              <Button size="small" startIcon={<AddIcon />} onClick={addLink}>
+                Add Another Link
+              </Button>
             </Box>
           </Box>
         </DialogContent>

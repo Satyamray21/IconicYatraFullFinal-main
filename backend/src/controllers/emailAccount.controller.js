@@ -4,7 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
 export const createEmailAccount = asyncHandler(async (req, res) => {
-  const { email, appPassword, displayName, companyId } = req.body;
+  const { email, appPassword, displayName, companyId, label, service, host, port, secure, signature } = req.body;
 
   if (!email || !appPassword) {
     throw new ApiError(400, "Email and App Password are required");
@@ -20,6 +20,12 @@ export const createEmailAccount = asyncHandler(async (req, res) => {
     appPassword,
     displayName,
     companyId,
+    label,
+    service,
+    host,
+    port,
+    secure,
+    signature,
   });
 
   return res

@@ -12,6 +12,11 @@ const emailAccountSchema = new mongoose.Schema(
     secure: { type: Boolean, default: true },
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company" }, // Null means global
     isActive: { type: Boolean, default: true },
+    signature: {
+      name: { type: String },
+      mobile: [{ type: String }],
+      links: [{ type: String }],
+    },
   },
   { timestamps: true },
 );
