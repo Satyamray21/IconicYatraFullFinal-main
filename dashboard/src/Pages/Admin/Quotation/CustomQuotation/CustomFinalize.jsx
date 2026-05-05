@@ -1093,6 +1093,8 @@ useEffect(() => {
         }
 
         return {
+            _id: apiData._id,
+            quotationId: quotationId,
             date: formatDate(createdAt),
             arrivalDate,
             reference: quotationId,
@@ -3695,6 +3697,7 @@ useEffect(() => {
                 open={openHotelConfirmation}
                 onClose={() => setOpenHotelConfirmation(false)}
                 quotation={selectedQuotation}
+                quotationRef={id}
                 type="custom"
             />
         </Box>

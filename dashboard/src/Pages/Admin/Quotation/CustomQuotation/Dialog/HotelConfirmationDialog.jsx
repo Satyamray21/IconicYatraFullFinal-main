@@ -28,7 +28,7 @@ import axios from "../../../../../utils/axios";
 import InvoiceView from "../../../../../Components/InvoiceView";
 import html2pdf from "html2pdf.js";
 
-const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) => {
+const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quotationRef }) => {
     const [hotels, setHotels] = useState([]);
     const [hotelsMap, setHotelsMap] = useState({}); // { city: [hotels] }
     const [loading, setLoading] = useState(false);
@@ -92,8 +92,8 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
 
         const fetchReceipts = async () => {
             try {
-                // Use human-readable quotationId/quickQuotationId as the ref for payments
-                const ref = quotation?.quotationId || quotation?.quickQuotationId || quotation?._id;
+                // Use the provided quotationRef if available, otherwise try common fields
+                const ref = quotationRef || quotation?.quotationId || quotation?.quickQuotationId || quotation?._id;
                 if (!ref) return;
 
                 const res = await axios.get(`/payment/by-quotation/${ref}`);
