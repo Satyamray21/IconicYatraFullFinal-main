@@ -6,8 +6,14 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
   const companyEmail = options.email || options.companyEmail || "info@iconictravel.in";
   const companyWebsite = options.companyWebsite || options.website || "www.iconictravel.in";
   const companyAddress = options.address || options.companyAddress || "B-38, 2nd Floor, Sector-64, Noida, U.P. 201301";
-  const termsConditions = options.termsConditions || "";
-  const cancellationPolicy = options.cancellationPolicy || "";
+  const pickHttp = (v) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return /^https?:\/\//i.test(s) ? s : "";
+  };
+
+  const termsConditions = pickHttp(options.termsConditions);
+  const cancellationPolicy = pickHttp(options.cancellationPolicy);
+  const paymentLink = pickHttp(options.paymentLink);
 
   const guestName = quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
   const bookingId = quotation?.quotationId || quotation?.quickQuotationId || "Booking Id";
@@ -195,9 +201,9 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
         doc.fillColor("#0000ff").font("Helvetica").text(cancellationPolicy, { link: cancellationPolicy, underline: true });
       }
 
-      if (options.paymentLink) {
+      if (paymentLink) {
         doc.fillColor("#000000").font("Helvetica-Bold").text("Pay Online: ", { continued: true });
-        doc.fillColor("#0000ff").font("Helvetica").text(options.paymentLink, { link: options.paymentLink, underline: true });
+        doc.fillColor("#0000ff").font("Helvetica").text(paymentLink, { link: paymentLink, underline: true });
       }
 
       doc.moveDown(1);
