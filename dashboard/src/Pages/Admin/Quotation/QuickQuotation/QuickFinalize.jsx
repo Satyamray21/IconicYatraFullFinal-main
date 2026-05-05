@@ -1017,6 +1017,8 @@ function transformQuickApiToDisplay(apiData, company) {
   })();
 
   return {
+    _id: apiData._id,
+    quickQuotationId: apiData.quickQuotationId,
     date: formatDate(
       apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
       apiData?.packageSnapshot?.arrivalDate ||
@@ -4148,6 +4150,7 @@ const QuickFinalize = () => {
         open={openHotelConfirmation}
         onClose={() => setOpenHotelConfirmation(false)}
         quotation={currentQuotation}
+        quotationRef={apiEntityId}
         type="quick"
       />
     </Box>
