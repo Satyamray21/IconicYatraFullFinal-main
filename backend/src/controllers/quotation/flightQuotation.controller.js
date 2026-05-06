@@ -551,12 +551,6 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
             attachments: attachments,
         });
 
-        const found = [];
-        if (pdfAttachment?.contentBase64) found.push("Itinerary");
-        if (receiptPdf?.contentBase64) found.push("Receipt");
-
-        console.log(`Email sent successfully to ${to}. Found: ${found.join(", ")}`);
-
         return res.status(200).json(
             new ApiResponse(
                 200,
@@ -564,10 +558,8 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
                     flightQuotationId,
                     type,
                     senderAccount: senderAccount || "gmail1",
-                    attachmentsSent: attachments.length,
-                    found
                 },
-                `!!! SENT: ${found.length > 0 ? found.join(" & ") : "None"} !!!`,
+                "Mail sent successfully",
             ),
         );
     } catch (mailError) {

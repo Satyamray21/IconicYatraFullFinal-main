@@ -390,7 +390,6 @@ const FlightFinalize = () => {
   };
 
   const handleEmailSend = async (values) => {
-    alert(`Debug: Sending mail. Receipt ID: ${values.selectedReceiptId}, Type: ${values.mailType}`);
     try {
       const isBookingMail = values?.mailType === "booking";
       const selectedCompany =
@@ -441,9 +440,7 @@ const FlightFinalize = () => {
         await new Promise((resolve) => setTimeout(resolve, 2500));
         
         const element = document.getElementById("hidden-receipt-container");
-        if (!element) {
-          alert("Debug: Hidden receipt container not found in DOM");
-        } else {
+        if (element) {
           try {
             const opt = {
               margin: 0.2,
@@ -455,9 +452,7 @@ const FlightFinalize = () => {
 
             const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
             
-            if (!pdfBlob || pdfBlob.size < 100) {
-              alert("Debug: Generated PDF blob is empty or too small");
-            } else {
+            if (pdfBlob && pdfBlob.size >= 100) {
               // Convert Blob to Base64
               const reader = new FileReader();
               const receiptAttachment = await new Promise((resolve, reject) => {
@@ -477,13 +472,11 @@ const FlightFinalize = () => {
             }
           } catch (captureErr) {
             console.error("Failed to capture receipt PDF:", captureErr);
-            alert(`Debug: Receipt capture failed: ${captureErr.message}`);
           }
         }
       }
 
-      const res = await axios.post(`/flightQT/${quotation.flightQuotationId}/email/send`, payload);
-      alert(res.data?.message || "Mail sent successfully");
+      await axios.post(`/flightQT/${quotation.flightQuotationId}/email/send`, payload);
       setOpenSnackbar(true);
       return true;
     } catch (err) {
