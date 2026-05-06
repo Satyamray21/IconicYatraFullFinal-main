@@ -20,7 +20,7 @@ import {
     deleteLeadOption,
 } from "../features/leads/leadSlice"; // adjust import path
 
-const LeadOptionsManager = ({ fieldName }) => {
+const LeadOptionsManager = ({ fieldName, onAdd }) => {
     const dispatch = useDispatch();
     const { options, loading, error } = useSelector((state) => state.leads);
 
@@ -33,7 +33,11 @@ const LeadOptionsManager = ({ fieldName }) => {
 
     const handleAdd = () => {
         if (!newOption.trim()) return;
-        dispatch(addLeadOption({ fieldName, value: newOption.trim() }));
+        dispatch(addLeadOption({ fieldName, value: newOption.trim() })).then(() => {
+            if (typeof onAdd === "function") {
+                onAdd(newOption.trim());
+            }
+        });
         setNewOption("");
     };
 
