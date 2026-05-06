@@ -93,6 +93,8 @@ import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 import HotelConfirmationDialog from "../CustomQuotation/Dialog/HotelConfirmationDialog";
 import ReceiptPreviewDialog from "../../../../Components/ReceiptPreviewDialog";
+import InvoiceView from "../../../../Components/InvoiceView";
+import html2pdf from "html2pdf.js";
 import {
   effectiveQuickPayableTotal,
 
@@ -1256,6 +1258,7 @@ const QuickFinalize = () => {
   const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
   const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState(null);
   const [openReceiptPreview, setOpenReceiptPreview] = useState(false);
+  const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
 
   const handleOpenReceiptPreview = (voucher) => {
     setSelectedVoucherForPreview(voucher);
@@ -1942,64 +1945,80 @@ const QuickFinalize = () => {
   };
 
   const handleEmailSend = async (values) => {
-    const to = String(values?.to || "").trim();
-    const cc = String(values?.cc || "").trim();
-    const subject = String(values?.subject || "");
-    const isBookingMail = values?.mailType === "booking";
-    const nextPayableRaw = String(values?.nextPayableAmount || "").trim();
-    const parsedNextPayable = Number(nextPayableRaw.replace(/[^0-9.-]/g, ""));
-    const dueDateRaw = String(values?.paymentDueDate || "").trim();
-    const nextPayableAmount =
-      nextPayableRaw === "" || !Number.isFinite(parsedNextPayable)
-        ? undefined
-        : parsedNextPayable;
-    const hasBookingOverrides =
-      isBookingMail &&
-      (dueDateRaw !== "" || Number.isFinite(nextPayableAmount));
-    const selectedCompany =
-      mailCompanies.find((c) => c?._id === values?.companyId) || null;
-    if (!to) {
-      setSnackbar({
-        open: true,
-        message: "Please enter receiver email",
-        severity: "warning",
-      });
-      return;
-    }
     try {
+      const isBookingMail = values?.mailType === "booking";
+      const selectedCompany =
+        mailCompanies.find((c) => c?._id === values?.companyId) || null;
+
+      const payload = {
+        to: String(values?.to || "").trim(),
+        cc: String(values?.cc || "").trim() || undefined,
+        type: isBookingMail ? "booking" : "normal",
+        subject: values?.subject || undefined,
+        bodyHtml: isBookingMail ? undefined : values?.message || undefined,
+        senderAccount: values?.senderAccount || "gmail1",
+        companyId: values?.companyId || undefined,
+        companyName: selectedCompany?.companyName || undefined,
+        customText: {
+          signature: values?.signature || undefined,
+          normal: { signature: values?.signature || undefined },
+          booking: {
+            signature: values?.signature || undefined,
+            ...(values?.nextPayableAmount
+              ? { nextPayableAmount: Number(values.nextPayableAmount) }
+              : {}),
+            ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+          },
+        },
+        ...(pdfAttachmentForMail?.contentBase64
+          ? { pdfAttachment: pdfAttachmentForMail }
+          : {}),
+        previewPdfMode:
+          !isBookingMail &&
+          !!pdfAttachmentForMail?.contentBase64 &&
+          previewPdfModeForMail,
+      };
+
+      // Handle Payment Receipt Attachment for Booking Mails
+      if (values.selectedReceiptId && isBookingMail) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        const element = document.getElementById("hidden-receipt-container");
+        if (element) {
+          try {
+            const opt = {
+              margin: 0.2,
+              filename: `Receipt_${values.selectedReceiptId}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 1.5, useCORS: true, logging: false },
+              jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+            };
+            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+            if (pdfBlob && pdfBlob.size >= 100) {
+              const reader = new FileReader();
+              const receiptAttachment = await new Promise((resolve, reject) => {
+                reader.onloadend = () =>
+                  resolve({
+                    filename: "Payment_Receipt.pdf",
+                    contentBase64: reader.result.split(",")[1],
+                    mimeType: "application/pdf",
+                  });
+                reader.onerror = reject;
+                reader.readAsDataURL(pdfBlob);
+              });
+              payload.receiptPdf = receiptAttachment;
+              payload.paymentVoucherId = values.selectedReceiptId;
+            }
+          } catch (captureErr) {
+            console.error("Failed to capture receipt PDF:", captureErr);
+          }
+        }
+      }
+
       await axios.post(
         `/quickQT/${encodeURIComponent(apiEntityId)}/email/send`,
-        {
-          to,
-          cc: cc || undefined,
-          type: isBookingMail ? "booking" : "normal",
-          subject: subject || undefined,
-          bodyHtml: isBookingMail ? undefined : values?.message || undefined,
-          senderAccount: values?.senderAccount || "gmail1",
-          companyId: values?.companyId || undefined,
-          companyName: selectedCompany?.companyName || undefined,
-          customText: {
-            signature: values?.signature || undefined,
-            normal: {
-              signature: values?.signature || undefined,
-            },
-            booking: {
-              signature: values?.signature || undefined,
-              ...(Number.isFinite(nextPayableAmount)
-                ? { nextPayableAmount }
-                : {}),
-              ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
-            },
-          },
-          previewPdfMode:
-            !isBookingMail &&
-            !!pdfAttachmentForMail?.contentBase64 &&
-            previewPdfModeForMail,
-          ...(pdfAttachmentForMail?.contentBase64
-            ? { pdfAttachment: pdfAttachmentForMail }
-            : {}),
-        },
+        payload,
       );
+
       setSnackbar({
         open: true,
         message: "Email sent successfully",
@@ -4054,6 +4073,8 @@ const QuickFinalize = () => {
           companyOptions={mailCompanies}
           emailAccountOptions={emailAccounts}
           hasPdfAttachment={!!pdfAttachmentForMail}
+          receiptOptions={paymentHistory.filter(v => v.paymentType === "Receive Voucher")}
+          onReceiptChange={(receiptId) => setSelectedReceiptIdForPdf(receiptId)}
         />
       )}
       <TransactionSummaryDialog
@@ -4153,6 +4174,14 @@ const QuickFinalize = () => {
         quotationRef={apiEntityId}
         type="quick"
       />
+
+      <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+        <div id="hidden-receipt-container">
+          {selectedReceiptIdForPdf && (
+            <InvoiceView id={selectedReceiptIdForPdf} hideButtons={true} />
+          )}
+        </div>
+      </Box>
     </Box>
   );
 };
