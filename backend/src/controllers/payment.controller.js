@@ -105,7 +105,12 @@ export const getVouchersByQuotationRef = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("quotationRef is required");
   }
-  const vouchers = await ReceivedVoucher.find({ quotationRef }).sort({
+  const vouchers = await ReceivedVoucher.find({
+    $or: [
+      { quotationRef: quotationRef },
+      { quotationId: quotationRef } // Some legacy records might use this
+    ]
+  }).sort({
     date: -1,
     createdAt: -1,
   });
