@@ -818,6 +818,8 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     companyName,
     pdfAttachment,
     previewPdfMode = false,
+    receiptPdf,
+    paymentVoucherId,
   } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -884,22 +886,49 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     auth: { user: auth.user, pass: auth.pass },
   });
 
-  const providedPdfAttachment =
-    pdfAttachment &&
+  const isBookingMail = String(type || "").trim().toLowerCase() === "booking";
+  const attachments = [];
+
+  // 1. Itinerary Attachment (Normal mail only)
+  if (!isBookingMail) {
+    const providedPdfAttachment =
+      pdfAttachment &&
       typeof pdfAttachment === "object" &&
       String(pdfAttachment.contentBase64 || "").trim()
-      ? {
-        filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
-        content: Buffer.from(
-          String(pdfAttachment.contentBase64).trim(),
-          "base64",
-        ),
-        contentType:
-          String(pdfAttachment.mimeType || "").trim() || "application/pdf",
-      }
-      : null;
+        ? {
+          filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+          content: Buffer.from(
+            String(pdfAttachment.contentBase64).trim(),
+            "base64",
+          ),
+          contentType:
+            String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+        }
+        : null;
+    
+    if (providedPdfAttachment) attachments.push(providedPdfAttachment);
+  }
 
-  const isBooking = String(type || "").trim().toLowerCase() === "booking";
+  // 2. Receipt Attachment (Booking mail only)
+  if (isBookingMail) {
+    if (receiptPdf && receiptPdf.contentBase64 && String(receiptPdf.contentBase64).trim()) {
+      attachments.push({
+        filename: receiptPdf.filename || "Payment_Receipt.pdf",
+        content: Buffer.from(String(receiptPdf.contentBase64).trim(), "base64"),
+        contentType: "application/pdf",
+      });
+    } else if (paymentVoucherId) {
+      const voucher = await ReceivedVoucher.findById(paymentVoucherId).populate("companyId");
+      if (voucher) {
+        const receiptPdfBuffer = await buildPaymentReceiptPdf(voucher, voucher.companyId || selectedCompany);
+        attachments.push({
+          filename: `Payment_Receipt_${voucher.invoiceId || paymentVoucherId}.pdf`,
+          content: receiptPdfBuffer,
+          contentType: "application/pdf",
+        });
+      }
+    }
+  }
 
   try {
     await transporter.sendMail({
@@ -910,7 +939,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
       subject: finalSubject,
       html: body,
       text: body.replace(/<[^>]*>/g, ""), // fallback
-      attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
+      attachments: attachments,
     });
   } catch (error) {
     console.error("Mail Error:", error);
