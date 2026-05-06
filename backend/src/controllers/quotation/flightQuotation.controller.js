@@ -452,6 +452,7 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
         companyName,
         customText = {},
         pdfAttachment,
+        receiptPdf,
     } = req.body || {};
 
     if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -493,8 +494,14 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
 
     // Append signature if bodyHtml was used and signature is provided
     if (bodyHtml && companyMeta.signature) {
-        const sig = companyMeta.signature.replace(/\n/g, "<br/>");
-        if (!body.includes(sig)) {
+        const isHtmlSig = /<[a-z][\s\S]*>/i.test(companyMeta.signature);
+        const sig = isHtmlSig ? companyMeta.signature : companyMeta.signature.replace(/\n/g, "<br/>");
+        
+        // Use a simpler check for existing signature to avoid duplication
+        const cleanSig = sig.replace(/\s/g, "");
+        const cleanBody = body.replace(/\s/g, "");
+        
+        if (!cleanBody.includes(cleanSig)) {
             body += `<br/><br/>${sig}`;
         }
     }
@@ -510,40 +517,73 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
     });
 
     const isBooking = String(type || "").trim().toLowerCase() === "booking";
-    const providedPdfAttachment =
-        !isBooking &&
-            pdfAttachment &&
-            typeof pdfAttachment === "object" &&
-            String(pdfAttachment.contentBase64 || "").trim()
-            ? {
-                filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
-                content: Buffer.from(String(pdfAttachment.contentBase64).trim(), "base64"),
-                contentType: String(pdfAttachment.mimeType || "").trim() || "application/pdf",
-            }
-            : null;
+    const attachments = [];
 
-    await transporter.sendMail({
-        from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
-        to,
-        cc: cc && String(cc).trim() ? cc : undefined,
-        replyTo: selectedCompany?.email || auth.user,
-        subject: finalSubject,
-        html: body,
-        text: body.replace(/<[^>]*>/g, ""),
-        attachments: providedPdfAttachment ? [providedPdfAttachment] : [],
-    });
+    // Handle normal PDF attachment (Quotation PDF)
+    if (pdfAttachment && pdfAttachment.contentBase64 && String(pdfAttachment.contentBase64).trim()) {
+        attachments.push({
+            filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+            content: Buffer.from(String(pdfAttachment.contentBase64).trim(), "base64"),
+            contentType: String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+        });
+    }
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            {
-                flightQuotationId,
-                type,
-                senderAccount: senderAccount || "gmail1",
-            },
-            "Mail sent successfully",
-        ),
-    );
+    // Handle Receipt PDF attachment
+    if (receiptPdf && receiptPdf.contentBase64 && String(receiptPdf.contentBase64).trim()) {
+        attachments.push({
+            filename: String(receiptPdf.filename || "Payment_Receipt.pdf").trim(),
+            content: Buffer.from(String(receiptPdf.contentBase64).trim(), "base64"),
+            contentType: String(receiptPdf.mimeType || "").trim() || "application/pdf",
+        });
+    }
+
+    try {
+        console.log(`Attempting to send flight ${type} email to: ${to} using account: ${auth.user}`);
+        
+        await transporter.sendMail({
+            from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+            to,
+            cc: cc && String(cc).trim() ? cc : undefined,
+            replyTo: selectedCompany?.email || auth.user,
+            subject: finalSubject,
+            html: body,
+            text: body.replace(/<[^>]*>/g, ""),
+            attachments: attachments,
+        });
+
+        const found = [];
+        if (pdfAttachment?.contentBase64) found.push("Itinerary");
+        if (receiptPdf?.contentBase64) found.push("Receipt");
+
+        console.log(`Email sent successfully to ${to}. Found: ${found.join(", ")}`);
+
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                {
+                    flightQuotationId,
+                    type,
+                    senderAccount: senderAccount || "gmail1",
+                    attachmentsSent: attachments.length,
+                    found
+                },
+                `!!! SENT: ${found.length > 0 ? found.join(" & ") : "None"} !!!`,
+            ),
+        );
+    } catch (mailError) {
+        console.error("Nodemailer Error Details:", {
+            message: mailError.message,
+            code: mailError.code,
+            command: mailError.command,
+            response: mailError.response,
+            stack: mailError.stack
+        });
+        
+        throw new ApiError(
+            500, 
+            `Failed to send email: ${mailError.message}. Check SMTP configuration or attachment size.`
+        );
+    }
 });
 
 

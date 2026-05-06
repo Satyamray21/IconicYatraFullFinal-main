@@ -259,6 +259,11 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
       <p><b>Payment received:</b> INR ${INR.format(receivedAmount)}</p>
       <p><b>The remaining payment:</b> INR ${INR.format(dueAmount)}</p>
       ${
+        customText?.nextPayableAmount !== undefined && customText?.nextPayableAmount !== null && customText?.nextPayableAmount !== ""
+          ? `<p style="color:#d32f2f; font-weight:bold;"><b>Next Payable Amount:</b> INR ${INR.format(toNum(customText.nextPayableAmount))}</p>`
+          : ""
+      }
+      ${
         customText?.dueDate
           ? `<p><b>Payment Due Date:</b> ${safe(customText.dueDate)}</p>`
           : ""

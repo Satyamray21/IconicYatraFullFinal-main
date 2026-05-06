@@ -72,6 +72,8 @@ import {
 import FlightQuotationPDFDialog from "./PDF/PreviewPdf";
 import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
 import TransactionHistoryDialog from "../VehicleQuotation/Dialog/TransactionHistoryDialog";
+import InvoiceView from "../../../../Components/InvoiceView";
+import html2pdf from "html2pdf.js";
 
 const FlightFinalize = () => {
   const [openDialog, setOpenDialog] = useState(false);
@@ -121,6 +123,7 @@ const FlightFinalize = () => {
   const lead = quotationDetails?.lead || null;
 
   const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
+  const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
 
   const apiEntityId = React.useMemo(() => {
     if (quotation?.flightQuotationId) return String(quotation.flightQuotationId);
@@ -387,6 +390,7 @@ const FlightFinalize = () => {
   };
 
   const handleEmailSend = async (values) => {
+    alert(`Debug: Sending mail. Receipt ID: ${values.selectedReceiptId}, Type: ${values.mailType}`);
     try {
       const isBookingMail = values?.mailType === "booking";
       const selectedCompany =
@@ -403,7 +407,7 @@ const FlightFinalize = () => {
         return false;
       }
 
-      await axios.post(`/flightQT/${quotation.flightQuotationId}/email/send`, {
+      const payload = {
         to: String(values?.to || "").trim(),
         cc: String(values?.cc || "").trim() || undefined,
         type: isBookingMail ? "booking" : "normal",
@@ -425,19 +429,67 @@ const FlightFinalize = () => {
             ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
           },
         },
-        previewPdfMode:
-          !isBookingMail &&
-          !!pdfAttachmentForMail?.contentBase64 &&
-          previewPdfModeForMail,
-        ...(!isBookingMail && pdfAttachmentForMail?.contentBase64
+        ...(pdfAttachmentForMail?.contentBase64
           ? { pdfAttachment: pdfAttachmentForMail }
           : {}),
-      });
+      };
 
+      // Handle Payment Receipt Attachment
+      if (values.selectedReceiptId && isBookingMail) {
+        console.log("Starting receipt capture for ID:", values.selectedReceiptId);
+        // Wait for InvoiceView to render and fetch data
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        
+        const element = document.getElementById("hidden-receipt-container");
+        if (!element) {
+          alert("Debug: Hidden receipt container not found in DOM");
+        } else {
+          try {
+            const opt = {
+              margin: 0.2,
+              filename: `Receipt_${values.selectedReceiptId}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 1.5, useCORS: true, logging: true },
+              jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+            };
+
+            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+            
+            if (!pdfBlob || pdfBlob.size < 100) {
+              alert("Debug: Generated PDF blob is empty or too small");
+            } else {
+              // Convert Blob to Base64
+              const reader = new FileReader();
+              const receiptAttachment = await new Promise((resolve, reject) => {
+                reader.onloadend = () =>
+                  resolve({
+                    filename: "Payment_Receipt.pdf",
+                    contentBase64: reader.result.split(",")[1],
+                    mimeType: "application/pdf",
+                  });
+                reader.onerror = reject;
+                reader.readAsDataURL(pdfBlob);
+              });
+
+              payload.receiptPdf = receiptAttachment;
+              payload.paymentVoucherId = values.selectedReceiptId;
+              console.log("Receipt captured and added to payload");
+            }
+          } catch (captureErr) {
+            console.error("Failed to capture receipt PDF:", captureErr);
+            alert(`Debug: Receipt capture failed: ${captureErr.message}`);
+          }
+        }
+      }
+
+      const res = await axios.post(`/flightQT/${quotation.flightQuotationId}/email/send`, payload);
+      alert(res.data?.message || "Mail sent successfully");
       setOpenSnackbar(true);
       return true;
     } catch (err) {
       console.error("Failed to send flight quotation mail:", err);
+      const errorMsg = err.response?.data?.message || err.message || "Unknown error";
+      alert(`Failed to send email: ${errorMsg}`);
       return false;
     }
   };
@@ -1295,7 +1347,17 @@ const FlightFinalize = () => {
         companyOptions={mailCompanies}
         emailAccountOptions={emailAccounts}
         hasPdfAttachment={!!pdfAttachmentForMail}
+        receiptOptions={paymentHistory.filter(v => v.paymentType === "Receive Voucher")}
+        onReceiptChange={(receiptId) => setSelectedReceiptIdForPdf(receiptId)}
       />
+
+      <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+        <div id="hidden-receipt-container">
+           {selectedReceiptIdForPdf && (
+              <InvoiceView id={selectedReceiptIdForPdf} hideButtons={true} />
+           )}
+        </div>
+      </Box>
 
       {/* Confirmation Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>

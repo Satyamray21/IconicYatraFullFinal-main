@@ -57,6 +57,8 @@ const EmailQuotationDialog = ({
   companyOptions = [],
   emailAccountOptions = [],
   hasPdfAttachment = false,
+  receiptOptions = [],
+  onReceiptChange = () => { },
 }) => {
   const validationSchema = Yup.object({
     to: Yup.string().email("Invalid email").required("Required"),
@@ -84,6 +86,7 @@ const EmailQuotationDialog = ({
     companyId: "",
     nextPayableAmount: "",
     paymentDueDate: null,
+    selectedReceiptId: "",
   };
   const initialValues = { ...baseInitialValues, ...(initialValuesOverride || {}) };
 
@@ -319,7 +322,7 @@ const EmailQuotationDialog = ({
                       <Grid size={{ xs: 12 }}>
                         {(values.mailType || "normal") === "booking" && (
                           <Grid container spacing={2} sx={{ mb: 1 }}>
-                            <Grid size={{ xs: 12, sm: 6 }}>
+                            <Grid size={{ xs: 12, sm: 4 }}>
                               <TextField
                                 fullWidth
                                 name="nextPayableAmount"
@@ -330,7 +333,7 @@ const EmailQuotationDialog = ({
                                 }
                               />
                             </Grid>
-                            <Grid size={{ xs: 12, sm: 6 }}>
+                            <Grid size={{ xs: 12, sm: 4 }}>
                               <DatePicker
                                 label="Payment Due Date"
                                 value={values.paymentDueDate}
@@ -344,6 +347,28 @@ const EmailQuotationDialog = ({
                                   },
                                 }}
                               />
+                            </Grid>
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                              <TextField
+                                select
+                                fullWidth
+                                label="Attach Receipt"
+                                value={values.selectedReceiptId || ""}
+                                onChange={(e) => {
+                                  setFieldValue("selectedReceiptId", e.target.value);
+                                  onReceiptChange(e.target.value);
+                                }}
+                                helperText={receiptOptions.length === 0 ? "No receipts found" : "Attach a payment receipt"}
+                              >
+                                <MenuItem value="">
+                                  <em>None</em>
+                                </MenuItem>
+                                {receiptOptions.map((r) => (
+                                  <MenuItem key={r._id} value={r._id}>
+                                    {r.invoiceId || r.receiptNumber} - ₹{r.amount}
+                                  </MenuItem>
+                                ))}
+                              </TextField>
                             </Grid>
                           </Grid>
                         )}
