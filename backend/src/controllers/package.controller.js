@@ -944,17 +944,13 @@ export const getPackagesByCategory = async (req, res) => {
 
 
 // ----------------------
-// DELETE
+// DELETE PACKAGE
 // ----------------------
 export const remove = asyncHandler(async (req, res) => {
-    const doc = await Package.findByIdAndDelete(req.params.id);
-    if (!doc) return res.status(404).json({ message: "Package not found" });
+    const { id } = req.params;
+    const doc = await Package.findByIdAndDelete(id);
 
-    // Invalidate caches
-    await Promise.all([
-        clearPattern('packages:*'),
-        clearPattern('dashboard:stats:*')
-    ]);
+    if (!doc) return res.status(404).json({ message: "Package not found" });
 
     await logActivity({
         action: "DELETE",
@@ -964,7 +960,56 @@ export const remove = asyncHandler(async (req, res) => {
         user: req.user?.name || "System",
     });
 
-    res.json({ message: "Deleted", id: doc._id });
+    // Invalidate caches
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
+
+    res.json({ message: "Package deleted successfully" });
+});
+
+// ----------------------
+// CLONE PACKAGE (NEW)
+// ----------------------
+export const clonePackage = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const existingPackage = await Package.findById(id).lean();
+
+    if (!existingPackage) {
+        return res.status(404).json({ message: "Package not found" });
+    }
+
+    // Remove ID, timestamps and the unique packageId
+    const { _id, createdAt, updatedAt, packageId, ...cloneData } = existingPackage;
+
+    // Keep sector and title exactly same as original
+    cloneData.sector = existingPackage.sector;
+    cloneData.title = existingPackage.title;
+    
+    // Reset status and dates to be safe (or keep them, but let's keep them and just recalculate status)
+    cloneData.status = calculateStatus(cloneData.validFrom, cloneData.validTill, true);
+
+    const newPackage = await Package.create(cloneData);
+
+    await logActivity({
+        action: "CREATE",
+        model: "Package",
+        refId: newPackage._id,
+        description: `Package "${newPackage.sector}" cloned from ${existingPackage.sector} by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    // Invalidate caches
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
+
+    res.status(201).json({
+        message: "Package cloned successfully",
+        package: normalizePackageUrls(newPackage.toObject())
+    });
 });
 
 // ----------------------
