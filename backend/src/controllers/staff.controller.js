@@ -339,10 +339,10 @@ export const getStaffDashboardStats = asyncHandler(async (req, res) => {
   ];
 
   const stats = await Promise.all(periods.map(async (period) => {
-    const [activeStaffIds, leadCount] = await Promise.all([
-      LoginHistory.distinct("userId", { 
-        timestamp: { $gte: period.date },
-        status: "Login Successful" 
+    const [assignedStaffNames, leadCount] = await Promise.all([
+      Lead.distinct("officialDetail.assignedTo", { 
+        createdAt: { $gte: period.date },
+        "officialDetail.assignedTo": { $exists: true, $ne: "" }
       }),
       Lead.countDocuments({ createdAt: { $gte: period.date } })
     ]);
@@ -355,7 +355,8 @@ export const getStaffDashboardStats = asyncHandler(async (req, res) => {
 
     return {
       title: period.title,
-      active: activeStaffIds.length,
+      active: assignedStaffNames.length,
+      activeStaffNames: assignedStaffNames,
       lead: leadCount,
       quotation: totalQuotations
     };
