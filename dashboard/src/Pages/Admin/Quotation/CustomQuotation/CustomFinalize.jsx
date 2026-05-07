@@ -1097,6 +1097,7 @@ useEffect(() => {
         return {
             _id: apiData._id,
             quotationId: quotationId,
+            bookingId: apiData.bookingId,
             date: formatDate(createdAt),
             arrivalDate,
             reference: quotationId,
@@ -1375,7 +1376,8 @@ useEffect(() => {
             return;
         }
         setEmailTemplateType("normal");
-        const defaultCompanyId = company?._id || mailCompanies?.[0]?._id;
+        // Prefer the company chosen at finalization
+        const defaultCompanyId = selectedQuotation?.companyId || company?._id || mailCompanies?.[0]?._id;
         try {
             await refreshEmailTemplates(defaultCompanyId);
         } catch (e) {
@@ -1485,6 +1487,8 @@ useEffect(() => {
         const source = selectedQuotation || {};
         const type = emailTemplateType === "booking" ? "booking" : "normal";
         const tpl = emailTemplateBodies[type];
+        // Prefer the company chosen during finalization so the user doesn't have to re-select
+        const defaultCompanyId = selectedQuotation?.companyId || company?._id || mailCompanies?.[0]?._id || "";
         return {
             to: "",
             cc: "",
@@ -1496,7 +1500,7 @@ useEffect(() => {
             signature: "",
             mailType: type,
             senderAccount: "",
-            companyId: company?._id || mailCompanies?.[0]?._id || "",
+            companyId: defaultCompanyId,
             nextPayableAmount: "",
             paymentDueDate: "",
         };
@@ -1841,6 +1845,8 @@ useEffect(() => {
                     finalizedPackage: packages[0], // Keep for backward compatibility
                     finalizedPackages: packages, // New field for multiple packages
                     selectedBank: values?.selectedBank,
+                    companyId: values?.companyId,
+                    companyName: values?.companyName,
                 })
             ).unwrap();
 
@@ -2426,7 +2432,7 @@ useEffect(() => {
                 {quotation.actions
                     .filter(
                         (a) =>
-                            !(a === "Finalize" && isFinalized) &&
+                            !(a === "Finalize" && isFinalized && quotation.bookingId) &&
                             !(a === "Transaction" && !isFinalized)
                     )
                     .map((a, i) => (
@@ -2776,6 +2782,14 @@ useEffect(() => {
                                     Ref: {quotation.reference}
                                 </Typography>
                             </Box>
+                            {quotation.bookingId && (
+                                <Box display="flex" alignItems="center" mt={1}>
+                                    <CheckCircle sx={{ fontSize: 18, mr: 0.5, color: "error.main" }} />
+                                    <Typography variant="body2" fontWeight="bold" color="error.main">
+                                        Booking ID: {quotation.bookingId}
+                                    </Typography>
+                                </Box>
+                            )}
 
                             <Box display="flex" alignItems="center" mt={2}>
                                 <Person sx={{ fontSize: 18, mr: 0.5 }} />
@@ -3491,6 +3505,7 @@ useEffect(() => {
                 onClose={handleFinalizeClose}
                 onConfirm={handleConfirm}
                 additionalServicesSum={billableServicesSum}
+                companyOptions={mailCompanies}
             />
             <HotelVendorDialog
                 open={openBankDialog}

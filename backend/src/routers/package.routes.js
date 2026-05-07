@@ -11,6 +11,7 @@ import {
     getById,
     listPackages,
     remove,
+    clonePackage,
     getPopularTours,
     makeAllPopular,
     getPackagesByCategory,
@@ -43,6 +44,9 @@ router.get("/make-all-popular", verifyToken, requirePermission("canEditPackage")
 // read
 router.get("/:id", getById);
 router.get("/", listPackages);
+
+// clone
+router.post("/clone/:id", verifyToken, requirePermission("canCreatePackage"), clonePackage);
 
 // delete
 router.delete("/:id", verifyToken, requirePermission("canDeletePackage"), remove);

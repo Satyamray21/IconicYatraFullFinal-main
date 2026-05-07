@@ -178,6 +178,19 @@ export const deletePackage = createAsyncThunk(
     }
 );
 
+// Clone package
+export const clonePackage = createAsyncThunk(
+    "packages/clonePackage",
+    async (id, { rejectWithValue }) => {
+        try {
+            const res = await axios.post(`/packages/clone/${id}`);
+            return res.data.package || res.data;
+        } catch (err) {
+            return rejectWithValue(err.response?.data || err.message);
+        }
+    }
+);
+
 // Upload banner
 export const uploadPackageBanner = createAsyncThunk(
     "packages/uploadBanner",
@@ -411,6 +424,21 @@ const packageSlice = createSlice({
                         state.tourTypePackages[tourType].items.length;
                 });
             })
+            // Clone
+            .addCase(clonePackage.pending, (state) => { state.loading = true; })
+            .addCase(clonePackage.fulfilled, (state, action) => {
+                state.loading = false;
+                const pkg = action.payload;
+                state.items.unshift(pkg);
+                state.total += 1;
+                
+                // Also add to respective tour type
+                if (pkg.tourType && state.tourTypePackages[pkg.tourType.toLowerCase()]) {
+                    state.tourTypePackages[pkg.tourType.toLowerCase()].items.unshift(pkg);
+                    state.tourTypePackages[pkg.tourType.toLowerCase()].total += 1;
+                }
+            })
+            .addCase(clonePackage.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
             .addCase(uploadPackageBanner.fulfilled, (state, action) => {
                 const pkg = action.payload.package || action.payload;
                 state.current = pkg;

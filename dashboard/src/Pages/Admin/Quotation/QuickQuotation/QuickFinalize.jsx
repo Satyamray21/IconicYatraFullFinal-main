@@ -630,7 +630,7 @@ const formatDateWithOptionalTime = (dateValue, timeValue) => {
   if (Number.isNaN(baseDate.getTime())) return "";
 
   const rawTime = String(timeValue || "").trim();
-  if (!rawTime) return formatDateTime(dateValue);
+  if (!rawTime) return formatDate(dateValue);
 
   const timeAsDate = new Date(rawTime);
   if (!Number.isNaN(timeAsDate.getTime())) {
@@ -639,7 +639,7 @@ const formatDateWithOptionalTime = (dateValue, timeValue) => {
   }
 
   const match = rawTime.match(/^(\d{1,2}):(\d{2})/);
-  if (!match) return formatDateTime(dateValue);
+  if (!match) return formatDate(dateValue);
   const hh = Math.min(Math.max(Number(match[1]) || 0, 0), 23);
   const mm = Math.min(Math.max(Number(match[2]) || 0, 0), 59);
   baseDate.setHours(hh, mm, 0, 0);
@@ -1021,6 +1021,7 @@ function transformQuickApiToDisplay(apiData, company) {
   return {
     _id: apiData._id,
     quickQuotationId: apiData.quickQuotationId,
+    bookingId: apiData.bookingId,
     date: formatDate(
       apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
       apiData?.packageSnapshot?.arrivalDate ||
@@ -1833,6 +1834,8 @@ const QuickFinalize = () => {
   const emailInitialValues = useMemo(() => {
     const type = emailTemplateType === "booking" ? "booking" : "normal";
     const tpl = emailTemplateBodies[type];
+    // Prefer the company chosen during finalization so the user doesn't have to re-select
+    const defaultCompanyId = currentQuotation?.companyId || company?._id || mailCompanies?.[0]?._id || "";
     return {
       to: currentQuotation?.email || quotation.customer?.email || "",
       cc: "",
@@ -1845,7 +1848,7 @@ const QuickFinalize = () => {
       signature: "",
       mailType: type,
       senderAccount: "",
-      companyId: company?._id || mailCompanies?.[0]?._id || "",
+      companyId: defaultCompanyId,
       nextPayableAmount: "",
       paymentDueDate: "",
     };
@@ -1926,7 +1929,8 @@ const QuickFinalize = () => {
       return;
     }
     setEmailTemplateType("normal");
-    const defaultCompanyId = company?._id || mailCompanies?.[0]?._id;
+    // Prefer the company chosen at finalization
+    const defaultCompanyId = currentQuotation?.companyId || company?._id || mailCompanies?.[0]?._id;
     try {
       await refreshEmailTemplates(defaultCompanyId);
     } catch (e) {
@@ -2286,6 +2290,8 @@ const QuickFinalize = () => {
         finalizeQuickQuotation({
           id: apiEntityId,
           finalizedPackage: pkg,
+          companyId: values.companyId,
+          companyName: values.companyName,
         }),
       ).unwrap();
       await dispatch(fetchQuickQuotationById(id)).unwrap();
@@ -2931,7 +2937,7 @@ const QuickFinalize = () => {
         {quotation.actions
           .filter(
             (a) =>
-              !(a === "Finalize" && isFinalized) &&
+              !(a === "Finalize" && isFinalized && quotation.bookingId) &&
               !(a === "Transaction" && !isFinalized),
           )
           .map((a, i) => (
@@ -3224,6 +3230,14 @@ const QuickFinalize = () => {
                   Ref: {quotation.reference}
                 </Typography>
               </Box>
+              {quotation.bookingId && (
+                <Box display="flex" alignItems="center" mt={1}>
+                  <CheckCircle sx={{ fontSize: 18, mr: 0.5, color: "error.main" }} />
+                  <Typography variant="body2" fontWeight="bold" color="error.main">
+                    Booking ID: {quotation.bookingId}
+                  </Typography>
+                </Box>
+              )}
 
               <Box display="flex" alignItems="center" mt={2}>
                 <Person sx={{ fontSize: 18, mr: 0.5 }} />
@@ -4015,6 +4029,7 @@ const QuickFinalize = () => {
         packageOptionsOverride={finalizePackageOptions}
         preselectedPackageLabel={currentQuotation?.finalizedPackage}
         allowEditableAmount
+        companyOptions={mailCompanies}
       />
       <HotelVendorDialog
         open={openBankDialog}

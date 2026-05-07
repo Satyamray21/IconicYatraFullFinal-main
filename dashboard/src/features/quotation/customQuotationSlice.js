@@ -134,7 +134,7 @@ export const updateCustomQuotationCosting = createAsyncThunk(
 export const finalizeCustomQuotation = createAsyncThunk(
     "customQuotation/finalize",
     async (
-        { quotationId, finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts },
+        { quotationId, finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts, companyId, companyName },
         { rejectWithValue, getState }
     ) => {
         try {
@@ -164,7 +164,11 @@ export const finalizeCustomQuotation = createAsyncThunk(
                 payload.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts;
             }
             
-            const res = await axios.patch(`/customQT/${quotationId}/finalize`, payload);
+            const res = await axios.patch(`/customQT/${quotationId}/finalize`, {
+                ...payload,
+                companyId,
+                companyName
+            });
             return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(

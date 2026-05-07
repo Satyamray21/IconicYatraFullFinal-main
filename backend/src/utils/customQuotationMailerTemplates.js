@@ -661,7 +661,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p style="color:#000; font-weight:bold;"> ${td.quotationTitle}</p>
         <p style="color:#d32f2f; font-weight:bold;">DETAILS OF TOUR PACKAGE:</p>
          <p style="color:#d32f2f; font-weight:bold;">
-            BOOKING ID: ${safe(customText.bookingId, quotation?.quickQuotationId || quotation?.quotationId)}
+            BOOKING ID: ${safe(customText.bookingId, quotation?.bookingId || quotation?.quickQuotationId || quotation?.quotationId)}
         </p>
         
         <p><b>No. of Pax:</b> ${guests}</p>
@@ -964,6 +964,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   return {
     quotationId: String(quick.quickQuotationId || quick._id || ""),
     quickQuotationId: String(quick.quickQuotationId || ""),
+    bookingId: safe(quick.bookingId, ""),
     clientDetails: { clientName: safe(quick.customerName, "Guest") },
     finalizedPackage,
     tourDetails: {
@@ -1058,7 +1059,7 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
   const companyAddress = safe(options.companyAddress, "2nd floor, B Block B-25 Sector- 64, Noida Uttar Pradesh 201301");
   
   const guestName = safe(quotation?.clientDetails?.clientName || quotation?.customerName, "Guest");
-  const bookingId = safe(quotation?.quotationId || quotation?.quickQuotationId, "Booking Id");
+  const bookingId = safe(quotation?.bookingId || quotation?.quotationId || quotation?.quickQuotationId, "Booking Id");
   const adults = toNum(quotation?.adults || qd?.adults);
   const children = toNum(quotation?.children || qd?.children);
   const kids = toNum(quotation?.kids || qd?.kids);

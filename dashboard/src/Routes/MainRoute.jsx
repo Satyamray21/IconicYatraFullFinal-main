@@ -211,6 +211,8 @@ const MainRoute = () => {
   /* ========================== */
 
   useEffect(() => {
+    if (isAuthChecked && isAuthenticated) return; // Skip if already checked and valid
+
     const checkAuthentication = () => {
       const token = localStorage.getItem("token");
       const user = localStorage.getItem("user");
@@ -224,23 +226,18 @@ const MainRoute = () => {
 
       try {
         const tokenParts = token.split(".");
-        if (tokenParts.length !== 3) {
-          throw new Error("Invalid token format");
-        }
+        if (tokenParts.length !== 3) throw new Error("Invalid token format");
 
         setIsAuthenticated(true);
         setIsAuthChecked(true);
-
+        
         const sessionStart = Number(localStorage.getItem("sessionStart"));
-        const now = Date.now();
-
-        if (!sessionStart || now - sessionStart > 10 * 60 * 60 * 1000) {
-          localStorage.setItem("sessionStart", now.toString());
+        if (!sessionStart) {
+          localStorage.setItem("sessionStart", Date.now().toString());
         }
-
+        
         setLoading(false);
       } catch (error) {
-        console.error("Authentication error:", error);
         localStorage.clear();
         setIsAuthenticated(false);
         setIsAuthChecked(true);
@@ -249,7 +246,7 @@ const MainRoute = () => {
     };
 
     checkAuthentication();
-  }, [location]);
+  }, [isAuthChecked, isAuthenticated]); // Only run if auth state is unknown
 
   /* ========================== */
   /*      SESSION TIMER         */

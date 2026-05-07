@@ -35,12 +35,14 @@ const FinalizeDialog = ({
     /** Billable add-on services (amount + line tax) to add to each package total in the dialog */
     additionalServicesSum = 0,
     allowEditableAmount = false,
+    companyOptions = [],
 }) => {
     const [selectedOptions, setSelectedOptions] = useState([]);
     const [packageAmountOverrides, setPackageAmountOverrides] = useState({});
     const [gstMode, setGstMode] = useState("with_gst");
     const [taxPercent, setTaxPercent] = useState(5);
     const [selectedBankId, setSelectedBankId] = useState("");
+    const [selectedCompanyId, setSelectedCompanyId] = useState("");
 
     const dispatch = useDispatch();
     const { data: company, status } = useSelector((state) => state.companyUI);
@@ -157,6 +159,9 @@ const FinalizeDialog = ({
         const selectedAmountWithTax = isWithoutGst
             ? selectedBaseAmount + (selectedBaseAmount * gstPct) / 100
             : selectedBaseAmount;
+        
+        const selectedCompany = companyOptions.find(c => c._id === selectedCompanyId);
+
         onConfirm({
             quotations: selectedOptions,
             // For backward compatibility, also send single package
@@ -167,6 +172,8 @@ const FinalizeDialog = ({
             gstMode,
             taxPercent: gstPct,
             selectedBank: company?.bankDetails?.find(b => b._id === selectedBankId),
+            companyId: selectedCompanyId,
+            companyName: selectedCompany?.companyName,
         });
     };
 
@@ -202,9 +209,36 @@ const FinalizeDialog = ({
             </DialogTitle>
 
             <DialogContent>
+                {/* Company Selection */}
                 <Typography
                     variant="subtitle1"
-                    sx={{ fontWeight: 600, mb: 2, mt: 2 }}
+                    sx={{ fontWeight: 600, mb: 1, mt: 1 }}
+                    color="text.primary"
+                >
+                    <span style={{ color: "red" }}>*</span> Select Company
+                </Typography>
+                <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    value={selectedCompanyId}
+                    onChange={(e) => setSelectedCompanyId(e.target.value)}
+                    sx={{ mb: 3 }}
+                    SelectProps={{
+                        native: true,
+                    }}
+                >
+                    <option value="">-- Choose Company --</option>
+                    {companyOptions.map((c) => (
+                        <option key={c._id} value={c._id}>
+                            {c.companyName}
+                        </option>
+                    ))}
+                </TextField>
+
+                <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 600, mb: 2, mt: 1 }}
                     color="text.primary"
                 >
                     <span style={{ color: "red" }}>*</span> Select one or more packages

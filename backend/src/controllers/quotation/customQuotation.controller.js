@@ -21,6 +21,7 @@ import {
 import ReceivedVoucher from "../../models/payment.model.js";
 import { buildHotelConfirmationPdf } from "../../utils/hotelConfirmationPdf.js";
 import { buildPaymentReceiptPdf } from "../../utils/paymentReceiptPdf.js";
+import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 
 // Counter Schema and Model - defined in the same file
 const counterSchema = new mongoose.Schema({
@@ -728,6 +729,20 @@ export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
     quotation.finalizedPackage = packagesToFinalize[0]; // Keep for backward compatibility
     quotation.finalizedPackages = packagesToFinalize; // New field for multiple packages
     quotation.finalizedAt = new Date();
+
+    // Generate bookingId if not already present
+    if (!quotation.bookingId) {
+      // We need company name to generate the prefix.
+      // If companyId/companyName is not in req.body, we might need to resolve it.
+      const selectedCompany = await resolveCompanyForEmail({
+        companyId: req.body?.companyId,
+        companyName: req.body?.companyName,
+      });
+      const companyName = selectedCompany?.companyName || "Iconic Travel";
+      quotation.companyName = companyName;
+      if (selectedCompany?._id) quotation.companyId = selectedCompany._id;
+      quotation.bookingId = await generateBookingId(companyName);
+    }
 
     // Store vendor details with amounts if provided
     if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {

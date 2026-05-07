@@ -2,8 +2,17 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Staff } from "../models/staff.model.js";
+import { LoginHistory } from "../models/loginHistory.model.js";
+import { Lead } from "../models/lead.model.js";
+import QuickQuotation from "../models/quotation/quickQuotation.model.js";
+import { CustomQuotation } from "../models/quotation/customQuotation.model.js";
+import { FlightQuotation } from "../models/quotation/flightQuotation.model.js";
+import { HotelQuotation } from "../models/quotation/hotelQuotation.model.js";
+import { fullQuotation } from "../models/quotation/fullQuotation.model.js";
+import { Vehicle } from "../models/quotation/vehicle.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import mongoose from "mongoose";
+import { startOfDay, startOfMonth, subMonths } from 'date-fns';
 
 // CREATE Staff with optional multiple photo uploads
 export const createStaff = asyncHandler(async (req, res) => {
@@ -303,4 +312,73 @@ export const deleteStaff = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, deleted, "Staff deleted successfully"));
+});
+
+export const getStaffDashboardStats = asyncHandler(async (req, res) => {
+  const today = startOfDay(new Date());
+  const thisMonth = startOfMonth(new Date());
+  const last3Months = startOfMonth(subMonths(new Date(), 3));
+  const last6Months = startOfMonth(subMonths(new Date(), 6));
+  const last12Months = startOfMonth(subMonths(new Date(), 12));
+
+  const periods = [
+    { title: "Today's", date: today },
+    { title: "This Month", date: thisMonth },
+    { title: "Last 3 Months", date: last3Months },
+    { title: "Last 6 Months", date: last6Months },
+    { title: "Last 12 Months", date: last12Months },
+  ];
+
+  const quotationModels = [
+    QuickQuotation,
+    CustomQuotation,
+    FlightQuotation,
+    HotelQuotation,
+    fullQuotation,
+    Vehicle
+  ];
+
+  const stats = await Promise.all(periods.map(async (period) => {
+    const [assignedStaffData, leadCount] = await Promise.all([
+      Lead.aggregate([
+        { 
+          $match: { 
+            createdAt: { $gte: period.date },
+            "officialDetail.assignedTo": { $exists: true, $ne: "" }
+          } 
+        },
+        {
+          $group: {
+            _id: "$officialDetail.assignedTo",
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { count: -1 } }
+      ]),
+      Lead.countDocuments({ createdAt: { $gte: period.date } })
+    ]);
+
+    const activeStaffNamesWithCounts = assignedStaffData.map(item => ({
+      name: item._id,
+      count: item.count
+    }));
+
+    const qCounts = await Promise.all(quotationModels.map(model => 
+      model.countDocuments({ createdAt: { $gte: period.date } })
+    ));
+
+    const totalQuotations = qCounts.reduce((a, b) => a + b, 0);
+
+    return {
+      title: period.title,
+      active: activeStaffNamesWithCounts.length,
+      activeStaffNames: activeStaffNamesWithCounts,
+      lead: leadCount,
+      quotation: totalQuotations
+    };
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, stats, "Staff dashboard stats fetched successfully"));
 });

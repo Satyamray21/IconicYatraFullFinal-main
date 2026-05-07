@@ -37,7 +37,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import HistoryIcon from "@mui/icons-material/History";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchAllStaff, deleteStaff } from "../../../features/staff/staffSlice";
+import { fetchAllStaff, deleteStaff, fetchStaffStats } from "../../../features/staff/staffSlice";
 import { isStaffSession } from "../../../features/user/userSlice";
 import axios from "../../../utils/axios";
 
@@ -54,19 +54,13 @@ function normalizeLoginHistoryPayload(res) {
   return [];
 }
 
-const stats = [
-  { title: "Today's", active: 0, lead: 0, quotation: 0 },
-  { title: "This Month", active: 0, lead: 0, quotation: 0 },
-  { title: "Last 3 Months", active: 0, lead: 0, quotation: 0 },
-  { title: "Last 6 Months", active: 0, lead: 0, quotation: 0 },
-  { title: "Last 12 Months", active: 0, lead: 0, quotation: 0 },
-];
+// Remove hardcoded stats array
 
 const StaffCard = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { list: staffList = [], loading, error } = useSelector((state) => state.staffs);
+  const { list: staffList = [], stats = [], loading, error } = useSelector((state) => state.staffs);
   const user = useSelector((state) => state.profile.user);
   const canViewStaffLoginHistory = isUserModelAdmin(user);
 
@@ -89,6 +83,12 @@ const StaffCard = () => {
     rows: [],
     loading: false,
     error: null,
+  });
+
+  const [activeNamesDialog, setActiveNamesDialog] = useState({
+    open: false,
+    names: [],
+    title: "",
   });
 
   const [assignedLeadsDialog, setAssignedLeadsDialog] = useState({
@@ -133,6 +133,20 @@ const StaffCard = () => {
       loading: false,
       error: null,
     });
+  };
+
+  const handleShowActiveNames = (item) => {
+    if (item.activeStaffNames && item.activeStaffNames.length > 0) {
+      setActiveNamesDialog({
+        open: true,
+        names: item.activeStaffNames,
+        title: `Staff Assigned to Leads — ${item.title}`,
+      });
+    }
+  };
+
+  const closeActiveNamesDialog = () => {
+    setActiveNamesDialog({ ...activeNamesDialog, open: false });
   };
 
   const openStaffLoginHistory = async (row) => {
@@ -180,6 +194,7 @@ const StaffCard = () => {
 
   useEffect(() => {
     dispatch(fetchAllStaff());
+    dispatch(fetchStaffStats());
   }, [dispatch]);
 
   const handleAddClick = () => {
@@ -345,7 +360,16 @@ const StaffCard = () => {
                   <Typography variant="h6">
                     {item.title}: {item.active}
                   </Typography>
-                  <Typography variant="body2">Active: {item.active}</Typography>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      cursor: item.activeStaffNames?.length > 0 ? "pointer" : "default",
+                      "&:hover": { textDecoration: item.activeStaffNames?.length > 0 ? "underline" : "none" }
+                    }}
+                    onClick={() => handleShowActiveNames(item)}
+                  >
+                    Active: {item.active}
+                  </Typography>
                   <Typography variant="body2">Lead: {item.lead}</Typography>
                   <Typography variant="body2">
                     Quotation: {item.quotation}
@@ -579,6 +603,28 @@ const StaffCard = () => {
             >
               Delete
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Active Staff Names Dialog */}
+        <Dialog
+          open={activeNamesDialog.open}
+          onClose={closeActiveNamesDialog}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>{activeNamesDialog.title}</DialogTitle>
+          <DialogContent dividers>
+            <Box component="ul" sx={{ m: 0, pl: 2 }}>
+              {activeNamesDialog.names.map((item, idx) => (
+                <Typography component="li" key={idx} sx={{ py: 0.5 }}>
+                  {item.name} — <strong>{item.count} leads</strong>
+                </Typography>
+              ))}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeActiveNamesDialog}>Close</Button>
           </DialogActions>
         </Dialog>
 

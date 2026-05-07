@@ -23,6 +23,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
+import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -51,6 +52,13 @@ async function resolveQuickQuotationMongoId(raw) {
   const s = String(raw || "").trim();
   if (!s) return null;
   if (/^[a-f\d]{24}$/i.test(s)) return s;
+
+  // Support ICYR_Q_ prefix (e.g. ICYR_Q_0013)
+  if (/^ICYR_Q_\d+$/i.test(s)) {
+    const quotation = await QuickQuotation.findOne({ quickQuotationId: s }).select("_id").lean();
+    return quotation ? String(quotation._id) : null;
+  }
+
   const m = /^QT-([a-f\d]{6})$/i.exec(s);
   if (!m) return null;
   const suffix = m[1].toLowerCase();
@@ -956,6 +964,18 @@ export const finalizeQuickQuotation = asyncHandler(async (req, res) => {
 
   quotation.finalizeStatus = "finalized";
   quotation.finalizedAt = new Date();
+
+  // Generate bookingId if not already present
+  if (!quotation.bookingId) {
+    const selectedCompany = await resolveCompanyForEmail({
+      companyId: req.body?.companyId,
+      companyName: req.body?.companyName,
+    });
+    const companyName = selectedCompany?.companyName || "Iconic Travel";
+    quotation.companyName = companyName;
+    if (selectedCompany?._id) quotation.companyId = selectedCompany._id;
+    quotation.bookingId = await generateBookingId(companyName);
+  }
   if (finalizedPackage != null && String(finalizedPackage).trim()) {
     quotation.finalizedPackage = String(finalizedPackage).trim();
   }
