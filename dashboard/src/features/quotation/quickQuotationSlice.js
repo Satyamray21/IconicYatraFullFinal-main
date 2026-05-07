@@ -83,7 +83,7 @@ export const sendQuickQuotationMail = createAsyncThunk(
 
 export const finalizeQuickQuotation = createAsyncThunk(
     "quickQuotation/finalize",
-    async ({ id, finalizedPackage, finalizedVendorsWithAmounts }, { rejectWithValue, getState }) => {
+    async ({ id, finalizedPackage, finalizedVendorsWithAmounts, companyId, companyName }, { rejectWithValue, getState }) => {
         try {
             const currentQuotation = getState()?.quickQuotation?.currentQuotation;
             const existingPackage = currentQuotation?.finalizedPackage;
@@ -102,6 +102,8 @@ export const finalizeQuickQuotation = createAsyncThunk(
             }
             const { data } = await api.patch(`/quickQT/${id}/finalize`, {
                 ...payload,
+                companyId,
+                companyName
             });
             return data?.data ?? data;
         } catch (err) {

@@ -601,7 +601,7 @@ const VehicleQuotationPage = () => {
     setEditDialog({ ...editDialog, value: e.target.value });
   };
 
-  const handleConfirm = async (selectedBank) => {
+  const handleConfirm = async ({ bank, companyId, companyName }) => {
     if (q?.vehicle?.vehicleQuotationId) {
       try {
         const selectedVendorName = String(vendor || "").trim();
@@ -635,6 +635,8 @@ const VehicleQuotationPage = () => {
           `/vehicleQT/${q.vehicle.vehicleQuotationId}/finalize`,
           {
             finalizedVendorsWithAmounts,
+            companyId,
+            companyName
           },
         );
         await dispatch(getVehicleQuotationById(q.vehicle.vehicleQuotationId));
@@ -1748,6 +1750,14 @@ const VehicleQuotationPage = () => {
                     Ref: {vehicle.vehicleQuotationId || "N/A"}
                   </Typography>
                 </Box>
+                {vehicle.bookingId && (
+                  <Box display="flex" alignItems="center" mt={1}>
+                    <CheckCircle sx={{ fontSize: 18, mr: 0.5, color: "error.main" }} />
+                    <Typography variant="body2" fontWeight="bold" color="error.main">
+                      Booking ID: {vehicle.bookingId}
+                    </Typography>
+                  </Box>
+                )}
                 <Box display="flex" alignItems="center" mt={2}>
                   <Person sx={{ fontSize: 18, mr: 0.5 }} />
                   <Typography variant="subtitle1" fontWeight="bold">
@@ -2272,6 +2282,7 @@ const VehicleQuotationPage = () => {
         vendor={vendor}
         setVendor={setVendor}
         onConfirm={handleConfirm}
+        companyOptions={mailCompanies}
       />
 
       {/* Edit Dialog */}

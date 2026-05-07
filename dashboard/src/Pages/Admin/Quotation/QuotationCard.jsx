@@ -373,6 +373,7 @@ const QuotationCard = () => {
   // Table Columns
   const columns = [
     { field: "id", headerName: "Sr No.", width: 80 },
+    { field: "bookingId", headerName: "Booking ID", width: 150 },
     { field: "quoteId", headerName: "Quote ID", width: 140 },
     { field: "clientName", headerName: "Client Name", width: 200 },
     { field: "arrival", headerName: "Arrival", width: 120 },
@@ -517,6 +518,7 @@ const QuotationCard = () => {
     ...(vehicleList || []).map((item, index) => ({
       id: `V-${index + 1}`,
       originalId: item?.vehicleQuotationId || item?._id,
+      bookingId: item?.bookingId || "-",
       quoteId: item?.vehicleQuotationId || "N/A",
       clientName: item?.basicsDetails?.clientName || "N/A",
       arrival: formatDate(item?.pickupDropDetails?.pickupDate),
@@ -539,6 +541,7 @@ const QuotationCard = () => {
     ...(flightList || []).map((item, index) => ({
       id: `F-${index + 1}`,
       originalId: item?.flightQuotationId || item?._id,
+      bookingId: item?.bookingId || "-",
       quoteId: item?.flightQuotationId || "N/A",
       clientName: item?.clientDetails?.clientName || "N/A",
       arrival: formatDate(item?.flightDetails?.[0]?.departureDate),
@@ -570,6 +573,7 @@ const QuotationCard = () => {
       return {
         id: `H-${index + 1}`,
         originalId: item?._id,
+        bookingId: item?.bookingId || "-",
         quoteId: item?.hotelQuotationId || "N/A",
         clientName: item?.clientDetails?.clientName || "N/A",
         arrival: formatDate(item?.pickupDrop?.arrivalDate),
@@ -620,6 +624,7 @@ const QuotationCard = () => {
       return {
         id: `Q-${index + 1}`,
         originalId: item?._id, // For API calls
+        bookingId: item?.bookingId || "-",
         quoteId: `QT-${item?._id?.slice(-6) || "N/A"}`,
         clientName: item?.customerName || "N/A",
         arrival: formatDate(quickArrival),
@@ -640,6 +645,7 @@ const QuotationCard = () => {
     ...(fullList || []).map((item, index) => ({
       id: `FU-${index + 1}`,
       originalId: item?._id,
+      bookingId: item?.bookingId || "-",
       quoteId: item?.quotationId || "N/A",
       clientName: item?.clientDetails?.clientName || "N/A",
       arrival: formatDate(item?.pickupDrop?.arrivalDate),
@@ -695,6 +701,7 @@ const QuotationCard = () => {
       return {
         id: `C-${index + 1}`,
         originalId: item?._id,
+        bookingId: item?.bookingId || "-",
         quoteId: item?.quotationId || `CUST-${item?._id?.slice(-6) || "N/A"}`,
         clientName: item?.clientDetails?.clientName || "N/A",
         arrival: formatDate(customArrival),

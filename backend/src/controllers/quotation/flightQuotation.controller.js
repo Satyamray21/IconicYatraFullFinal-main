@@ -4,6 +4,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
+import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 import { Lead } from "../../models/lead.model.js"
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
@@ -311,6 +312,19 @@ export const confirmFlightQuotation = asyncHandler(async (req, res) => {
         : (Number(baseFare || 0) + Number(gstAmount || 0)) || finalFareList.reduce((sum, fare) => sum + Number(fare || 0), 0);
 
     quotation.status = "Confirmed";
+
+    // Generate bookingId if not already present
+    if (!quotation.bookingId) {
+        const selectedCompany = await resolveCompanyForEmail({
+            companyId: req.body?.companyId,
+            companyName: req.body?.companyName,
+        });
+        const compName = selectedCompany?.companyName || quotation.companyName || "Iconic Travel";
+        quotation.companyName = compName;
+        if (selectedCompany?._id) quotation.companyId = selectedCompany._id;
+        quotation.bookingId = await generateBookingId(compName);
+    }
+
     await quotation.save();
 
     await logActivity({

@@ -4,6 +4,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
+import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 import { Lead } from "../../models/lead.model.js";
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
@@ -426,6 +427,18 @@ export const finalizeVehicleQuotation = asyncHandler(async (req, res) => {
 
   vehicle.finalizeStatus = "finalized";
   vehicle.finalizedAt = new Date();
+
+  // Generate bookingId if not already present
+  if (!vehicle.bookingId) {
+    const selectedCompany = await resolveCompanyForEmail({
+      companyId: req.body?.companyId,
+      companyName: req.body?.companyName,
+    });
+    const companyName = selectedCompany?.companyName || "Iconic Travel";
+    vehicle.companyName = companyName;
+    if (selectedCompany?._id) vehicle.companyId = selectedCompany._id;
+    vehicle.bookingId = await generateBookingId(companyName);
+  }
   if (
     Array.isArray(finalizedVendorsWithAmounts) &&
     finalizedVendorsWithAmounts.length > 0

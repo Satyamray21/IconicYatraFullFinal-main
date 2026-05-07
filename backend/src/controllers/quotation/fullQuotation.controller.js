@@ -292,6 +292,21 @@ export const finalizeQuotation = asyncHandler(async (req, res) => {
     quotation.isFinalized = true;
     quotation.status = "Submitted";
     quotation.submittedAt = new Date();
+
+    // Generate bookingId if not already present
+    if (!quotation.bookingId) {
+        const selectedCompany = await resolveCompanyForEmail({
+            companyId: req.body?.companyId,
+            companyName: req.body?.companyName,
+        });
+        const compName = selectedCompany?.companyName || req.body?.companyName || "Iconic Travel";
+        quotation.companyName = compName;
+        if (selectedCompany?._id) quotation.companyId = selectedCompany._id;
+        
+        const { generateBookingId } = await import("../../utils/bookingIdGenerator.js");
+        quotation.bookingId = await generateBookingId(compName);
+    }
+
     await quotation.save();
 
     await logActivity({
@@ -334,3 +349,18 @@ export const getAllQuotations = asyncHandler(async (req, res) => {
         .status(200)
         .json(new ApiResponse(200, quotations, "All quotations fetched successfully"));
 });
+
+const resolveCompanyForEmail = async ({ companyId, companyName }) => {
+    const Company = (await import("../../models/company.model.js")).default;
+    if (companyId) {
+        const byId = await Company.findById(companyId).lean();
+        if (byId) return byId;
+    }
+    if (companyName) {
+        const byName = await Company.findOne({
+            companyName: { $regex: `^${String(companyName).trim()}$`, $options: "i" },
+        }).lean();
+        if (byName) return byName;
+    }
+    return null;
+};

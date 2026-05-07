@@ -85,6 +85,9 @@ const flightQuotationSchema = mongoose.Schema({
     },
     companyName: {
         type: String
+    },
+    bookingId: {
+        type: String,
     }
 }, { timestamps: true });
 

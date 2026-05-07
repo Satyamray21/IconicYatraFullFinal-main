@@ -19,9 +19,10 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchAllAssociates } from "../../../../../features/associate/associateSlice";
 import { getCompany } from "../../../../../features/companyUI/companyUISlice";
 
-const FinalizeDialog = ({ open, onClose, vendor, setVendor, onConfirm }) => {
+const FinalizeDialog = ({ open, onClose, vendor, setVendor, onConfirm, companyOptions = [] }) => {
   const dispatch = useDispatch();
   const [selectedBankId, setSelectedBankId] = useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
 
   const { list: associateList = [] } = useSelector((state) => state.associate);
   const { data: company, status } = useSelector((state) => state.companyUI);
@@ -54,7 +55,12 @@ const FinalizeDialog = ({ open, onClose, vendor, setVendor, onConfirm }) => {
 
   const handleConfirmClick = () => {
     const selectedBank = company?.bankDetails?.find((b) => b._id === selectedBankId);
-    onConfirm(selectedBank);
+    const selectedCompany = companyOptions.find(c => c._id === selectedCompanyId);
+    onConfirm({
+        bank: selectedBank,
+        companyId: selectedCompanyId,
+        companyName: selectedCompany?.companyName
+    });
   };
 
   return (
@@ -63,6 +69,27 @@ const FinalizeDialog = ({ open, onClose, vendor, setVendor, onConfirm }) => {
         Finalize Quotation - Select Vendor & Bank
       </DialogTitle>
       <DialogContent>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, mt: 1 }} color="text.primary">
+          <span style={{ color: "red" }}>*</span> Select Company
+        </Typography>
+        <FormControl fullWidth margin="normal" size="small">
+          <InputLabel>Company</InputLabel>
+          <Select
+            value={selectedCompanyId}
+            onChange={(e) => setSelectedCompanyId(e.target.value)}
+            label="Company"
+          >
+            <MenuItem value="">
+              <em>-- Choose Company --</em>
+            </MenuItem>
+            {companyOptions.map((c) => (
+              <MenuItem key={c._id} value={c._id}>
+                {c.companyName}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, mt: 2 }} color="text.primary">
           <span style={{ color: "red" }}>*</span> Select Vehicle Vendor
         </Typography>
