@@ -85,6 +85,12 @@ const StaffCard = () => {
     error: null,
   });
 
+  const [activeNamesDialog, setActiveNamesDialog] = useState({
+    open: false,
+    names: [],
+    title: "",
+  });
+
   const [assignedLeadsDialog, setAssignedLeadsDialog] = useState({
     open: false,
     staffName: "",
@@ -127,6 +133,20 @@ const StaffCard = () => {
       loading: false,
       error: null,
     });
+  };
+
+  const handleShowActiveNames = (item) => {
+    if (item.activeStaffNames && item.activeStaffNames.length > 0) {
+      setActiveNamesDialog({
+        open: true,
+        names: item.activeStaffNames,
+        title: `Staff Assigned to Leads — ${item.title}`,
+      });
+    }
+  };
+
+  const closeActiveNamesDialog = () => {
+    setActiveNamesDialog({ ...activeNamesDialog, open: false });
   };
 
   const openStaffLoginHistory = async (row) => {
@@ -340,7 +360,16 @@ const StaffCard = () => {
                   <Typography variant="h6">
                     {item.title}: {item.active}
                   </Typography>
-                  <Typography variant="body2">Active: {item.active}</Typography>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      cursor: item.activeStaffNames?.length > 0 ? "pointer" : "default",
+                      "&:hover": { textDecoration: item.activeStaffNames?.length > 0 ? "underline" : "none" }
+                    }}
+                    onClick={() => handleShowActiveNames(item)}
+                  >
+                    Active: {item.active}
+                  </Typography>
                   <Typography variant="body2">Lead: {item.lead}</Typography>
                   <Typography variant="body2">
                     Quotation: {item.quotation}
@@ -574,6 +603,28 @@ const StaffCard = () => {
             >
               Delete
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Active Staff Names Dialog */}
+        <Dialog
+          open={activeNamesDialog.open}
+          onClose={closeActiveNamesDialog}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>{activeNamesDialog.title}</DialogTitle>
+          <DialogContent dividers>
+            <Box component="ul" sx={{ m: 0, pl: 2 }}>
+              {activeNamesDialog.names.map((name, idx) => (
+                <Typography component="li" key={idx} sx={{ py: 0.5 }}>
+                  {name}
+                </Typography>
+              ))}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeActiveNamesDialog}>Close</Button>
           </DialogActions>
         </Dialog>
 
