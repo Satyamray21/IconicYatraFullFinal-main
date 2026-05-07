@@ -33,8 +33,10 @@ const Sidebar = ({ children }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const dispatch = useDispatch();
   useEffect(() => {
-    dispatch(getCompany());
-  }, [dispatch]);
+    if (!company && status === "idle") {
+      dispatch(getCompany());
+    }
+  }, [dispatch, company, status]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState({}); // 👈 NEW
 
@@ -208,4 +210,4 @@ const Sidebar = ({ children }) => {
   );
 };
 
-export default Sidebar;
+export default React.memo(Sidebar);
