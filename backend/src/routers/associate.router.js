@@ -6,6 +6,7 @@ import {
   updateAssociate,
   deleteAssociate,
   getAssociateQuotations,
+  getAssociateDashboardStats
 } from "../controllers/associates.controller.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
 import multer from "multer";
@@ -42,6 +43,7 @@ const upload = multer({
 
 router.post("/", requirePermission("canManageAssociates"), upload.single("qrCode"), createAssociate);
 router.get("/", requirePermission("canAccessAssociates"), getAllAssociates);
+router.get("/stats", requirePermission("canAccessAssociates"), getAssociateDashboardStats);
 router.get("/:id", requirePermission("canAccessAssociates"), getAssociateById);
 router.get(
   "/:id/quotations",

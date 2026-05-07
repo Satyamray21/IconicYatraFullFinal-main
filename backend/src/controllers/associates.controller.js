@@ -3,7 +3,10 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import QuickQuotation from "../models/quotation/quickQuotation.model.js";
 import { CustomQuotation } from "../models/quotation/customQuotation.model.js";
 import { FlightQuotation } from "../models/quotation/flightQuotation.model.js";
+import { HotelQuotation } from "../models/quotation/hotelQuotation.model.js";
+import { fullQuotation } from "../models/quotation/fullQuotation.model.js";
 import { Vehicle } from "../models/quotation/vehicle.model.js";
+import { startOfDay, startOfMonth, subMonths } from 'date-fns';
 
 // Helper function to convert flat object with dot notation to nested object
 const convertToNestedObject = (flatObj) => {
@@ -352,6 +355,68 @@ export const getAssociateQuotations = async (req, res, next) => {
       totalAssignedAmount,
       quotations,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getAssociateDashboardStats = async (req, res, next) => {
+  try {
+    const today = startOfDay(new Date());
+    const thisMonth = startOfMonth(new Date());
+    const last3Months = startOfMonth(subMonths(new Date(), 3));
+    const last6Months = startOfMonth(subMonths(new Date(), 6));
+    const last12Months = startOfMonth(subMonths(new Date(), 12));
+
+    const periods = [
+      { title: "Today's", date: today },
+      { title: "This Month", date: thisMonth },
+      { title: "Last 3 Months", date: last3Months },
+      { title: "Last 6 Months", date: last6Months },
+      { title: "Last 12 Months", date: last12Months },
+    ];
+
+    const quotationModels = [
+      QuickQuotation,
+      CustomQuotation,
+      FlightQuotation,
+      HotelQuotation,
+      fullQuotation,
+      Vehicle
+    ];
+
+    const stats = await Promise.all(periods.map(async (period) => {
+      const associateCount = await Associate.countDocuments({ createdAt: { $gte: period.date } });
+
+      // Count quotations assigned to any associate (has finalizedVendorsWithAmounts)
+      const qCounts = await Promise.all(quotationModels.map(async (model) => {
+        const [confirmed, cancelled] = await Promise.all([
+          model.countDocuments({
+            createdAt: { $gte: period.date },
+            finalizeStatus: "finalized", // "finalized" seems to be the confirmed status in quickQuotation
+            finalizedVendorsWithAmounts: { $exists: true, $not: { $size: 0 } }
+          }),
+          model.countDocuments({
+            createdAt: { $gte: period.date },
+            finalizeStatus: "cancelled",
+            finalizedVendorsWithAmounts: { $exists: true, $not: { $size: 0 } }
+          })
+        ]);
+        return { confirmed, cancelled };
+      }));
+
+      const totalConfirmed = qCounts.reduce((sum, q) => sum + q.confirmed, 0);
+      const totalCancelled = qCounts.reduce((sum, q) => sum + q.cancelled, 0);
+
+      return {
+        title: period.title,
+        active: associateCount,
+        confirmed: totalConfirmed,
+        cancelled: totalCancelled
+      };
+    }));
+
+    res.status(200).json(stats);
   } catch (err) {
     next(err);
   }

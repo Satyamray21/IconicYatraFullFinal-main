@@ -30,21 +30,17 @@ import {
   deleteAssociate,
   fetchAssociateQuotations,
   clearAssociateQuotations,
+  fetchAssociateStats,
 } from "../../../features/associate/associateSlice";
 
-const stats = [
-  { title: "Today's", active: 0, confirmed: 0, cancelled: 0 },
-  { title: "This Month", active: 0, confirmed: 0, cancelled: 0 },
-  { title: "Last 3 Months", active: 0, confirmed: 0, cancelled: 0 },
-  { title: "Last 6 Months", active: 0, confirmed: 0, cancelled: 0 },
-  { title: "Last 12 Months", active: 0, confirmed: 0, cancelled: 0 },
-];
+// Remove hardcoded stats array
 
 const AssociateDashboard = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const {
     list: associateList = [],
+    stats = [],
     loading,
     quotations = [],
     quotationsLoading = false,
@@ -72,6 +68,7 @@ const AssociateDashboard = () => {
 
   useEffect(() => {
     dispatch(fetchAllAssociates());
+    dispatch(fetchAssociateStats());
   }, [dispatch]);
 
   const handleAddClick = () => {
