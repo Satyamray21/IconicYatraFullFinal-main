@@ -145,7 +145,7 @@ const customQuotationSchema = new mongoose.Schema(
 
         finalizeStatus: {
             type: String,
-            enum: ["draft", "finalized"],
+            enum: ["draft", "finalized", "cancelled"],
             default: "draft",
         },
         finalizedPackage: {

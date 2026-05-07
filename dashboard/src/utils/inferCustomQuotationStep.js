@@ -61,6 +61,9 @@ export function formatCustomQuotationListStatus(item) {
   const fs = String(item?.finalizeStatus || "").toLowerCase();
   const st = String(item?.status || "").toLowerCase();
 
+  if (fs === "cancelled") {
+    return "Cancelled";
+  }
   if (fs === "finalized") {
     return "Finalized";
   }
@@ -82,6 +85,9 @@ export function formatCustomQuotationListStatus(item) {
 export function formatQuickQuotationListStatus(item) {
   const fs = String(item?.finalizeStatus || "").toLowerCase();
   const st = String(item?.status || "").toLowerCase();
+  if (fs === "cancelled") {
+    return "Cancelled";
+  }
   if (fs === "finalized") {
     return "Finalized";
   }

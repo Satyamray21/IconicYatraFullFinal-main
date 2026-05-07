@@ -64,7 +64,7 @@ const quickQuotationSchema = new mongoose.Schema(
 
         finalizeStatus: {
             type: String,
-            enum: ["draft", "finalized"],
+            enum: ["draft", "finalized", "cancelled"],
             default: "draft",
         },
         finalizedAt: { type: Date },

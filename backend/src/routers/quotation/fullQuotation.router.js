@@ -10,6 +10,7 @@ import {
     finalizeQuotation,
     getQuotationById,
     getAllQuotations,
+    updateFullQuotation,
 } from "../../controllers/quotation/fullQuotation.controller.js";
 import { upload } from "../../middleware/imageMulter.middleware.js";
 import { requirePermission } from "../../middleware/staffPermission.middleware.js";
@@ -22,5 +23,6 @@ router.put("/step5/:quotationId", requirePermission("canEditQuotation"), updateS
 router.put("/step6/:quotationId", requirePermission("canEditQuotation"), updateStep6);
 router.put("/finalize/:quotationId", requirePermission("canEditQuotation"), finalizeQuotation);
 router.get("/:quotationId", requirePermission("canAccessQuotations"), getQuotationById);
+router.put("/:quotationId", requirePermission("canEditQuotation"), updateFullQuotation);
 router.get("/", requirePermission("canAccessQuotations"), getAllQuotations);
 export default router;
