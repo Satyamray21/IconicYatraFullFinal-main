@@ -339,13 +339,29 @@ export const getStaffDashboardStats = asyncHandler(async (req, res) => {
   ];
 
   const stats = await Promise.all(periods.map(async (period) => {
-    const [assignedStaffNames, leadCount] = await Promise.all([
-      Lead.distinct("officialDetail.assignedTo", { 
-        createdAt: { $gte: period.date },
-        "officialDetail.assignedTo": { $exists: true, $ne: "" }
-      }),
+    const [assignedStaffData, leadCount] = await Promise.all([
+      Lead.aggregate([
+        { 
+          $match: { 
+            createdAt: { $gte: period.date },
+            "officialDetail.assignedTo": { $exists: true, $ne: "" }
+          } 
+        },
+        {
+          $group: {
+            _id: "$officialDetail.assignedTo",
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { count: -1 } }
+      ]),
       Lead.countDocuments({ createdAt: { $gte: period.date } })
     ]);
+
+    const activeStaffNamesWithCounts = assignedStaffData.map(item => ({
+      name: item._id,
+      count: item.count
+    }));
 
     const qCounts = await Promise.all(quotationModels.map(model => 
       model.countDocuments({ createdAt: { $gte: period.date } })
@@ -355,8 +371,8 @@ export const getStaffDashboardStats = asyncHandler(async (req, res) => {
 
     return {
       title: period.title,
-      active: assignedStaffNames.length,
-      activeStaffNames: assignedStaffNames,
+      active: activeStaffNamesWithCounts.length,
+      activeStaffNames: activeStaffNamesWithCounts,
       lead: leadCount,
       quotation: totalQuotations
     };

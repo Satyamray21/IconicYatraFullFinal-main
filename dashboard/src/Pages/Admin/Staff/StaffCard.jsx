@@ -616,9 +616,9 @@ const StaffCard = () => {
           <DialogTitle>{activeNamesDialog.title}</DialogTitle>
           <DialogContent dividers>
             <Box component="ul" sx={{ m: 0, pl: 2 }}>
-              {activeNamesDialog.names.map((name, idx) => (
+              {activeNamesDialog.names.map((item, idx) => (
                 <Typography component="li" key={idx} sx={{ py: 0.5 }}>
-                  {name}
+                  {item.name} — <strong>{item.count} leads</strong>
                 </Typography>
               ))}
             </Box>
