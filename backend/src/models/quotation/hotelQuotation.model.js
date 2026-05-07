@@ -123,7 +123,17 @@ const hotelQuotationSchema = new mongoose.Schema(
         hotelQuotationId: {
             type: String,
             unique: true
-        }
+        },
+        bookingId: {
+            type: String,
+        },
+        companyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Company",
+        },
+        companyName: {
+            type: String,
+        },
 
     }, { timestamps: true }
 )

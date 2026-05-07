@@ -105,6 +105,16 @@ const quickQuotationSchema = new mongoose.Schema(
                 bookingPnr: { type: String },
             }
         ],
+        bookingId: {
+            type: String,
+        },
+        companyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Company",
+        },
+        companyName: {
+            type: String,
+        },
     },
     { timestamps: true }
 );
