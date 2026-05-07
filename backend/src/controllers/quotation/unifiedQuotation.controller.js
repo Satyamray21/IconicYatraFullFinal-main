@@ -16,7 +16,7 @@ export const searchAllQuotations = asyncHandler(async (req, res) => {
   const cacheKey = `quotations:search:${search || 'all'}`;
   const cachedData = await getCache(cacheKey);
   if (cachedData) {
-    return res.status(200).json(new ApiResponse(200, cachedData, "Quotations fetched from cache"));
+    return res.status(200).json(new ApiResponse(200, cachedData, "Quotations fetched from cache", "cache"));
   }
 
   const regex = search ? { $regex: search, $options: "i" } : null;
@@ -89,14 +89,14 @@ export const searchAllQuotations = asyncHandler(async (req, res) => {
 
   await setCache(cacheKey, results, 300); // Cache for 5 minutes
 
-  return res.status(200).json(new ApiResponse(200, results, "Quotations fetched successfully"));
+  return res.status(200).json(new ApiResponse(200, results, "Quotations fetched successfully", "database"));
 });
 
 export const getUnifiedQuotationStats = asyncHandler(async (req, res) => {
   const cacheKey = "quotations:stats";
   const cachedData = await getCache(cacheKey);
   if (cachedData) {
-    return res.status(200).json(new ApiResponse(200, cachedData, "Quotation stats fetched from cache"));
+    return res.status(200).json(new ApiResponse(200, cachedData, "Quotation stats fetched from cache", "cache"));
   }
 
   const today = new Date();
@@ -148,5 +148,5 @@ export const getUnifiedQuotationStats = asyncHandler(async (req, res) => {
 
   await setCache(cacheKey, stats, 600); // Cache for 10 minutes
 
-  return res.status(200).json(new ApiResponse(200, stats, "Quotation stats fetched successfully"));
+  return res.status(200).json(new ApiResponse(200, stats, "Quotation stats fetched successfully", "database"));
 });

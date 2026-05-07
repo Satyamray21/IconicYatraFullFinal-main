@@ -7,7 +7,7 @@ export const createFlightQuotation = createAsyncThunk(
     async (formData, { rejectWithValue }) => {
         try {
             const { data } = await axios.post(`flightQT/`, formData);
-            return data.data;
+            return data?.data ?? data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Failed to create quotation");
         }
@@ -20,7 +20,7 @@ export const getAllFlightQuotations = createAsyncThunk(
     async (_, { rejectWithValue }) => {
         try {
             const { data } = await axios.get(`flightQT`);
-            return data.data;
+            return data?.data ?? data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Failed to fetch quotations");
         }
@@ -33,7 +33,7 @@ export const getFlightQuotationById = createAsyncThunk(
     async (flightQuotationId, { rejectWithValue }) => {
         try {
             const { data } = await axios.get(`flightQT/${flightQuotationId}`);
-            return data.data;
+            return data?.data ?? data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Quotation not found");
         }
@@ -46,7 +46,7 @@ export const updateFlightQuotationById = createAsyncThunk(
     async ({ flightQuotationId, formData }, { rejectWithValue }) => {
         try {
             const { data } = await axios.put(`flightQT/${flightQuotationId}`, formData);
-            return data.data;
+            return data?.data ?? data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Failed to update quotation");
         }
@@ -73,9 +73,9 @@ export const confirmFlightQuotation = createAsyncThunk(
         try {
             const { data } = await axios.patch(
                 `flightQT/confirm/${flightQuotationId}`,
-                { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount, companyId, companyName } // ✅ Added all fields
+                { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount, companyId, companyName }
             );
-            return data.data;
+            return data?.data ?? data;
         } catch (err) {
             return rejectWithValue(
                 err.response?.data?.message || "Failed to confirm quotation"

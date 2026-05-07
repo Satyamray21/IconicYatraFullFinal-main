@@ -2,7 +2,7 @@ import { FlightQuotation } from "../../models/quotation/flightQuotation.model.js
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
-import { clearPattern } from "../../utils/cache.js";
+import { getCache, setCache, clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
 import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 import { Lead } from "../../models/lead.model.js"
@@ -137,12 +137,16 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
     });
 
     // ✅ Send response with quotation + full lead info
+    await clearPattern("flightQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
     await clearPattern('dashboard:stats:*');
+
     return res.status(201).json(
         new ApiResponse(201, {
             quotation,
-            leadDetails: lead,  // <--- Include full lead info here
-        }, "Flight quotation created successfully")
+            leadDetails: lead,
+        }, "Flight quotation created successfully", "database")
     );
 });
 
@@ -150,6 +154,20 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
 
 
 export const getAllFlightQuotations = asyncHandler(async (req, res) => {
+    const cacheKey = "flightQuotations:all";
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                cachedData,
+                "Flight quotations fetched from cache",
+                "cache"
+            )
+        );
+    }
+
     // Fetch all quotations sorted by createdAt (latest first)
     const quotations = await FlightQuotation.find().sort({ createdAt: -1 });
 
@@ -171,13 +189,16 @@ export const getAllFlightQuotations = asyncHandler(async (req, res) => {
         })
     );
 
+    await setCache(cacheKey, quotationsWithLead, 3600);
+
     return res
         .status(200)
         .json(
             new ApiResponse(
                 200,
                 quotationsWithLead,
-                "Flight quotations with lead details fetched successfully"
+                "Flight quotations fetched from database",
+                "database"
             )
         );
 });
@@ -186,6 +207,15 @@ export const getAllFlightQuotations = asyncHandler(async (req, res) => {
 
 export const getFlightQuotationById = asyncHandler(async (req, res) => {
     const { flightQuotationId } = req.params;
+
+    const cacheKey = `flightQuotation:${flightQuotationId}`;
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+        return res.status(200).json(
+            new ApiResponse(200, cachedData, "Flight quotation fetched from cache", "cache")
+        );
+    }
 
     // Find the quotation first
     const quotation = await FlightQuotation.findOne({ flightQuotationId });
@@ -211,9 +241,11 @@ export const getFlightQuotationById = asyncHandler(async (req, res) => {
         lead,
     };
 
+    await setCache(cacheKey, responseData, 3600);
+
     return res
         .status(200)
-        .json(new ApiResponse(200, responseData, "Flight quotation fetched successfully"));
+        .json(new ApiResponse(200, responseData, "Flight quotation fetched from database", "database"));
 });
 
 
@@ -230,10 +262,15 @@ export const updateFlightQuotationById = asyncHandler(async (req, res) => {
 
     if (!quotation) throw new ApiError(404, "Flight quotation not found");
 
+    await clearPattern(`flightQuotation:${flightQuotationId}`);
+    await clearPattern("flightQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
     await clearPattern('dashboard:stats:*');
+
     return res
         .status(200)
-        .json(new ApiResponse(200, quotation, "Flight quotation updated successfully"));
+        .json(new ApiResponse(200, quotation, "Flight quotation updated successfully", "database"));
 });
 
 export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
@@ -335,9 +372,14 @@ export const confirmFlightQuotation = asyncHandler(async (req, res) => {
         user: req.user?.name || "System",
     });
 
+    await clearPattern(`flightQuotation:${flightQuotationId}`);
+    await clearPattern("flightQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
     await clearPattern('dashboard:stats:*');
+
     return res.status(200).json(
-        new ApiResponse(200, quotation, "Flight quotation confirmed successfully")
+        new ApiResponse(200, quotation, "Flight quotation confirmed successfully", "database")
     );
 });
 
