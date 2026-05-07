@@ -4,7 +4,8 @@ import {
   getAllStaff,
   getStaffById,
   updateStaff,
-  deleteStaff
+  deleteStaff,
+  getStaffDashboardStats
 } from "../controllers/staff.controller.js";
 import {upload} from "../middleware/imageMulter.middleware.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
@@ -24,6 +25,7 @@ router.post(
   createStaff
 );
 router.get("/", requirePermission("canAccessStaff"), getAllStaff);
+router.get("/stats", requirePermission("canAccessStaff"), getStaffDashboardStats);
 router.get("/:id", requirePermission("canAccessStaff"), getStaffById);
 router.put(
   "/:id",

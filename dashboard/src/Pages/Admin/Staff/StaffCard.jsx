@@ -37,7 +37,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import HistoryIcon from "@mui/icons-material/History";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchAllStaff, deleteStaff } from "../../../features/staff/staffSlice";
+import { fetchAllStaff, deleteStaff, fetchStaffStats } from "../../../features/staff/staffSlice";
 import { isStaffSession } from "../../../features/user/userSlice";
 import axios from "../../../utils/axios";
 
@@ -54,19 +54,13 @@ function normalizeLoginHistoryPayload(res) {
   return [];
 }
 
-const stats = [
-  { title: "Today's", active: 0, lead: 0, quotation: 0 },
-  { title: "This Month", active: 0, lead: 0, quotation: 0 },
-  { title: "Last 3 Months", active: 0, lead: 0, quotation: 0 },
-  { title: "Last 6 Months", active: 0, lead: 0, quotation: 0 },
-  { title: "Last 12 Months", active: 0, lead: 0, quotation: 0 },
-];
+// Remove hardcoded stats array
 
 const StaffCard = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { list: staffList = [], loading, error } = useSelector((state) => state.staffs);
+  const { list: staffList = [], stats = [], loading, error } = useSelector((state) => state.staffs);
   const user = useSelector((state) => state.profile.user);
   const canViewStaffLoginHistory = isUserModelAdmin(user);
 
@@ -180,6 +174,7 @@ const StaffCard = () => {
 
   useEffect(() => {
     dispatch(fetchAllStaff());
+    dispatch(fetchStaffStats());
   }, [dispatch]);
 
   const handleAddClick = () => {
