@@ -129,7 +129,7 @@ import vehicleQuotationRouter from "./src/routers/quotation/vehicleQuotation.rou
 app.use("/api/v1/vehicleQT", verifyToken, vehicleQuotationRouter);
 
 import unifiedQuotationRouter from "./src/routers/quotation/unifiedQuotation.router.js";
-app.use("/api/v1/quotations", verifyToken, unifiedQuotationRouter);
+app.use("/api/v1/quotations", unifiedQuotationRouter);
 
 import galleryRoutes from "./src/routers/gallery.routes.js";
 

@@ -83,6 +83,39 @@ export const getHotelQuotationById = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, quotation, "Hotel Quotation fetched"));
 });
 
+// 📌 Update quotation
+export const updateHotelQuotation = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    let quotation;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+        quotation = await HotelQuotation.findByIdAndUpdate(
+            id,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
+    }
+
+    if (!quotation) {
+        quotation = await HotelQuotation.findOneAndUpdate(
+            { hotelQuotationId: id },
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
+    }
+
+    if (!quotation) {
+        throw new ApiError(404, "Hotel Quotation not found");
+    }
+
+    await clearPattern('dashboard:stats:*');
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, quotation, "Hotel Quotation updated successfully"));
+});
+
 // 📌 Delete quotation
 export const deleteHotelQuotation = asyncHandler(async (req, res) => {
     const { id } = req.params;

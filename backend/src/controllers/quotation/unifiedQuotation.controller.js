@@ -3,8 +3,10 @@ import QuickQuotation from "../../models/quotation/quickQuotation.model.js";
 import { Vehicle } from "../../models/quotation/vehicle.model.js";
 import { FlightQuotation } from "../../models/quotation/flightQuotation.model.js";
 import { HotelQuotation } from "../../models/quotation/hotelQuotation.model.js";
+import { fullQuotation } from "../../models/quotation/fullQuotation.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { startOfDay, endOfDay, startOfMonth, subMonths } from 'date-fns';
 
 export const searchAllQuotations = asyncHandler(async (req, res) => {
   const { search } = req.query;
@@ -79,4 +81,55 @@ export const searchAllQuotations = asyncHandler(async (req, res) => {
   ];
 
   return res.status(200).json(new ApiResponse(200, results, "Quotations fetched successfully"));
+});
+
+export const getUnifiedQuotationStats = asyncHandler(async (req, res) => {
+  const today = new Date();
+  
+  const periods = [
+    { title: "Today's", start: startOfDay(today), end: endOfDay(today) },
+    { title: "This Month", start: startOfMonth(today), end: today },
+    { title: "Last 3 Months", start: startOfMonth(subMonths(today, 2)), end: today },
+    { title: "Last 6 Months", start: startOfMonth(subMonths(today, 5)), end: today },
+    { title: "Last 12 Months", start: startOfMonth(subMonths(today, 11)), end: today },
+  ];
+
+  const models = [CustomQuotation, QuickQuotation, Vehicle, FlightQuotation, HotelQuotation, fullQuotation];
+
+  const calculateStatsForPeriod = async (start, end) => {
+    const query = { createdAt: { $gte: start, $lte: end } };
+    
+    const counts = await Promise.all(models.map(async (model) => {
+      const results = await model.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: "$finalizeStatus",
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+      return results;
+    }));
+
+    let finalized = 0;
+    let inProcess = 0;
+    let cancelled = 0;
+
+    counts.flat().forEach(stat => {
+      const status = stat._id || 'draft'; // fallback for old records
+      if (status === 'finalized') finalized += stat.count;
+      else if (status === 'cancelled') cancelled += stat.count;
+      else inProcess += stat.count; // everything else is in process
+    });
+
+    return { confirmed: finalized, inProcess, cancelledIncomplete: cancelled };
+  };
+
+  const stats = await Promise.all(periods.map(async (p) => {
+    const counts = await calculateStatsForPeriod(p.start, p.end);
+    return { title: p.title, ...counts };
+  }));
+
+  return res.status(200).json(new ApiResponse(200, stats, "Quotation stats fetched successfully"));
 });

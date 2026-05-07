@@ -46,40 +46,36 @@ import ScheduleIcon from "@mui/icons-material/Schedule";
 import CancelIcon from "@mui/icons-material/Cancel";
 import ShareIcon from "@mui/icons-material/Share";
 
-import { getAllVehicleQuotations } from "../../../features/quotation/vehicleQuotationSlice";
-import { getAllFlightQuotations } from "../../../features/quotation/flightQuotationSlice";
-import { fetchHotelQuotations, deleteHotelQuotation } from "../../../features/quotation/hotelQuotation";
+import { getAllVehicleQuotations, deleteVehicleQuotation, updateVehicleQuotation } from "../../../features/quotation/vehicleQuotationSlice";
+import { getAllFlightQuotations, deleteFlightQuotationById, updateFlightQuotationById } from "../../../features/quotation/flightQuotationSlice";
+import { fetchHotelQuotations, deleteHotelQuotation, updateHotelQuotation } from "../../../features/quotation/hotelQuotation";
 import {
   fetchQuickQuotations,
   sendQuickQuotationMail,
-  deleteQuickQuotation
+  deleteQuickQuotation,
+  updateQuickQuotation,
 } from "../../../features/quotation/quickQuotationSlice";
-// Add Full and Custom Quotation imports
-import { getAllQuotations as getAllFullQuotations } from "../../../features/quotation/fullQuotationSlice";
+import { getAllQuotations as getAllFullQuotations, updateFullQuotation } from "../../../features/quotation/fullQuotationSlice";
 import {
   getAllCustomQuotations,
   deleteCustomQuotation,
+  updateCustomQuotation,
 } from "../../../features/quotation/customQuotationSlice";
-import { deleteVehicleQuotation } from "../../../features/quotation/vehicleQuotationSlice";
-import { deleteFlightQuotationById } from "../../../features/quotation/flightQuotationSlice";
 import {
   inferLastCompletedCustomStep,
   formatCustomQuotationListStatus,
   formatQuickQuotationListStatus,
 } from "../../../utils/inferCustomQuotationStep";
+import { fetchUnifiedQuotationStats } from "../../../features/quotation/unifiedQuotationSlice";
 
-const stats = [
-  { title: "Today's", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
-  { title: "This Month", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
-  { title: "Last 3 Months", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
-  { title: "Last 6 Months", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
-  { title: "Last 12 Months", confirmed: 15, inProcess: 0, cancelledIncomplete: 0 },
-];
+// Removed hardcoded stats array
 
 const QuotationCard = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const theme = useTheme();
+
+  const { stats: dynamicStats, loading: statsLoading } = useSelector((state) => state.unifiedQuotation);
 
   const {
     list: vehicleList,
@@ -125,6 +121,7 @@ const QuotationCard = () => {
     // Add Full and Custom Quotation fetches
     dispatch(getAllFullQuotations());
     dispatch(getAllCustomQuotations());
+    dispatch(fetchUnifiedQuotationStats());
   }, [dispatch]);
 
   useEffect(() => {
@@ -434,6 +431,64 @@ const QuotationCard = () => {
             </IconButton>
           )}
 
+          {/* ❌ CANCEL – For ALL */}
+          {params.row.quotationStatus.toLowerCase() !== "cancelled" && (
+            <IconButton
+              color="error"
+              size="small"
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (window.confirm("Are you sure you want to cancel this quotation?")) {
+                  const id = params.row.originalId;
+                  const type = params.row.type;
+                  const payload = { finalizeStatus: "cancelled" };
+                  try {
+                    switch (type) {
+                      case "Quick":
+                        await dispatch(updateQuickQuotation({ id, formData: payload })).unwrap();
+                        dispatch(fetchQuickQuotations());
+                        break;
+                      case "Custom":
+                        await dispatch(updateCustomQuotation({ id, formData: payload })).unwrap();
+                        dispatch(getAllCustomQuotations());
+                        break;
+                      case "Vehicle":
+                        await dispatch(updateVehicleQuotation({ vehicleQuotationId: id, data: payload })).unwrap();
+                        dispatch(getAllVehicleQuotations());
+                        break;
+                      case "Flight":
+                        await dispatch(updateFlightQuotationById({ flightQuotationId: id, formData: payload })).unwrap();
+                        dispatch(getAllFlightQuotations());
+                        break;
+                      case "Hotel":
+                        await dispatch(updateHotelQuotation({ id, formData: payload })).unwrap();
+                        dispatch(fetchHotelQuotations());
+                        break;
+                      case "Full":
+                        await dispatch(updateFullQuotation({ id, formData: payload })).unwrap();
+                        dispatch(getAllFullQuotations());
+                        break;
+                      default:
+                        break;
+                    }
+                    dispatch(fetchUnifiedQuotationStats());
+                    setSnackbar({ open: true, message: "Quotation cancelled successfully", severity: "success" });
+                  } catch (err) {
+                    setSnackbar({ open: true, message: err || "Failed to cancel quotation", severity: "error" });
+                  }
+                }
+              }}
+              sx={{
+                backgroundColor: alpha(theme.palette.error.main, 0.1),
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.error.main, 0.2),
+                }
+              }}
+            >
+              <CancelIcon fontSize="small" />
+            </IconButton>
+          )}
+
           {/* ✏️ EDIT – For ALL (including Quick) */}
           <IconButton
             color="primary"
@@ -532,8 +587,9 @@ const QuotationCard = () => {
       tourType: item?.basicsDetails?.tripType || "-",
       type: "Vehicle",
       quotationStatus:
-        item?.status ||
-        (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending"),
+        item?.finalizeStatus === "cancelled"
+          ? "Cancelled"
+          : (item?.status || (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending")),
       formStatus: "Completed",
       businessType: "Travel",
     })),
@@ -556,8 +612,9 @@ const QuotationCard = () => {
       tourType: item?.tripType || "-",
       type: "Flight",
       quotationStatus:
-        item?.status ||
-        (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending"),
+        item?.finalizeStatus === "cancelled" || item?.status === "Cancelled"
+          ? "Cancelled"
+          : (item?.status || (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending")),
       formStatus: "Completed",
       businessType: "Travel",
     })),
@@ -584,8 +641,9 @@ const QuotationCard = () => {
         tourType: item?.clientDetails?.tourType || "-",
         type: "Hotel",
         quotationStatus:
-          item?.status ||
-          (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending"),
+          item?.finalizeStatus === "cancelled" || item?.status === "Cancelled"
+            ? "Cancelled"
+            : (item?.status || (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending")),
         formStatus: "Completed",
         businessType: "Travel",
       };
@@ -656,8 +714,9 @@ const QuotationCard = () => {
       tourType: item?.clientDetails?.tourType || "-",
       type: "Full",
       quotationStatus:
-        item?.status ||
-        (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft"),
+        item?.finalizeStatus === "cancelled"
+          ? "Cancelled"
+          : (item?.status || (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft")),
       formStatus: "Completed",
       businessType: "Travel",
       rawData: item,
@@ -802,40 +861,59 @@ const QuotationCard = () => {
 
       {/* Enhanced Stat Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {stats.map((item, index) => (
-          <Grid key={index} size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-            <Card
-              sx={{
-                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-                color: "white",
-                height: "100%",
-                transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
-                '&:hover': {
-                  transform: "translateY(-4px)",
-                  boxShadow: theme.shadows[8],
-                }
-              }}
-            >
-              <CardContent sx={{ p: 2.5 }}>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                  {item.title}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <TrendingUpIcon sx={{ fontSize: 16, mr: 1 }} />
-                  <Typography variant="body2">Confirmed: {item.confirmed}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <ScheduleIcon sx={{ fontSize: 16, mr: 1 }} />
-                  <Typography variant="body2">In Process: {item.inProcess}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <CancelIcon sx={{ fontSize: 16, mr: 1 }} />
-                  <Typography variant="body2">Cancelled: {item.cancelledIncomplete}</Typography>
-                </Box>
-              </CardContent>
-            </Card>
+        {statsLoading ? (
+          // Skeleton loaders while data is fetching
+          Array.from(new Array(5)).map((_, index) => (
+            <Grid key={index} size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
+              <Card sx={{ height: "100%", background: alpha(theme.palette.primary.main, 0.05) }}>
+                <CardContent sx={{ p: 2.5 }}>
+                  <CircularProgress size={20} sx={{ mb: 1 }} />
+                  <Typography variant="body2" color="textSecondary">Loading Stats...</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))
+        ) : (dynamicStats && dynamicStats.length > 0) ? (
+          dynamicStats.map((item, index) => (
+            <Grid key={index} size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
+              <Card
+                sx={{
+                  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                  color: "white",
+                  height: "100%",
+                  transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
+                  '&:hover': {
+                    transform: "translateY(-4px)",
+                    boxShadow: theme.shadows[8],
+                  }
+                }}
+              >
+                <CardContent sx={{ p: 2.5 }}>
+                  <Typography variant="h6" fontWeight="bold" gutterBottom>
+                    {item.title}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <TrendingUpIcon sx={{ fontSize: 16, mr: 1 }} />
+                    <Typography variant="body2">Confirmed: {item.confirmed}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <ScheduleIcon sx={{ fontSize: 16, mr: 1 }} />
+                    <Typography variant="body2">In Process: {item.inProcess}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <CancelIcon sx={{ fontSize: 16, mr: 1 }} />
+                    <Typography variant="body2">Cancelled: {item.cancelledIncomplete}</Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))
+        ) : (
+          // Fallback if no data is returned
+          <Grid size={{ xs: 12 }}>
+            <Alert severity="info">No live stats available yet. Create some quotations to see your business performance!</Alert>
           </Grid>
-        ))}
+        )}
       </Grid>
 
       {/* Actions Section */}

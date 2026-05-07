@@ -147,7 +147,7 @@ const vehicleSchema = mongoose.Schema({
     /** Finalization status */
     finalizeStatus: {
         type: String,
-        enum: ["draft", "finalized"],
+        enum: ["draft", "finalized", "cancelled"],
         default: "draft",
     },
     finalizedAt: {

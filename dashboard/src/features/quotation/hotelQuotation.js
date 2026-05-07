@@ -42,6 +42,18 @@ export const fetchHotelQuotationById = createAsyncThunk(
 );
 
 
+export const updateHotelQuotation = createAsyncThunk(
+    "hotelQuotation/update",
+    async ({ id, formData }, { rejectWithValue }) => {
+        try {
+            const res = await axios.put(`/hotelQT/${id}`, formData);
+            return res.data.data;
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.message || "Error updating quotation");
+        }
+    }
+);
+
 export const deleteHotelQuotation = createAsyncThunk(
     "hotelQuotation/delete",
     async (id, { rejectWithValue }) => {
@@ -107,6 +119,24 @@ const hotelQuotationSlice = createSlice({
                 state.quotation = action.payload;
             })
             .addCase(fetchHotelQuotationById.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.payload;
+            })
+
+            // 📌 Update
+            .addCase(updateHotelQuotation.pending, (state) => {
+                state.loading = true;
+            })
+            .addCase(updateHotelQuotation.fulfilled, (state, action) => {
+                state.loading = false;
+                state.quotations = state.quotations.map((q) =>
+                    q._id === action.payload?._id ? action.payload : q
+                );
+                if (state.quotation?._id === action.payload?._id) {
+                    state.quotation = action.payload;
+                }
+            })
+            .addCase(updateHotelQuotation.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
             })

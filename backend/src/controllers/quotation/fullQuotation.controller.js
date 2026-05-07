@@ -325,6 +325,28 @@ export const finalizeQuotation = asyncHandler(async (req, res) => {
 
 
 /* =====================================================
+   UPDATE QUOTATION (Generic)
+===================================================== */
+export const updateFullQuotation = asyncHandler(async (req, res) => {
+    const { quotationId } = req.params;
+    const updateData = req.body;
+
+    const quotation = await fullQuotation.findOneAndUpdate(
+        { quotationId },
+        { $set: updateData },
+        { new: true, runValidators: true }
+    );
+
+    if (!quotation) throw new ApiError(404, "Quotation not found");
+
+    await clearPattern('dashboard:stats:*');
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, quotation, "Quotation updated successfully"));
+});
+
+/* =====================================================
    GET QUOTATION BY ID
 ===================================================== */
 export const getQuotationById = asyncHandler(async (req, res) => {

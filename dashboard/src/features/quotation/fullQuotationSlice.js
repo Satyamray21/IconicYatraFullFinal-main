@@ -122,6 +122,19 @@ export const finalizeQuotationApi = createAsyncThunk(
     }
 );
 
+// Generic Update
+export const updateFullQuotation = createAsyncThunk(
+    "fullQuotation/update",
+    async ({ id, formData }, { rejectWithValue }) => {
+        try {
+            const res = await axios.put(`/fullQT/${id}`, formData);
+            return res.data.data;
+        } catch (err) {
+            return rejectWithValue(err.response?.data || err.message);
+        }
+    }
+);
+
 // Get by ID
 export const getQuotationById = createAsyncThunk(
     "fullQuotation/getById",
@@ -180,7 +193,7 @@ const fullQuotationSlice = createSlice({
         const handleRejected = (state, action) => { state.loading = false; state.error = action.payload; };
 
         // Step 1–5 and finalize (saving)
-        [step1CreateOrResume, step2Update, step3Update, step4Update, step5Update, step6Update, finalizeQuotationApi].forEach((thunk) => {
+        [step1CreateOrResume, step2Update, step3Update, step4Update, step5Update, step6Update, finalizeQuotationApi, updateFullQuotation].forEach((thunk) => {
             builder
                 .addCase(thunk.pending, handlePending)
                 .addCase(thunk.fulfilled, handleFulfilled)

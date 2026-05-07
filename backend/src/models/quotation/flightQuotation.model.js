@@ -66,8 +66,13 @@ const flightQuotationSchema = mongoose.Schema({
 
     status: {
         type: String,
-        enum: ['In Progress', 'Completed', 'Confirmed', 'New'],
+        enum: ['In Progress', 'Completed', 'Confirmed', 'New', 'Cancelled'],
         default: 'New'
+    },
+    finalizeStatus: {
+        type: String,
+        enum: ["draft", "finalized", "cancelled"],
+        default: "draft",
     },
 
     flightQuotationId: {
