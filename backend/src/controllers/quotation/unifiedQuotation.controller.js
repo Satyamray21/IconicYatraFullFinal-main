@@ -7,11 +7,18 @@ import { fullQuotation } from "../../models/quotation/fullQuotation.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { startOfDay, endOfDay, startOfMonth, subMonths } from 'date-fns';
+import { getCache, setCache } from "../../utils/cache.js";
 
 export const searchAllQuotations = asyncHandler(async (req, res) => {
   const { search } = req.query;
   const limit = 10;
   
+  const cacheKey = `quotations:search:${search || 'all'}`;
+  const cachedData = await getCache(cacheKey);
+  if (cachedData) {
+    return res.status(200).json(new ApiResponse(200, cachedData, "Quotations fetched from cache"));
+  }
+
   const regex = search ? { $regex: search, $options: "i" } : null;
 
   const [custom, quick, vehicle, flight, hotel] = await Promise.all([
@@ -80,10 +87,18 @@ export const searchAllQuotations = asyncHandler(async (req, res) => {
     ...hotel.map(q => ({ _id: q._id, quotationId: q.hotelQuotationId, clientName: q.clientDetails?.clientName || "N/A", type: "Hotel" })),
   ];
 
+  await setCache(cacheKey, results, 300); // Cache for 5 minutes
+
   return res.status(200).json(new ApiResponse(200, results, "Quotations fetched successfully"));
 });
 
 export const getUnifiedQuotationStats = asyncHandler(async (req, res) => {
+  const cacheKey = "quotations:stats";
+  const cachedData = await getCache(cacheKey);
+  if (cachedData) {
+    return res.status(200).json(new ApiResponse(200, cachedData, "Quotation stats fetched from cache"));
+  }
+
   const today = new Date();
   
   const periods = [
@@ -130,6 +145,8 @@ export const getUnifiedQuotationStats = asyncHandler(async (req, res) => {
     const counts = await calculateStatsForPeriod(p.start, p.end);
     return { title: p.title, ...counts };
   }));
+
+  await setCache(cacheKey, stats, 600); // Cache for 10 minutes
 
   return res.status(200).json(new ApiResponse(200, stats, "Quotation stats fetched successfully"));
 });
