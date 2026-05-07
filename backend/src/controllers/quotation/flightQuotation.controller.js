@@ -40,7 +40,9 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
         infants,
         anyMessage,
         personalDetails,
-        status // optional from client
+        status, // optional from client
+        companyId,
+        companyName
     } = req.body;
 
     // ✅ Validate required fields
@@ -120,7 +122,9 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
         status: status || "New",
         quotation_type: "flight",
         leadId: lead.leadId,
-        policies: defaultPolicies
+        policies: defaultPolicies,
+        companyId,
+        companyName
     });
 
     await logActivity({
@@ -257,7 +261,7 @@ export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
 // ✅ Confirm Flight Quotation API
 export const confirmFlightQuotation = asyncHandler(async (req, res) => {
     const { flightQuotationId } = req.params;
-    const { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount } = req.body;
+    const { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount, companyId, companyName } = req.body;
 
     const quotation = await FlightQuotation.findOne({ flightQuotationId });
 
@@ -298,6 +302,8 @@ export const confirmFlightQuotation = asyncHandler(async (req, res) => {
     if (gstType) quotation.gstType = gstType;
     if (gstPercentage !== undefined) quotation.gstPercentage = gstPercentage;
     if (gstAmount !== undefined) quotation.gstAmount = gstAmount;
+    if (companyId) quotation.companyId = companyId;
+    if (companyName) quotation.companyName = companyName;
 
     // ✅ Update total final fare
     quotation.finalFare = finalFare
@@ -407,6 +413,7 @@ export const previewFlightQuotationMail = asyncHandler(async (req, res) => {
         paymentLink: selectedCompany?.paymentLink || "",
         bankDetails: Array.isArray(selectedCompany?.bankDetails) ? selectedCompany.bankDetails : [],
         receivedAmount,
+        signature: selectedCompany?.signature || `Warm Regards,\n${selectedCompany?.companyName || "Iconic Travel"}`
     };
 
     const quotationData = { quotation, lead };
@@ -445,6 +452,7 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
         companyName,
         customText = {},
         pdfAttachment,
+        receiptPdf,
     } = req.body || {};
 
     if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -465,6 +473,7 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
 
     const vouchers = await ReceivedVoucher.find({ quotationRef: flightQuotationId }).lean();
     const receivedAmount = sumReceivedFromClient(vouchers);
+    const isBookingMail = type === "booking";
     const companyMeta = {
         companyName: selectedCompany?.companyName || "Iconic Travel",
         companyWebsite: selectedCompany?.companyWebsite || "",
@@ -473,15 +482,29 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
         paymentLink: selectedCompany?.paymentLink || "",
         bankDetails: Array.isArray(selectedCompany?.bankDetails) ? selectedCompany.bankDetails : [],
         receivedAmount,
-        ...(customText?.booking || {}),
+        signature: customText?.signature || selectedCompany?.signature || `Warm Regards,\n${selectedCompany?.companyName || "Iconic Travel"}`,
+        ...(isBookingMail ? (customText?.booking || {}) : (customText?.normal || {})),
     };
 
     const quotationData = { quotation, lead };
-    const generatedBody =
-        type === "booking"
+    const generatedBody = isBookingMail
             ? buildFlightQuotationBookingEmail(quotationData, companyMeta)
             : buildFlightQuotationNormalEmail(quotationData, companyMeta);
-    const body = String(bodyHtml || "").trim() || generatedBody;
+    let body = String(bodyHtml || "").trim() || generatedBody;
+
+    // Append signature if bodyHtml was used and signature is provided
+    if (bodyHtml && companyMeta.signature) {
+        const isHtmlSig = /<[a-z][\s\S]*>/i.test(companyMeta.signature);
+        const sig = isHtmlSig ? companyMeta.signature : companyMeta.signature.replace(/\n/g, "<br/>");
+        
+        // Use a simpler check for existing signature to avoid duplication
+        const cleanSig = sig.replace(/\s/g, "");
+        const cleanBody = body.replace(/\s/g, "");
+        
+        if (!cleanBody.includes(cleanSig)) {
+            body += `<br/><br/>${sig}`;
+        }
+    }
     const finalSubject =
         subject ||
         (type === "booking"
@@ -494,40 +517,65 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
     });
 
     const isBooking = String(type || "").trim().toLowerCase() === "booking";
-    const providedPdfAttachment =
-        !isBooking &&
-            pdfAttachment &&
-            typeof pdfAttachment === "object" &&
-            String(pdfAttachment.contentBase64 || "").trim()
-            ? {
-                filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
-                content: Buffer.from(String(pdfAttachment.contentBase64).trim(), "base64"),
-                contentType: String(pdfAttachment.mimeType || "").trim() || "application/pdf",
-            }
-            : null;
+    const attachments = [];
 
-    await transporter.sendMail({
-        from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
-        to,
-        cc: cc && String(cc).trim() ? cc : undefined,
-        replyTo: selectedCompany?.email || auth.user,
-        subject: finalSubject,
-        html: body,
-        text: body.replace(/<[^>]*>/g, ""),
-        attachments: providedPdfAttachment ? [providedPdfAttachment] : [],
-    });
+    // Handle normal PDF attachment (Quotation PDF)
+    if (pdfAttachment && pdfAttachment.contentBase64 && String(pdfAttachment.contentBase64).trim()) {
+        attachments.push({
+            filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+            content: Buffer.from(String(pdfAttachment.contentBase64).trim(), "base64"),
+            contentType: String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+        });
+    }
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            {
-                flightQuotationId,
-                type,
-                senderAccount: senderAccount || "gmail1",
-            },
-            "Mail sent successfully",
-        ),
-    );
+    // Handle Receipt PDF attachment
+    if (receiptPdf && receiptPdf.contentBase64 && String(receiptPdf.contentBase64).trim()) {
+        attachments.push({
+            filename: String(receiptPdf.filename || "Payment_Receipt.pdf").trim(),
+            content: Buffer.from(String(receiptPdf.contentBase64).trim(), "base64"),
+            contentType: String(receiptPdf.mimeType || "").trim() || "application/pdf",
+        });
+    }
+
+    try {
+        console.log(`Attempting to send flight ${type} email to: ${to} using account: ${auth.user}`);
+        
+        await transporter.sendMail({
+            from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+            to,
+            cc: cc && String(cc).trim() ? cc : undefined,
+            replyTo: selectedCompany?.email || auth.user,
+            subject: finalSubject,
+            html: body,
+            text: body.replace(/<[^>]*>/g, ""),
+            attachments: attachments,
+        });
+
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                {
+                    flightQuotationId,
+                    type,
+                    senderAccount: senderAccount || "gmail1",
+                },
+                "Mail sent successfully",
+            ),
+        );
+    } catch (mailError) {
+        console.error("Nodemailer Error Details:", {
+            message: mailError.message,
+            code: mailError.code,
+            command: mailError.command,
+            response: mailError.response,
+            stack: mailError.stack
+        });
+        
+        throw new ApiError(
+            500, 
+            `Failed to send email: ${mailError.message}. Check SMTP configuration or attachment size.`
+        );
+    }
 });
 
 

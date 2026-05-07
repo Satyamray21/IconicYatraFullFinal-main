@@ -61,7 +61,7 @@ import {
   PictureAsPdf,
   Edit,
 } from "@mui/icons-material";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "../../../../utils/axios";
 import {
@@ -71,6 +71,9 @@ import {
 } from "../../../../features/quotation/flightQuotationSlice";
 import FlightQuotationPDFDialog from "./PDF/PreviewPdf";
 import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
+import TransactionHistoryDialog from "../VehicleQuotation/Dialog/TransactionHistoryDialog";
+import InvoiceView from "../../../../Components/InvoiceView";
+import html2pdf from "html2pdf.js";
 
 const FlightFinalize = () => {
   const [openDialog, setOpenDialog] = useState(false);
@@ -84,11 +87,11 @@ const FlightFinalize = () => {
   const [isFinalized, setIsFinalized] = useState(false);
   const [invoiceGenerated, setInvoiceGenerated] = useState(false);
   const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState("");
+  const [mailCompanies, setMailCompanies] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [emailContentType, setEmailContentType] = useState("short");
   const [mailMode, setMailMode] = useState("normal");
   const [openEmailDialog, setOpenEmailDialog] = useState(false);
-  const [mailCompanies, setMailCompanies] = useState([]);
   const [emailAccounts, setEmailAccounts] = useState([]);
   const [emailTemplateBodies, setEmailTemplateBodies] = useState({
     normal: { subject: "", message: "" },
@@ -112,11 +115,15 @@ const FlightFinalize = () => {
 
   const { id } = useParams();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { quotationDetails, loading } = useSelector(
     (state) => state.flightQuotation
   );
   const quotation = quotationDetails?.quotation || null;
   const lead = quotationDetails?.lead || null;
+
+  const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
+  const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
 
   const apiEntityId = React.useMemo(() => {
     if (quotation?.flightQuotationId) return String(quotation.flightQuotationId);
@@ -145,6 +152,9 @@ const FlightFinalize = () => {
       setGstAmount(quotation.gstAmount || 0);
       setIsFinalized(quotation.status === "Confirmed");
       setInvoiceGenerated(quotation.status === "Confirmed");
+      if (quotation.companyId) {
+        setSelectedCompanyId(quotation.companyId);
+      }
     }
   }, [quotation]);
 
@@ -199,7 +209,11 @@ const FlightFinalize = () => {
     const loadMailCompanies = async () => {
       try {
         const res = await axios.get("/company");
-        setMailCompanies(Array.isArray(res?.data?.data) ? res.data.data : []);
+        const companies = Array.isArray(res?.data?.data) ? res.data.data : [];
+        setMailCompanies(companies);
+        if (companies.length > 0) {
+          setSelectedCompanyId(companies[0]._id);
+        }
       } catch {
         setMailCompanies([]);
       }
@@ -250,6 +264,8 @@ const FlightFinalize = () => {
           gstPercentage: Number(gstPercentage),
           gstAmount,
           finalFare: totalFinalFare,
+          companyId: selectedCompanyId,
+          companyName: activeCompany?.companyName,
         })
       ).unwrap();
 
@@ -291,6 +307,8 @@ const FlightFinalize = () => {
             gstPercentage: Number(gstPercentage),
             gstAmount,
             finalFare: totalFinalFare,
+            companyId: selectedCompanyId,
+            companyName: activeCompany?.companyName,
           },
         }),
       ).unwrap();
@@ -304,7 +322,6 @@ const FlightFinalize = () => {
   };
 
   const handlePreviewPDF = () => {
-    setSelectedCompany("");
     setEmailContentType(mailMode === "booking" ? "full" : "short");
     setOpenPreviewDialog(true);
   };
@@ -339,10 +356,12 @@ const FlightFinalize = () => {
   };
 
   const openEmailDialogWithTemplates = async (mailType = "normal") => {
-    const defaultCompany = mailCompanies?.[0];
+    const activeCompanyId = selectedCompanyId || mailCompanies?.[0]?._id;
     setEmailTemplateType(mailType === "booking" ? "booking" : "normal");
     try {
-      await refreshEmailTemplates(defaultCompany?._id);
+      if (activeCompanyId) {
+        await refreshEmailTemplates(activeCompanyId);
+      }
     } catch { }
     setOpenEmailDialog(true);
   };
@@ -387,7 +406,7 @@ const FlightFinalize = () => {
         return false;
       }
 
-      await axios.post(`/flightQT/${quotation.flightQuotationId}/email/send`, {
+      const payload = {
         to: String(values?.to || "").trim(),
         cc: String(values?.cc || "").trim() || undefined,
         type: isBookingMail ? "booking" : "normal",
@@ -396,29 +415,74 @@ const FlightFinalize = () => {
         senderAccount: values?.senderAccount || "gmail1",
         companyId: values?.companyId || undefined,
         companyName: selectedCompany?.companyName || undefined,
-        customText: isBookingMail
-          ? {
-            booking: {
-              ...(values?.nextPayableAmount
-                ? { nextPayableAmount: Number(values.nextPayableAmount) }
-                : {}),
-              ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
-            },
-          }
-          : undefined,
-        previewPdfMode:
-          !isBookingMail &&
-          !!pdfAttachmentForMail?.contentBase64 &&
-          previewPdfModeForMail,
-        ...(!isBookingMail && pdfAttachmentForMail?.contentBase64
+        customText: {
+          signature: values?.signature || undefined,
+          normal: {
+            signature: values?.signature || undefined,
+          },
+          booking: {
+            signature: values?.signature || undefined,
+            ...(values?.nextPayableAmount
+              ? { nextPayableAmount: Number(values.nextPayableAmount) }
+              : {}),
+            ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+          },
+        },
+        ...(pdfAttachmentForMail?.contentBase64
           ? { pdfAttachment: pdfAttachmentForMail }
           : {}),
-      });
+      };
 
+      // Handle Payment Receipt Attachment
+      if (values.selectedReceiptId && isBookingMail) {
+        console.log("Starting receipt capture for ID:", values.selectedReceiptId);
+        // Wait for InvoiceView to render and fetch data
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        
+        const element = document.getElementById("hidden-receipt-container");
+        if (element) {
+          try {
+            const opt = {
+              margin: 0.2,
+              filename: `Receipt_${values.selectedReceiptId}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 1.5, useCORS: true, logging: true },
+              jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+            };
+
+            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+            
+            if (pdfBlob && pdfBlob.size >= 100) {
+              // Convert Blob to Base64
+              const reader = new FileReader();
+              const receiptAttachment = await new Promise((resolve, reject) => {
+                reader.onloadend = () =>
+                  resolve({
+                    filename: "Payment_Receipt.pdf",
+                    contentBase64: reader.result.split(",")[1],
+                    mimeType: "application/pdf",
+                  });
+                reader.onerror = reject;
+                reader.readAsDataURL(pdfBlob);
+              });
+
+              payload.receiptPdf = receiptAttachment;
+              payload.paymentVoucherId = values.selectedReceiptId;
+              console.log("Receipt captured and added to payload");
+            }
+          } catch (captureErr) {
+            console.error("Failed to capture receipt PDF:", captureErr);
+          }
+        }
+      }
+
+      await axios.post(`/flightQT/${quotation.flightQuotationId}/email/send`, payload);
       setOpenSnackbar(true);
       return true;
     } catch (err) {
       console.error("Failed to send flight quotation mail:", err);
+      const errorMsg = err.response?.data?.message || err.message || "Unknown error";
+      alert(`Failed to send email: ${errorMsg}`);
       return false;
     }
   };
@@ -582,6 +646,8 @@ const FlightFinalize = () => {
     "Edit Finalized Booking",
     "Normal Mail",
     "Booking Mail",
+    "Transaction History",
+    "Make Payment",
   ];
 
   const handleActionClick = (action) => {
@@ -599,6 +665,14 @@ const FlightFinalize = () => {
       case "Booking Mail":
         setMailMode("booking");
         handleEmailOpen("booking");
+        break;
+      case "Transaction History":
+        setOpenTransactionDialog(true);
+        break;
+      case "Make Payment":
+        const clientName = getCustomerName()?.trim() || "";
+        const party = encodeURIComponent(clientName);
+        navigate(`/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`);
         break;
       default:
         console.log("Unknown action:", action);
@@ -626,16 +700,17 @@ const FlightFinalize = () => {
 
   const tableHeaders = ["Flight", "From", "To", "Airline", "Flight No", "PNR", "Departure Date", "Departure Time", "Fare"];
 
+  const activeCompany = mailCompanies.find(c => c._id === selectedCompanyId) || company?.company;
+
   const footer = {
-    contact: company?.company?.contactPerson ||
-      company?.company?.call,
-    phone: company?.company?.call,
-    email: company?.company?.emailId,
+    contact: activeCompany?.authorizedSignatory?.name || activeCompany?.contactPerson || activeCompany?.call,
+    phone: activeCompany?.phone || activeCompany?.call,
+    email: activeCompany?.email || activeCompany?.emailId,
     received: "₹ 0",
     balance: formatCurrency(totalFinalFare),
-    company: company?.company?.companyName,
-    address: company?.company?.address,
-    website: company?.company?.website,
+    company: activeCompany?.companyName,
+    address: activeCompany?.address,
+    website: activeCompany?.companyWebsite || activeCompany?.website,
   };
 
   const flightPolicies = quotation?.policies || {};
@@ -715,10 +790,10 @@ const FlightFinalize = () => {
     adults: quotation.adults || 0,
     children: quotation.childs || 0,
     infants: quotation.infants || 0,
-    quotationTitle: `Flight Quotation For ${getCustomerName()}`,
+    quotationTitle: `Flight ${isFinalized ? "Confirmation" : "Quotation"} For ${getCustomerName()}`,
     destinationSummary: getCustomerLocation(),
     reference: quotation.flightQuotationId,
-    date: new Date().toLocaleDateString(),
+    date: new Date().toLocaleDateString("en-GB"),
     totalFare: totalFinalFare,
     formattedTotalFare: formatCurrency(totalFinalFare),
     policies: {
@@ -745,11 +820,14 @@ const FlightFinalize = () => {
     subject: emailTemplate?.subject || "",
     greetLine: "Please find below details:",
     message: emailTemplate?.message || "",
-    signature: "Warm Regards,\nReservation Team\nIconic Travel",
+    signature: "",
     mailType: emailType,
-    senderAccount: "gmail1",
-    companyId: mailCompanies?.[0]?._id || "",
-    nextPayableAmount: "",
+    senderAccount:
+      emailAccounts.find((acc) => (acc.companyId?._id || acc.companyId) === selectedCompanyId)?._id ||
+      emailAccounts[0]?._id ||
+      "gmail1",
+    companyId: selectedCompanyId || mailCompanies?.[0]?._id || "",
+    nextPayableAmount: balanceAmount > 0 ? String(balanceAmount) : "",
     paymentDueDate: "",
   };
 
@@ -762,6 +840,21 @@ const FlightFinalize = () => {
         mb={2}
         flexWrap="wrap"
       >
+        <FormControl size="small" sx={{ minWidth: 200, mr: 1 }}>
+          <InputLabel>Branding Company</InputLabel>
+          <Select
+            value={selectedCompanyId}
+            label="Branding Company"
+            onChange={(e) => setSelectedCompanyId(e.target.value)}
+          >
+            {mailCompanies.map((c) => (
+              <MenuItem key={c._id} value={c._id}>
+                {c.companyName}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
         {actions.map((a, i) => {
           if (a === "Finalize Booking" && isFinalized) return null;
           if (a === "Edit Finalized Booking" && !isFinalized) return null;
@@ -1211,7 +1304,8 @@ const FlightFinalize = () => {
         open={openPreviewDialog}
         onClose={handlePreviewDialogClose}
         quotation={quotationForPdf}
-        pdfHeading="FLIGHT QUOTATION"
+        pdfHeading={isFinalized ? "FLIGHT CONFIRMATION" : "FLIGHT QUOTATION"}
+        initialCompanyId={selectedCompanyId}
         initialEmailContentMode={emailContentType}
         includePdfOnSend={mailMode !== "booking"}
         autoSendForMail={autoGeneratePdfForMail}
@@ -1246,7 +1340,17 @@ const FlightFinalize = () => {
         companyOptions={mailCompanies}
         emailAccountOptions={emailAccounts}
         hasPdfAttachment={!!pdfAttachmentForMail}
+        receiptOptions={paymentHistory.filter(v => v.paymentType === "Receive Voucher")}
+        onReceiptChange={(receiptId) => setSelectedReceiptIdForPdf(receiptId)}
       />
+
+      <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+        <div id="hidden-receipt-container">
+           {selectedReceiptIdForPdf && (
+              <InvoiceView id={selectedReceiptIdForPdf} hideButtons={true} />
+           )}
+        </div>
+      </Box>
 
       {/* Confirmation Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
@@ -1375,6 +1479,14 @@ const FlightFinalize = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <TransactionHistoryDialog
+        open={openTransactionDialog}
+        onClose={() => setOpenTransactionDialog(false)}
+        loading={paymentHistoryLoading}
+        rows={paymentHistory}
+        quotationRef={apiEntityId}
+      />
 
       {/* Success Snackbar */}
       <Snackbar

@@ -78,6 +78,13 @@ const flightQuotationSchema = mongoose.Schema({
     Quotation_type: {
         type: String,
         default: 'Flight_Quotation'
+    },
+    companyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Company'
+    },
+    companyName: {
+        type: String
     }
 }, { timestamps: true });
 

@@ -28,7 +28,7 @@ import axios from "../../../../../utils/axios";
 import InvoiceView from "../../../../../Components/InvoiceView";
 import html2pdf from "html2pdf.js";
 
-const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) => {
+const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quotationRef }) => {
     const [hotels, setHotels] = useState([]);
     const [hotelsMap, setHotelsMap] = useState({}); // { city: [hotels] }
     const [loading, setLoading] = useState(false);
@@ -40,6 +40,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
     const [selectedCompanyId, setSelectedCompanyId] = useState("");
     const [emailAccounts, setEmailAccounts] = useState([]);
     const [senderAccount, setSenderAccount] = useState("");
+    const [signatureHtml, setSignatureHtml] = useState("");
     const [receipts, setReceipts] = useState([]);
     const [selectedReceiptId, setSelectedReceiptId] = useState("");
     const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
@@ -91,8 +92,8 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
 
         const fetchReceipts = async () => {
             try {
-                // Use human-readable quotationId/quickQuotationId as the ref for payments
-                const ref = quotation?.quotationId || quotation?.quickQuotationId || quotation?._id;
+                // Use the provided quotationRef if available, otherwise try common fields
+                const ref = quotationRef || quotation?.quotationId || quotation?.quickQuotationId || quotation?._id;
                 if (!ref) return;
 
                 const res = await axios.get(`/payment/by-quotation/${ref}`);
@@ -117,7 +118,6 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
         }
     }, [open, hotels.length, quotation?._id]);
 
-    // Update sender account when company selection changes (and emailAccounts are already loaded)
     useEffect(() => {
         if (selectedCompanyId && emailAccounts.length > 0) {
             const firstAcc = emailAccounts.find(acc => (acc.companyId?._id || acc.companyId) === selectedCompanyId);
@@ -125,6 +125,29 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
             else setSenderAccount("");
         }
     }, [selectedCompanyId, emailAccounts.length]);
+
+    useEffect(() => {
+        const acc = emailAccounts.find(a => a._id === senderAccount);
+        if (acc && acc.signature && (acc.signature.name || (acc.signature.mobile && acc.signature.mobile.some(m => m)) || (acc.signature.links && acc.signature.links.some(l => l)))) {
+            let sigHtml = `<div style="margin-top: 15px; font-family: Arial, sans-serif;">`;
+            sigHtml += `<p style="margin: 0;"><b>Warm Regards,</b></p>`;
+            if (acc.signature.name) sigHtml += `<p style="margin: 0;"><b>${acc.signature.name}</b></p>`;
+            if (acc.signature.mobile && acc.signature.mobile.length > 0) {
+                const mobs = acc.signature.mobile.filter(m => m.trim());
+                if (mobs.length > 0) sigHtml += `<p style="margin: 0;">Mobile: ${mobs.join(", ")}</p>`;
+            }
+            if (acc.signature.links && acc.signature.links.length > 0) {
+                const links = acc.signature.links.filter(l => l.trim());
+                if (links.length > 0) {
+                    sigHtml += `<p style="margin: 0;">${links.map(l => `<a href="${l}" style="color: #0b5394; text-decoration: none;">${l}</a>`).join(" | ")}</p>`;
+                }
+            }
+            sigHtml += `</div>`;
+            setSignatureHtml(sigHtml);
+        } else {
+            setSignatureHtml("");
+        }
+    }, [senderAccount, emailAccounts]);
 
 
     useEffect(() => {
@@ -286,7 +309,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                 receiptPdf: receiptPdfAttachment,
                 // Fallback for backend generation if frontend fails for some reason
                 paymentVoucherId: selectedReceiptId,
-                customText: { additionalNote: customMessage }
+                customText: { additionalNote: customMessage, signature: signatureHtml }
             });
 
             setSnackbar({ open: true, message: "Hotel confirmation mail sent!", severity: "success" });
@@ -422,6 +445,16 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick" }) =
                                 ))}
                             </TextField>
                         </Grid>
+                        {signatureHtml && (
+                            <Grid size={{ xs: 12 }}>
+                                <Typography variant="subtitle2" sx={{ color: "#1a237e", fontWeight: "bold", mb: 1 }}>
+                                    Signature Preview
+                                </Typography>
+                                <Paper variant="outlined" sx={{ p: 2, bgcolor: "#fff" }}>
+                                    <Box dangerouslySetInnerHTML={{ __html: signatureHtml }} />
+                                </Paper>
+                            </Grid>
+                        )}
                     </Grid>
 
                 </Box>

@@ -228,7 +228,7 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
       <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
       <p>${policyLines(paymentPolicy.length ? paymentPolicy : ["Payment policy as per confirmation."]).replace(/\n/g, "<br/>")}</p>
       ${bankHtmlSection(customText?.bankDetails || [], customText?.paymentLink || "")}
-      <p>${safe(customText.signature, `Warm Regards<br/>Reservation Team<br/>${companyName}`)}</p>
+      <p>${safe(customText.signature, "").replace(/\n/g, "<br/>")}</p>
     </div>
   `;
 }
@@ -258,6 +258,11 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
       ${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? `<p><b>GST (${quotation.gstPercentage}%):</b> INR ${INR.format(quotation.gstAmount)}</p><p><b>Total Package Cost (Incl. GST):</b> INR ${INR.format(totals.total)}</p>` : ""}
       <p><b>Payment received:</b> INR ${INR.format(receivedAmount)}</p>
       <p><b>The remaining payment:</b> INR ${INR.format(dueAmount)}</p>
+      ${
+        customText?.nextPayableAmount !== undefined && customText?.nextPayableAmount !== null && customText?.nextPayableAmount !== ""
+          ? `<p style="color:#d32f2f; font-weight:bold;"><b>Next Payable Amount:</b> INR ${INR.format(toNum(customText.nextPayableAmount))}</p>`
+          : ""
+      }
       ${
         customText?.dueDate
           ? `<p><b>Payment Due Date:</b> ${safe(customText.dueDate)}</p>`
@@ -292,7 +297,7 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
       <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
       <p>${policyLines(paymentPolicy.length ? paymentPolicy : ["Payment policy as per confirmation."]).replace(/\n/g, "<br/>")}</p>
       ${bankHtmlSection(customText?.bankDetails || [], customText?.paymentLink || "")}
-      <p>${safe(customText.signature, `Warm Regards<br/>Reservation Team<br/>${companyName}`)}</p>
+      <p>${safe(customText.signature, "").replace(/\n/g, "<br/>")}</p>
     </div>
   `;
 }

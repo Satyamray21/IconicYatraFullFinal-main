@@ -21,6 +21,32 @@ import dayjs from "dayjs";
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
 
+const SignatureUpdater = ({ senderAccount, emailAccountOptions, setFieldValue }) => {
+  React.useEffect(() => {
+    const acc = emailAccountOptions.find((a) => a._id === senderAccount);
+    if (acc && acc.signature && (acc.signature.name || (acc.signature.mobile && acc.signature.mobile.some(m => m)) || (acc.signature.links && acc.signature.links.some(l => l)))) {
+        let sigHtml = `<div style="margin-top: 15px; font-family: Arial, sans-serif;">`;
+        sigHtml += `<p style="margin: 0;"><b>Warm Regards,</b></p>`;
+        if (acc.signature.name) sigHtml += `<p style="margin: 0;"><b>${acc.signature.name}</b></p>`;
+        if (acc.signature.mobile && acc.signature.mobile.length > 0) {
+            const mobs = acc.signature.mobile.filter(m => m.trim());
+            if (mobs.length > 0) sigHtml += `<p style="margin: 0;">Mobile: ${mobs.join(", ")}</p>`;
+        }
+        if (acc.signature.links && acc.signature.links.length > 0) {
+            const links = acc.signature.links.filter(l => l.trim());
+            if (links.length > 0) {
+                sigHtml += `<p style="margin: 0;">${links.map(l => `<a href="${l}" style="color: #0b5394; text-decoration: none;">${l}</a>`).join(" | ")}</p>`;
+            }
+        }
+        sigHtml += `</div>`;
+        setFieldValue("signature", sigHtml);
+    } else {
+        setFieldValue("signature", "");
+    }
+  }, [senderAccount, emailAccountOptions, setFieldValue]);
+  return null;
+};
+
 const EmailQuotationDialog = ({
   open,
   onClose,
@@ -31,6 +57,8 @@ const EmailQuotationDialog = ({
   companyOptions = [],
   emailAccountOptions = [],
   hasPdfAttachment = false,
+  receiptOptions = [],
+  onReceiptChange = () => { },
 }) => {
   const validationSchema = Yup.object({
     to: Yup.string().email("Invalid email").required("Required"),
@@ -58,6 +86,7 @@ const EmailQuotationDialog = ({
     companyId: "",
     nextPayableAmount: "",
     paymentDueDate: null,
+    selectedReceiptId: "",
   };
   const initialValues = { ...baseInitialValues, ...(initialValuesOverride || {}) };
 
@@ -116,6 +145,7 @@ const EmailQuotationDialog = ({
               return (
                 <Form>
                   <DialogContent dividers>
+                    <SignatureUpdater senderAccount={values.senderAccount} emailAccountOptions={emailAccountOptions} setFieldValue={setFieldValue} />
                     <Alert
                       severity={hasPdfAttachment ? "success" : "warning"}
                       sx={{ mb: 2 }}
@@ -292,7 +322,7 @@ const EmailQuotationDialog = ({
                       <Grid size={{ xs: 12 }}>
                         {(values.mailType || "normal") === "booking" && (
                           <Grid container spacing={2} sx={{ mb: 1 }}>
-                            <Grid size={{ xs: 12, sm: 6 }}>
+                            <Grid size={{ xs: 12, sm: 4 }}>
                               <TextField
                                 fullWidth
                                 name="nextPayableAmount"
@@ -303,7 +333,7 @@ const EmailQuotationDialog = ({
                                 }
                               />
                             </Grid>
-                            <Grid size={{ xs: 12, sm: 6 }}>
+                            <Grid size={{ xs: 12, sm: 4 }}>
                               <DatePicker
                                 label="Payment Due Date"
                                 value={values.paymentDueDate}
@@ -317,6 +347,28 @@ const EmailQuotationDialog = ({
                                   },
                                 }}
                               />
+                            </Grid>
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                              <TextField
+                                select
+                                fullWidth
+                                label="Attach Receipt"
+                                value={values.selectedReceiptId || ""}
+                                onChange={(e) => {
+                                  setFieldValue("selectedReceiptId", e.target.value);
+                                  onReceiptChange(e.target.value);
+                                }}
+                                helperText={receiptOptions.length === 0 ? "No receipts found" : "Attach a payment receipt"}
+                              >
+                                <MenuItem value="">
+                                  <em>None</em>
+                                </MenuItem>
+                                {receiptOptions.map((r) => (
+                                  <MenuItem key={r._id} value={r._id}>
+                                    {r.invoiceId || r.receiptNumber} - ₹{r.amount}
+                                  </MenuItem>
+                                ))}
+                              </TextField>
                             </Grid>
                           </Grid>
                         )}
@@ -371,15 +423,19 @@ const EmailQuotationDialog = ({
                         <Paper variant="outlined" sx={{ p: 2, maxHeight: 280, overflow: "auto" }}>
                           <Box
                             sx={{ "& p": { m: 0, mb: 1 } }}
-                            dangerouslySetInnerHTML={{ __html: values.message || "<p>No preview</p>" }}
+                            dangerouslySetInnerHTML={{ __html: (values.message || "<p>No preview</p>") + (values.signature || "") }}
                           />
                         </Paper>
                       </Grid>
                       <Grid size={{ xs: 12 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                          Generated Signature (HTML)
+                        </Typography>
                         <Field
                           as={TextField}
                           name="signature"
-                          label="Signature"
+                          multiline
+                          minRows={3}
                           fullWidth
                         />
                       </Grid>

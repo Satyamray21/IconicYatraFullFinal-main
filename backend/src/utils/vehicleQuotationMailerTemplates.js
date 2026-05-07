@@ -280,6 +280,7 @@ export function buildVehicleQuotationPdfPreviewEmail(vehicleData, customText = {
         <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
         <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
         ${bankHtmlSection(bankDetails, paymentLink)}
+        <p>${safe(customText.signature, `Warm Regards<br/><b>${companyName}</b>`)}</p>
     </div>
   `;
 }
@@ -391,12 +392,7 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
       <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
       <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
       ${bankHtmlSection(bankDetails, paymentLink)}
-      <p>
-        ${safe(
-          customText.signature,
-          `Warm Regards<br/>Reservation Team<br/>${companyName}`,
-        ).replace(/\n/g, "<br/>")}
-      </p>
+      <p>${safe(customText.signature, `Warm Regards<br/><b>${companyName}</b>`)}</p>
     </div>
   `;
 }

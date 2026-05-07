@@ -786,11 +786,15 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
     companyName,
     pdfAttachment,
     previewPdfMode = false,
+    receiptPdf,
+    paymentVoucherId,
   } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
     throw new ApiError(400, "Receiver email is required");
   }
+
+  const isBookingMail = String(type || "").trim().toLowerCase() === "booking";
 
   const quotation = await QuickQuotation.findById(mongoId)
     .populate("packageId")
@@ -807,7 +811,7 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
   const meta = await loadEmailMetaQuick(selectedCompany);
 
   const generatedBody =
-    type === "booking"
+    isBookingMail
       ? buildCustomQuotationBookingEmail(
           shaped,
           await mergeQuickBookingEmailPayload(shaped, meta, req.body, mongoId),
@@ -823,7 +827,7 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
     meta,
   );
   const body =
-    type === "booking"
+    isBookingMail
       ? generatedBody
       : previewPdfMode
         ? previewPdfBody
@@ -833,7 +837,7 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
   const guestName = quotation.customerName || "Guest";
   const finalSubject =
     subject ||
-    (type === "booking"
+    (isBookingMail
       ? `Booking Confirmation ${shortRef} - ${guestName}`
       : `Quotation ${shortRef} - ${guestName}`);
 
@@ -850,32 +854,60 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
     auth: { user: auth.user, pass: auth.pass },
   });
 
-  const isBooking = String(type || "").trim().toLowerCase() === "booking";
-  const shouldAttachPdf = !isBooking;
-  const providedPdfAttachment =
-    pdfAttachment &&
-    typeof pdfAttachment === "object" &&
-    String(pdfAttachment.contentBase64 || "").trim()
-      ? {
-          filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
-          content: Buffer.from(
-            String(pdfAttachment.contentBase64).trim(),
-            "base64",
-          ),
-          contentType:
-            String(pdfAttachment.mimeType || "").trim() || "application/pdf",
-        }
-      : null;
+  const shouldAttachItinerary = !isBookingMail;
+  const attachments = [];
 
-  try {
-    const generatedPdfAttachment =
-      !shouldAttachPdf || providedPdfAttachment
+  // 1. Itinerary Attachment (Normal mail only)
+  if (shouldAttachItinerary) {
+    const providedPdfAttachment =
+      pdfAttachment &&
+      typeof pdfAttachment === "object" &&
+      String(pdfAttachment.contentBase64 || "").trim()
+        ? {
+            filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+            content: Buffer.from(
+              String(pdfAttachment.contentBase64).trim(),
+              "base64",
+            ),
+            contentType:
+              String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+          }
+        : null;
+
+    const generatedPdfAttachment = providedPdfAttachment
       ? null
       : await buildPdfAttachment({
           subject: finalSubject,
           htmlBody: body,
           quotationRef: `QT-${mongoId.slice(-6)}`,
         });
+
+    if (providedPdfAttachment) attachments.push(providedPdfAttachment);
+    else if (generatedPdfAttachment) attachments.push(generatedPdfAttachment);
+  }
+
+  // 2. Receipt Attachment (Booking mail only)
+  if (isBookingMail) {
+    if (receiptPdf && receiptPdf.contentBase64 && String(receiptPdf.contentBase64).trim()) {
+        attachments.push({
+            filename: receiptPdf.filename || "Payment_Receipt.pdf",
+            content: Buffer.from(String(receiptPdf.contentBase64).trim(), "base64"),
+            contentType: "application/pdf",
+        });
+    } else if (paymentVoucherId) {
+        const voucher = await ReceivedVoucher.findById(paymentVoucherId).populate("companyId");
+        if (voucher) {
+            const receiptPdfBuffer = await buildPaymentReceiptPdf(voucher, voucher.companyId || selectedCompany);
+            attachments.push({
+                filename: `Payment_Receipt_${voucher.invoiceId || paymentVoucherId}.pdf`,
+                content: receiptPdfBuffer,
+                contentType: "application/pdf",
+            });
+        }
+    }
+  }
+
+  try {
     await transporter.sendMail({
       from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
       to,
@@ -884,9 +916,7 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
       subject: finalSubject,
       html: body,
       text: body.replace(/<[^>]*>/g, ""),
-      attachments: shouldAttachPdf
-        ? [providedPdfAttachment || generatedPdfAttachment].filter(Boolean)
-        : [],
+      attachments: attachments,
     });
 
     await logActivity({
@@ -1318,8 +1348,10 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
         <br/>
         ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
         <br/>
+        ${options.signature ? options.signature : `
         <p>Best Regards,</p>
         <p><b>${options.companyName}</b></p>
+        `}
       `,
       attachments: [
         {
