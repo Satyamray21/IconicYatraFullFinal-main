@@ -630,7 +630,7 @@ const formatDateWithOptionalTime = (dateValue, timeValue) => {
   if (Number.isNaN(baseDate.getTime())) return "";
 
   const rawTime = String(timeValue || "").trim();
-  if (!rawTime) return formatDateTime(dateValue);
+  if (!rawTime) return formatDate(dateValue);
 
   const timeAsDate = new Date(rawTime);
   if (!Number.isNaN(timeAsDate.getTime())) {
@@ -639,7 +639,7 @@ const formatDateWithOptionalTime = (dateValue, timeValue) => {
   }
 
   const match = rawTime.match(/^(\d{1,2}):(\d{2})/);
-  if (!match) return formatDateTime(dateValue);
+  if (!match) return formatDate(dateValue);
   const hh = Math.min(Math.max(Number(match[1]) || 0, 0), 23);
   const mm = Math.min(Math.max(Number(match[2]) || 0, 0), 59);
   baseDate.setHours(hh, mm, 0, 0);
