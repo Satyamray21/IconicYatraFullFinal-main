@@ -7,7 +7,7 @@ export const createVehicleQuotation = createAsyncThunk(
   async (data, thunkApi) => {
     try {
       const res = await axios.post("/vehicleQT", data);
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message || "Failed to create Vehicle Quotation",
@@ -22,7 +22,7 @@ export const getAllVehicleQuotations = createAsyncThunk(
   async (_, thunkApi) => {
     try {
       const res = await axios.get("/vehicleQT");
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message || "Failed to fetch Vehicle Quotations",
@@ -37,7 +37,7 @@ export const getVehicleQuotationById = createAsyncThunk(
   async (vehicleQuotationId, thunkApi) => {
     try {
       const res = await axios.get(`/vehicleQT/${vehicleQuotationId}`);
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message || "Vehicle Quotation not found",
@@ -52,7 +52,7 @@ export const updateVehicleQuotation = createAsyncThunk(
   async ({ vehicleQuotationId, data }, thunkApi) => {
     try {
       const res = await axios.put(`/vehicleQT/${vehicleQuotationId}`, data);
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message || "Failed to update Vehicle Quotation",
@@ -86,7 +86,7 @@ export const addItinerary = createAsyncThunk(
           itinerary,
         },
       );
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message || "Failed to add itinerary",
@@ -104,7 +104,7 @@ export const editItinerary = createAsyncThunk(
         `/vehicleQT/${vehicleQuotationId}/itinerary/${itineraryId}`,
         data,
       );
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message || "Failed to edit itinerary",
@@ -119,7 +119,7 @@ export const viewItinerary = createAsyncThunk(
   async (vehicleQuotationId, thunkApi) => {
     try {
       const res = await axios.get(`/vehicleQT/${vehicleQuotationId}/itinerary`);
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message || "Failed to fetch itinerary",
@@ -140,7 +140,7 @@ export const previewVehicleQuotationMail = createAsyncThunk(
           companyName: companyName || undefined,
         }
       });
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message ||
@@ -159,7 +159,7 @@ export const sendVehicleQuotationMail = createAsyncThunk(
         `/vehicleQT/${encodeURIComponent(vehicleQuotationId)}/email/send`,
         data,
       );
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message ||
@@ -178,7 +178,7 @@ export const finalizeVehicleQuotation = createAsyncThunk(
         `/vehicleQT/${encodeURIComponent(vehicleQuotationId)}/finalize`,
         data,
       );
-      return res.data.data;
+      return res.data?.data ?? res.data;
     } catch (err) {
       return thunkApi.rejectWithValue(
         err?.response?.data?.message || "Failed to finalize Vehicle Quotation",

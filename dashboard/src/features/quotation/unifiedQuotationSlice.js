@@ -6,7 +6,7 @@ export const fetchUnifiedQuotationStats = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const { data } = await api.get("/quotations/stats");
-      return data.data;
+      return data?.data ?? data;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || "Failed to load stats");
     }
