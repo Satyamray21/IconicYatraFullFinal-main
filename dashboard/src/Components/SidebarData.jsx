@@ -40,6 +40,11 @@ export const sidebarItems = [
         route: "/setting/hero-section",
         icon: <HomeIcon />,
       },
+      {
+        label: "Email Accounts",
+        route: "/email-accounts",
+        icon: <AccountCircleIcon />,
+      },
     ],
   },
 

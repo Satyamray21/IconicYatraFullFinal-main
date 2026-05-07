@@ -30,6 +30,13 @@ import {
   ListItem,
   ListItemText,
   IconButton,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import {
   Flight,
@@ -54,7 +61,7 @@ import {
   PictureAsPdf,
   Edit,
 } from "@mui/icons-material";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "../../../../utils/axios";
 import {
@@ -64,6 +71,9 @@ import {
 } from "../../../../features/quotation/flightQuotationSlice";
 import FlightQuotationPDFDialog from "./PDF/PreviewPdf";
 import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
+import TransactionHistoryDialog from "../VehicleQuotation/Dialog/TransactionHistoryDialog";
+import InvoiceView from "../../../../Components/InvoiceView";
+import html2pdf from "html2pdf.js";
 
 const FlightFinalize = () => {
   const [openDialog, setOpenDialog] = useState(false);
@@ -77,11 +87,12 @@ const FlightFinalize = () => {
   const [isFinalized, setIsFinalized] = useState(false);
   const [invoiceGenerated, setInvoiceGenerated] = useState(false);
   const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState("");
+  const [mailCompanies, setMailCompanies] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [emailContentType, setEmailContentType] = useState("short");
   const [mailMode, setMailMode] = useState("normal");
   const [openEmailDialog, setOpenEmailDialog] = useState(false);
-  const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailAccounts, setEmailAccounts] = useState([]);
   const [emailTemplateBodies, setEmailTemplateBodies] = useState({
     normal: { subject: "", message: "" },
     booking: { subject: "", message: "" },
@@ -92,19 +103,34 @@ const FlightFinalize = () => {
   const [autoGeneratePdfForMail, setAutoGeneratePdfForMail] = useState(false);
   const [emailToPrefill, setEmailToPrefill] = useState("");
   const [editDialog, setEditDialog] = useState({
-    open: false,
-    field: "",
-    title: "",
     value: "",
   });
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
+
+  const [gstType, setGstType] = useState("Included");
+  const [gstPercentage, setGstPercentage] = useState(0);
+  const [gstAmount, setGstAmount] = useState(0);
+  const [baseFare, setBaseFare] = useState(0);
 
   const { id } = useParams();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { quotationDetails, loading } = useSelector(
     (state) => state.flightQuotation
   );
   const quotation = quotationDetails?.quotation || null;
   const lead = quotationDetails?.lead || null;
+
+  const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
+  const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
+
+  const apiEntityId = React.useMemo(() => {
+    if (quotation?.flightQuotationId) return String(quotation.flightQuotationId);
+    if (quotation?._id) return String(quotation._id);
+    if (id && /^[a-f\d]{24}$/i.test(String(id))) return String(id);
+    return id;
+  }, [quotation?.flightQuotationId, quotation?._id, id]);
   // Load flight data whenever quotation changes
   useEffect(() => {
     if (quotation) {
@@ -120,8 +146,15 @@ const FlightFinalize = () => {
         0,
       );
       setTotalFinalFare(Number(quotation.finalFare || 0) || computedTotal);
+      setBaseFare(Number(quotation.baseFare || 0) || computedTotal);
+      setGstType(quotation.gstType || "Included");
+      setGstPercentage(quotation.gstPercentage || 0);
+      setGstAmount(quotation.gstAmount || 0);
       setIsFinalized(quotation.status === "Confirmed");
       setInvoiceGenerated(quotation.status === "Confirmed");
+      if (quotation.companyId) {
+        setSelectedCompanyId(quotation.companyId);
+      }
     }
   }, [quotation]);
 
@@ -132,26 +165,69 @@ const FlightFinalize = () => {
     }
   }, [id, dispatch]);
 
+  const loadPaymentHistory = React.useCallback(async () => {
+    if (!apiEntityId) return;
+    setPaymentHistoryLoading(true);
+    try {
+      const res = await axios.get(
+        `/payment/by-quotation/${encodeURIComponent(apiEntityId)}`,
+      );
+      setPaymentHistory(res.data?.data || []);
+    } catch (e) {
+      setPaymentHistory([]);
+    } finally {
+      setPaymentHistoryLoading(false);
+    }
+  }, [apiEntityId]);
+
+  useEffect(() => {
+    loadPaymentHistory();
+  }, [apiEntityId, loadPaymentHistory]);
+
   // Keep total fare in sync with per-flight fare edits.
   useEffect(() => {
     if (!quotation) return;
-    const computedTotal = (finalFareList || []).reduce(
+    const computedBase = (finalFareList || []).reduce(
       (sum, fare) => sum + Number(fare || 0),
       0,
     );
-    setTotalFinalFare(computedTotal);
-  }, [finalFareList, quotation]);
+    setBaseFare(computedBase);
+
+    let computedGst = 0;
+    let finalTotal = computedBase;
+
+    if (gstType === "Excluded") {
+      computedGst = (computedBase * Number(gstPercentage)) / 100;
+      finalTotal = computedBase + computedGst;
+    }
+
+    setGstAmount(computedGst);
+    setTotalFinalFare(finalTotal);
+  }, [finalFareList, quotation, gstType, gstPercentage]);
 
   useEffect(() => {
     const loadMailCompanies = async () => {
       try {
         const res = await axios.get("/company");
-        setMailCompanies(Array.isArray(res?.data?.data) ? res.data.data : []);
+        const companies = Array.isArray(res?.data?.data) ? res.data.data : [];
+        setMailCompanies(companies);
+        if (companies.length > 0) {
+          setSelectedCompanyId(companies[0]._id);
+        }
       } catch {
         setMailCompanies([]);
       }
     };
+    const fetchEmailAccounts = async () => {
+      try {
+        const res = await axios.get("/email-accounts");
+        setEmailAccounts(Array.isArray(res?.data?.data) ? res.data.data : []);
+      } catch {
+        setEmailAccounts([]);
+      }
+    };
     loadMailCompanies();
+    fetchEmailAccounts();
   }, []);
 
   if (!quotation || !quotation.flightDetails) {
@@ -163,9 +239,14 @@ const FlightFinalize = () => {
   }
 
   // Handle Confirm Finalization
-  const getComputedFareTotal = (fareList = finalFareList) =>
-    (fareList || []).reduce((sum, fare) => sum + Number(fare || 0), 0);
-
+  const getComputedFareTotal = () => {
+    const base = finalFareList.reduce((sum, fare) => sum + Number(fare || 0), 0);
+    if (gstType === "Excluded") {
+      const gst = (base * Number(gstPercentage || 0)) / 100;
+      return base + gst;
+    }
+    return base;
+  };
   const handleConfirmFinalize = async () => {
     if (pnrList.some((pnr) => !pnr) || finalFareList.some((fare) => !fare)) {
       alert("Please enter PNR and Final Fare for all flights before confirming!");
@@ -178,7 +259,13 @@ const FlightFinalize = () => {
           flightQuotationId: quotation.flightQuotationId,
           pnrList,
           finalFareList,
-          finalFare: getComputedFareTotal(),
+          baseFare,
+          gstType,
+          gstPercentage: Number(gstPercentage),
+          gstAmount,
+          finalFare: totalFinalFare,
+          companyId: selectedCompanyId,
+          companyName: activeCompany?.companyName,
         })
       ).unwrap();
 
@@ -215,7 +302,13 @@ const FlightFinalize = () => {
           formData: {
             pnrList,
             finalFareList,
-            finalFare: computedTotal,
+            baseFare,
+            gstType,
+            gstPercentage: Number(gstPercentage),
+            gstAmount,
+            finalFare: totalFinalFare,
+            companyId: selectedCompanyId,
+            companyName: activeCompany?.companyName,
           },
         }),
       ).unwrap();
@@ -229,7 +322,6 @@ const FlightFinalize = () => {
   };
 
   const handlePreviewPDF = () => {
-    setSelectedCompany("");
     setEmailContentType(mailMode === "booking" ? "full" : "short");
     setOpenPreviewDialog(true);
   };
@@ -264,10 +356,12 @@ const FlightFinalize = () => {
   };
 
   const openEmailDialogWithTemplates = async (mailType = "normal") => {
-    const defaultCompany = mailCompanies?.[0];
+    const activeCompanyId = selectedCompanyId || mailCompanies?.[0]?._id;
     setEmailTemplateType(mailType === "booking" ? "booking" : "normal");
     try {
-      await refreshEmailTemplates(defaultCompany?._id);
+      if (activeCompanyId) {
+        await refreshEmailTemplates(activeCompanyId);
+      }
     } catch { }
     setOpenEmailDialog(true);
   };
@@ -312,7 +406,7 @@ const FlightFinalize = () => {
         return false;
       }
 
-      await axios.post(`/flightQT/${quotation.flightQuotationId}/email/send`, {
+      const payload = {
         to: String(values?.to || "").trim(),
         cc: String(values?.cc || "").trim() || undefined,
         type: isBookingMail ? "booking" : "normal",
@@ -321,29 +415,74 @@ const FlightFinalize = () => {
         senderAccount: values?.senderAccount || "gmail1",
         companyId: values?.companyId || undefined,
         companyName: selectedCompany?.companyName || undefined,
-        customText: isBookingMail
-          ? {
-            booking: {
-              ...(values?.nextPayableAmount
-                ? { nextPayableAmount: Number(values.nextPayableAmount) }
-                : {}),
-              ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
-            },
-          }
-          : undefined,
-        previewPdfMode:
-          !isBookingMail &&
-          !!pdfAttachmentForMail?.contentBase64 &&
-          previewPdfModeForMail,
-        ...(!isBookingMail && pdfAttachmentForMail?.contentBase64
+        customText: {
+          signature: values?.signature || undefined,
+          normal: {
+            signature: values?.signature || undefined,
+          },
+          booking: {
+            signature: values?.signature || undefined,
+            ...(values?.nextPayableAmount
+              ? { nextPayableAmount: Number(values.nextPayableAmount) }
+              : {}),
+            ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+          },
+        },
+        ...(pdfAttachmentForMail?.contentBase64
           ? { pdfAttachment: pdfAttachmentForMail }
           : {}),
-      });
+      };
 
+      // Handle Payment Receipt Attachment
+      if (values.selectedReceiptId && isBookingMail) {
+        console.log("Starting receipt capture for ID:", values.selectedReceiptId);
+        // Wait for InvoiceView to render and fetch data
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        
+        const element = document.getElementById("hidden-receipt-container");
+        if (element) {
+          try {
+            const opt = {
+              margin: 0.2,
+              filename: `Receipt_${values.selectedReceiptId}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 1.5, useCORS: true, logging: true },
+              jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+            };
+
+            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+            
+            if (pdfBlob && pdfBlob.size >= 100) {
+              // Convert Blob to Base64
+              const reader = new FileReader();
+              const receiptAttachment = await new Promise((resolve, reject) => {
+                reader.onloadend = () =>
+                  resolve({
+                    filename: "Payment_Receipt.pdf",
+                    contentBase64: reader.result.split(",")[1],
+                    mimeType: "application/pdf",
+                  });
+                reader.onerror = reject;
+                reader.readAsDataURL(pdfBlob);
+              });
+
+              payload.receiptPdf = receiptAttachment;
+              payload.paymentVoucherId = values.selectedReceiptId;
+              console.log("Receipt captured and added to payload");
+            }
+          } catch (captureErr) {
+            console.error("Failed to capture receipt PDF:", captureErr);
+          }
+        }
+      }
+
+      await axios.post(`/flightQT/${quotation.flightQuotationId}/email/send`, payload);
       setOpenSnackbar(true);
       return true;
     } catch (err) {
       console.error("Failed to send flight quotation mail:", err);
+      const errorMsg = err.response?.data?.message || err.message || "Unknown error";
+      alert(`Failed to send email: ${errorMsg}`);
       return false;
     }
   };
@@ -361,6 +500,28 @@ const FlightFinalize = () => {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const displayDate = (date) => {
+    if (!date) return "N/A";
+    if (typeof date === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(date)) return date;
+    try {
+      const d = new Date(date);
+      return isNaN(d.getTime()) ? date : d.toLocaleDateString("en-IN");
+    } catch {
+      return date;
+    }
+  };
+
+  const displayTime = (time) => {
+    if (!time) return "N/A";
+    if (typeof time === "string" && (time.includes("AM") || time.includes("PM"))) return time;
+    try {
+      const d = new Date(time);
+      return isNaN(d.getTime()) ? time : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return time;
+    }
   };
 
   // Get guest info string
@@ -456,10 +617,16 @@ const FlightFinalize = () => {
     }
   };
 
+  const totalReceived = paymentHistory.reduce((acc, v) => {
+    const isReceive = v?.drCr === "Cr" || v?.paymentType === "Receive Voucher" || v?.particulars?.toLowerCase().includes("receive");
+    return isReceive ? acc + (parseFloat(v.amount) || 0) : acc;
+  }, 0);
+  const balanceAmount = totalFinalFare - totalReceived;
+
   const infoMap = {
     call: `📞 ${getCustomerMobile()}`,
     email: `✉️ ${getCustomerEmail()}`,
-    payment: `Received: 0\n Balance: ${formatCurrency(totalFinalFare)}`,
+    payment: `Received: ${formatCurrency(totalReceived)}\n Balance: ${formatCurrency(balanceAmount)}`,
     quotation: `Total Quotation Cost: ${formatCurrency(totalFinalFare)}`,
     guest: getGuestInfoString(),
     location: `📍 ${getCustomerLocation()}`,
@@ -479,6 +646,8 @@ const FlightFinalize = () => {
     "Edit Finalized Booking",
     "Normal Mail",
     "Booking Mail",
+    "Transaction History",
+    "Make Payment",
   ];
 
   const handleActionClick = (action) => {
@@ -496,6 +665,14 @@ const FlightFinalize = () => {
       case "Booking Mail":
         setMailMode("booking");
         handleEmailOpen("booking");
+        break;
+      case "Transaction History":
+        setOpenTransactionDialog(true);
+        break;
+      case "Make Payment":
+        const clientName = getCustomerName()?.trim() || "";
+        const party = encodeURIComponent(clientName);
+        navigate(`/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`);
         break;
       default:
         console.log("Unknown action:", action);
@@ -523,16 +700,17 @@ const FlightFinalize = () => {
 
   const tableHeaders = ["Flight", "From", "To", "Airline", "Flight No", "PNR", "Departure Date", "Departure Time", "Fare"];
 
+  const activeCompany = mailCompanies.find(c => c._id === selectedCompanyId) || company?.company;
+
   const footer = {
-    contact: company?.company?.contactPerson ||
-      company?.company?.call,
-    phone: company?.company?.call,
-    email: company?.company?.emailId,
+    contact: activeCompany?.authorizedSignatory?.name || activeCompany?.contactPerson || activeCompany?.call,
+    phone: activeCompany?.phone || activeCompany?.call,
+    email: activeCompany?.email || activeCompany?.emailId,
     received: "₹ 0",
     balance: formatCurrency(totalFinalFare),
-    company: company?.company?.companyName,
-    address: company?.company?.address,
-    website: company?.company?.website,
+    company: activeCompany?.companyName,
+    address: activeCompany?.address,
+    website: activeCompany?.companyWebsite || activeCompany?.website,
   };
 
   const flightPolicies = quotation?.policies || {};
@@ -541,10 +719,9 @@ const FlightFinalize = () => {
       title: "Inclusion Policy",
       icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
       content: (flightPolicies?.inclusionPolicy?.length ? flightPolicies.inclusionPolicy : [
-        "All flights as per itinerary.",
-        "Airport taxes and fees included.",
-        "24/7 customer support during travel.",
-        "Flight changes allowed as per airline policy."
+        "Economy class airfare",
+        "Applicable airport taxes",
+        "Standard baggage allowance as per airline policy"
       ]),
       field: "policies.inclusionPolicy",
       isArray: true,
@@ -553,10 +730,12 @@ const FlightFinalize = () => {
       title: "Exclusion Policy",
       icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
       content: (flightPolicies?.exclusionPolicy?.length ? flightPolicies.exclusionPolicy : [
-        "Meals on board (unless specified).",
-        "Extra baggage charges.",
-        "Travel insurance.",
-        "Airport transfers."
+        "Any meals or snacks not specified in the inclusions",
+        "Seat selection and preferred seating charges",
+        "Extra baggage charges beyond the standard allowance",
+        "Travel Insurance",
+        "Any items of personal nature (tips, laundry, etc.)",
+        "Anything not explicitly mentioned in the inclusions"
       ]),
       field: "policies.exclusionPolicy",
       isArray: true,
@@ -566,7 +745,7 @@ const FlightFinalize = () => {
       icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
       content: (flightPolicies?.paymentPolicy?.length
         ? flightPolicies.paymentPolicy.join("\n")
-        : "100% payment required at the time of booking confirmation."),
+        : "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.\n20% at reservation + 100% Flight/Train cost\n60% after booking confirmation\nBalance before departure"),
       field: "policies.paymentPolicy",
       isArray: false,
     },
@@ -585,7 +764,7 @@ const FlightFinalize = () => {
 
   const terms = flightPolicies?.termsAndConditions?.length
     ? flightPolicies.termsAndConditions.join("\n")
-    : "1. This is only a Quote. Availability is checked only on confirmation.\n2. Rates are subject to change without prior notice.\n3. All disputes are subject to Noida Jurisdiction only.\n4. Passengers must carry valid ID proof and booking reference.";
+    : "Fares are subject to availability at the time of booking\nTickets are non-refundable and non-changeable unless specified otherwise\nPassport must be valid for at least 6 months from the date of travel";
 
   // Prepare data for PDF dialog
   const quotationForPdf = {
@@ -611,20 +790,24 @@ const FlightFinalize = () => {
     adults: quotation.adults || 0,
     children: quotation.childs || 0,
     infants: quotation.infants || 0,
-    quotationTitle: `Flight Quotation For ${getCustomerName()}`,
+    quotationTitle: `Flight ${isFinalized ? "Confirmation" : "Quotation"} For ${getCustomerName()}`,
     destinationSummary: getCustomerLocation(),
     reference: quotation.flightQuotationId,
-    date: new Date().toLocaleDateString(),
+    date: new Date().toLocaleDateString("en-GB"),
     totalFare: totalFinalFare,
     formattedTotalFare: formatCurrency(totalFinalFare),
     policies: {
-      inclusions: Policies[0].content,
-      exclusions: Policies[1].content,
+      inclusionPolicy: Policies[0].content,
+      exclusionPolicy: Policies[1].content,
       paymentPolicy: Policies[2].content,
       cancellationPolicy: Policies[3].content,
-      terms: terms,
+      termsAndConditions: terms,
     },
     footer: footer,
+    baseFare: baseFare,
+    gstType: gstType,
+    gstPercentage: gstPercentage,
+    gstAmount: gstAmount,
   };
 
   const emailType = emailTemplateType === "booking" ? "booking" : "normal";
@@ -637,11 +820,14 @@ const FlightFinalize = () => {
     subject: emailTemplate?.subject || "",
     greetLine: "Please find below details:",
     message: emailTemplate?.message || "",
-    signature: "Warm Regards,\nReservation Team\nIconic Travel",
+    signature: "",
     mailType: emailType,
-    senderAccount: "gmail1",
-    companyId: mailCompanies?.[0]?._id || "",
-    nextPayableAmount: "",
+    senderAccount:
+      emailAccounts.find((acc) => (acc.companyId?._id || acc.companyId) === selectedCompanyId)?._id ||
+      emailAccounts[0]?._id ||
+      "gmail1",
+    companyId: selectedCompanyId || mailCompanies?.[0]?._id || "",
+    nextPayableAmount: balanceAmount > 0 ? String(balanceAmount) : "",
     paymentDueDate: "",
   };
 
@@ -654,6 +840,21 @@ const FlightFinalize = () => {
         mb={2}
         flexWrap="wrap"
       >
+        <FormControl size="small" sx={{ minWidth: 200, mr: 1 }}>
+          <InputLabel>Branding Company</InputLabel>
+          <Select
+            value={selectedCompanyId}
+            label="Branding Company"
+            onChange={(e) => setSelectedCompanyId(e.target.value)}
+          >
+            {mailCompanies.map((c) => (
+              <MenuItem key={c._id} value={c._id}>
+                {c.companyName}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
         {actions.map((a, i) => {
           if (a === "Finalize Booking" && isFinalized) return null;
           if (a === "Edit Finalized Booking" && !isFinalized) return null;
@@ -778,6 +979,13 @@ const FlightFinalize = () => {
                         <Typography variant="h5" color="primary" gutterBottom>
                           {formatCurrency(totalFinalFare)}
                         </Typography>
+                        {gstType === "Excluded" && Number(gstPercentage) > 0 && (
+                          <Box sx={{ mb: 1 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Base: {formatCurrency(baseFare)} | GST ({gstPercentage}%): {formatCurrency(gstAmount)}
+                            </Typography>
+                          </Box>
+                        )}
                         <Typography variant="body1">
                           Reference No: {quotation.flightQuotationId}
                         </Typography>
@@ -792,7 +1000,7 @@ const FlightFinalize = () => {
                           Total Flights: {flightData.length}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Total Fare: {formatCurrency(totalFinalFare)}
+                          Total {gstType === "Excluded" && Number(gstPercentage) > 0 ? "Fare (Incl. GST)" : "Fare"}: {formatCurrency(totalFinalFare)}
                         </Typography>
                       </Box>
                     </AccordionDetails>
@@ -916,15 +1124,27 @@ const FlightFinalize = () => {
                               <TableCell>{flight.flightNo || "N/A"}</TableCell>
                               <TableCell>{pnrList[index] || "N/A"}</TableCell>
                               <TableCell>
-                                {flight.departureDate ? new Date(flight.departureDate).toLocaleDateString() : "N/A"}
+                                {displayDate(flight.departureDate)}
                               </TableCell>
                               <TableCell>
-                                {flight.departureTime ? new Date(flight.departureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A"}
+                                {displayTime(flight.departureTime)}
                               </TableCell>
                               <TableCell>{formatCurrency(finalFareList[index] || flight.fare)}</TableCell>
 
                             </TableRow>
                           ))}
+                          {gstType === "Excluded" && Number(gstPercentage) > 0 && (
+                            <>
+                              <TableRow>
+                                <TableCell colSpan={8} align="right" sx={{ fontWeight: "bold" }}>Base Fare</TableCell>
+                                <TableCell sx={{ fontWeight: "bold" }}>{formatCurrency(baseFare)}</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell colSpan={8} align="right" sx={{ fontWeight: "bold" }}>GST ({gstPercentage}%)</TableCell>
+                                <TableCell sx={{ fontWeight: "bold" }}>{formatCurrency(gstAmount)}</TableCell>
+                              </TableRow>
+                            </>
+                          )}
                         </TableBody>
                         <TableRow sx={{ backgroundColor: "primary.main" }}>
                           <TableCell
@@ -932,9 +1152,9 @@ const FlightFinalize = () => {
                             align="right"
                             sx={{ color: "white", fontWeight: "bold" }}
                           >
-                            Total Fare
+                            Total {gstType === "Excluded" && Number(gstPercentage) > 0 ? "Fare (Incl. GST)" : "Fare"}
                           </TableCell>
-                          <TableCell colSpan={2} sx={{ color: "white", fontWeight: "bold" }}>
+                          <TableCell sx={{ color: "white", fontWeight: "bold" }}>
                             {formatCurrency(totalFinalFare)}
                           </TableCell>
                         </TableRow>
@@ -1084,7 +1304,8 @@ const FlightFinalize = () => {
         open={openPreviewDialog}
         onClose={handlePreviewDialogClose}
         quotation={quotationForPdf}
-        pdfHeading="FLIGHT QUOTATION"
+        pdfHeading={isFinalized ? "FLIGHT CONFIRMATION" : "FLIGHT QUOTATION"}
+        initialCompanyId={selectedCompanyId}
         initialEmailContentMode={emailContentType}
         includePdfOnSend={mailMode !== "booking"}
         autoSendForMail={autoGeneratePdfForMail}
@@ -1109,7 +1330,6 @@ const FlightFinalize = () => {
         open={openEmailDialog}
         onClose={handleEmailClose}
         onSend={handleEmailSend}
-        hasPdfAttachment={!!pdfAttachmentForMail?.contentBase64}
         onCompanyChange={async (companyId, nextMailType) => {
           const templates = await refreshEmailTemplates(companyId);
           const type = nextMailType === "booking" ? "booking" : "normal";
@@ -1118,7 +1338,19 @@ const FlightFinalize = () => {
         initialValuesOverride={emailInitialValues}
         templateBodies={emailTemplateBodies}
         companyOptions={mailCompanies}
+        emailAccountOptions={emailAccounts}
+        hasPdfAttachment={!!pdfAttachmentForMail}
+        receiptOptions={paymentHistory.filter(v => v.paymentType === "Receive Voucher")}
+        onReceiptChange={(receiptId) => setSelectedReceiptIdForPdf(receiptId)}
       />
+
+      <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+        <div id="hidden-receipt-container">
+           {selectedReceiptIdForPdf && (
+              <InvoiceView id={selectedReceiptIdForPdf} hideButtons={true} />
+           )}
+        </div>
+      </Box>
 
       {/* Confirmation Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
@@ -1160,6 +1392,64 @@ const FlightFinalize = () => {
                 </Grid>
               </Grid>
             ))}
+
+            {/* GST Section */}
+            <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 0.5 }}>
+                GST Calculation
+              </Typography>
+              <RadioGroup
+                row
+                value={gstType}
+                onChange={(e) => setGstType(e.target.value)}
+                sx={{ mb: 1 }}
+              >
+                <FormControlLabel value="Included" control={<Radio size="small" />} label="Include GST" />
+                <FormControlLabel value="Excluded" control={<Radio size="small" />} label="Exclude GST" />
+              </RadioGroup>
+            </Grid>
+
+            {gstType === "Excluded" && (
+              <Grid size={{ xs: 12 }} sx={{ mb: 1 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>GST Percentage (%)</InputLabel>
+                  <Select
+                    value={gstPercentage}
+                    label="GST Percentage (%)"
+                    onChange={(e) => setGstPercentage(e.target.value)}
+                  >
+                    <MenuItem value={0}>0%</MenuItem>
+                    <MenuItem value={5}>5%</MenuItem>
+                    <MenuItem value={12}>12%</MenuItem>
+                    <MenuItem value={18}>18%</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="Base Fare (₹)"
+                type="number"
+                fullWidth
+                value={baseFare}
+                InputProps={{ readOnly: true }}
+                variant="outlined"
+                size="small"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="GST Amount (₹)"
+                type="number"
+                fullWidth
+                value={gstAmount.toFixed(2)}
+                InputProps={{ readOnly: true }}
+                variant="outlined"
+                size="small"
+              />
+            </Grid>
+
             <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
               <TextField
                 label="Total Final Fare (₹)"
@@ -1169,6 +1459,7 @@ const FlightFinalize = () => {
                 InputProps={{ readOnly: true }}
                 variant="outlined"
                 size="small"
+                sx={{ backgroundColor: "grey.100" }}
               />
             </Grid>
           </Grid>
@@ -1188,6 +1479,14 @@ const FlightFinalize = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <TransactionHistoryDialog
+        open={openTransactionDialog}
+        onClose={() => setOpenTransactionDialog(false)}
+        loading={paymentHistoryLoading}
+        rows={paymentHistory}
+        quotationRef={apiEntityId}
+      />
 
       {/* Success Snackbar */}
       <Snackbar

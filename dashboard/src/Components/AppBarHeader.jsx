@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   AppBar,
   Box,
@@ -27,6 +27,7 @@ import {
   Chip,
   Tooltip,
   CircularProgress,
+  Badge,
 } from "@mui/material";
 import {
   ChevronLeft,
@@ -70,14 +71,63 @@ const DashboardHeader = () => {
     } catch (e) {
       setLoginHistoryError(
         e.response?.data?.message ||
-          e.response?.data?.error ||
-          "Could not load login history"
+        e.response?.data?.error ||
+        "Could not load login history"
       );
       setLoginHistory([]);
     } finally {
       setLoginHistoryLoading(false);
     }
   }, []);
+
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationMenuAnchor, setNotificationMenuAnchor] = useState(null);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const { data } = await axios.get("/notifications/my-notifications");
+      const notifs = data?.data || [];
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter((n) => !n.isRead).length);
+    } catch (e) {
+      console.error("Failed to fetch notifications", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 30000); // 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [fetchNotifications, user]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await axios.patch("/notifications/mark-all-read");
+      fetchNotifications();
+      setNotificationMenuAnchor(null);
+    } catch (e) {
+      console.error("Failed to mark all read", e);
+    }
+  };
+
+  const handleNotificationClick = async (notif) => {
+    try {
+      if (!notif.isRead) {
+        await axios.patch(`/notifications/mark-as-read/${notif._id}`);
+        fetchNotifications();
+      }
+      setNotificationMenuAnchor(null);
+      if (notif.refId) {
+        // Navigate to the lead or related object
+        navigate(`/lead`); // Assuming leads manager for now, maybe deep link later
+      }
+    } catch (e) {
+      console.error("Failed to mark notification as read", e);
+    }
+  };
 
   const handleOpenLoginHistory = () => {
     setLoginHistoryOpen(true);
@@ -161,20 +211,20 @@ const DashboardHeader = () => {
           justifyContent="flex-end"
         >
           <Button
-    variant="contained"
-    size="small"
-    sx={{
-      textTransform: "none",
-      borderRadius: "20px",
-      background: "linear-gradient(90deg, #ff9800, #f57c00)",
-      "&:hover": {
-        background: "linear-gradient(90deg, #f57c00, #e65100)",
-      },
-    }}
-    onClick={() => navigate("/google-ads-enquiry")}
-  >
-    Google Ads Enquiry
-  </Button>
+            variant="contained"
+            size="small"
+            sx={{
+              textTransform: "none",
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #ff9800, #f57c00)",
+              "&:hover": {
+                background: "linear-gradient(90deg, #f57c00, #e65100)",
+              },
+            }}
+            onClick={() => navigate("/google-ads-enquiry")}
+          >
+            Google Ads Enquiry
+          </Button>
           <Button
             variant="contained"
             size="small"
@@ -191,9 +241,63 @@ const DashboardHeader = () => {
             Website Enquiry
           </Button>
 
-          <IconButton>
-            <Notifications />
+          <IconButton onClick={(e) => setNotificationMenuAnchor(e.currentTarget)}>
+            <Badge badgeContent={unreadCount} color="error">
+              <Notifications />
+            </Badge>
           </IconButton>
+
+          <Menu
+            anchorEl={notificationMenuAnchor}
+            open={Boolean(notificationMenuAnchor)}
+            onClose={() => setNotificationMenuAnchor(null)}
+            PaperProps={{
+              sx: { width: 320, maxHeight: 400, borderRadius: 2 },
+            }}
+          >
+            <Box
+              p={2}
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+            >
+              <Typography variant="subtitle1" fontWeight="bold">
+                Notifications
+              </Typography>
+              {unreadCount > 0 && (
+                <Button size="small" onClick={handleMarkAllRead}>
+                  Mark all as read
+                </Button>
+              )}
+            </Box>
+            <Divider />
+            {notifications.length === 0 ? (
+              <MenuItem disabled>
+                <Typography variant="body2">No notifications</Typography>
+              </MenuItem>
+            ) : (
+              notifications.map((notif) => (
+                <MenuItem
+                  key={notif._id}
+                  onClick={() => handleNotificationClick(notif)}
+                  sx={{
+                    whiteSpace: "normal",
+                    bgcolor: notif.isRead ? "transparent" : "action.hover",
+                    borderBottom: "1px solid #eee",
+                  }}
+                >
+                  <Box py={1}>
+                    <Typography variant="body2" fontWeight={notif.isRead ? 400 : 600}>
+                      {notif.message}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {new Date(notif.createdAt).toLocaleString()}
+                    </Typography>
+                  </Box>
+                </MenuItem>
+              ))
+            )}
+          </Menu>
 
           <Tooltip title="Login history">
             <IconButton

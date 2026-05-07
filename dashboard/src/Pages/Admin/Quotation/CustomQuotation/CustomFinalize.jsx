@@ -62,7 +62,8 @@ import {
     Error,
     Calculate,
 } from "@mui/icons-material";
-
+import html2pdf from "html2pdf.js";
+import InvoiceView from "../../../../Components/InvoiceView";
 import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
 import FinalizeDialog from "./Dialog/FinalizeDialog";
 import CostingEditDialog from "./Dialog/CostingEditDialog";
@@ -73,6 +74,8 @@ import AddServiceDialog from "../VehicleQuotation/Dialog/AddServiceDialog";
 import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
+import HotelConfirmationDialog from "./Dialog/HotelConfirmationDialog";
+import ReceiptPreviewDialog from "../../../../Components/ReceiptPreviewDialog";
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -189,6 +192,7 @@ const TransactionSummaryDialog = ({
     loading,
     rows,
     quotationRef,
+    onPreview,
 }) => {
     const totals = summarizeVoucherAmounts(rows);
 
@@ -202,6 +206,7 @@ const TransactionSummaryDialog = ({
         "Payment Bank",
         "Dr/Cr",
         "Amount",
+        "Actions",
     ];
 
     return (
@@ -319,7 +324,12 @@ const TransactionSummaryDialog = ({
                                 </TableRow>
                             ) : rows?.length ? (
                                 rows.map((v, index) => (
-                                    <TableRow key={v._id || index} hover>
+                                    <TableRow 
+                                        key={v._id || index} 
+                                        hover
+                                        onClick={() => window.open(`/invoice-view/${v._id}`, '_blank')}
+                                        sx={{ cursor: "pointer" }}
+                                    >
                                         <TableCell>{index + 1}</TableCell>
                                         <TableCell>{v.receiptNumber}</TableCell>
                                         <TableCell>{v.invoiceId}</TableCell>
@@ -336,6 +346,26 @@ const TransactionSummaryDialog = ({
                                         </TableCell>
                                         <TableCell align="right">
                                             ₹{(Number(v.amount) || 0).toLocaleString("en-IN")}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                                                <IconButton 
+                                                    size="small" 
+                                                    color="primary" 
+                                                    onClick={() => onPreview(v)}
+                                                    title="Preview Receipt"
+                                                >
+                                                    <Visibility fontSize="small" />
+                                                </IconButton>
+                                                <IconButton 
+                                                    size="small" 
+                                                    color="info" 
+                                                    onClick={() => window.open(`/payments-form/${v._id}`, '_blank')}
+                                                    title="Edit Payment"
+                                                >
+                                                    <Edit fontSize="small" />
+                                                </IconButton>
+                                            </Box>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -507,6 +537,14 @@ const CustomFinalize = () => {
         message: "",
         severity: "success"
     });
+    const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
+    const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState(null);
+    const [openReceiptPreview, setOpenReceiptPreview] = useState(false);
+
+    const handleOpenReceiptPreview = (voucher) => {
+        setSelectedVoucherForPreview(voucher);
+        setOpenReceiptPreview(true);
+    };
     const { data: company, status } = useSelector((state) => state.companyUI);
     const [itineraryDialog, setItineraryDialog] = useState({
         open: false,
@@ -520,6 +558,7 @@ const CustomFinalize = () => {
     const [openVehicleFinalizeDialog, setOpenVehicleFinalizeDialog] = useState(false);
     const [openHotelsPricingDialog, setOpenHotelsPricingDialog] = useState(false);
     const [itinerarySaving, setItinerarySaving] = useState(false);
+    const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
     const [guestCountsDialog, setGuestCountsDialog] = useState({
         open: false,
         adults: 0,
@@ -589,7 +628,18 @@ useEffect(() => {
             setMailCompanies([]);
         }
     };
+    const fetchEmailAccounts = async () => {
+        try {
+            const res = await axios.get("/email-accounts");
+            const list = res?.data?.data || [];
+            setEmailAccounts(Array.isArray(list) ? list : []);
+        } catch (err) {
+            console.error("Failed to fetch email accounts:", err);
+            setEmailAccounts([]);
+        }
+    };
     fetchMailCompanies();
+    fetchEmailAccounts();
 }, []);
     // Dynamic quotation state from API
     const [quotation, setQuotation] = useState({
@@ -671,6 +721,7 @@ useEffect(() => {
         booking: { subject: "", message: "" },
     });
     const [mailCompanies, setMailCompanies] = useState([]);
+    const [emailAccounts, setEmailAccounts] = useState([]);
     const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
     const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
     const [openBankDialog, setOpenBankDialog] = useState(false);
@@ -902,20 +953,11 @@ useEffect(() => {
         quotation?.finalizedVendorsWithAmounts,
     ]);
 
-    useEffect(() => {
-        const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
-        setQuotation((prev) => ({
-            ...prev,
-            footer: {
-                ...prev.footer,
-                received: `₹ ${receivedFromClient.toLocaleString("en-IN")}`,
-                balance:
-                    packageTotalForFooter != null
-                        ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}`
-                        : prev.footer.balance,
-            },
-        }));
-    }, [paymentHistory, packageTotalForFooter]);
+    const { receivedFromClient, paidToVendor } = React.useMemo(() => summarizeVoucherAmounts(paymentHistory), [paymentHistory]);
+    const paymentReceivedDisplay = `₹ ${receivedFromClient.toLocaleString("en-IN")}`;
+    const paymentBalanceDisplay = packageTotalForFooter != null 
+        ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}` 
+        : "₹ 0";
 
     // Update the transformApiData function to handle the actual API response structure
     const transformApiData = (apiData) => {
@@ -1053,6 +1095,8 @@ useEffect(() => {
         }
 
         return {
+            _id: apiData._id,
+            quotationId: quotationId,
             date: formatDate(createdAt),
             arrivalDate,
             reference: quotationId,
@@ -1331,9 +1375,9 @@ useEffect(() => {
             return;
         }
         setEmailTemplateType("normal");
-        const defaultCompany = mailCompanies?.[0];
+        const defaultCompanyId = company?._id || mailCompanies?.[0]?._id;
         try {
-            await refreshEmailTemplates(defaultCompany?._id);
+            await refreshEmailTemplates(defaultCompanyId);
         } catch (e) {
             setSnackbar({
                 open: true,
@@ -1351,67 +1395,76 @@ useEffect(() => {
         setPreviewPdfModeForMail(false);
     };
     const handleEmailSend = async (values) => {
-        const to = String(values?.to || "").trim();
-        const cc = String(values?.cc || "").trim();
-        const subject = String(values?.subject || "");
-        const isBookingMail = values?.mailType === "booking";
-        const nextPayableRaw = String(values?.nextPayableAmount || "").trim();
-        const parsedNextPayable = Number(
-            nextPayableRaw.replace(/[^0-9.-]/g, "")
-        );
-        const dueDateRaw = String(values?.paymentDueDate || "").trim();
-        const nextPayableAmount =
-            nextPayableRaw === "" || !Number.isFinite(parsedNextPayable)
-                ? undefined
-                : parsedNextPayable;
-        const hasBookingOverrides =
-            isBookingMail &&
-            (dueDateRaw !== "" || Number.isFinite(nextPayableAmount));
-        const selectedCompany =
-            mailCompanies.find((c) => c?._id === values?.companyId) || null;
-        if (!to) {
-            setSnackbar({
-                open: true,
-                message: "Please enter receiver email",
-                severity: "warning",
-            });
-            return;
-        }
         try {
+            const isBookingMail = values?.mailType === "booking";
+            const selectedCompany =
+                mailCompanies.find((c) => c?._id === values?.companyId) || null;
+
+            const payload = {
+                to: String(values?.to || "").trim(),
+                cc: String(values?.cc || "").trim() || undefined,
+                type: isBookingMail ? "booking" : "normal",
+                subject: values?.subject || undefined,
+                bodyHtml: isBookingMail ? undefined : values?.message || undefined,
+                senderAccount: values?.senderAccount || "gmail1",
+                companyId: values?.companyId || undefined,
+                companyName: selectedCompany?.companyName || undefined,
+                customText: {
+                    signature: values?.signature || undefined,
+                    normal: { signature: values?.signature || undefined },
+                    booking: {
+                        signature: values?.signature || undefined,
+                        ...(values?.nextPayableAmount
+                            ? { nextPayableAmount: Number(values.nextPayableAmount) }
+                            : {}),
+                        ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+                    },
+                },
+                ...(pdfAttachmentForMail?.contentBase64
+                    ? { pdfAttachment: pdfAttachmentForMail }
+                    : {}),
+            };
+
+            // Handle Payment Receipt Attachment for Booking Mails
+            if (values.selectedReceiptId && isBookingMail) {
+                await new Promise((resolve) => setTimeout(resolve, 2500));
+                const element = document.getElementById("hidden-receipt-container");
+                if (element) {
+                    try {
+                        const opt = {
+                            margin: 0.2,
+                            filename: `Receipt_${values.selectedReceiptId}.pdf`,
+                            image: { type: "jpeg", quality: 0.98 },
+                            html2canvas: { scale: 1.5, useCORS: true, logging: false },
+                            jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+                        };
+                        const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+                        if (pdfBlob && pdfBlob.size >= 100) {
+                            const reader = new FileReader();
+                            const receiptAttachment = await new Promise((resolve, reject) => {
+                                reader.onloadend = () =>
+                                    resolve({
+                                        filename: "Payment_Receipt.pdf",
+                                        contentBase64: reader.result.split(",")[1],
+                                        mimeType: "application/pdf",
+                                    });
+                                reader.onerror = reject;
+                                reader.readAsDataURL(pdfBlob);
+                            });
+                            payload.receiptPdf = receiptAttachment;
+                            payload.paymentVoucherId = values.selectedReceiptId;
+                        }
+                    } catch (captureErr) {
+                        console.error("Failed to capture receipt PDF:", captureErr);
+                    }
+                }
+            }
+
             await axios.post(
                 `/customQT/${encodeURIComponent(id)}/email/send`,
-                {
-                    to,
-                    cc: cc || undefined,
-                    type: isBookingMail ? "booking" : "normal",
-                    subject: subject || undefined,
-                    // For booking mails, always let backend build from template with latest payment data/overrides.
-                    bodyHtml:
-                        isBookingMail
-                            ? undefined
-                            : values?.message || undefined,
-                    senderAccount: values?.senderAccount || "gmail1",
-                    companyId: values?.companyId || undefined,
-                    companyName: selectedCompany?.companyName || undefined,
-                    customText: isBookingMail
-                        ? {
-                            booking: {
-                                ...(Number.isFinite(nextPayableAmount)
-                                    ? { nextPayableAmount }
-                                    : {}),
-                                ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
-                            },
-                        }
-                        : undefined,
-                    previewPdfMode:
-                        !isBookingMail &&
-                        !!pdfAttachmentForMail?.contentBase64 &&
-                        previewPdfModeForMail,
-                    ...(pdfAttachmentForMail?.contentBase64
-                        ? { pdfAttachment: pdfAttachmentForMail }
-                        : {}),
-                }
+                payload
             );
+
             setSnackbar({
                 open: true,
                 message: "Email sent successfully",
@@ -1422,8 +1475,7 @@ useEffect(() => {
         } catch (e) {
             setSnackbar({
                 open: true,
-                message:
-                    e?.response?.data?.message || "Failed to send email",
+                message: e?.response?.data?.message || "Failed to send email",
                 severity: "error",
             });
         }
@@ -1441,10 +1493,10 @@ useEffect(() => {
             subject: tpl?.subject || "",
             greetLine: "Please find below details:",
             message: tpl?.message || "",
-            signature: "Warm Regards,\nReservation Team\nIconic Travel",
+            signature: "",
             mailType: type,
-            senderAccount: "gmail1",
-            companyId: mailCompanies?.[0]?._id || "",
+            senderAccount: "",
+            companyId: company?._id || mailCompanies?.[0]?._id || "",
             nextPayableAmount: "",
             paymentDueDate: "",
         };
@@ -2283,7 +2335,7 @@ useEffect(() => {
     const infoMap = {
         call: `📞 ${quotation.footer.phone}`,
         email: `✉️ ${quotation.footer.email}`,
-        payment: `Received from client: ${quotation.footer.received}\n Balance due: ${quotation.footer.balance}`,
+        payment: `Received from client: ${paymentReceivedDisplay}\n Balance due: ${paymentBalanceDisplay}`,
         quotation: `Total Quotation Cost: ${
             packageTotalForFooter != null
                 ? `₹ ${Math.round(packageTotalForFooter).toLocaleString("en-IN")}`
@@ -2811,6 +2863,16 @@ useEffect(() => {
                                             onClick={() => setOpenBankDialog(true)}
                                         >
                                             Edit Vendors
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="secondary"
+                                            startIcon={<CheckCircle />}
+                                            sx={{ ml: 1 }}
+                                            onClick={() => setOpenHotelConfirmation(true)}
+                                        >
+                                            Hotel Confirmation
                                         </Button>
                                     </Box>
 
@@ -3528,26 +3590,40 @@ useEffect(() => {
                 onClose={handleAddFlightClose}
                 onSave={handleAddFlight}
             />
-            <EmailQuotationDialog
-                open={openEmailDialog}
-                onClose={handleEmailClose}
-                customer={quotation.customer}
-                onSend={handleEmailSend}
-                onCompanyChange={async (companyId, mailType) => {
-                    const templates = await refreshEmailTemplates(companyId);
-                    const type = mailType === "booking" ? "booking" : "normal";
-                    return templates?.[type] || { subject: "", message: "" };
-                }}
-                initialValuesOverride={emailInitialValues}
-                templateBodies={emailTemplateBodies}
-                companyOptions={mailCompanies}
-            />
+            {openEmailDialog && (
+                <EmailQuotationDialog
+                    open={openEmailDialog}
+                    onClose={handleEmailClose}
+                    customer={quotation.customer}
+                    onSend={handleEmailSend}
+                    onCompanyChange={async (companyId, mailType) => {
+                        const templates = await refreshEmailTemplates(companyId);
+                        const type = mailType === "booking" ? "booking" : "normal";
+                        return templates?.[type] || { subject: "", message: "" };
+                    }}
+                    initialValuesOverride={emailInitialValues}
+                    templateBodies={emailTemplateBodies}
+                    companyOptions={mailCompanies}
+                    emailAccountOptions={emailAccounts}
+                    hasPdfAttachment={!!pdfAttachmentForMail}
+                    receiptOptions={paymentHistory.filter(v => v.paymentType === "Receive Voucher")}
+                    onReceiptChange={(receiptId) => setSelectedReceiptIdForPdf(receiptId)}
+                />
+            )}
             <TransactionSummaryDialog
                 open={openTransactionDialog}
                 onClose={() => setOpenTransactionDialog(false)}
                 loading={paymentHistoryLoading}
                 rows={paymentHistory}
                 quotationRef={id}
+                onPreview={handleOpenReceiptPreview}
+            />
+
+            <ReceiptPreviewDialog 
+                open={openReceiptPreview}
+                onClose={() => setOpenReceiptPreview(false)}
+                voucher={selectedVoucherForPreview}
+                quotation={quotation}
             />
 
             {/* Invoice PDF Dialog */}
@@ -3564,6 +3640,7 @@ useEffect(() => {
                     open={openPdfDialog}
                     onClose={handleClosePdfDialog}
                     quotation={quotationForPdf}
+                    pdfHeading="CUSTOM QUOTATION"
                     onSendMail={(payload) => {
                         const attachment = payload?.pdfAttachment || payload || null;
                         setPdfAttachmentForMail(attachment);
@@ -3574,6 +3651,14 @@ useEffect(() => {
                     }}
                 />
             )}
+
+            <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+                <div id="hidden-receipt-container">
+                    {selectedReceiptIdForPdf && (
+                        <InvoiceView id={selectedReceiptIdForPdf} hideButtons={true} />
+                    )}
+                </div>
+            </Box>
 
             {/* Itinerary Dialog */}
             <Dialog open={itineraryDialog.open} onClose={handleCloseItineraryDialog} maxWidth="md" fullWidth>
@@ -3625,6 +3710,14 @@ useEffect(() => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <HotelConfirmationDialog
+                open={openHotelConfirmation}
+                onClose={() => setOpenHotelConfirmation(false)}
+                quotation={selectedQuotation}
+                quotationRef={id}
+                type="custom"
+            />
         </Box>
     );
 };

@@ -11,38 +11,44 @@ import {
     sendQuickQuotationEmail,
     uploadQuickQuotationBanner,
     uploadQuickQuotationDayImage,
+    saveQuickConfirmedHotels,
+    sendQuickHotelConfirmationMail,
+    previewQuickHotelConfirmation,
 } from "../../controllers/quotation/quickQuotation.controller.js";
 import { upload } from "../../middleware/imageMulter.middleware.js";
 import { requirePermission } from "../../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
-router.post("/", requirePermission("canCreateBooking"), createQuickQuotation);
-router.get("/", requirePermission("canAccessBookings"), getAllQuickQuotations);
+router.post("/", requirePermission("canCreateQuotation"), createQuickQuotation);
+router.get("/", requirePermission("canAccessQuotations"), getAllQuickQuotations);
 
 router.post(
     "/:id/banner",
-    requirePermission("canEditBooking"),
+    requirePermission("canEditQuotation"),
     upload.single("bannerImage"),
     uploadQuickQuotationBanner
 );
 router.post(
     "/:id/day-image",
-    requirePermission("canEditBooking"),
+    requirePermission("canEditQuotation"),
     upload.single("image"),
     uploadQuickQuotationDayImage
 );
 
-router.get("/:id", requirePermission("canAccessBookings"), getQuickQuotationById);
+router.get("/:id", requirePermission("canAccessQuotations"), getQuickQuotationById);
 
-router.patch("/:id/finalize", requirePermission("canEditBooking"), finalizeQuickQuotation);
-router.post("/:id/email/preview", requirePermission("canEditBooking"), previewQuickQuotationMail);
-router.post("/:id/email/send", requirePermission("canEditBooking"), sendQuickQuotationEmail);
+router.patch("/:id/finalize", requirePermission("canEditQuotation"), finalizeQuickQuotation);
+router.post("/:id/save-confirmed-hotels", requirePermission("canEditQuotation"), saveQuickConfirmedHotels);
+router.post("/:id/email/hotel-confirmation", requirePermission("canEditQuotation"), sendQuickHotelConfirmationMail);
+router.post("/:id/email/hotel-confirmation/preview", requirePermission("canEditQuotation"), previewQuickHotelConfirmation);
+router.post("/:id/email/preview", requirePermission("canEditQuotation"), previewQuickQuotationMail);
+router.post("/:id/email/send", requirePermission("canEditQuotation"), sendQuickQuotationEmail);
 
-router.put("/:id", requirePermission("canEditBooking"), updateQuickQuotation);
+router.put("/:id", requirePermission("canEditQuotation"), updateQuickQuotation);
 
-router.delete("/:id", requirePermission("canDeleteBooking"), deleteQuickQuotation);
+router.delete("/:id", requirePermission("canDeleteQuotation"), deleteQuickQuotation);
 
-router.post("/:id/send-mail", requirePermission("canEditBooking"), sendQuickQuotationMail);
+router.post("/:id/send-mail", requirePermission("canEditQuotation"), sendQuickQuotationMail);
 
 export default router;

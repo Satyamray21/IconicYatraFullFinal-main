@@ -106,7 +106,7 @@ const SpecialPackageDetail = () => {
         setIsBookmarked(!isBookmarked);
     };
 
-    if (loading) {
+    if (loading || (!packageData && !error)) {
         return (
             <Box sx={{
                 display: "flex",

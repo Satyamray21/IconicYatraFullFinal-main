@@ -50,18 +50,18 @@ export const saveLoginHistory = async (
 
     // Format date-time
     const now = new Date();
-    const formattedDateTime = now
-      .toLocaleString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-        timeZone: "Asia/Kolkata",
-      })
-      .replace(",", "");
+    // IST is UTC + 5.5 hours
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
+
+    const day = String(istTime.getUTCDate()).padStart(2, "0");
+    const month = String(istTime.getUTCMonth() + 1).padStart(2, "0");
+    const year = istTime.getUTCFullYear();
+    const hours = String(istTime.getUTCHours()).padStart(2, "0");
+    const minutes = String(istTime.getUTCMinutes()).padStart(2, "0");
+    const seconds = String(istTime.getUTCSeconds()).padStart(2, "0");
+
+    const formattedDateTime = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
 
     // Save to database
     const loginRecord = await LoginHistory.create({

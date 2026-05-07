@@ -1,5 +1,6 @@
 import Hotel from "../models/hotel.model.js";
 import { findHotelByIdOrHotelId } from "../utils/findHotelById.js";
+import { getCache, setCache, clearPattern } from "../utils/cache.js";
 
 // Helper: parse JSON safely
 const tryParseJSON = (value) => {
@@ -111,6 +112,12 @@ export const createHotelStep1 = async (req, res) => {
         const hotel = new Hotel(hotelData);
         const savedHotel = await hotel.save();
 
+        // Invalidate caches
+        await Promise.all([
+            clearPattern('hotels:*'),
+            clearPattern('dashboard:stats:*')
+        ]);
+
         res.status(201).json({
             success: true,
             message: "Hotel basic details saved successfully",
@@ -119,6 +126,34 @@ export const createHotelStep1 = async (req, res) => {
     } catch (error) {
         console.error("❌ Hotel create error:", error);
         res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// ----------------------
+// Get All Hotels
+// ----------------------
+export const getHotels = async (req, res) => {
+    try {
+        const { city } = req.query;
+        const cacheKey = city ? `hotels:list:city:${city.toLowerCase()}` : 'hotels:list:all';
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+            console.log(`[Cache] Hotel list fetched from Redis`);
+            return res.status(200).json({ fromCache: true, success: true, data: cachedData });
+        }
+
+        const query = {};
+        if (city) {
+            query['location.city'] = { $regex: new RegExp(`^${city.trim()}$`, 'i') };
+        }
+
+        const hotels = await Hotel.find(query);
+        await setCache(cacheKey, hotels, 3600);
+        console.log(`[DB] Hotel list fetched from MongoDB`);
+        res.status(200).json({ fromCache: false, success: true, data: hotels });
+    } catch (error) {
+        console.error("❌ Error fetching hotels:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -462,54 +497,71 @@ export const updateHotelStep4 = async (req, res) => {
             // Combine data into final rooms structure
             hotel.rooms = tempRoomDetails.map((season, seasonIndex) => {
                 const seasonData = season || {};
+                const finalRoomDetails = [];
 
                 console.log(`🔹 Processing season ${seasonIndex}:`, seasonData.seasonType);
+
+                (seasonData.roomDetails || []).forEach((roomDetail, roomIndex) => {
+                    const roomData = roomDetail || {};
+                    const roomType = roomData.roomType || `Room ${roomIndex + 1}`;
+
+                    // Iterate through all possible meal plans
+                    ["ep", "cp", "map", "ap"].forEach(planKey => {
+                        const price = parseFloat(roomData[planKey]);
+                        
+                        // Only add if price is entered and > 0
+                        if (!isNaN(price) && price > 0) {
+                            const mealPlan = planKey.toUpperCase();
+                            
+                            // Find matching mattress cost for THIS room type AND meal plan (Case-insensitive)
+                            let mattressCost = tempMattressCost.find(mc =>
+                                mc && 
+                                mc.roomType?.toLowerCase().trim() === roomType.toLowerCase().trim() && 
+                                mc.mealPlan?.toUpperCase().trim() === mealPlan.toUpperCase().trim()
+                            );
+
+                            // Fallback: If no meal-plan specific mattress cost, take the first one for this room type
+                            if (!mattressCost) {
+                                mattressCost = tempMattressCost.find(mc =>
+                                    mc && mc.roomType?.toLowerCase().trim() === roomType.toLowerCase().trim()
+                                );
+                            }
+
+                            // Find matching peak costs for THIS room type
+                            const peakCosts = tempPeakCost.filter(pc =>
+                                pc && pc.roomType?.toLowerCase().trim() === roomType.toLowerCase().trim()
+                            );
+
+                            console.log(`🔹 Room ${roomType} (${mealPlan}): Mattress Cost Found? ${!!mattressCost}`);
+
+                            finalRoomDetails.push({
+                                roomType: roomType,
+                                mealPlan: mealPlan,
+                                price: price,
+                                images: roomData.images || [],
+                                mattressCost: mattressCost ? {
+                                    mealPlan: mattressCost.mealPlan || mealPlan,
+                                    adult: parseFloat(mattressCost.adult) || 0,
+                                    children: parseFloat(mattressCost.children) || 0,
+                                    kidWithoutMattress: parseFloat(mattressCost.kidWithoutMattress) || 0
+                                } : undefined,
+                                peakCost: peakCosts.map(pc => ({
+                                    title: pc.title || "Peak Cost",
+                                    validFrom: pc.validFrom,
+                                    validTill: pc.validTill,
+                                    surcharge: parseFloat(pc.surcharge) || 0,
+                                    note: pc.note || ""
+                                }))
+                            });
+                        }
+                    });
+                });
 
                 return {
                     seasonType: seasonData.seasonType || `Season ${seasonIndex + 1}`,
                     validFrom: seasonData.validFrom,
                     validTill: seasonData.validTill,
-                    roomDetails: (seasonData.roomDetails || []).map((roomDetail, roomIndex) => {
-                        const roomData = roomDetail || {};
-                        const roomType = roomData.roomType || `Room ${roomIndex + 1}`;
-
-                        console.log(`🔹 Processing room ${roomIndex}:`, roomType);
-
-                        // Find matching mattress cost
-                        const mattressCost = tempMattressCost.find(mc =>
-                            mc && mc.roomType && mc.roomType === roomType
-                        );
-
-                        // Find matching peak costs
-                        const peakCosts = tempPeakCost.filter(pc =>
-                            pc && pc.roomType && pc.roomType === roomType
-                        );
-
-                        console.log(`🔹 Room ${roomType}:`, {
-                            hasMattressCost: !!mattressCost,
-                            peakCostsCount: peakCosts.length,
-                            images: roomData.images?.length || 0
-                        });
-
-                        return {
-                            roomType: roomType,
-                            mealPlan: roomData.mealPlan || "EP",
-                            images: roomData.images || [],
-                            mattressCost: mattressCost ? {
-                                mealPlan: mattressCost.mealPlan || "EP",
-                                adult: mattressCost.adult || 0,
-                                children: mattressCost.children || 0,
-                                kidWithoutMattress: mattressCost.kidWithoutMattress || 0
-                            } : undefined,
-                            peakCost: peakCosts.map(pc => ({
-                                title: pc.title || "Peak Cost",
-                                validFrom: pc.validFrom,
-                                validTill: pc.validTill,
-                                surcharge: pc.surcharge || 0,
-                                note: pc.note || ""
-                            }))
-                        };
-                    })
+                    roomDetails: finalRoomDetails
                 };
             });
 
@@ -634,15 +686,7 @@ export const updateHotel = async (req, res) => {
 // ----------------------
 // Get All Hotels
 // ----------------------
-export const getHotels = async (req, res) => {
-    try {
-        const hotels = await Hotel.find();
-        res.status(200).json({ success: true, data: hotels });
-    } catch (error) {
-        console.error("❌ Error fetching hotels:", error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
+
 
 // ----------------------
 // Get Single Hotel
@@ -671,6 +715,12 @@ export const deleteHotel = async (req, res) => {
 
         await hotel.deleteOne();
 
+        // Invalidate caches
+        await Promise.all([
+            clearPattern('hotels:*'),
+            clearPattern('dashboard:stats:*')
+        ]);
+
         res.status(200).json({ success: true, message: "Hotel deleted successfully" });
     } catch (error) {
         console.error("❌ Error deleting hotel:", error);
@@ -694,6 +744,12 @@ export const updateStatus = async (req, res) => {
 
         hotel.status = status;
         await hotel.save();
+
+        // Invalidate caches
+        await Promise.all([
+            clearPattern('hotels:*'),
+            clearPattern('dashboard:stats:*')
+        ]);
 
         res.status(200).json({
             success: true,

@@ -128,6 +128,9 @@ app.use("/api/v1/companyUI", companyUiRouter);
 import vehicleQuotationRouter from "./src/routers/quotation/vehicleQuotation.router.js";
 app.use("/api/v1/vehicleQT", verifyToken, vehicleQuotationRouter);
 
+import unifiedQuotationRouter from "./src/routers/quotation/unifiedQuotation.router.js";
+app.use("/api/v1/quotations", verifyToken, unifiedQuotationRouter);
+
 import galleryRoutes from "./src/routers/gallery.routes.js";
 
 app.use("/api/v1/gallery", galleryRoutes);
@@ -159,6 +162,18 @@ app.use("/api/v1/social-links", socialLinksRoutes);
 
 import homePageRoutes from "./src/routers/homePage.routes.js";
 app.use("/api/v1/home", homePageRoutes);
+
+import dashboardRouter from "./src/routers/dashboard.router.js";
+app.use("/api/v1/dashboard", verifyToken, dashboardRouter);
+
+import reminderRouter from "./src/routers/reminder.router.js";
+app.use("/api/v1/reminders", verifyToken, reminderRouter);
+
+import notificationRouter from "./src/routers/notification.router.js";
+app.use("/api/v1/notifications", notificationRouter);
+
+import emailAccountRouter from "./src/routers/emailAccount.routes.js";
+app.use("/api/v1/email-accounts", emailAccountRouter);
 // ==========================================
 // ✅ Fix: Load JSON without import
 const swaggerDocument = JSON.parse(

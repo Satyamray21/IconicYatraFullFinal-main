@@ -91,8 +91,13 @@ import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
 import QuickEditAllDialog from "./Dialog/QuickEditAllDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
+import HotelConfirmationDialog from "../CustomQuotation/Dialog/HotelConfirmationDialog";
+import ReceiptPreviewDialog from "../../../../Components/ReceiptPreviewDialog";
+import InvoiceView from "../../../../Components/InvoiceView";
+import html2pdf from "html2pdf.js";
 import {
   effectiveQuickPayableTotal,
+
   mapApiAdditionalServicesToState,
   serializeAdditionalServicesForApi,
   sumBillableAdditionalServices,
@@ -128,16 +133,28 @@ function linesToPolicyArray(v) {
 function buildQuickMongoSetFromEditDialog(editDialog, newValue) {
   const parseDateTimeFromText = (value) => {
     const raw = String(value || "");
+    // Updated regex to support AM/PM
     const m = raw.match(
-      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2}))?\)/i,
+      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?\)/i,
     );
     if (!m) return { dateIso: "", time: "" };
+
     const dd = String(m[1]).padStart(2, "0");
     const mm = String(m[2]).padStart(2, "0");
     const yyyy = String(m[3]).length === 2 ? `20${m[3]}` : String(m[3]);
-    const hh = m[4] ? String(m[4]).padStart(2, "0") : "";
+    let hhNum = m[4] ? parseInt(m[4], 10) : null;
     const min = m[5] ? String(m[5]).padStart(2, "0") : "";
+    const ampm = m[6] ? m[6].toUpperCase() : null;
+
+    // Convert AM/PM to 24h for storage
+    if (hhNum !== null && ampm) {
+      if (ampm === "PM" && hhNum < 12) hhNum += 12;
+      if (ampm === "AM" && hhNum === 12) hhNum = 0;
+    }
+
+    const hh = hhNum !== null ? String(hhNum).padStart(2, "0") : "";
     const dateIso = `${yyyy}-${mm}-${dd}T00:00:00.000Z`;
+
     return {
       dateIso: Number.isNaN(new Date(dateIso).getTime()) ? "" : dateIso,
       time: hh && min ? `${hh}:${min}` : "",
@@ -268,6 +285,7 @@ const TransactionSummaryDialog = ({
   loading,
   rows,
   quotationRef,
+  onPreview,
 }) => {
   const totals = summarizeVoucherAmounts(rows);
 
@@ -281,6 +299,7 @@ const TransactionSummaryDialog = ({
     "Payment Bank",
     "Dr/Cr",
     "Amount",
+    "Actions",
   ];
 
   return (
@@ -403,7 +422,12 @@ const TransactionSummaryDialog = ({
                 </TableRow>
               ) : rows?.length ? (
                 rows.map((v, index) => (
-                  <TableRow key={v._id || index} hover>
+                  <TableRow 
+                    key={v._id || index} 
+                    hover
+                    onClick={() => window.open(`/invoice-view/${v._id}`, '_blank')}
+                    sx={{ cursor: "pointer" }}
+                  >
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{v.receiptNumber}</TableCell>
                     <TableCell>{v.invoiceId}</TableCell>
@@ -428,6 +452,26 @@ const TransactionSummaryDialog = ({
                     </TableCell>
                     <TableCell align="right">
                       ₹{(Number(v.amount) || 0).toLocaleString("en-IN")}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                        <IconButton 
+                          size="small" 
+                          color="primary" 
+                          onClick={() => onPreview(v)}
+                          title="Preview Receipt"
+                        >
+                          <Visibility fontSize="small" />
+                        </IconButton>
+                        <IconButton 
+                          size="small" 
+                          color="info" 
+                          onClick={() => window.open(`/payments-form/${v._id}`, '_blank')}
+                          title="Edit Payment"
+                        >
+                          <Edit fontSize="small" />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))
@@ -570,9 +614,15 @@ const formatDateTime = (dateString) => {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const yyyy = date.getFullYear();
-  const hh = String(date.getHours()).padStart(2, "0");
+  
+  let hh = date.getHours();
+  const ampm = hh >= 12 ? "PM" : "AM";
+  hh = hh % 12;
+  hh = hh ? hh : 12; // the hour '0' should be '12'
+  const hhStr = String(hh).padStart(2, "0");
   const min = String(date.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${yyyy} at ${hh}:${min}`;
+
+  return `${dd}/${mm}/${yyyy} at ${hhStr}:${min} ${ampm}`;
 };
 
 const formatDateWithOptionalTime = (dateValue, timeValue) => {
@@ -622,7 +672,13 @@ const normalizePointLabel = (text) => {
   return uniqueParts.join(" - ") || "—";
 };
 
-const editablePickupDropPoint = (value) => normalizePointLabel(value);
+const editablePickupDropPoint = (value) => {
+  // Don't use normalizePointLabel here because it strips parentheses
+  // which contain the date/time the user needs to edit.
+  return String(value || "")
+    .replace(/^((arrival|departure)\s*:\s*)+/i, "")
+    .trim();
+};
 
 /** True when `days` is a list of day objects (not a night-count number from snapshot). */
 function isQuickPackageDayObjectArray(days) {
@@ -963,6 +1019,8 @@ function transformQuickApiToDisplay(apiData, company) {
   })();
 
   return {
+    _id: apiData._id,
+    quickQuotationId: apiData.quickQuotationId,
     date: formatDate(
       apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
       apiData?.packageSnapshot?.arrivalDate ||
@@ -1197,6 +1255,15 @@ const QuickFinalize = () => {
     message: "",
     severity: "success",
   });
+  const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
+  const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState(null);
+  const [openReceiptPreview, setOpenReceiptPreview] = useState(false);
+  const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
+
+  const handleOpenReceiptPreview = (voucher) => {
+    setSelectedVoucherForPreview(voucher);
+    setOpenReceiptPreview(true);
+  };
   const [itineraryDialog, setItineraryDialog] = useState({
     open: false,
     mode: "add",
@@ -1287,6 +1354,7 @@ const QuickFinalize = () => {
     booking: { subject: "", message: "" },
   });
   const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailAccounts, setEmailAccounts] = useState([]);
   const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
   const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
   const [policyInputs, setPolicyInputs] = useState({
@@ -1550,7 +1618,18 @@ const QuickFinalize = () => {
         setMailCompanies([]);
       }
     };
+    const loadEmailAccounts = async () => {
+      try {
+        const res = await axios.get("/email-accounts");
+        const list = res?.data?.data || [];
+        setEmailAccounts(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.error("Failed to load email accounts:", err);
+        setEmailAccounts([]);
+      }
+    };
     loadCompanies();
+    loadEmailAccounts();
   }, []);
 
   useEffect(() => {
@@ -1635,6 +1714,12 @@ const QuickFinalize = () => {
     const n = effectiveQuickPayableTotal(currentQuotation, services);
     return Number.isFinite(n) ? n : null;
   }, [currentQuotation, services]);
+  const { receivedFromClient, paidToVendor } = useMemo(() => summarizeVoucherAmounts(paymentHistory), [paymentHistory]);
+  const paymentReceivedDisplay = `₹ ${receivedFromClient.toLocaleString("en-IN")}`;
+  const paymentBalanceDisplay = packageTotalForFooter != null 
+    ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}` 
+    : "₹ 0";
+
   const finalizedVendors = React.useMemo(() => {
     const vendorAmountRows = Array.isArray(quotation?.finalizedVendorsWithAmounts)
       ? quotation.finalizedVendorsWithAmounts
@@ -1669,20 +1754,6 @@ const QuickFinalize = () => {
     quotation?.finalizedVendorDetails,
     quotation?.finalizedVendorsWithAmounts,
   ]);
-  useEffect(() => {
-    const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
-    setQuotation((prev) => ({
-      ...prev,
-      footer: {
-        ...prev.footer,
-        received: `₹ ${receivedFromClient.toLocaleString("en-IN")}`,
-        balance:
-          packageTotalForFooter != null
-            ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}`
-            : prev.footer.balance,
-      },
-    }));
-  }, [paymentHistory, packageTotalForFooter]);
 
   const finalizePackageOptions = useMemo(() => {
     const pkg =
@@ -1771,10 +1842,10 @@ const QuickFinalize = () => {
       subject: tpl?.subject || "",
       greetLine: "Please find below details:",
       message: tpl?.message || "",
-      signature: "Warm Regards,\nReservation Team\nIconic Travel",
+      signature: "",
       mailType: type,
-      senderAccount: "gmail1",
-      companyId: mailCompanies?.[0]?._id || "",
+      senderAccount: "",
+      companyId: company?._id || mailCompanies?.[0]?._id || "",
       nextPayableAmount: "",
       paymentDueDate: "",
     };
@@ -1855,9 +1926,9 @@ const QuickFinalize = () => {
       return;
     }
     setEmailTemplateType("normal");
-    const defaultCompany = mailCompanies?.[0];
+    const defaultCompanyId = company?._id || mailCompanies?.[0]?._id;
     try {
-      await refreshEmailTemplates(defaultCompany?._id);
+      await refreshEmailTemplates(defaultCompanyId);
     } catch (e) {
       setSnackbar({
         open: true,
@@ -1874,70 +1945,80 @@ const QuickFinalize = () => {
   };
 
   const handleEmailSend = async (values) => {
-    const to = String(values?.to || "").trim();
-    const cc = String(values?.cc || "").trim();
-    const subject = String(values?.subject || "");
-    const isBookingMail = values?.mailType === "booking";
-    const nextPayableRaw = String(values?.nextPayableAmount || "").trim();
-    const parsedNextPayable = Number(nextPayableRaw.replace(/[^0-9.-]/g, ""));
-    const dueDateRaw = String(values?.paymentDueDate || "").trim();
-    const nextPayableAmount =
-      nextPayableRaw === "" || !Number.isFinite(parsedNextPayable)
-        ? undefined
-        : parsedNextPayable;
-    const hasBookingOverrides =
-      isBookingMail &&
-      (dueDateRaw !== "" || Number.isFinite(nextPayableAmount));
-    const selectedCompany =
-      mailCompanies.find((c) => c?._id === values?.companyId) || null;
-    if (!to) {
-      setSnackbar({
-        open: true,
-        message: "Please enter receiver email",
-        severity: "warning",
-      });
-      return;
-    }
     try {
+      const isBookingMail = values?.mailType === "booking";
+      const selectedCompany =
+        mailCompanies.find((c) => c?._id === values?.companyId) || null;
+
+      const payload = {
+        to: String(values?.to || "").trim(),
+        cc: String(values?.cc || "").trim() || undefined,
+        type: isBookingMail ? "booking" : "normal",
+        subject: values?.subject || undefined,
+        bodyHtml: isBookingMail ? undefined : values?.message || undefined,
+        senderAccount: values?.senderAccount || "gmail1",
+        companyId: values?.companyId || undefined,
+        companyName: selectedCompany?.companyName || undefined,
+        customText: {
+          signature: values?.signature || undefined,
+          normal: { signature: values?.signature || undefined },
+          booking: {
+            signature: values?.signature || undefined,
+            ...(values?.nextPayableAmount
+              ? { nextPayableAmount: Number(values.nextPayableAmount) }
+              : {}),
+            ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+          },
+        },
+        ...(pdfAttachmentForMail?.contentBase64
+          ? { pdfAttachment: pdfAttachmentForMail }
+          : {}),
+        previewPdfMode:
+          !isBookingMail &&
+          !!pdfAttachmentForMail?.contentBase64 &&
+          previewPdfModeForMail,
+      };
+
+      // Handle Payment Receipt Attachment for Booking Mails
+      if (values.selectedReceiptId && isBookingMail) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        const element = document.getElementById("hidden-receipt-container");
+        if (element) {
+          try {
+            const opt = {
+              margin: 0.2,
+              filename: `Receipt_${values.selectedReceiptId}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 1.5, useCORS: true, logging: false },
+              jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+            };
+            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+            if (pdfBlob && pdfBlob.size >= 100) {
+              const reader = new FileReader();
+              const receiptAttachment = await new Promise((resolve, reject) => {
+                reader.onloadend = () =>
+                  resolve({
+                    filename: "Payment_Receipt.pdf",
+                    contentBase64: reader.result.split(",")[1],
+                    mimeType: "application/pdf",
+                  });
+                reader.onerror = reject;
+                reader.readAsDataURL(pdfBlob);
+              });
+              payload.receiptPdf = receiptAttachment;
+              payload.paymentVoucherId = values.selectedReceiptId;
+            }
+          } catch (captureErr) {
+            console.error("Failed to capture receipt PDF:", captureErr);
+          }
+        }
+      }
+
       await axios.post(
         `/quickQT/${encodeURIComponent(apiEntityId)}/email/send`,
-        {
-          to,
-          cc: cc || undefined,
-          type: isBookingMail ? "booking" : "normal",
-          subject: subject || undefined,
-          bodyHtml: isBookingMail ? undefined : values?.message || undefined,
-          senderAccount: values?.senderAccount || "gmail1",
-          companyId: values?.companyId || undefined,
-          companyName: selectedCompany?.companyName || undefined,
-          customText: isBookingMail
-            ? {
-              booking: {
-                ...(Number.isFinite(nextPayableAmount)
-                  ? { nextPayableAmount }
-                  : {}),
-                ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
-              },
-            }
-            : hasBookingOverrides
-              ? {
-                booking: {
-                  ...(Number.isFinite(nextPayableAmount)
-                    ? { nextPayableAmount }
-                    : {}),
-                  ...(dueDateRaw ? { dueDate: dueDateRaw } : {}),
-                },
-              }
-              : undefined,
-          previewPdfMode:
-            !isBookingMail &&
-            !!pdfAttachmentForMail?.contentBase64 &&
-            previewPdfModeForMail,
-          ...(pdfAttachmentForMail?.contentBase64
-            ? { pdfAttachment: pdfAttachmentForMail }
-            : {}),
-        },
+        payload,
       );
+
       setSnackbar({
         open: true,
         message: "Email sent successfully",
@@ -1998,6 +2079,7 @@ const QuickFinalize = () => {
       taxType: "",
     });
   };
+
 
   const handleAddFlightOpen = () => setOpenAddFlight(true);
   const handleAddFlightClose = () => setOpenAddFlight(false);
@@ -2729,7 +2811,7 @@ const QuickFinalize = () => {
   const infoMap = {
     call: `📞 ${quotation.footer.phone}`,
     email: `✉️ ${quotation.customer?.email}`,
-    payment: `Received: ${quotation.footer.received}\n Balance: ${quotation.footer.balance}`,
+    payment: `Received: ${paymentReceivedDisplay}\n Balance: ${paymentBalanceDisplay}`,
     quotation: `Total Quotation Cost: ${quotation.pricing.total}`,
     guest: `Guests: ${quotation.hotel.guests}`,
   };
@@ -3229,6 +3311,16 @@ const QuickFinalize = () => {
                       onClick={() => setOpenBankDialog(true)}
                     >
                       Edit Vendors
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      startIcon={<CheckCircle />}
+                      sx={{ ml: 1 }}
+                      onClick={() => setOpenHotelConfirmation(true)}
+                    >
+                      Hotel Confirmation
                     </Button>
                   </Box>
 
@@ -3965,26 +4057,40 @@ const QuickFinalize = () => {
         onClose={handleAddFlightClose}
         onSave={handleAddFlight}
       />
-      <EmailQuotationDialog
-        open={openEmailDialog}
-        onClose={handleEmailClose}
-        customer={quotation.customer}
-        onSend={handleEmailSend}
-        onCompanyChange={async (companyId, mailType) => {
-          const templates = await refreshEmailTemplates(companyId);
-          const type = mailType === "booking" ? "booking" : "normal";
-          return templates?.[type] || { subject: "", message: "" };
-        }}
-        initialValuesOverride={emailInitialValues}
-        templateBodies={emailTemplateBodies}
-        companyOptions={mailCompanies}
-      />
+      {openEmailDialog && (
+        <EmailQuotationDialog
+          open={openEmailDialog}
+          onClose={handleEmailClose}
+          customer={quotation.customer}
+          onSend={handleEmailSend}
+          onCompanyChange={async (companyId, mailType) => {
+            const templates = await refreshEmailTemplates(companyId);
+            const type = mailType === "booking" ? "booking" : "normal";
+            return templates?.[type] || { subject: "", message: "" };
+          }}
+          initialValuesOverride={emailInitialValues}
+          templateBodies={emailTemplateBodies}
+          companyOptions={mailCompanies}
+          emailAccountOptions={emailAccounts}
+          hasPdfAttachment={!!pdfAttachmentForMail}
+          receiptOptions={paymentHistory.filter(v => v.paymentType === "Receive Voucher")}
+          onReceiptChange={(receiptId) => setSelectedReceiptIdForPdf(receiptId)}
+        />
+      )}
       <TransactionSummaryDialog
         open={openTransactionDialog}
         onClose={() => setOpenTransactionDialog(false)}
         loading={paymentHistoryLoading}
         rows={paymentHistory}
         quotationRef={apiEntityId}
+        onPreview={handleOpenReceiptPreview}
+      />
+
+      <ReceiptPreviewDialog 
+        open={openReceiptPreview}
+        onClose={() => setOpenReceiptPreview(false)}
+        voucher={selectedVoucherForPreview}
+        quotation={currentQuotation}
       />
 
       {/* Invoice PDF Dialog */}
@@ -4060,6 +4166,22 @@ const QuickFinalize = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <HotelConfirmationDialog
+        open={openHotelConfirmation}
+        onClose={() => setOpenHotelConfirmation(false)}
+        quotation={currentQuotation}
+        quotationRef={apiEntityId}
+        type="quick"
+      />
+
+      <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+        <div id="hidden-receipt-container">
+          {selectedReceiptIdForPdf && (
+            <InvoiceView id={selectedReceiptIdForPdf} hideButtons={true} />
+          )}
+        </div>
+      </Box>
     </Box>
   );
 };

@@ -9,9 +9,9 @@ import { requirePermission } from "../../middleware/staffPermission.middleware.j
 
 const router = express.Router();
 
-router.post("/", requirePermission("canCreateBooking"), createHotelQuotation);
-router.get("/", requirePermission("canAccessBookings"), getAllHotelQuotations);
-router.get("/:id", requirePermission("canAccessBookings"), getHotelQuotationById);
-router.delete("/:id", requirePermission("canDeleteBooking"), deleteHotelQuotation);
+router.post("/", requirePermission("canCreateQuotation"), createHotelQuotation);
+router.get("/", requirePermission("canAccessQuotations"), getAllHotelQuotations);
+router.get("/:id", requirePermission("canAccessQuotations"), getHotelQuotationById);
+router.delete("/:id", requirePermission("canDeleteQuotation"), deleteHotelQuotation);
 
 export default router;

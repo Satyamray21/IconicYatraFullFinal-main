@@ -21,6 +21,32 @@ import dayjs from "dayjs";
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
 
+const SignatureUpdater = ({ senderAccount, emailAccountOptions, setFieldValue }) => {
+  React.useEffect(() => {
+    const acc = emailAccountOptions.find((a) => a._id === senderAccount);
+    if (acc && acc.signature && (acc.signature.name || (acc.signature.mobile && acc.signature.mobile.some(m => m)) || (acc.signature.links && acc.signature.links.some(l => l)))) {
+        let sigHtml = `<div style="margin-top: 15px; font-family: Arial, sans-serif;">`;
+        sigHtml += `<p style="margin: 0;"><b>Warm Regards,</b></p>`;
+        if (acc.signature.name) sigHtml += `<p style="margin: 0;"><b>${acc.signature.name}</b></p>`;
+        if (acc.signature.mobile && acc.signature.mobile.length > 0) {
+            const mobs = acc.signature.mobile.filter(m => m.trim());
+            if (mobs.length > 0) sigHtml += `<p style="margin: 0;">Mobile: ${mobs.join(", ")}</p>`;
+        }
+        if (acc.signature.links && acc.signature.links.length > 0) {
+            const links = acc.signature.links.filter(l => l.trim());
+            if (links.length > 0) {
+                sigHtml += `<p style="margin: 0;">${links.map(l => `<a href="${l}" style="color: #0b5394; text-decoration: none;">${l}</a>`).join(" | ")}</p>`;
+            }
+        }
+        sigHtml += `</div>`;
+        setFieldValue("signature", sigHtml);
+    } else {
+        setFieldValue("signature", "");
+    }
+  }, [senderAccount, emailAccountOptions, setFieldValue]);
+  return null;
+};
+
 const EmailQuotationDialog = ({
   open,
   onClose,
@@ -29,7 +55,10 @@ const EmailQuotationDialog = ({
   initialValuesOverride,
   templateBodies,
   companyOptions = [],
+  emailAccountOptions = [],
   hasPdfAttachment = false,
+  receiptOptions = [],
+  onReceiptChange = () => { },
 }) => {
   const validationSchema = Yup.object({
     to: Yup.string().email("Invalid email").required("Required"),
@@ -53,10 +82,11 @@ const EmailQuotationDialog = ({
     message: "",
     signature: "",
     mailType: "normal",
-    senderAccount: "gmail1",
+    senderAccount: emailAccountOptions[0]?._id || "",
     companyId: "",
     nextPayableAmount: "",
     paymentDueDate: null,
+    selectedReceiptId: "",
   };
   const initialValues = { ...baseInitialValues, ...(initialValuesOverride || {}) };
 
@@ -83,7 +113,6 @@ const EmailQuotationDialog = ({
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
         <DialogTitle>Email</DialogTitle>
         <Formik
-          enableReinitialize
           initialValues={initialValues}
           validationSchema={validationSchema}
           onSubmit={handleSubmit}
@@ -116,6 +145,7 @@ const EmailQuotationDialog = ({
               return (
                 <Form>
                   <DialogContent dividers>
+                    <SignatureUpdater senderAccount={values.senderAccount} emailAccountOptions={emailAccountOptions} setFieldValue={setFieldValue} />
                     <Alert
                       severity={hasPdfAttachment ? "success" : "warning"}
                       sx={{ mb: 2 }}
@@ -155,15 +185,32 @@ const EmailQuotationDialog = ({
                           onChange={async (e) => {
                             const companyId = e.target.value;
                             setFieldValue("companyId", companyId);
+
+                            // Find first available account for this company
+                            const firstAvailable = emailAccountOptions.find((acc) => {
+                              const accCompanyId = acc.companyId?._id || acc.companyId;
+                              return accCompanyId === companyId;
+                            });
+                            if (firstAvailable) {
+                              setFieldValue("senderAccount", firstAvailable._id);
+                            } else {
+                              setFieldValue("senderAccount", "");
+                            }
+
                             if (typeof onCompanyChange === "function") {
                               const nextType = values.mailType || "normal";
-                              const tpl = await onCompanyChange(companyId, nextType);
-                              if (tpl?.subject !== undefined) setFieldValue("subject", tpl.subject);
-                              if (tpl?.message !== undefined) setFieldValue("message", tpl.message);
+                              const { subject: s, message: m } =
+                                await onCompanyChange(companyId, nextType);
+                              if (s) setFieldValue("subject", s);
+                              if (m) setFieldValue("message", m);
                             }
                           }}
                           error={touched.companyId && Boolean(errors.companyId)}
-                          helperText={touched.companyId && errors.companyId}
+                          helperText={
+                            touched.companyId &&
+                            (errors.companyId ||
+                              `Company Email: ${companyOptions.find((c) => c._id === values.companyId)?.email || "N/A"}`)
+                          }
                         >
                           {companyOptions.map((company) => (
                             <MenuItem key={company._id} value={company._id}>
@@ -173,17 +220,49 @@ const EmailQuotationDialog = ({
                         </TextField>
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <Field
+                          <Field
                           as={TextField}
                           select
                           fullWidth
                           name="senderAccount"
                           label="Send From"
                           error={touched.senderAccount && Boolean(errors.senderAccount)}
-                          helperText={touched.senderAccount && errors.senderAccount}
+                          SelectProps={{
+                            renderValue: (selected) => {
+                              const acc = emailAccountOptions.find((a) => a._id === selected);
+                              return acc ? `${acc.label || acc.displayName} <${acc.email}>` : "Select Sender";
+                            },
+                          }}
+                          helperText={
+                            (touched.senderAccount && errors.senderAccount) ||
+                            (values.senderAccount &&
+                            emailAccountOptions.find((a) => a._id === values.senderAccount)
+                              ? `Selected Sender: ${
+                                  emailAccountOptions.find((a) => a._id === values.senderAccount)?.email
+                                }`
+                              : "")
+                          }
                         >
-                          <MenuItem value="gmail1">Gmail 1</MenuItem>
-                          <MenuItem value="gmail2">Gmail 2</MenuItem>
+                          {emailAccountOptions
+                            .filter((acc) => {
+                              const accCompanyId = acc.companyId?._id || acc.companyId;
+                              if (values.companyId) {
+                                return accCompanyId === values.companyId;
+                              }
+                              return !accCompanyId;
+                            })
+                            .map((account) => (
+                              <MenuItem key={account._id} value={account._id}>
+                                <Box>
+                                  <Typography variant="body1" fontWeight="bold">
+                                    {account.label || account.displayName || "No Label"}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {account.email}
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+                            ))}
                         </Field>
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
@@ -243,7 +322,7 @@ const EmailQuotationDialog = ({
                       <Grid size={{ xs: 12 }}>
                         {(values.mailType || "normal") === "booking" && (
                           <Grid container spacing={2} sx={{ mb: 1 }}>
-                            <Grid size={{ xs: 12, sm: 6 }}>
+                            <Grid size={{ xs: 12, sm: 4 }}>
                               <TextField
                                 fullWidth
                                 name="nextPayableAmount"
@@ -254,7 +333,7 @@ const EmailQuotationDialog = ({
                                 }
                               />
                             </Grid>
-                            <Grid size={{ xs: 12, sm: 6 }}>
+                            <Grid size={{ xs: 12, sm: 4 }}>
                               <DatePicker
                                 label="Payment Due Date"
                                 value={values.paymentDueDate}
@@ -268,6 +347,28 @@ const EmailQuotationDialog = ({
                                   },
                                 }}
                               />
+                            </Grid>
+                            <Grid size={{ xs: 12, sm: 4 }}>
+                              <TextField
+                                select
+                                fullWidth
+                                label="Attach Receipt"
+                                value={values.selectedReceiptId || ""}
+                                onChange={(e) => {
+                                  setFieldValue("selectedReceiptId", e.target.value);
+                                  onReceiptChange(e.target.value);
+                                }}
+                                helperText={receiptOptions.length === 0 ? "No receipts found" : "Attach a payment receipt"}
+                              >
+                                <MenuItem value="">
+                                  <em>None</em>
+                                </MenuItem>
+                                {receiptOptions.map((r) => (
+                                  <MenuItem key={r._id} value={r._id}>
+                                    {r.invoiceId || r.receiptNumber} - ₹{r.amount}
+                                  </MenuItem>
+                                ))}
+                              </TextField>
                             </Grid>
                           </Grid>
                         )}
@@ -322,15 +423,19 @@ const EmailQuotationDialog = ({
                         <Paper variant="outlined" sx={{ p: 2, maxHeight: 280, overflow: "auto" }}>
                           <Box
                             sx={{ "& p": { m: 0, mb: 1 } }}
-                            dangerouslySetInnerHTML={{ __html: values.message || "<p>No preview</p>" }}
+                            dangerouslySetInnerHTML={{ __html: (values.message || "<p>No preview</p>") + (values.signature || "") }}
                           />
                         </Paper>
                       </Grid>
                       <Grid size={{ xs: 12 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                          Generated Signature (HTML)
+                        </Typography>
                         <Field
                           as={TextField}
                           name="signature"
-                          label="Signature"
+                          multiline
+                          minRows={3}
                           fullWidth
                         />
                       </Grid>

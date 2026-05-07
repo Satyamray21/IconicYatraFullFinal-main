@@ -279,8 +279,13 @@ const QuotationCard = () => {
   // Format Date Safely
   const formatDate = (date) => {
     if (!date) return "N/A";
+    if (typeof date === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+      return date;
+    }
     try {
-      return new Date(date).toLocaleDateString("en-IN");
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "N/A";
+      return d.toLocaleDateString("en-IN");
     } catch {
       return "N/A";
     }
@@ -759,6 +764,11 @@ const QuotationCard = () => {
         // Must use Mongo _id — quoteId is only a display label (QT-xxxxxx)
         if (params.row.originalId) {
           navigate(`/quickfinalize/${params.row.originalId}`);
+        }
+        break;
+      case "Hotel":
+        if (params.row.originalId) {
+          navigate(`/hotelfinalize/${params.row.originalId}`);
         }
         break;
       default:

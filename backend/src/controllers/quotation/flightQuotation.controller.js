@@ -2,9 +2,12 @@ import { FlightQuotation } from "../../models/quotation/flightQuotation.model.js
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { clearPattern } from "../../utils/cache.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 import { Lead } from "../../models/lead.model.js"
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
+import EmailAccount from "../../models/emailAccount.model.js";
 import ReceivedVoucher from "../../models/payment.model.js";
 import {
     buildFlightQuotationNormalEmail,
@@ -37,7 +40,9 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
         infants,
         anyMessage,
         personalDetails,
-        status // optional from client
+        status, // optional from client
+        companyId,
+        companyName
     } = req.body;
 
     // ✅ Validate required fields
@@ -75,6 +80,33 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
     // ✅ Generate unique Flight Quotation ID
     const flightQuotationId = await generateFlightQuotationId();
 
+    const defaultPolicies = {
+        inclusionPolicy: [
+            "Economy class airfare",
+            "Applicable airport taxes",
+            "Standard baggage allowance as per airline policy"
+        ],
+        exclusionPolicy: [
+            "Any meals or snacks not specified in the inclusions",
+            "Seat selection and preferred seating charges",
+            "Extra baggage charges beyond the standard allowance",
+            "Travel Insurance",
+            "Any items of personal nature (tips, laundry, etc.)",
+            "Anything not explicitly mentioned in the inclusions"
+        ],
+        paymentPolicy: [
+            "At the time of reservation, a non-refundable booking amount of 20% of package cost + 5% GST is required.",
+            "20% at reservation + 100% Flight/Train cost",
+            "60% after booking confirmation",
+            "Balance before departure"
+        ],
+        termsAndConditions: [
+            "Fares are subject to availability at the time of booking",
+            "Tickets are non-refundable and non-changeable unless specified otherwise",
+            "Passport must be valid for at least 6 months from the date of travel"
+        ]
+    };
+
     // ✅ Create quotation
     const quotation = await FlightQuotation.create({
         flightQuotationId,
@@ -89,10 +121,22 @@ export const createFlightQuotation = asyncHandler(async (req, res) => {
         personalDetails,
         status: status || "New",
         quotation_type: "flight",
-        leadId: lead.leadId
+        leadId: lead.leadId,
+        policies: defaultPolicies,
+        companyId,
+        companyName
+    });
+
+    await logActivity({
+        action: "CREATE",
+        model: "FlightQuotation",
+        refId: flightQuotationId,
+        description: `Flight Quotation ${flightQuotationId} (${clientDetails.clientName}) created by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
     });
 
     // ✅ Send response with quotation + full lead info
+    await clearPattern('dashboard:stats:*');
     return res.status(201).json(
         new ApiResponse(201, {
             quotation,
@@ -185,6 +229,7 @@ export const updateFlightQuotationById = asyncHandler(async (req, res) => {
 
     if (!quotation) throw new ApiError(404, "Flight quotation not found");
 
+    await clearPattern('dashboard:stats:*');
     return res
         .status(200)
         .json(new ApiResponse(200, quotation, "Flight quotation updated successfully"));
@@ -197,6 +242,16 @@ export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
 
     if (!quotation) throw new ApiError(404, "Flight quotation not found");
 
+    await logActivity({
+        action: "DELETE",
+        model: "FlightQuotation",
+        refId: flightQuotationId,
+        description: `Flight Quotation ${flightQuotationId} (${quotation.clientDetails?.clientName || 'Guest'}) deleted by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
+
     return res
         .status(200)
         .json(new ApiResponse(200, {}, "Flight quotation deleted successfully"));
@@ -206,7 +261,7 @@ export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
 // ✅ Confirm Flight Quotation API
 export const confirmFlightQuotation = asyncHandler(async (req, res) => {
     const { flightQuotationId } = req.params;
-    const { pnrList, finalFareList, finalFare } = req.body;
+    const { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount, companyId, companyName } = req.body;
 
     const quotation = await FlightQuotation.findOne({ flightQuotationId });
 
@@ -240,16 +295,33 @@ export const confirmFlightQuotation = asyncHandler(async (req, res) => {
             throw new ApiError(400, "Final fare list length must match flight details length");
         }
         quotation.finalFareList = finalFareList;
-
-        // ✅ Update total final fare
-        quotation.finalFare = finalFare
-            ? Number(finalFare) // ✅ Use manual value if provided
-            : finalFareList.reduce((sum, fare) => sum + Number(fare || 0), 0);
     }
+
+    // ✅ Update GST and Fare fields
+    if (baseFare !== undefined) quotation.baseFare = baseFare;
+    if (gstType) quotation.gstType = gstType;
+    if (gstPercentage !== undefined) quotation.gstPercentage = gstPercentage;
+    if (gstAmount !== undefined) quotation.gstAmount = gstAmount;
+    if (companyId) quotation.companyId = companyId;
+    if (companyName) quotation.companyName = companyName;
+
+    // ✅ Update total final fare
+    quotation.finalFare = finalFare
+        ? Number(finalFare) // ✅ Use manual value if provided
+        : (Number(baseFare || 0) + Number(gstAmount || 0)) || finalFareList.reduce((sum, fare) => sum + Number(fare || 0), 0);
 
     quotation.status = "Confirmed";
     await quotation.save();
 
+    await logActivity({
+        action: "CONFIRM",
+        model: "FlightQuotation",
+        refId: flightQuotationId,
+        description: `Flight Quotation ${flightQuotationId} (${quotation.clientDetails?.clientName || 'Guest'}) confirmed by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
     return res.status(200).json(
         new ApiResponse(200, quotation, "Flight quotation confirmed successfully")
     );
@@ -269,15 +341,43 @@ const resolveCompanyForEmail = async ({ companyId, companyName }) => {
     return null;
 };
 
-const resolveMailAuth = (senderAccount) => {
-    const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
-    const user = useSecondary
-        ? process.env.gmail2 || process.env.EMAIL_USER2 || process.env.gmail || process.env.EMAIL_USER
-        : process.env.gmail || process.env.EMAIL_USER;
-    const pass = useSecondary
-        ? process.env.app_pass2 || process.env.EMAIL_PASS2 || process.env.app_pass || process.env.EMAIL_PASS
-        : process.env.app_pass || process.env.EMAIL_PASS;
-    return { user, pass };
+const resolveMailAuth = async (senderAccount, selectedCompany) => {
+    // 1. If senderAccount is a valid MongoDB ID, look up in EmailAccount
+    if (senderAccount && senderAccount.length === 24) {
+        try {
+      const account = await EmailAccount.findById(senderAccount).lean();
+      if (account) {
+        return {
+          user: account.email,
+          pass: account.appPassword,
+          service: account.service,
+          host: account.host,
+          port: account.port,
+          secure: account.secure,
+        };
+      }
+    } catch (e) {
+      console.warn("EmailAccount lookup failed:", e.message);
+    }
+  }
+
+  // 2. If company has its own email and app password, use them
+  if (selectedCompany?.email && selectedCompany?.emailAppPassword) {
+    return {
+      user: selectedCompany.email,
+      pass: selectedCompany.emailAppPassword,
+      service: "gmail",
+    };
+  }
+
+  const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
+  const user = useSecondary
+    ? process.env.gmail2 || process.env.EMAIL_USER2 || process.env.gmail || process.env.EMAIL_USER
+    : process.env.gmail || process.env.EMAIL_USER;
+  const pass = useSecondary
+    ? process.env.app_pass2 || process.env.EMAIL_PASS2 || process.env.app_pass || process.env.EMAIL_PASS
+    : process.env.app_pass || process.env.EMAIL_PASS;
+  return { user, pass, service: "gmail" };
 };
 
 const sumReceivedFromClient = (vouchers = []) => {
@@ -313,6 +413,7 @@ export const previewFlightQuotationMail = asyncHandler(async (req, res) => {
         paymentLink: selectedCompany?.paymentLink || "",
         bankDetails: Array.isArray(selectedCompany?.bankDetails) ? selectedCompany.bankDetails : [],
         receivedAmount,
+        signature: selectedCompany?.signature || `Warm Regards,\n${selectedCompany?.companyName || "Iconic Travel"}`
     };
 
     const quotationData = { quotation, lead };
@@ -351,6 +452,7 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
         companyName,
         customText = {},
         pdfAttachment,
+        receiptPdf,
     } = req.body || {};
 
     if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -364,13 +466,14 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
         "personalDetails.fullName": quotation?.clientDetails?.clientName,
     }).lean();
     const selectedCompany = await resolveCompanyForEmail({ companyId, companyName });
-    const auth = resolveMailAuth(senderAccount);
+    const auth = await resolveMailAuth(senderAccount, selectedCompany);
     if (!auth.user || !auth.pass) {
         throw new ApiError(500, "Sender email credentials are not configured for selected account");
     }
 
     const vouchers = await ReceivedVoucher.find({ quotationRef: flightQuotationId }).lean();
     const receivedAmount = sumReceivedFromClient(vouchers);
+    const isBookingMail = type === "booking";
     const companyMeta = {
         companyName: selectedCompany?.companyName || "Iconic Travel",
         companyWebsite: selectedCompany?.companyWebsite || "",
@@ -379,15 +482,29 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
         paymentLink: selectedCompany?.paymentLink || "",
         bankDetails: Array.isArray(selectedCompany?.bankDetails) ? selectedCompany.bankDetails : [],
         receivedAmount,
-        ...(customText?.booking || {}),
+        signature: customText?.signature || selectedCompany?.signature || `Warm Regards,\n${selectedCompany?.companyName || "Iconic Travel"}`,
+        ...(isBookingMail ? (customText?.booking || {}) : (customText?.normal || {})),
     };
 
     const quotationData = { quotation, lead };
-    const generatedBody =
-        type === "booking"
+    const generatedBody = isBookingMail
             ? buildFlightQuotationBookingEmail(quotationData, companyMeta)
             : buildFlightQuotationNormalEmail(quotationData, companyMeta);
-    const body = String(bodyHtml || "").trim() || generatedBody;
+    let body = String(bodyHtml || "").trim() || generatedBody;
+
+    // Append signature if bodyHtml was used and signature is provided
+    if (bodyHtml && companyMeta.signature) {
+        const isHtmlSig = /<[a-z][\s\S]*>/i.test(companyMeta.signature);
+        const sig = isHtmlSig ? companyMeta.signature : companyMeta.signature.replace(/\n/g, "<br/>");
+        
+        // Use a simpler check for existing signature to avoid duplication
+        const cleanSig = sig.replace(/\s/g, "");
+        const cleanBody = body.replace(/\s/g, "");
+        
+        if (!cleanBody.includes(cleanSig)) {
+            body += `<br/><br/>${sig}`;
+        }
+    }
     const finalSubject =
         subject ||
         (type === "booking"
@@ -395,47 +512,70 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
             : `Quotation ${flightQuotationId} - ${quotation?.personalDetails?.fullName || "Guest"}`);
 
     const transporter = nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 587,
-        secure: false,
-        auth: { user: auth.user, pass: auth.pass },
+      ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
+      auth: { user: auth.user, pass: auth.pass },
     });
 
     const isBooking = String(type || "").trim().toLowerCase() === "booking";
-    const providedPdfAttachment =
-        !isBooking &&
-            pdfAttachment &&
-            typeof pdfAttachment === "object" &&
-            String(pdfAttachment.contentBase64 || "").trim()
-            ? {
-                filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
-                content: Buffer.from(String(pdfAttachment.contentBase64).trim(), "base64"),
-                contentType: String(pdfAttachment.mimeType || "").trim() || "application/pdf",
-            }
-            : null;
+    const attachments = [];
 
-    await transporter.sendMail({
-        from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
-        to,
-        cc: cc && String(cc).trim() ? cc : undefined,
-        replyTo: selectedCompany?.email || auth.user,
-        subject: finalSubject,
-        html: body,
-        text: body.replace(/<[^>]*>/g, ""),
-        attachments: providedPdfAttachment ? [providedPdfAttachment] : [],
-    });
+    // Handle normal PDF attachment (Quotation PDF)
+    if (pdfAttachment && pdfAttachment.contentBase64 && String(pdfAttachment.contentBase64).trim()) {
+        attachments.push({
+            filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
+            content: Buffer.from(String(pdfAttachment.contentBase64).trim(), "base64"),
+            contentType: String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+        });
+    }
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            {
-                flightQuotationId,
-                type,
-                senderAccount: senderAccount || "gmail1",
-            },
-            "Mail sent successfully",
-        ),
-    );
+    // Handle Receipt PDF attachment
+    if (receiptPdf && receiptPdf.contentBase64 && String(receiptPdf.contentBase64).trim()) {
+        attachments.push({
+            filename: String(receiptPdf.filename || "Payment_Receipt.pdf").trim(),
+            content: Buffer.from(String(receiptPdf.contentBase64).trim(), "base64"),
+            contentType: String(receiptPdf.mimeType || "").trim() || "application/pdf",
+        });
+    }
+
+    try {
+        console.log(`Attempting to send flight ${type} email to: ${to} using account: ${auth.user}`);
+        
+        await transporter.sendMail({
+            from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+            to,
+            cc: cc && String(cc).trim() ? cc : undefined,
+            replyTo: selectedCompany?.email || auth.user,
+            subject: finalSubject,
+            html: body,
+            text: body.replace(/<[^>]*>/g, ""),
+            attachments: attachments,
+        });
+
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                {
+                    flightQuotationId,
+                    type,
+                    senderAccount: senderAccount || "gmail1",
+                },
+                "Mail sent successfully",
+            ),
+        );
+    } catch (mailError) {
+        console.error("Nodemailer Error Details:", {
+            message: mailError.message,
+            code: mailError.code,
+            command: mailError.command,
+            response: mailError.response,
+            stack: mailError.stack
+        });
+        
+        throw new ApiError(
+            500, 
+            `Failed to send email: ${mailError.message}. Check SMTP configuration or attachment size.`
+        );
+    }
 });
 
 

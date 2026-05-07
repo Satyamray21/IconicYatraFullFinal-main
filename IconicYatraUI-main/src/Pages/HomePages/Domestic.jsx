@@ -14,7 +14,7 @@ import {
   Alert,
 } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchDomesticPackages } from "../../Features/packageSlice";
+import { fetchDomesticPackages, setCurrentSector } from "../../Features/packageSlice";
 import PackageCard from "../../Components/PackageCard";
 import { BASE_URL, destinationAxios } from "../../Utils/axiosInstance";
 import { Pagination } from "@mui/material";
@@ -38,7 +38,8 @@ const Domestic = () => {
   const dispatch = useDispatch();
   const [currency, setCurrency] = useState("INR");
   const [rates, setRates] = useState({});
-  const [page, setPage] = useState(1);
+  const { page: savedPage } = useSelector((state) => state.packages);
+  const [page, setPage] = useState(savedPage || 1);
   const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
   const [selectedPackageTitle, setSelectedPackageTitle] = useState("");
   const [domesticDescriptionsBySlug, setDomesticDescriptionsBySlug] = useState(
@@ -53,6 +54,8 @@ const Domestic = () => {
     error,
     totalPages = 1,
     totalPackages = 0,
+    page: reduxPage = 1,
+    currentSector,
   } = useSelector((state) => state.packages);
 
   const routeSlug =
@@ -63,8 +66,16 @@ const Domestic = () => {
   // ✅ Fetch packages (fetch more when filtering by sector to show all matches)
   useEffect(() => {
     const limit = destination ? 200 : 9;
+    const targetSector = destination || "All";
+
+    // Skip fetch if we already have the data for this page and sector in Redux
+    if (packages.length > 0 && page === reduxPage && targetSector === currentSector && !loading) {
+      return;
+    }
+
     dispatch(fetchDomesticPackages({ page, limit }));
-  }, [dispatch, page, destination]);
+    dispatch(setCurrentSector(targetSector));
+  }, [dispatch, page, destination, packages.length, reduxPage, currentSector, loading]);
 
   useEffect(() => {
     let isMounted = true;
@@ -113,10 +124,13 @@ const Domestic = () => {
     };
   }, []);
 
-  // ✅ Reset page only when route changes
+  // ✅ Reset page only when route changes (destination changes)
   useEffect(() => {
-    setPage(1);
-  }, [destination]);
+    const targetSector = destination || "All";
+    if (targetSector !== currentSector) {
+      setPage(1);
+    }
+  }, [destination, currentSector]);
   useEffect(() => {
     const fetchRates = async () => {
       try {

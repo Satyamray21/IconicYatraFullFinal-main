@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import axios from "axios";
 import { User } from "../models/user.model.js";
 import { Staff } from "../models/staff.model.js";
 import { StaffPermission } from "../models/staffPermission.model.js";
@@ -8,7 +9,48 @@ import nodemailer from "nodemailer";
 import { OTP } from "../models/otp.model.js";
 import { comparePassword } from "../utils/permission.utils.js";
 import { LoginHistory } from "../models/loginHistory.model.js";
-import { saveLoginHistory as persistLoginHistory } from "../utils/loginHistory.utils.js";
+
+const saveLoginHistory = async (userName, id, staffId, status, req) => {
+  try {
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+      req.connection?.remoteAddress ||
+      req.socket?.remoteAddress ||
+      "IP not found";
+
+    const response = await axios.get(`https://ipapi.co/${ip}/json/`);
+    const { city, region, country_name: country, org: isp } = response.data;
+
+    const now = new Date();
+    // IST is UTC + 5.5 hours
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
+
+    const day = String(istTime.getUTCDate()).padStart(2, "0");
+    const month = String(istTime.getUTCMonth() + 1).padStart(2, "0");
+    const year = istTime.getUTCFullYear();
+    const hours = String(istTime.getUTCHours()).padStart(2, "0");
+    const minutes = String(istTime.getUTCMinutes()).padStart(2, "0");
+    const seconds = String(istTime.getUTCSeconds()).padStart(2, "0");
+
+    const formattedDateTime = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+
+    await LoginHistory.create({
+      userName,
+      userId: id,
+      staffId,
+      status: status === "Success" ? "Login Successful" : "Login Failed",
+      dateTime: formattedDateTime,
+      ip,
+      isp,
+      city,
+      region,
+      country,
+    });
+  } catch (error) {
+    console.error("🚨 Login history error:", error.message);
+  }
+};
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 const ACCESS_TOKEN_EXPIRY = process.env.ACCESS_TOKEN_EXPIRY || "12h";
 
@@ -288,7 +330,7 @@ export const login = async (req, res) => {
     if (user) {
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) {
-        await persistLoginHistory(
+        await saveLoginHistory(
           loginId,
           user._id,
           user.userId || String(user._id),
@@ -298,7 +340,7 @@ export const login = async (req, res) => {
         return res.status(400).json({ error: "Invalid credentials" });
       }
 
-      await persistLoginHistory(
+      await saveLoginHistory(
         user.email || loginId,
         user._id,
         user.userId || String(user._id),
@@ -361,7 +403,7 @@ export const login = async (req, res) => {
     if (!pwdOk) {
       const failedStaff = permission.staffId;
       if (failedStaff?._id) {
-        await persistLoginHistory(
+        await saveLoginHistory(
           loginId,
           failedStaff._id,
           failedStaff.staffId || permission.staffUserId || "",
@@ -382,6 +424,7 @@ export const login = async (req, res) => {
     const token = jwt.sign(
       {
         id: staff._id.toString(),
+        name: staff.personalDetails?.fullName,
         role: permission.role,
         staffUserId: permission.staffUserId,
         loginId: loginId,
@@ -391,7 +434,7 @@ export const login = async (req, res) => {
       { expiresIn: ACCESS_TOKEN_EXPIRY },
     );
 
-    await persistLoginHistory(
+    await saveLoginHistory(
       permission.credentials?.username || loginId,
       staff._id,
       staff.staffId || permission.staffUserId || "",

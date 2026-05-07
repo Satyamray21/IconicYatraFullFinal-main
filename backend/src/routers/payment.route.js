@@ -7,19 +7,21 @@ import {
     deleteVoucher,
     getCompanyTotalPayments,
     getVouchersByQuotationRef,
+    generateReceiptPdf,
 } from "../controllers/payment.controller.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
 router.route("/")
-    .post(requirePermission("canCreateInvoice"), createVoucher)
-    .get(requirePermission("canAccessInvoices"), getAllVouchers);
-router.route("/totalPayment").get(requirePermission("canAccessInvoices"), getCompanyTotalPayments);
-router.get("/by-quotation/:quotationRef", requirePermission("canAccessInvoices"), getVouchersByQuotationRef);
+    .post(requirePermission("canManagePayments"), createVoucher)
+    .get(requirePermission("canAccessPayments"), getAllVouchers);
+router.route("/totalPayment").get(requirePermission("canAccessPayments"), getCompanyTotalPayments);
+router.get("/by-quotation/:quotationRef", requirePermission("canAccessPayments"), getVouchersByQuotationRef);
 router.route("/:id")
-    .get(requirePermission("canAccessInvoices"), getVoucherById)
-    .put(requirePermission("canEditInvoice"), updateVoucher)
-    .delete(requirePermission("canEditInvoice"), deleteVoucher);
+    .get(requirePermission("canAccessPayments"), getVoucherById)
+    .put(requirePermission("canManagePayments"), updateVoucher)
+    .delete(requirePermission("canManagePayments"), deleteVoucher);
+router.get("/:id/receipt", requirePermission("canAccessPayments"), generateReceiptPdf);
 
 export default router;

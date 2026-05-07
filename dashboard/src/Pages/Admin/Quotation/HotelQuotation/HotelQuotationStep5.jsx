@@ -54,11 +54,16 @@ const HotelQuotationStep5 = ({ formData, onBack, onSubmit, submissionStatus }) =
                     Submission Failed
                 </Typography>
                 <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                    There was an error creating your quotation. Please try again.
+                    There was an error creating your quotation. Please check your data and try again.
                 </Typography>
-                <Button variant="contained" onClick={handleFinalSubmit}>
-                    Retry Submission
-                </Button>
+                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
+                    <Button variant="outlined" onClick={onBack}>
+                        Go Back to Edit
+                    </Button>
+                    <Button variant="contained" onClick={handleFinalSubmit}>
+                        Retry Submission
+                    </Button>
+                </Box>
             </Box>
         );
     }
@@ -144,10 +149,26 @@ const HotelQuotationStep5 = ({ formData, onBack, onSubmit, submissionStatus }) =
                 <Typography variant="h6" gutterBottom color="primary">
                     Hotel Configuration
                 </Typography>
-                {step3.sections && step3.sections.length > 0 ? (
-                    <Typography variant="body2">
-                        {step3.sections.length} hotel section(s) configured
-                    </Typography>
+                {step3.hotelSections && step3.hotelSections.length > 0 ? (
+                    <List>
+                        {step3.hotelSections.map((section, index) => (
+                            <ListItem key={index} divider={index !== step3.hotelSections.length - 1}>
+                                <ListItemText
+                                    primary={`${section.city} - ${section.hotelName || 'TBD'}`}
+                                    secondary={
+                                        <React.Fragment>
+                                            <Typography component="span" variant="body2" color="text.primary">
+                                                {section.roomType} | {section.mealPlan}
+                                            </Typography>
+                                            {` — ${section.noRooms} Room(s) for ${section.noNights} Night(s)`}
+                                            <br />
+                                            <strong>Cost:</strong> ₹{section.totalCost}
+                                        </React.Fragment>
+                                    }
+                                />
+                            </ListItem>
+                        ))}
+                    </List>
                 ) : (
                     <Typography variant="body2" color="text.secondary">
                         No hotel configurations added
@@ -160,23 +181,34 @@ const HotelQuotationStep5 = ({ formData, onBack, onSubmit, submissionStatus }) =
                 <Typography variant="h6" gutterBottom color="primary">
                     Transport Details
                 </Typography>
-                <Grid container spacing={2}>
-                    <Grid size={{ xs: 6 }}>
-                        <Typography variant="body2">
-                            <strong>Vehicle:</strong> {step4.vehicleType}
-                        </Typography>
+                {step4 ? (
+                    <Grid container spacing={2}>
+                        <Grid size={{ xs: 6 }}>
+                            <Typography variant="body2">
+                                <strong>Vehicle:</strong> {step4.basicsDetails?.vehicleType || "N/A"}
+                            </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                            <Typography variant="body2">
+                                <strong>Trip Type:</strong> {step4.basicsDetails?.tripType || "N/A"}
+                            </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                            <Typography variant="body2">
+                                <strong>Duration:</strong> {step4.basicsDetails?.noOfDays || "0"} Day(s)
+                            </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                            <Typography variant="body2">
+                                <strong>Total Cost:</strong> ₹{step4.costDetails?.totalCost || "0"}
+                            </Typography>
+                        </Grid>
                     </Grid>
-                    <Grid size={{ xs: 6 }}>
-                        <Typography variant="body2">
-                            <strong>Trip Type:</strong> {step4.tripType}
-                        </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                        <Typography variant="body2">
-                            <strong>Total Cost:</strong> ₹{step4.totalCost}
-                        </Typography>
-                    </Grid>
-                </Grid>
+                ) : (
+                    <Typography variant="body2" color="text.secondary">
+                        No transport details added
+                    </Typography>
+                )}
             </Paper>
 
             {/* Step 5 Review */}

@@ -141,10 +141,8 @@ const HotelFormStep4 = ({ hotelId, onBack, onClose }) => {
     const handleSubmitAll = async () => {
         try {
             // ✅ Validate data before sending
-            if (!peakCosts || !Array.isArray(peakCosts) || peakCosts.length === 0) {
-                console.error("❌ No peak costs to submit");
-                return;
-            }
+            // Peak costs can be empty
+            console.log("🔹 Peak costs to submit:", peakCosts);
 
             console.log("🔹 Peak costs to submit:", peakCosts);
 
@@ -361,9 +359,8 @@ const HotelFormStep4 = ({ hotelId, onBack, onClose }) => {
                             size="small"
                             label="Surcharge Amount *"
                             name="surcharge"
-                            type="number"
                             value={formik.values.surcharge}
-                            onChange={formik.handleChange}
+                            onChange={(e) => formik.setFieldValue("surcharge", e.target.value)}
                             onBlur={formik.handleBlur}
                             error={formik.touched.surcharge && Boolean(formik.errors.surcharge)}
                             helperText={formik.touched.surcharge && formik.errors.surcharge}
@@ -452,10 +449,10 @@ const HotelFormStep4 = ({ hotelId, onBack, onClose }) => {
                     variant="contained"
                     color="success"
                     onClick={handleSubmitAll}
-                    disabled={loading || peakCosts.length === 0}
+                    disabled={loading}
                     startIcon={loading ? <CircularProgress size={20} /> : null}
                 >
-                    {loading ? "Submitting..." : "Final Submit"}
+                    {loading ? "Submitting..." : peakCosts.length === 0 ? "Finish (No Peak Cost)" : "Final Submit"}
                 </Button>
 
                 <Button
@@ -471,7 +468,7 @@ const HotelFormStep4 = ({ hotelId, onBack, onClose }) => {
             {/* Info Message */}
             {peakCosts.length === 0 && (
                 <Alert severity="info" sx={{ mt: 2 }}>
-                    Add at least one peak cost before final submission
+                    You can add peak costs above, or click Finish to complete hotel registration without them.
                 </Alert>
             )}
 

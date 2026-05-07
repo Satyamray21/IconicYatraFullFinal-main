@@ -3,18 +3,24 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../../utils/cloudinary.js";
+import { getCache, setCache, clearPattern } from "../../utils/cache.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 import mongoose from "mongoose";
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
+import EmailAccount from "../../models/emailAccount.model.js";
 import Bank from "../../models/bankDetails.js";
 import GlobalSettings from "../../models/globalSettings.model.js";
 import {
   buildCustomQuotationNormalEmail,
   buildCustomQuotationPdfPreviewEmail,
   buildCustomQuotationBookingEmail,
+  buildHotelConfirmationEmail,
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
 import ReceivedVoucher from "../../models/payment.model.js";
+import { buildHotelConfirmationPdf } from "../../utils/hotelConfirmationPdf.js";
+import { buildPaymentReceiptPdf } from "../../utils/paymentReceiptPdf.js";
 
 // Counter Schema and Model - defined in the same file
 const counterSchema = new mongoose.Schema({
@@ -84,6 +90,14 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
         currentStep: 1,
       });
 
+      await logActivity({
+        action: "CREATE",
+        model: "CustomQuotation",
+        refId: quotationId,
+        description: `Custom Quotation ${quotationId} (${req.body.clientDetails?.clientName || 'Guest'}) created by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+      });
+
       return res
         .status(201)
         .json(
@@ -113,6 +127,8 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
         // Some other error, throw it
         throw error;
       }
+    } finally {
+      await clearPattern('dashboard:stats:*');
     }
   }
 });
@@ -144,30 +160,9 @@ export const getCustomQuotationById = asyncHandler(async (req, res) => {
 export const updateCustomQuotation = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const updatedQuotation = await CustomQuotation.findByIdAndUpdate(
-    id,
-    { $set: req.body },
-    { new: true, runValidators: true },
-  );
-
-  if (!updatedQuotation) {
-    throw new ApiError(404, "Quotation not found");
-  }
-
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, updatedQuotation, "Quotation updated successfully"),
-    );
-});
-
-/** Partial update by business quotationId (e.g. ICYR_CQ_0001) — used from finalize / admin UI */
-export const updateCustomQuotationByQuotationId = asyncHandler(
-  async (req, res) => {
-    const { quotationId } = req.params;
-
-    const updatedQuotation = await CustomQuotation.findOneAndUpdate(
-      { quotationId },
+  try {
+    const updatedQuotation = await CustomQuotation.findByIdAndUpdate(
+      id,
       { $set: req.body },
       { new: true, runValidators: true },
     );
@@ -179,16 +174,49 @@ export const updateCustomQuotationByQuotationId = asyncHandler(
     return res
       .status(200)
       .json(
-        new ApiResponse(
-          200,
-          updatedQuotation,
-          "Quotation updated successfully",
-        ),
+        new ApiResponse(200, updatedQuotation, "Quotation updated successfully"),
       );
+  } catch (error) {
+    throw error;
+  } finally {
+    await clearPattern('dashboard:stats:*');
+  }
+});
+
+/** Partial update by business quotationId (e.g. ICYR_CQ_0001) — used from finalize / admin UI */
+export const updateCustomQuotationByQuotationId = asyncHandler(
+  async (req, res) => {
+    const { quotationId } = req.params;
+
+    try {
+
+      const updatedQuotation = await CustomQuotation.findOneAndUpdate(
+        { quotationId },
+        { $set: req.body },
+        { new: true, runValidators: true },
+      );
+
+      if (!updatedQuotation) {
+        throw new ApiError(404, "Quotation not found");
+      }
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            updatedQuotation,
+            "Quotation updated successfully",
+          ),
+        );
+    } catch (error) {
+      throw error;
+    } finally {
+      await clearPattern('dashboard:stats:*');
+    }
   },
 );
 
-// Step-wise Update
 // Step-wise Update
 export const updateQuotationStep = asyncHandler(async (req, res) => {
   console.log("🔄 ========== UPDATE STEP REQUEST START ==========");
@@ -494,8 +522,11 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error("💥 Error during quotation update:", error);
     throw error;
+  } finally {
+    await clearPattern('dashboard:stats:*');
   }
-});
+}
+);
 
 const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
 
@@ -513,7 +544,35 @@ const resolveCompanyForEmail = async ({ companyId, companyName }) => {
   return null;
 };
 
-const resolveMailAuth = (senderAccount) => {
+const resolveMailAuth = async (senderAccount, selectedCompany) => {
+  // 1. If senderAccount is a valid MongoDB ID, look up in EmailAccount
+  if (senderAccount && senderAccount.length === 24) {
+    try {
+      const account = await EmailAccount.findById(senderAccount).lean();
+      if (account) {
+        return {
+          user: account.email,
+          pass: account.appPassword,
+          service: account.service,
+          host: account.host,
+          port: account.port,
+          secure: account.secure,
+        };
+      }
+    } catch (e) {
+      console.warn("EmailAccount lookup failed:", e.message);
+    }
+  }
+
+  // 2. If company has its own email and app password, use them
+  if (selectedCompany?.email && selectedCompany?.emailAppPassword) {
+    return {
+      user: selectedCompany.email,
+      pass: selectedCompany.emailAppPassword,
+      service: "gmail",
+    };
+  }
+
   const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
 
   const user = useSecondary
@@ -522,12 +581,12 @@ const resolveMailAuth = (senderAccount) => {
 
   const pass = useSecondary
     ? process.env.app_pass2 ||
-      process.env.EMAIL_PASS2 ||
-      process.env.app_pass ||
-      process.env.EMAIL_PASS
+    process.env.EMAIL_PASS2 ||
+    process.env.app_pass ||
+    process.env.EMAIL_PASS
     : process.env.app_pass || process.env.EMAIL_PASS;
 
-  return { user, pass };
+  return { user, pass, service: "gmail" };
 };
 
 
@@ -609,8 +668,8 @@ const loadEmailMeta = async (company) => {
   const accountHolder = company?.companyName;
   const bankDetails = accountHolder
     ? await Bank.find({
-        accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
-      }).lean()
+      accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
+    }).lean()
     : [];
   const pickHttp = (v) => {
     const s = typeof v === "string" ? v.trim() : "";
@@ -636,53 +695,68 @@ export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
   const { finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts } = req.body || {};
 
-  // Support both single and multiple packages
-  let packagesToFinalize = [];
-  
-  if (Array.isArray(finalizedPackages) && finalizedPackages.length > 0) {
-    // Multiple packages - validate each
-    packagesToFinalize = finalizedPackages.filter(pkg => 
-      pkg && String(pkg).trim() && FINAL_PACKAGES.includes(String(pkg).trim())
-    );
-    if (packagesToFinalize.length === 0) {
-      throw new ApiError(400, "At least one valid package required (Standard, Deluxe, or Superior)");
+  try {
+
+    // Support both single and multiple packages
+    let packagesToFinalize = [];
+
+    if (Array.isArray(finalizedPackages) && finalizedPackages.length > 0) {
+      // Multiple packages - validate each
+      packagesToFinalize = finalizedPackages.filter(pkg =>
+        pkg && String(pkg).trim() && FINAL_PACKAGES.includes(String(pkg).trim())
+      );
+      if (packagesToFinalize.length === 0) {
+        throw new ApiError(400, "At least one valid package required (Standard, Deluxe, or Superior)");
+      }
+    } else if (finalizedPackage && String(finalizedPackage).trim()) {
+      // Single package (backward compatibility)
+      const pkg = String(finalizedPackage).trim();
+      if (!FINAL_PACKAGES.includes(pkg)) {
+        throw new ApiError(400, `Invalid package: ${pkg}. Must be Standard, Deluxe, or Superior`);
+      }
+      packagesToFinalize = [pkg];
+    } else {
+      throw new ApiError(400, "finalizedPackage(s) must be Standard, Deluxe, or Superior");
     }
-  } else if (finalizedPackage && String(finalizedPackage).trim()) {
-    // Single package (backward compatibility)
-    const pkg = String(finalizedPackage).trim();
-    if (!FINAL_PACKAGES.includes(pkg)) {
-      throw new ApiError(400, `Invalid package: ${pkg}. Must be Standard, Deluxe, or Superior`);
+
+    const quotation = await CustomQuotation.findOne({ quotationId });
+    if (!quotation) {
+      throw new ApiError(404, "Quotation not found");
     }
-    packagesToFinalize = [pkg];
-  } else {
-    throw new ApiError(400, "finalizedPackage(s) must be Standard, Deluxe, or Superior");
+
+    quotation.finalizeStatus = "finalized";
+    quotation.finalizedPackage = packagesToFinalize[0]; // Keep for backward compatibility
+    quotation.finalizedPackages = packagesToFinalize; // New field for multiple packages
+    quotation.finalizedAt = new Date();
+
+    // Store vendor details with amounts if provided
+    if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {
+      quotation.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts.map(vendor => ({
+        vendorName: vendor.vendorName || "",
+        vendorType: vendor.vendorType || "Other",
+        amount: Number(vendor.amount) || 0,
+        remarks: vendor.remarks || "",
+      }));
+    }
+
+    await quotation.save();
+
+    await logActivity({
+      action: "FINALIZE",
+      model: "CustomQuotation",
+      refId: quotationId,
+      description: `Custom Quotation ${quotationId} (${quotation.clientDetails?.clientName || 'Guest'}) finalized with ${packagesToFinalize.join(", ")} package(s) by ${req.user?.name || 'System'}`,
+      user: req.user?.name || "System",
+    });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, quotation, "Quotation finalized successfully"));
+  } catch (error) {
+    throw error;
+  } finally {
+    await clearPattern('dashboard:stats:*');
   }
-
-  const quotation = await CustomQuotation.findOne({ quotationId });
-  if (!quotation) {
-    throw new ApiError(404, "Quotation not found");
-  }
-
-  quotation.finalizeStatus = "finalized";
-  quotation.finalizedPackage = packagesToFinalize[0]; // Keep for backward compatibility
-  quotation.finalizedPackages = packagesToFinalize; // New field for multiple packages
-  quotation.finalizedAt = new Date();
-
-  // Store vendor details with amounts if provided
-  if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {
-    quotation.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts.map(vendor => ({
-      vendorName: vendor.vendorName || "",
-      vendorType: vendor.vendorType || "Other",
-      amount: Number(vendor.amount) || 0,
-      remarks: vendor.remarks || "",
-    }));
-  }
-
-  await quotation.save();
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, quotation, "Quotation finalized successfully"));
 });
 
 // Build email preview from custom quotation data
@@ -744,6 +818,8 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     companyName,
     pdfAttachment,
     previewPdfMode = false,
+    receiptPdf,
+    paymentVoucherId,
   } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -759,29 +835,37 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   const generatedBody =
     type === "booking"
       ? buildCustomQuotationBookingEmail(
+        quotation,
+        await mergeBookingEmailPayload(
           quotation,
-          await mergeBookingEmailPayload(
-            quotation,
-            meta,
-            readBookingOverridesFromRequest(req.body || {}),
-          ),
-        )
-      : buildCustomQuotationNormalEmail(
-          quotation,
-          customText.normal || {},
           meta,
-        );
+          readBookingOverridesFromRequest(req.body || {}),
+        ),
+      )
+      : buildCustomQuotationNormalEmail(
+        quotation,
+        customText.normal || {},
+        meta,
+      );
   const previewPdfBody = buildCustomQuotationPdfPreviewEmail(
     quotation,
     customText.normal || {},
     meta,
   );
-  const body =
+  let body =
     type === "booking"
       ? generatedBody
       : previewPdfMode
         ? previewPdfBody
         : String(bodyHtml || "").trim() || generatedBody;
+
+  // Append signature if bodyHtml was used and signature is provided
+  if (type !== "booking" && !previewPdfMode && bodyHtml && customText.normal?.signature) {
+    const sig = customText.normal.signature.replace(/\n/g, "<br/>");
+    if (!body.includes(sig)) {
+      body += `<br/><br/>${sig}`;
+    }
+  }
 
   const finalSubject =
     subject ||
@@ -789,7 +873,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
       ? `Booking Confirmation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`
       : `Quotation ${quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}`);
 
-  const auth = resolveMailAuth(senderAccount);
+  const auth = await resolveMailAuth(senderAccount, selectedCompany);
   if (!auth.user || !auth.pass) {
     throw new ApiError(
       500,
@@ -798,20 +882,20 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   }
 
   const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: auth.user,
-      pass: auth.pass,
-    },
+    ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
+    auth: { user: auth.user, pass: auth.pass },
   });
 
-  const providedPdfAttachment =
-    pdfAttachment &&
-    typeof pdfAttachment === "object" &&
-    String(pdfAttachment.contentBase64 || "").trim()
-      ? {
+  const isBookingMail = String(type || "").trim().toLowerCase() === "booking";
+  const attachments = [];
+
+  // 1. Itinerary Attachment (Normal mail only)
+  if (!isBookingMail) {
+    const providedPdfAttachment =
+      pdfAttachment &&
+      typeof pdfAttachment === "object" &&
+      String(pdfAttachment.contentBase64 || "").trim()
+        ? {
           filename: String(pdfAttachment.filename || "quotation.pdf").trim(),
           content: Buffer.from(
             String(pdfAttachment.contentBase64).trim(),
@@ -820,25 +904,47 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
           contentType:
             String(pdfAttachment.mimeType || "").trim() || "application/pdf",
         }
-      : null;
+        : null;
+    
+    if (providedPdfAttachment) attachments.push(providedPdfAttachment);
+  }
 
-    const isBooking = String(type || "").trim().toLowerCase() === "booking";
-
-    try {
-      await transporter.sendMail({
-        from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
-        to,
-        cc: cc && cc.length ? cc : undefined,
-        replyTo: selectedCompany?.email || auth.user,
-        subject: finalSubject,
-        html: body,
-        text: body.replace(/<[^>]*>/g, ""), // fallback
-        attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
+  // 2. Receipt Attachment (Booking mail only)
+  if (isBookingMail) {
+    if (receiptPdf && receiptPdf.contentBase64 && String(receiptPdf.contentBase64).trim()) {
+      attachments.push({
+        filename: receiptPdf.filename || "Payment_Receipt.pdf",
+        content: Buffer.from(String(receiptPdf.contentBase64).trim(), "base64"),
+        contentType: "application/pdf",
       });
-    } catch (error) {
-      console.error("Mail Error:", error);
-      throw new ApiError(500, "Failed to send email");
+    } else if (paymentVoucherId) {
+      const voucher = await ReceivedVoucher.findById(paymentVoucherId).populate("companyId");
+      if (voucher) {
+        const receiptPdfBuffer = await buildPaymentReceiptPdf(voucher, voucher.companyId || selectedCompany);
+        attachments.push({
+          filename: `Payment_Receipt_${voucher.invoiceId || paymentVoucherId}.pdf`,
+          content: receiptPdfBuffer,
+          contentType: "application/pdf",
+        });
+      }
     }
+  }
+
+  try {
+    await transporter.sendMail({
+      from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+      to,
+      cc: cc && cc.length ? cc : undefined,
+      replyTo: selectedCompany?.email || auth.user,
+      subject: finalSubject,
+      html: body,
+      text: body.replace(/<[^>]*>/g, ""), // fallback
+      attachments: attachments,
+    });
+  } catch (error) {
+    console.error("Mail Error:", error);
+    throw new ApiError(500, "Failed to send email");
+  }
 
   return res.status(200).json(
     new ApiResponse(
@@ -863,6 +969,16 @@ export const deleteCustomQuotation = asyncHandler(async (req, res) => {
   if (!deletedQuotation) {
     throw new ApiError(404, "Quotation not found");
   }
+
+  await logActivity({
+    action: "DELETE",
+    model: "CustomQuotation",
+    refId: deletedQuotation.quotationId,
+    description: `Custom Quotation ${deletedQuotation.quotationId} (${deletedQuotation.clientDetails?.clientName || 'Guest'}) deleted by ${req.user?.name || 'System'}`,
+    user: req.user?.name || "System",
+  });
+
+  await clearPattern('dashboard:stats:*');
 
   return res
     .status(200)
@@ -889,79 +1005,296 @@ export const updatePackageCalculations = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
   const { packageCalculations, companyMargin, discount, taxes } = req.body;
 
-  const hasPkg =
-    packageCalculations &&
-    typeof packageCalculations === "object" &&
-    Object.keys(packageCalculations).length > 0;
-  const hasMargin = companyMargin && typeof companyMargin === "object";
-  const hasDiscount = discount !== undefined && discount !== null;
-  const hasTaxes = taxes && typeof taxes === "object";
+  try {
 
-  if (!hasPkg && !hasMargin && !hasDiscount && !hasTaxes) {
-    throw new ApiError(
-      400,
-      "Provide packageCalculations, companyMargin, discount, and/or taxes",
-    );
+    const hasPkg =
+      packageCalculations &&
+      typeof packageCalculations === "object" &&
+      Object.keys(packageCalculations).length > 0;
+    const hasMargin = companyMargin && typeof companyMargin === "object";
+    const hasDiscount = discount !== undefined && discount !== null;
+    const hasTaxes = taxes && typeof taxes === "object";
+
+    if (!hasPkg && !hasMargin && !hasDiscount && !hasTaxes) {
+      throw new ApiError(
+        400,
+        "Provide packageCalculations, companyMargin, discount, and/or taxes",
+      );
+    }
+
+    const quotation = await CustomQuotation.findOne({ quotationId });
+    if (!quotation) {
+      throw new ApiError(404, "Quotation not found");
+    }
+
+    if (!quotation.tourDetails.quotationDetails) {
+      quotation.tourDetails.quotationDetails = {};
+    }
+
+    if (hasPkg) {
+      quotation.tourDetails.quotationDetails.packageCalculations = {
+        ...quotation.tourDetails.quotationDetails.packageCalculations,
+        ...packageCalculations,
+        standard: {
+          ...(quotation.tourDetails.quotationDetails.packageCalculations
+            ?.standard || {}),
+          ...(packageCalculations.standard || {}),
+        },
+        deluxe: {
+          ...(quotation.tourDetails.quotationDetails.packageCalculations
+            ?.deluxe || {}),
+          ...(packageCalculations.deluxe || {}),
+        },
+        superior: {
+          ...(quotation.tourDetails.quotationDetails.packageCalculations
+            ?.superior || {}),
+          ...(packageCalculations.superior || {}),
+        },
+      };
+    }
+
+    if (hasMargin) {
+      quotation.tourDetails.quotationDetails.companyMargin = {
+        ...(quotation.tourDetails.quotationDetails.companyMargin || {}),
+        ...companyMargin,
+      };
+    }
+
+    if (hasDiscount) {
+      quotation.tourDetails.quotationDetails.discount = Number(discount) || 0;
+    }
+
+    if (hasTaxes) {
+      quotation.tourDetails.quotationDetails.taxes = {
+        ...(quotation.tourDetails.quotationDetails.taxes || {}),
+        ...taxes,
+      };
+    }
+
+    await quotation.save();
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          quotation,
+          "Package calculations updated successfully",
+        ),
+      );
+  } catch (error) {
+    throw error;
+  } finally {
+    await clearPattern('dashboard:stats:*');
   }
+});
+export const saveConfirmedHotels = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmedHotels } = req.body;
 
-  const quotation = await CustomQuotation.findOne({ quotationId });
-  if (!quotation) {
-    throw new ApiError(404, "Quotation not found");
+    const quotation = await CustomQuotation.findById(id);
+    if (!quotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    quotation.confirmedHotels = confirmedHotels;
+    await quotation.save();
+
+    res.status(200).json(new ApiResponse(200, quotation, "Confirmed hotels saved successfully"));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
+};
 
-  if (!quotation.tourDetails.quotationDetails) {
-    quotation.tourDetails.quotationDetails = {};
+export const sendHotelConfirmationMail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { toEmail, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
+
+    const quotation = await CustomQuotation.findById(id).lean();
+    if (!quotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    const company = await resolveCompanyForEmail({ 
+      companyId: req.body.companyId || req.user?.companyId, 
+      companyName: req.body.companyName || "Iconic Travel" 
+    });
+
+    if (!company) {
+      return res.status(404).json({ message: "Company settings not found" });
+    }
+
+    const meta = await loadBookingPaymentDefaults(quotation);
+    const td = quotation?.tourDetails || {};
+    const qd = td?.quotationDetails || {};
+    const destinations = qd?.destinations || [];
+
+    const adults = Number(quotation?.clientDetails?.adults || qd?.adults) || 0;
+    const children = Number(quotation?.clientDetails?.children || qd?.children) || 0;
+    const kids = Number(quotation?.clientDetails?.kids || qd?.kids) || 0;
+
+    const options = {
+      ...meta,
+      ...company,
+      ...customText,
+      guestsLine: `${adults} Adults, ${children + kids} Child`,
+      roomsLine: `${qd?.rooms?.numberOfRooms || 1} ${qd?.rooms?.sharingType || "Double sharing"}`,
+      packageType: quotation?.finalizedPackage || "Family Tour Package",
+      duration: {
+        nights: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0),
+        days: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0) + 1
+      },
+      startDate: td?.arrivalDate,
+      endDate: td?.departureDate,
+      packageTitle: td?.quotationTitle,
+      destinationSummary: td?.destinationSummary,
+      stayLocations: quotation?.pickupDrop || [],
+      pickupPoint: td?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint,
+      dropPoint: td?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint,
+      mealPlan: qd?.mealPlan || quotation?.mealPlan
+    };
+
+    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
+    
+    const auth = await resolveMailAuth(senderAccount, company);
+
+    const transporter = nodemailer.createTransport({
+      ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
+      auth: { user: auth.user, pass: auth.pass },
+    });
+
+    const guestName = quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
+
+    const mailOptions = {
+      from: `"${options.companyName}" <${auth.user}>`,
+      to: toEmail || quotation.clientDetails?.email,
+      subject: `Hotel Confirmation Voucher - ${quotation.quotationId}`,
+      html: `
+        <p>Dear ${guestName},</p>
+        <p>Please find attached the <b>Hotel Confirmation Voucher</b> for your upcoming trip.</p>
+        <p>Thank you for choosing ${options.companyName}.</p>
+        <br/>
+        ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
+        <br/>
+        ${options.signature ? options.signature : `
+        <p>Best Regards,</p>
+        <p><b>${options.companyName}</b></p>
+        `}
+      `,
+      attachments: [
+        {
+          filename: `Hotel_Confirmation_${quotation.quotationId}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        }
+      ]
+    };
+
+    if (receiptPdf && receiptPdf.contentBase64) {
+      mailOptions.attachments.push({
+        filename: receiptPdf.filename || "Payment_Receipt.pdf",
+        content: Buffer.from(receiptPdf.contentBase64, "base64"),
+        contentType: "application/pdf",
+      });
+    } else if (paymentVoucherId) {
+      const voucher = await ReceivedVoucher.findById(paymentVoucherId).populate("companyId");
+      if (voucher) {
+        const receiptPdfBuffer = await buildPaymentReceiptPdf(voucher, voucher.companyId || company);
+        mailOptions.attachments.push({
+          filename: `Payment_Receipt_${voucher.invoiceId || paymentVoucherId}.pdf`,
+          content: receiptPdfBuffer,
+          contentType: "application/pdf",
+        });
+      }
+    }
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json(new ApiResponse(200, null, "Hotel confirmation mail sent successfully"));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
+};
 
-  if (hasPkg) {
-    quotation.tourDetails.quotationDetails.packageCalculations = {
-      ...quotation.tourDetails.quotationDetails.packageCalculations,
-      ...packageCalculations,
-      standard: {
-        ...(quotation.tourDetails.quotationDetails.packageCalculations
-          ?.standard || {}),
-        ...(packageCalculations.standard || {}),
+export const previewHotelConfirmation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { customText } = req.body;
+
+    const quotation = await CustomQuotation.findById(id).lean();
+    if (!quotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    const company = await resolveCompanyForEmail({ 
+      companyId: req.body.companyId || req.user?.companyId, 
+      companyName: req.body.companyName || "Iconic Travel" 
+    });
+
+    const meta = await loadBookingPaymentDefaults(quotation);
+    const td = quotation?.tourDetails || {};
+    const qd = td?.quotationDetails || {};
+    const destinations = qd?.destinations || [];
+
+    const adults = Number(quotation?.clientDetails?.adults || qd?.adults) || 0;
+    const children = Number(quotation?.clientDetails?.children || qd?.children) || 0;
+    const kids = Number(quotation?.clientDetails?.kids || qd?.kids) || 0;
+
+    const options = {
+      ...meta,
+      ...company,
+      ...customText,
+      guestsLine: `${adults} Adults, ${children + kids} Child`,
+      roomsLine: `${qd?.rooms?.numberOfRooms || 1} ${qd?.rooms?.sharingType || "Double sharing"}`,
+      packageType: quotation?.finalizedPackage || "Family Tour Package",
+      duration: {
+        nights: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0),
+        days: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0) + 1
       },
-      deluxe: {
-        ...(quotation.tourDetails.quotationDetails.packageCalculations
-          ?.deluxe || {}),
-        ...(packageCalculations.deluxe || {}),
-      },
-      superior: {
-        ...(quotation.tourDetails.quotationDetails.packageCalculations
-          ?.superior || {}),
-        ...(packageCalculations.superior || {}),
-      },
+      startDate: td?.arrivalDate,
+      endDate: td?.departureDate,
+      packageTitle: td?.quotationTitle,
+      destinationSummary: td?.destinationSummary,
+      stayLocations: quotation?.pickupDrop || [],
+      pickupPoint: td?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint,
+      dropPoint: td?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint,
+      mealPlan: qd?.mealPlan || quotation?.mealPlan
+    };
+
+    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    res.status(200).json(new ApiResponse(200, { html: htmlBody }, "Preview generated"));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get a simplified list of quotations for selection dropdowns
+export const getQuotationList = asyncHandler(async (req, res) => {
+  const { search } = req.query;
+  let query = {};
+  
+  if (search) {
+    query = {
+      $or: [
+        { quotationId: { $regex: search, $options: "i" } },
+        { "clientDetails.clientName": { $regex: search, $options: "i" } }
+      ]
     };
   }
 
-  if (hasMargin) {
-    quotation.tourDetails.quotationDetails.companyMargin = {
-      ...(quotation.tourDetails.quotationDetails.companyMargin || {}),
-      ...companyMargin,
-    };
-  }
+  const quotations = await CustomQuotation.find(query)
+    .select("_id quotationId clientDetails.clientName")
+    .limit(20)
+    .sort({ createdAt: -1 });
 
-  if (hasDiscount) {
-    quotation.tourDetails.quotationDetails.discount = Number(discount) || 0;
-  }
+  const formattedQuotations = quotations.map(q => ({
+    _id: q._id,
+    quotationId: q.quotationId,
+    clientName: q.clientDetails?.clientName || "N/A"
+  }));
 
-  if (hasTaxes) {
-    quotation.tourDetails.quotationDetails.taxes = {
-      ...(quotation.tourDetails.quotationDetails.taxes || {}),
-      ...taxes,
-    };
-  }
-
-  await quotation.save();
-
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        quotation,
-        "Package calculations updated successfully",
-      ),
-    );
+  return res.status(200).json(new ApiResponse(200, formattedQuotations, "Quotation list fetched successfully"));
 });

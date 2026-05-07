@@ -2,9 +2,12 @@ import { Vehicle } from "../../models/quotation/vehicle.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { clearPattern } from "../../utils/cache.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 import { Lead } from "../../models/lead.model.js";
 import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
+import EmailAccount from "../../models/emailAccount.model.js";
 import ReceivedVoucher from "../../models/payment.model.js";
 import {
   buildVehicleQuotationBookingEmail,
@@ -144,6 +147,15 @@ export const createVehicle = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Failed to create vehicle quotation");
   }
 
+  await logActivity({
+    action: "CREATE",
+    model: "VehicleQuotation",
+    refId: vehicleQuotationId,
+    description: `Vehicle Quotation ${vehicleQuotationId} (${clientName}) created by ${req.user?.name || 'System'}`,
+    user: req.user?.name || "System",
+  });
+
+  await clearPattern('dashboard:stats:*');
   return res
     .status(201)
     .json(
@@ -257,6 +269,7 @@ export const updateVehicle = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Vehicle quotation not found");
   }
 
+  await clearPattern('dashboard:stats:*');
   return res
     .status(200)
     .json(
@@ -276,6 +289,16 @@ export const deleteVehicle = asyncHandler(async (req, res) => {
   if (!deletedVehicle) {
     throw new ApiError(404, "Vehicle quotation not found");
   }
+
+  await logActivity({
+    action: "DELETE",
+    model: "VehicleQuotation",
+    refId: vehicleQuotationId,
+    description: `Vehicle Quotation ${vehicleQuotationId} (${deletedVehicle.basicsDetails?.clientName || 'Guest'}) deleted by ${req.user?.name || 'System'}`,
+    user: req.user?.name || "System",
+  });
+
+  await clearPattern('dashboard:stats:*');
 
   return res
     .status(200)
@@ -378,6 +401,7 @@ export const updateVehicleQuotationByQuotationId = asyncHandler(
       "personalDetails.fullName": updatedVehicle.basicsDetails.clientName,
     });
 
+    await clearPattern('dashboard:stats:*');
     return res
       .status(200)
       .json(
@@ -418,6 +442,7 @@ export const finalizeVehicleQuotation = asyncHandler(async (req, res) => {
 
   await vehicle.save();
 
+  await clearPattern('dashboard:stats:*');
   return res
     .status(200)
     .json(
@@ -439,21 +464,51 @@ const resolveCompanyForEmail = async ({ companyId, companyName }) => {
   return null;
 };
 
-const resolveMailAuth = (senderAccount) => {
+const resolveMailAuth = async (senderAccount, selectedCompany) => {
+  // 1. If senderAccount is a valid MongoDB ID, look up in EmailAccount
+  if (senderAccount && senderAccount.length === 24) {    try {
+      const account = await EmailAccount.findById(senderAccount).lean();
+      if (account) {
+        return {
+          user: account.email,
+          pass: account.appPassword,
+          service: account.service,
+          host: account.host,
+          port: account.port,
+          secure: account.secure,
+        };
+      }
+    } catch (e) {
+      console.warn("EmailAccount lookup failed:", e.message);
+    }
+  }
+
+  // 2. If company has its own email and app password, use them
+  if (selectedCompany?.email && selectedCompany?.emailAppPassword) {
+    return {
+      user: selectedCompany.email,
+      pass: selectedCompany.emailAppPassword,
+      service: "gmail",
+    };
+  }
+
   const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
-  const user = useSecondary
-    ? process.env.gmail2 ||
-    process.env.EMAIL_USER2 ||
-    process.env.gmail ||
-    process.env.EMAIL_USER
-    : process.env.gmail || process.env.EMAIL_USER;
-  const pass = useSecondary
-    ? process.env.app_pass2 ||
-    process.env.EMAIL_PASS2 ||
-    process.env.app_pass ||
-    process.env.EMAIL_PASS
-    : process.env.app_pass || process.env.EMAIL_PASS;
-  return { user, pass };
+  const user =
+    useSecondary
+      ? process.env.gmail2 ||
+      process.env.EMAIL_USER2 ||
+      process.env.gmail ||
+      process.env.EMAIL_USER
+      : process.env.gmail || process.env.EMAIL_USER;
+  const pass =
+    useSecondary
+      ? process.env.app_pass2 ||
+      process.env.EMAIL_PASS2 ||
+      process.env.app_pass ||
+      process.env.EMAIL_PASS
+      : process.env.app_pass || process.env.EMAIL_PASS;
+
+  return { user, pass, service: "gmail" };
 };
 
 const sumReceivedFromClient = (vouchers = []) => {
@@ -553,7 +608,7 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
     companyId,
     companyName,
   });
-  const auth = resolveMailAuth(senderAccount);
+  const auth = await resolveMailAuth(senderAccount, selectedCompany);
   if (!auth.user || !auth.pass) {
     throw new ApiError(
       500,
@@ -576,21 +631,31 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
   }).lean();
   const receivedAmount = sumReceivedFromClient(vouchers);
 
-  const generatedBody =
-    type === "booking"
-      ? buildVehicleQuotationBookingEmail(quotationData, {
-        ...companyMeta,
-        ...(customText?.booking || {}),
-        receivedAmount,
-      })
-      : buildVehicleQuotationPdfPreviewEmail(quotationData, companyMeta);
+  const isBookingMail = type === "booking";
+  const companyMetaWithCustom = {
+    ...companyMeta,
+    receivedAmount,
+    signature: customText?.signature,
+    ...(isBookingMail ? (customText?.booking || {}) : (customText?.normal || {})),
+  };
 
-  const body =
-    type === "booking"
+  const generatedBody = isBookingMail
+      ? buildVehicleQuotationBookingEmail(quotationData, companyMetaWithCustom)
+      : buildVehicleQuotationPdfPreviewEmail(quotationData, companyMetaWithCustom);
+
+  let body = isBookingMail
       ? generatedBody
       : previewPdfMode
-        ? buildVehicleQuotationPdfPreviewEmail(quotationData, companyMeta)
+        ? generatedBody
         : String(bodyHtml || "").trim() || generatedBody;
+
+  // Append signature if bodyHtml was used and signature is provided
+  if (!isBookingMail && !previewPdfMode && bodyHtml && companyMetaWithCustom.signature) {
+    const sig = companyMetaWithCustom.signature.replace(/\n/g, "<br/>");
+    if (!body.includes(sig)) {
+      body += `<br/><br/>${sig}`;
+    }
+  }
 
   const finalSubject =
     subject ||
@@ -599,9 +664,7 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
       : `Quotation ${vehicleQuotationId} - ${vehicle?.basicsDetails?.clientName || "Guest"}`);
 
   const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
+    ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
     auth: { user: auth.user, pass: auth.pass },
   });
 

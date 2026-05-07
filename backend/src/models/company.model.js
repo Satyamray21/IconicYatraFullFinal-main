@@ -6,6 +6,7 @@ const companySchema = new mongoose.Schema(
     address: { type: String, required: true },
     phone: { type: String },
     email: { type: String },
+    emailAppPassword: { type: String }, // App password for SMTP
     gstin: { type: String },
     stateCode: { type: String },
     logo: { type: String },

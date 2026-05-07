@@ -1,11 +1,13 @@
 import { Router } from "express";
 import {
     createLead, viewAllLeads, updateLead, deleteLead, viewAllLeadsReports, viewByLeadId, changeLeadStatus,
-    getLeadOptions, addLeadOption
+    getLeadOptions, addLeadOption, getLeadsByStaff
 } from "../controllers/lead.controller.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
 const router = Router();
+
+router.get("/assigned-to/:staffName", getLeadsByStaff);
 
 router
     .route("/create")

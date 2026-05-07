@@ -155,11 +155,14 @@ const GlobalSettings = lazy(()=>
 import("../Pages/Admin/Profile/components/GlobalSettings")
 );
 
-const CompanyForm =lazy(()=>
-import("../Pages/Admin/Profile/components/CompanyForm")
+const CompanyForm = lazy(() =>
+  import("../Pages/Admin/Profile/components/CompanyForm")
 );
-const InsideCompanyList =lazy(()=>
-import("../Pages/Admin/Profile/components/InsideCompanyList")
+const InsideCompanyList = lazy(() =>
+  import("../Pages/Admin/Profile/components/InsideCompanyList")
+);
+const EmailAccounts = lazy(() =>
+  import("../Pages/Admin/Profile/components/EmailAccounts")
 );
 
 const GoogleAdsLandingForm = lazy(() =>
@@ -404,6 +407,7 @@ const MainRoute = () => {
           <Route path="/quickfinalize/:id" element={<QuickFinalize />} />
           <Route path="/terms&condition" element={<GlobalSettings />} />
           <Route path="/admin/inside-company" element={<InsideCompanyList />} />
+          <Route path="/email-accounts" element={<EmailAccounts />} />
 
 <Route path="/admin/inside-company/add" element={<CompanyForm />} />
 <Route path="/admin/inside-company/edit/:id" element={<CompanyForm />} />  

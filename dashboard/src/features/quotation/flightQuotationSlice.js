@@ -69,11 +69,11 @@ export const deleteFlightQuotationById = createAsyncThunk(
 // Confirm flight quotation (Completed → Confirmed)
 export const confirmFlightQuotation = createAsyncThunk(
     "flightQuotation/confirm",
-    async ({ flightQuotationId, pnrList, finalFareList, finalFare }, { rejectWithValue }) => {
+    async ({ flightQuotationId, pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount, companyId, companyName }, { rejectWithValue }) => {
         try {
             const { data } = await axios.patch(
                 `flightQT/confirm/${flightQuotationId}`,
-                { pnrList, finalFareList, finalFare } // ✅ Added finalFare to request body
+                { pnrList, finalFareList, finalFare, baseFare, gstType, gstPercentage, gstAmount, companyId, companyName } // ✅ Added all fields
             );
             return data.data;
         } catch (err) {

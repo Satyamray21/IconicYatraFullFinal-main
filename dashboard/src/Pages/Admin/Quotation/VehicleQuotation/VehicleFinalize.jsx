@@ -232,6 +232,13 @@ const VehicleQuotationPage = () => {
     (state) => state.vehicleQuotation,
   );
   const { data: company, status } = useSelector((state) => state.companyUI);
+
+  const apiEntityId = React.useMemo(() => {
+    if (q?.vehicle?.vehicleQuotationId) return String(q.vehicle.vehicleQuotationId);
+    if (q?.vehicle?._id) return String(q.vehicle._id);
+    if (id && /^[a-f\d]{24}$/i.test(String(id))) return String(id);
+    return id;
+  }, [q?.vehicle?.vehicleQuotationId, q?.vehicle?._id, id]);
   // Initialize local itinerary from API data
   useEffect(() => {
     if (q?.vehicle?.itinerary) {
@@ -276,6 +283,7 @@ const VehicleQuotationPage = () => {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
   const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailAccounts, setEmailAccounts] = useState([]);
   const [selectedMailCompanyId, setSelectedMailCompanyId] = useState("");
   const [emailTemplateBodies, setEmailTemplateBodies] = useState({
     normal: { subject: "", message: "" },
@@ -324,11 +332,11 @@ const VehicleQuotationPage = () => {
   }, [dispatch, id]);
 
   const loadPaymentHistory = async () => {
-    if (!id) return;
+    if (!apiEntityId) return;
     setPaymentHistoryLoading(true);
     try {
       const res = await axios.get(
-        `/payment/by-quotation/${encodeURIComponent(id)}`,
+        `/payment/by-quotation/${encodeURIComponent(apiEntityId)}`,
       );
       setPaymentHistory(res.data?.data || []);
     } catch (e) {
@@ -393,10 +401,20 @@ const VehicleQuotationPage = () => {
     fetchGlobalSettings();
   }, []);
 
+  const fetchEmailAccounts = async () => {
+    try {
+      const res = await axios.get("/email-accounts");
+      setEmailAccounts(Array.isArray(res?.data?.data) ? res.data.data : []);
+    } catch {
+      setEmailAccounts([]);
+    }
+  };
+
   useEffect(() => {
     loadPaymentHistory();
     loadMailCompanies();
-  }, [id]);
+    fetchEmailAccounts();
+  }, [apiEntityId]);
 
   const actions = [
     "Finalize",
@@ -875,18 +893,21 @@ const VehicleQuotationPage = () => {
         senderAccount: values?.senderAccount || "gmail1",
         companyId: values?.companyId || undefined,
         companyName: selectedCompany?.companyName || undefined,
-        customText: isBookingMail
-          ? {
-            booking: {
-              ...(values?.nextPayableAmount
-                ? { nextPayableAmount: Number(values.nextPayableAmount) }
-                : {}),
-              ...(values?.paymentDueDate
-                ? { dueDate: values.paymentDueDate }
-                : {}),
-            },
-          }
-          : undefined,
+        customText: {
+          signature: values?.signature || undefined,
+          normal: {
+            signature: values?.signature || undefined,
+          },
+          booking: {
+            signature: values?.signature || undefined,
+            ...(values?.nextPayableAmount
+              ? { nextPayableAmount: Number(values.nextPayableAmount) }
+              : {}),
+            ...(values?.paymentDueDate
+              ? { dueDate: values.paymentDueDate }
+              : {}),
+          },
+        },
         previewPdfMode:
           !isBookingMail &&
           !!pdfAttachmentForMail?.contentBase64 &&
@@ -1070,7 +1091,7 @@ const VehicleQuotationPage = () => {
       subject: tpl?.subject || "",
       greetLine: "Please find below details:",
       message: tpl?.message || "",
-      signature: "Warm Regards,\nReservation Team\nIconic Travel",
+      signature: "",
       mailType: type,
       senderAccount: "gmail1",
       companyId: selectedMailCompanyId || mailCompanies?.[0]?._id || "",
@@ -2284,7 +2305,6 @@ const VehicleQuotationPage = () => {
         open={openEmailDialog}
         onClose={handleEmailClose}
         onSend={handleEmailSend}
-        hasPdfAttachment={!!pdfAttachmentForMail?.contentBase64}
         onCompanyChange={async (companyId, mailType) => {
           setSelectedMailCompanyId(companyId);
           const templates = await refreshEmailTemplates(companyId);
@@ -2294,6 +2314,8 @@ const VehicleQuotationPage = () => {
         initialValuesOverride={emailInitialValues}
         templateBodies={emailTemplateBodies}
         companyOptions={mailCompanies}
+        emailAccountOptions={emailAccounts}
+        hasPdfAttachment={!!pdfAttachmentForMail}
       />
 
       <TransactionHistoryDialog

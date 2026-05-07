@@ -86,34 +86,29 @@ export const fetchInternationalCities = createAsyncThunk(
    =========================================================== */
 
 /**
- * ✅ Fetch ALL cities of India
- */
-export const fetchAllIndianCities = createAsyncThunk(
-    "countryStateAndCity/fetchAllIndianCities",
-    async (_, { rejectWithValue }) => {
-        try {
-            const allCities = City.getCitiesOfCountry("IN");
-            return allCities.map((city) => city.name);
-        } catch (error) {
-            return rejectWithValue(error.message);
-        }
-    }
-);
-
-/**
- * ✅ Fetch all cities of selected international country
+ * ✅ Fetch ALL cities of a country via Backend (Redis Cached)
  */
 export const fetchAllCitiesByCountry = createAsyncThunk(
     "countryStateAndCity/fetchAllCitiesByCountry",
     async (countryName, { rejectWithValue }) => {
         try {
-            const country = Country.getAllCountries().find(
-                (c) => c.name.toLowerCase() === countryName.toLowerCase()
-            );
-            if (!country) throw new Error(`Country not found: ${countryName}`);
+            const { data } = await axios.get(`countryStateAndCity/cities/${countryName}`);
+            // Return only names for consistency with existing usage
+            return data.cities.map(city => city.name);
+        } catch (error) {
+            return rejectWithValue(error.response?.data || error.message);
+        }
+    }
+);
 
-            const cities = City.getCitiesOfCountry(country.isoCode);
-            return cities.map((city) => city.name);
+/**
+ * ✅ Fetch ALL cities of India (Legacy name, now uses backend)
+ */
+export const fetchAllIndianCities = createAsyncThunk(
+    "countryStateAndCity/fetchAllIndianCities",
+    async (_, { dispatch, rejectWithValue }) => {
+        try {
+            return await dispatch(fetchAllCitiesByCountry("India")).unwrap();
         } catch (error) {
             return rejectWithValue(error.message);
         }
