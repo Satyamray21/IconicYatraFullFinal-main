@@ -362,6 +362,58 @@ const PackageEditView = () => {
     }
   }, [current, initialized, id, dispatch]);
 
+  // Sync destinationNights with stayLocations
+  useEffect(() => {
+    if (!initialized || !pkg.stayLocations) return;
+
+    setPkg((prev) => {
+      const currentDestinations = prev.destinationNights || [];
+      const newStayLocations = prev.stayLocations || [];
+
+      // Create a map of existing destination data to preserve hotel info
+      // We use a map to quickly look up by city name
+      const destinationMap = {};
+      currentDestinations.forEach((dest) => {
+        if (dest.destination) {
+          destinationMap[dest.destination] = dest;
+        }
+      });
+
+      // Build new destinationNights based on stayLocations
+      const updatedDestinationNights = newStayLocations.map((stay) => {
+        const cityName = stay.city || "";
+        const existing = destinationMap[cityName];
+        
+        return {
+          destination: cityName,
+          nights: parseInt(stay.nights) || 1,
+          hotels: existing?.hotels || [
+            { category: "standard", hotelName: "TBD", pricePerPerson: 0 },
+            { category: "deluxe", hotelName: "TBD", pricePerPerson: 0 },
+            { category: "superior", hotelName: "TBD", pricePerPerson: 0 },
+          ],
+        };
+      });
+
+      // Only update if there's a real change to avoid infinite loops
+      // We check length and destination/nights values
+      const hasChanged = 
+        updatedDestinationNights.length !== currentDestinations.length ||
+        updatedDestinationNights.some((dest, i) => {
+          const oldDest = currentDestinations[i];
+          return !oldDest || 
+                 dest.destination !== oldDest.destination || 
+                 dest.nights !== oldDest.nights;
+        });
+
+      if (hasChanged) {
+        console.log("Syncing destinationNights with stayLocations:", updatedDestinationNights);
+        return { ...prev, destinationNights: updatedDestinationNights };
+      }
+      return prev;
+    });
+  }, [pkg.stayLocations, initialized]);
+
   // Loading state
   if (loading && !initialized) {
     return (

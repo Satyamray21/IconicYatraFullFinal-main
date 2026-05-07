@@ -410,19 +410,25 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
         const existingDest = tourDetails.destinationNights.find(
           (dest) => dest.destination === city,
         );
-        return (
-          existingDest || {
-            destination: city,
-            nights:
-              packageData.stayLocations.find((loc) => loc.city === city)
-                ?.nights || 0,
-            hotels: [
-              { category: "standard", hotelName: "TBD", pricePerPerson: 0 },
-              { category: "deluxe", hotelName: "TBD", pricePerPerson: 0 },
-              { category: "superior", hotelName: "TBD", pricePerPerson: 0 },
-            ],
-          }
-        );
+        const stayLoc = packageData.stayLocations.find((loc) => loc.city === city);
+        const nights = stayLoc?.nights || 0;
+
+        if (existingDest) {
+          return {
+            ...existingDest,
+            nights: nights,
+          };
+        }
+
+        return {
+          destination: city,
+          nights: nights,
+          hotels: [
+            { category: "standard", hotelName: "TBD", pricePerPerson: 0 },
+            { category: "deluxe", hotelName: "TBD", pricePerPerson: 0 },
+            { category: "superior", hotelName: "TBD", pricePerPerson: 0 },
+          ],
+        };
       });
 
       console.log("🔄 Updated destination nights:", updatedDestinationNights);
