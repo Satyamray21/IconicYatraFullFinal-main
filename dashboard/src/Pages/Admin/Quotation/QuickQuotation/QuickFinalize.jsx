@@ -63,6 +63,8 @@ import {
   Download,
   Error,
   Calculate,
+  ArrowUpward,
+  ArrowDownward,
 } from "@mui/icons-material";
 
 import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
@@ -2649,6 +2651,69 @@ const QuickFinalize = () => {
     await persistItineraryForDays(next);
   };
 
+  const handleMoveDestination = async (index, direction) => {
+    const destinations = snap.destinationNights || [];
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= destinations.length) return;
+
+    setItinerarySaving(true);
+    try {
+      const nextDestinations = [...destinations];
+      const [movedDest] = nextDestinations.splice(index, 1);
+      nextDestinations.splice(nextIndex, 0, movedDest);
+
+      const nextDays = [...days];
+      const getDayRange = (idx) => {
+        let start = 0;
+        for (let i = 0; i < idx; i++) {
+          start += Number(destinations[i].nights) || 0;
+        }
+        return { start, count: Number(destinations[idx].nights) || 0 };
+      };
+
+      const range1 = getDayRange(index);
+      const range2 = getDayRange(nextIndex);
+
+      if (direction === 1) {
+        const block1 = nextDays.splice(range1.start, range1.count);
+        nextDays.splice(range1.start + range2.count, 0, ...block1);
+      } else {
+        const block2 = nextDays.splice(range2.start, range2.count);
+        nextDays.splice(range2.start + range1.count, 0, ...block2);
+      }
+
+      setDays(nextDays);
+
+      const pkgDays = nextDays.map((d) => ({
+        title: d.title || "",
+        notes: d.description || d.notes || "",
+        aboutCity: "",
+        dayImage: d.image?.url || d.image?.preview || "",
+      }));
+
+      await dispatch(
+        updateQuickQuotation({
+          id: apiEntityId,
+          formData: {
+            packageSnapshot: {
+              ...currentQuotation.packageSnapshot,
+              destinationNights: nextDestinations,
+              days: pkgDays,
+            },
+          },
+        }),
+      ).unwrap();
+
+      await refreshQuotationFromApi();
+      setSnackbar({ open: true, message: "Destinations reordered", severity: "success" });
+    } catch (e) {
+      console.error(e);
+      setSnackbar({ open: true, message: "Failed to reorder", severity: "error" });
+    } finally {
+      setItinerarySaving(false);
+    }
+  };
+
   // PDF Dialog Handlers - FIXED VERSION
   const handlePreviewPdf = () => {
     console.log("Opening PDF dialog...");
@@ -3552,6 +3617,32 @@ const QuickFinalize = () => {
                               <Box>
                                 <IconButton
                                   size="small"
+                                  disabled={index === 0 || itinerarySaving}
+                                  onClick={async () => {
+                                    const next = [...days];
+                                    const [moved] = next.splice(index, 1);
+                                    next.splice(index - 1, 0, moved);
+                                    setDays(next);
+                                    await persistItineraryForDays(next);
+                                  }}
+                                >
+                                  <ArrowUpward fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  disabled={index === days.length - 1 || itinerarySaving}
+                                  onClick={async () => {
+                                    const next = [...days];
+                                    const [moved] = next.splice(index, 1);
+                                    next.splice(index + 1, 0, moved);
+                                    setDays(next);
+                                    await persistItineraryForDays(next);
+                                  }}
+                                >
+                                  <ArrowDownward fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
                                   disabled={itinerarySaving}
                                   onClick={() =>
                                     handleEditItinerary(day, index)
@@ -3734,6 +3825,7 @@ const QuickFinalize = () => {
                             {h}
                           </TableCell>
                         ))}
+                        <TableCell sx={{ color: "white", fontWeight: "bold" }}>Actions</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -3773,6 +3865,26 @@ const QuickFinalize = () => {
                             {showStandardCol && <TableCell>{row.standard}</TableCell>}
                             {showDeluxeCol && <TableCell>{row.deluxe}</TableCell>}
                             {showSuperiorCol && <TableCell>{row.superior}</TableCell>}
+                            <TableCell>
+                              {!isSummaryRow(row) && (
+                                <Box sx={{ display: "flex", gap: 0.5 }}>
+                                  <IconButton
+                                    size="small"
+                                    disabled={index === 0 || itinerarySaving}
+                                    onClick={() => handleMoveDestination(index, -1)}
+                                  >
+                                    <ArrowUpward fontSize="small" />
+                                  </IconButton>
+                                  <IconButton
+                                    size="small"
+                                    disabled={index === (snap.destinationNights?.length - 1) || itinerarySaving}
+                                    onClick={() => handleMoveDestination(index, 1)}
+                                  >
+                                    <ArrowDownward fontSize="small" />
+                                  </IconButton>
+                                </Box>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))
                       )}
