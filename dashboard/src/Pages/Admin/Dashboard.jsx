@@ -95,7 +95,7 @@ const CHART_STROKE = "#6366F1"; // Indigo
 const CHART_DOT_FILL = "#8B5CF6";
 const CHART_DOT_STROKE = "#FFFFFF";
 
-const GlassCard = ({ children, sx, noPadding = false }) => (
+const GlassCard = React.memo(({ children, sx, noPadding = false }) => (
   <Card
     sx={{
       borderRadius: 6,
@@ -114,9 +114,10 @@ const GlassCard = ({ children, sx, noPadding = false }) => (
   >
     {noPadding ? children : <CardContent sx={{ p: 3 }}>{children}</CardContent>}
   </Card>
-);
+));
+GlassCard.displayName = "GlassCard";
 
-const StatCard = ({ title, value, icon, color, trend, trendValue, delay = 0 }) => (
+const StatCard = React.memo(({ title, value, icon, color, trend, trendValue, delay = 0 }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -187,9 +188,10 @@ const StatCard = ({ title, value, icon, color, trend, trendValue, delay = 0 }) =
       </Box>
     </GlassCard>
   </motion.div>
-);
+));
+StatCard.displayName = "StatCard";
 
-const MiniStat = ({ title, value, icon, color }) => (
+const MiniStat = React.memo(({ title, value, icon, color }) => (
   <Box display="flex" alignItems="center" gap={2} p={2.5} sx={{ borderRadius: 4, bgcolor: "#f8fafc", border: "1px solid rgba(25,118,210,0.08)", transition: "all 0.2s", "&:hover": { bgcolor: "#f1f5f9", borderColor: "rgba(25,118,210,0.15)" } }}>
     <Avatar sx={{ bgcolor: `${color}15`, color: color, width: 44, height: 44, borderRadius: 3 }}>{icon}</Avatar>
     <Box>
@@ -197,7 +199,76 @@ const MiniStat = ({ title, value, icon, color }) => (
       <Typography variant="h6" fontWeight={800} sx={{ color: "#1a1a2e" }}>{value}</Typography>
     </Box>
   </Box>
-);
+));
+MiniStat.displayName = "MiniStat";
+
+// Memoized Area Chart component
+const RevenueAreaChart = React.memo(({ data }) => (
+  <Box height={400}>
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={data}>
+        <defs>
+          <linearGradient id="gradientRev" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={CHART_GRADIENT_START} stopOpacity={0.4} />
+            <stop offset="50%" stopColor={CHART_GRADIENT_END} stopOpacity={0.2} />
+            <stop offset="95%" stopColor={CHART_GRADIENT_END} stopOpacity={0.05} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.06)" />
+        <XAxis
+          dataKey="month"
+          stroke="rgba(0,0,0,0.4)"
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: 'rgba(0,0,0,0.6)', fontWeight: 500 }}
+        />
+        <YAxis
+          stroke="rgba(0,0,0,0.4)"
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={(v) => `₹${v / 1000}k`}
+          tick={{ fill: 'rgba(0,0,0,0.6)', fontWeight: 500 }}
+        />
+        <Tooltip
+          contentStyle={{
+            background: "#ffffff",
+            border: "1px solid rgba(139, 92, 246, 0.2)",
+            borderRadius: 16,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+            color: "#1a1a2e",
+            padding: "8px 16px"
+          }}
+          formatter={(value) => [`₹${value.toLocaleString()}`, 'Gross Income']}
+          cursor={{ stroke: 'rgba(139, 92, 246, 0.2)', strokeWidth: 2 }}
+        />
+        <Area
+          type="monotone"
+          dataKey="revenue"
+          stroke={CHART_STROKE}
+          strokeWidth={4}
+          fillOpacity={1}
+          fill="url(#gradientRev)"
+          dot={{
+            r: 5,
+            fill: CHART_DOT_FILL,
+            strokeWidth: 3,
+            stroke: CHART_DOT_STROKE,
+            transition: 'all 0.2s ease'
+          }}
+          activeDot={{
+            r: 8,
+            strokeWidth: 2,
+            stroke: CHART_DOT_STROKE,
+            fill: CHART_DOT_FILL
+          }}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  </Box>
+));
+RevenueAreaChart.displayName = "RevenueAreaChart";
 
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -264,38 +335,46 @@ const Dashboard = () => {
     }
   };
 
-  const filteredActivities = stats?.recentActivities || [];
+  const filteredActivities = React.useMemo(() => stats?.recentActivities || [], [stats?.recentActivities]);
 
-  const leadPieData = stats?.leads
+  const leadPieData = React.useMemo(() => stats?.leads
     ? [
       { name: "Active", value: stats.leads.active },
       { name: "Confirmed", value: stats.leads.confirmed },
       { name: "Cancelled", value: stats.leads.cancelled },
     ]
-    : [];
+    : [], [stats?.leads]);
 
   // Function to get color for each lead segment
-  const getLeadPieColor = (entry) => {
+  const getLeadPieColor = React.useCallback((entry) => {
     switch (entry.name) {
       case 'Active': return LEAD_PIE_COLORS.Active;
       case 'Confirmed': return LEAD_PIE_COLORS.Confirmed;
       case 'Cancelled': return LEAD_PIE_COLORS.Cancelled;
       default: return '#1976d2';
     }
-  };
+  }, []);
 
-  const revenueData = stats?.invoices?.monthlyRevenue || [];
+  const revenueData = React.useMemo(() => stats?.invoices?.monthlyRevenue || [], [stats?.invoices?.monthlyRevenue]);
 
   if (loading && !stats) {
     return (
       <Box p={4} sx={{ bgcolor: "#f0f4f8", minHeight: "100vh" }}>
-        <Skeleton variant="text" width={300} height={60} sx={{ bgcolor: "rgba(0,0,0,0.05)" }} />
-        <Grid container spacing={3} mt={2}>
+        <Skeleton variant="text" width={300} height={60} sx={{ bgcolor: "rgba(0,0,0,0.05)", mb: 4 }} />
+        <Grid container spacing={3} mb={6}>
           {[1, 2, 3, 4].map((i) => (
             <Grid size={{ xs: 12, sm: 6, md: 3 }} key={i}>
-              <Skeleton variant="rectangular" height={140} sx={{ borderRadius: 5, bgcolor: "rgba(0,0,0,0.05)" }} />
+              <Skeleton variant="rectangular" height={160} sx={{ borderRadius: 6, bgcolor: "#ffffff" }} />
             </Grid>
           ))}
+        </Grid>
+        <Grid container spacing={4}>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Skeleton variant="rectangular" height={500} sx={{ borderRadius: 6, bgcolor: "#ffffff" }} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Skeleton variant="rectangular" height={500} sx={{ borderRadius: 6, bgcolor: "#ffffff" }} />
+          </Grid>
         </Grid>
       </Box>
     );
@@ -441,69 +520,7 @@ const Dashboard = () => {
                       <Chip label="6 Months" size="small" sx={{ bgcolor: "rgba(139, 92, 246, 0.1)", color: "#8B5CF6", fontWeight: 800, borderRadius: 2 }} />
                     </Box>
                   </Box>
-                  <Box height={400}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={revenueData}>
-                        <defs>
-                          <linearGradient id="gradientRev" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={CHART_GRADIENT_START} stopOpacity={0.4} />
-                            <stop offset="50%" stopColor={CHART_GRADIENT_END} stopOpacity={0.2} />
-                            <stop offset="95%" stopColor={CHART_GRADIENT_END} stopOpacity={0.05} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.06)" />
-                        <XAxis
-                          dataKey="month"
-                          stroke="rgba(0,0,0,0.4)"
-                          fontSize={12}
-                          tickLine={false}
-                          axisLine={false}
-                          tick={{ fill: 'rgba(0,0,0,0.6)', fontWeight: 500 }}
-                        />
-                        <YAxis
-                          stroke="rgba(0,0,0,0.4)"
-                          fontSize={12}
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(v) => `₹${v / 1000}k`}
-                          tick={{ fill: 'rgba(0,0,0,0.6)', fontWeight: 500 }}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            background: "#ffffff",
-                            border: "1px solid rgba(139, 92, 246, 0.2)",
-                            borderRadius: 16,
-                            boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-                            color: "#1a1a2e",
-                            padding: "8px 16px"
-                          }}
-                          formatter={(value) => [`₹${value.toLocaleString()}`, 'Gross Income']}
-                          cursor={{ stroke: 'rgba(139, 92, 246, 0.2)', strokeWidth: 2 }}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="revenue"
-                          stroke={CHART_STROKE}
-                          strokeWidth={4}
-                          fillOpacity={1}
-                          fill="url(#gradientRev)"
-                          dot={{
-                            r: 5,
-                            fill: CHART_DOT_FILL,
-                            strokeWidth: 3,
-                            stroke: CHART_DOT_STROKE,
-                            transition: 'all 0.2s ease'
-                          }}
-                          activeDot={{
-                            r: 8,
-                            strokeWidth: 2,
-                            stroke: CHART_DOT_STROKE,
-                            fill: CHART_DOT_FILL
-                          }}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </Box>
+                  <RevenueAreaChart data={revenueData} />
                 </CardContent>
               </GlassCard>
             </Grid>
