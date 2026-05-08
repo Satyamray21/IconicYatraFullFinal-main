@@ -35,6 +35,8 @@ import {
   LocationOn as LocationIcon,
   Edit as EditIcon,
   Save as SaveIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -626,11 +628,47 @@ const PackageEditView = () => {
       return;
 
     const updated = [...pkg.stayLocations];
+    const oldNights = parseInt(updated[index].nights) || 1;
+    const newNights = field === "nights" ? parseInt(value) || 0 : oldNights;
+
     if (field === "nights") {
       updated[index] = {
         ...updated[index],
-        [field]: parseInt(value) || 0,
+        [field]: newNights,
       };
+
+      // Adjust itinerary days if nights changed
+      if (newNights !== oldNights) {
+        const diff = newNights - oldNights;
+        const newDays = [...(pkg.days || [])];
+
+        // Find the split point (after this city's current block)
+        let splitPoint = 0;
+        for (let i = 0; i <= index; i++) {
+          splitPoint += parseInt(pkg.stayLocations[i].nights) || 1;
+        }
+
+        if (diff > 0) {
+          // Add days
+          const newDayEntries = Array(diff)
+            .fill(null)
+            .map(() => ({
+              title: "",
+              notes: "",
+              aboutCity: "",
+              dayImage: null,
+              sightseeing: [],
+              selectedSightseeing: [],
+            }));
+          newDays.splice(splitPoint, 0, ...newDayEntries);
+        } else if (diff < 0) {
+          // Remove days (from the end of this city's block)
+          newDays.splice(splitPoint + diff, Math.abs(diff));
+        }
+
+        setPkg({ ...pkg, stayLocations: updated, days: newDays });
+        return;
+      }
     } else {
       updated[index] = {
         ...updated[index],
@@ -638,20 +676,32 @@ const PackageEditView = () => {
       };
     }
     setPkg({ ...pkg, stayLocations: updated });
-
   };
 
   const handleRemoveCity = (cityToRemove) => {
     if (!cityToRemove || !pkg.stayLocations) return;
 
-    const updated = pkg.stayLocations.filter(
+    const index = pkg.stayLocations.findIndex(
       (item) =>
-        !(
-          item?.city === cityToRemove.city && item?.state === cityToRemove.state
-        ),
+        item?.city === cityToRemove.city && item?.state === cityToRemove.state,
     );
-    setPkg({ ...pkg, stayLocations: updated });
 
+    if (index !== -1) {
+      const nights = parseInt(pkg.stayLocations[index].nights) || 1;
+      const newDays = [...(pkg.days || [])];
+
+      // Calculate start index of days for this city
+      let startDayIndex = 0;
+      for (let i = 0; i < index; i++) {
+        startDayIndex += parseInt(pkg.stayLocations[i].nights) || 1;
+      }
+
+      // Remove corresponding days
+      newDays.splice(startDayIndex, nights);
+
+      const updated = pkg.stayLocations.filter((_, i) => i !== index);
+      setPkg({ ...pkg, stayLocations: updated, days: newDays });
+    }
   };
 
   const handleDayChange = (index, field, value) => {
@@ -1528,18 +1578,56 @@ const PackageEditView = () => {
                                           const newList = [
                                             ...pkg.stayLocations,
                                           ];
-                                          const [moved] = newList.splice(
+                                          const oldDays = [
+                                            ...(pkg.days || []),
+                                          ];
+
+                                          // Calculate day blocks
+                                          let currentDay = 0;
+                                          const blocks = newList.map(
+                                            (stay) => {
+                                              const nights =
+                                                parseInt(stay.nights) || 1;
+                                              const block = oldDays.slice(
+                                                currentDay,
+                                                currentDay + nights,
+                                              );
+                                              currentDay += nights;
+                                              return block;
+                                            },
+                                          );
+                                          const remaining =
+                                            oldDays.slice(currentDay);
+
+                                          // Swap locations
+                                          const [movedLoc] = newList.splice(
                                             globalIndex,
                                             1,
                                           );
                                           newList.splice(
                                             globalIndex - 1,
                                             0,
-                                            moved,
+                                            movedLoc,
                                           );
+
+                                          // Swap blocks
+                                          const [movedBlock] = blocks.splice(
+                                            globalIndex,
+                                            1,
+                                          );
+                                          blocks.splice(
+                                            globalIndex - 1,
+                                            0,
+                                            movedBlock,
+                                          );
+
                                           setPkg({
                                             ...pkg,
                                             stayLocations: newList,
+                                            days: [
+                                              ...blocks.flat(),
+                                              ...remaining,
+                                            ],
                                           });
                                         }}
                                       >
@@ -1555,18 +1643,56 @@ const PackageEditView = () => {
                                           const newList = [
                                             ...pkg.stayLocations,
                                           ];
-                                          const [moved] = newList.splice(
+                                          const oldDays = [
+                                            ...(pkg.days || []),
+                                          ];
+
+                                          // Calculate day blocks
+                                          let currentDay = 0;
+                                          const blocks = newList.map(
+                                            (stay) => {
+                                              const nights =
+                                                parseInt(stay.nights) || 1;
+                                              const block = oldDays.slice(
+                                                currentDay,
+                                                currentDay + nights,
+                                              );
+                                              currentDay += nights;
+                                              return block;
+                                            },
+                                          );
+                                          const remaining =
+                                            oldDays.slice(currentDay);
+
+                                          // Swap locations
+                                          const [movedLoc] = newList.splice(
                                             globalIndex,
                                             1,
                                           );
                                           newList.splice(
                                             globalIndex + 1,
                                             0,
-                                            moved,
+                                            movedLoc,
                                           );
+
+                                          // Swap blocks
+                                          const [movedBlock] = blocks.splice(
+                                            globalIndex,
+                                            1,
+                                          );
+                                          blocks.splice(
+                                            globalIndex + 1,
+                                            0,
+                                            movedBlock,
+                                          );
+
                                           setPkg({
                                             ...pkg,
                                             stayLocations: newList,
+                                            days: [
+                                              ...blocks.flat(),
+                                              ...remaining,
+                                            ],
                                           });
                                         }}
                                       >
@@ -1798,14 +1924,46 @@ const PackageEditView = () => {
                       alignItems="center"
                     >
                       <Typography fontWeight="bold">Day {index + 1}</Typography>
-                      {index > 0 && (
+                      <Box>
+                        <IconButton
+                          size="small"
+                          disabled={index === 0}
+                          onClick={() => {
+                            const newList = [...pkg.days];
+                            [newList[index - 1], newList[index]] = [
+                              newList[index],
+                              newList[index - 1],
+                            ];
+                            setPkg({ ...pkg, days: newList });
+                          }}
+                          title="Move Up"
+                        >
+                          <ArrowUpwardIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          disabled={index === pkg.days.length - 1}
+                          onClick={() => {
+                            const newList = [...pkg.days];
+                            [newList[index + 1], newList[index]] = [
+                              newList[index],
+                              newList[index + 1],
+                            ];
+                            setPkg({ ...pkg, days: newList });
+                          }}
+                          title="Move Down"
+                        >
+                          <ArrowDownwardIcon fontSize="small" />
+                        </IconButton>
                         <IconButton
                           color="error"
+                          size="small"
                           onClick={() => handleRemoveDay(index)}
+                          title="Delete Day"
                         >
-                          <DeleteIcon />
+                          <DeleteIcon fontSize="small" />
                         </IconButton>
-                      )}
+                      </Box>
                     </Box>
 
                     <Grid container spacing={2} sx={{ mt: 1 }}>
