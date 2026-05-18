@@ -288,6 +288,10 @@ export const deleteFlightQuotationById = asyncHandler(async (req, res) => {
         user: req.user?.name || "System",
     });
 
+    await clearPattern(`flightQuotation:${flightQuotationId}`);
+    await clearPattern("flightQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
     await clearPattern('dashboard:stats:*');
 
     return res

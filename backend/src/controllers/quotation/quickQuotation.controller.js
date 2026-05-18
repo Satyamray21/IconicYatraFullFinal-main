@@ -474,6 +474,10 @@ export const deleteQuickQuotation = async (req, res) => {
       user: req.user?.name || "Admin",
     });
 
+    await clearPattern(`quickQuotation:${mongoId}`);
+    await clearPattern("quickQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
     await clearPattern('dashboard:stats:*');
 
     res.status(200).json({ message: "Quotation deleted successfully" });
