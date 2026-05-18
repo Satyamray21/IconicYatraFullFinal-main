@@ -345,6 +345,10 @@ export const deleteVehicle = asyncHandler(async (req, res) => {
     user: req.user?.name || "System",
   });
 
+  await clearPattern(`vehicleQuotation:${vehicleQuotationId}`);
+  await clearPattern("vehicleQuotations:all");
+  await clearPattern("quotations:search:*");
+  await clearPattern("quotations:stats");
   await clearPattern('dashboard:stats:*');
 
   return res

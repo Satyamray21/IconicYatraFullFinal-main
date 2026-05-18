@@ -1045,6 +1045,12 @@ export const deleteCustomQuotation = asyncHandler(async (req, res) => {
     user: req.user?.name || "System",
   });
 
+  if (deletedQuotation.quotationId) {
+    await clearPattern(`customQuotation:${deletedQuotation.quotationId}`);
+  }
+  await clearPattern("customQuotations:all");
+  await clearPattern("quotations:search:*");
+  await clearPattern("quotations:stats");
   await clearPattern('dashboard:stats:*');
 
   return res
