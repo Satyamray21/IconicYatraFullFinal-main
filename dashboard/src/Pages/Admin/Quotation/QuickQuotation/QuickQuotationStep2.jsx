@@ -35,6 +35,8 @@ const StepClientDetails = ({ onNext }) => {
         phone: "",
         adults: "",
         children: "",
+        kids: "",
+        infants: "",
         message: "",
         tourType: "",
         clientLocation: "",
@@ -45,7 +47,9 @@ const StepClientDetails = ({ onNext }) => {
         departureDate: "",
         pickupTime: "",
         dropTime: "",
+        roomType: "",
         noOfRooms: 1,
+        noOfMattress: "",
       }}
       validate={(values) => {
         const errors = {};
@@ -146,6 +150,14 @@ const StepClientDetails = ({ onNext }) => {
                       "children",
                       selectedClient.tourDetails?.members?.children || 0,
                     );
+                    setFieldValue(
+                      "kids",
+                      selectedClient.tourDetails?.members?.kidsWithoutMattress || 0,
+                    );
+                    setFieldValue(
+                      "infants",
+                      selectedClient.tourDetails?.members?.infants || 0,
+                    );
 
                     // Auto-fill message with tour destination if available
                     const tourDestination =
@@ -195,6 +207,14 @@ const StepClientDetails = ({ onNext }) => {
                     setFieldValue(
                       "noOfRooms",
                       Number(selectedClient.tourDetails?.accommodation?.noOfRooms) || 1,
+                    );
+                    setFieldValue(
+                      "noOfMattress",
+                      Number(selectedClient.tourDetails?.accommodation?.noOfMattress) || 0,
+                    );
+                    setFieldValue(
+                      "roomType",
+                      selectedClient.tourDetails?.accommodation?.sharingType || "",
                     );
                   }
                 }}
@@ -271,6 +291,70 @@ const StepClientDetails = ({ onNext }) => {
                 label="Number of Children"
                 name="children"
                 value={values.children}
+                onChange={handleChange}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+
+            {/* Kids (Without Mattress) */}
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Kids (Without Mattress)"
+                name="kids"
+                value={values.kids}
+                onChange={handleChange}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+
+            {/* Infants */}
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Infants"
+                name="infants"
+                value={values.infants}
+                onChange={handleChange}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+
+            {/* Room Type */}
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                label="Room Type"
+                name="roomType"
+                value={values.roomType}
+                onChange={handleChange}
+                placeholder="e.g., Deluxe, Triple Sharing"
+              />
+            </Grid>
+
+            {/* Number of Rooms */}
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Number of Rooms"
+                name="noOfRooms"
+                value={values.noOfRooms}
+                onChange={handleChange}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+
+            {/* Number of Mattress */}
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Number of Mattress"
+                name="noOfMattress"
+                value={values.noOfMattress}
                 onChange={handleChange}
                 inputProps={{ min: 0 }}
               />

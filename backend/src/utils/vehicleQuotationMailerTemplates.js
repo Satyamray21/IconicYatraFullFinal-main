@@ -354,7 +354,7 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
       )}</p>
       <p style="color:#d32f2f; font-weight:bold;">BOOKING ID: ${safe(
         customText.bookingId,
-        vehicle?.vehicleQuotationId,
+        vehicle?.bookingId || vehicle?.vehicleQuotationId,
       )}</p>
       <p><b>Client:</b> ${safe(basics?.clientName, "Guest")}</p>
       <p><b>Vehicle:</b> ${safe(basics?.vehicleType, "As per itinerary")}</p>

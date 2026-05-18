@@ -249,7 +249,7 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
     <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
       <p style="color:red; font-weight:bold;">${safe(customText.greeting, `Dear ${safe(quotation?.personalDetails?.fullName, "Guest")},`)}</p>
       <p style="color:red; font-weight:bold;">${safe(customText.opening, `BOOKING CONFIRMATION FROM ${companyName.toUpperCase()}!!!`)}</p>
-      <p><b>BOOKING ID:</b> ${safe(quotation?.flightQuotationId, "-")}</p>
+      <p><b>BOOKING ID:</b> ${safe(customText.bookingId, quotation?.bookingId || quotation?.flightQuotationId || "-")}</p>
       <p><b>Passenger:</b> ${safe(quotation?.personalDetails?.fullName, "Guest")}</p>
       <p><b>Trip Type:</b> ${fmtTripType(quotation?.tripType)}</p>
       <br/>

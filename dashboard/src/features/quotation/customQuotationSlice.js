@@ -9,7 +9,7 @@ export const createCustomQuotation = createAsyncThunk(
     async (formData, { rejectWithValue }) => {
         try {
             const res = await axios.post("/customQT/", formData);
-            return res.data.data;
+            return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Create failed");
         }
@@ -22,7 +22,7 @@ export const getAllCustomQuotations = createAsyncThunk(
     async (_, { rejectWithValue }) => {
         try {
             const res = await axios.get("/customQT");
-            return res.data.data;
+            return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Fetch failed");
         }
@@ -103,7 +103,7 @@ export const updateQuotationStep = createAsyncThunk(
 
             const res = await axios.post("/customQT/update-step", requestData, config);
             console.log("✅ Redux: Step update successful");
-            return res.data.data;
+            return res.data?.data ?? res.data;
         } catch (err) {
             console.error("❌ Redux: Step update failed:", err);
             console.error("❌ Error details:", err.response?.data);
@@ -134,7 +134,7 @@ export const updateCustomQuotationCosting = createAsyncThunk(
 export const finalizeCustomQuotation = createAsyncThunk(
     "customQuotation/finalize",
     async (
-        { quotationId, finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts },
+        { quotationId, finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts, companyId, companyName },
         { rejectWithValue, getState }
     ) => {
         try {
@@ -164,7 +164,11 @@ export const finalizeCustomQuotation = createAsyncThunk(
                 payload.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts;
             }
             
-            const res = await axios.patch(`/customQT/${quotationId}/finalize`, payload);
+            const res = await axios.patch(`/customQT/${quotationId}/finalize`, {
+                ...payload,
+                companyId,
+                companyName
+            });
             return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(
@@ -180,7 +184,7 @@ export const deleteCustomQuotation = createAsyncThunk(
     async (id, { rejectWithValue }) => {
         try {
             const res = await axios.delete(`/customQT/${id}`);
-            return res.data.data;
+            return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Delete failed");
         }

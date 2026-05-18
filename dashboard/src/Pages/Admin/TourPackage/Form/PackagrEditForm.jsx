@@ -35,6 +35,8 @@ import {
   LocationOn as LocationIcon,
   Edit as EditIcon,
   Save as SaveIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -51,9 +53,24 @@ import {
 import {
   fetchCountries,
   fetchStatesByCountry,
+  fetchDomesticCities,
+  fetchInternationalCities,
   clearStates,
   clearCities,
 } from "../../../../features/location/locationSlice";
+import {
+  getLeadOptions,
+  addLeadOption,
+  deleteLeadOption,
+} from "../../../../features/leads/leadSlice";
+import LeadOptionsManager from "../../../../Components/LeadOptionsManager";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import HomeWorkIcon from "@mui/icons-material/HomeWork";
+import AddIcon from "@mui/icons-material/Add";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 
@@ -120,16 +137,25 @@ const PackageEditView = () => {
 
   // UI State
   const [selectedCountry, setSelectedCountry] = useState("India");
-  const [groupedStayLocations, setGroupedStayLocations] = useState({});
   const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState(null);
+  const [allCities, setAllCities] = useState([]);
+  const [locationList, setLocationList] = useState([]);
+  const [searchText, setSearchText] = useState("");
+  const [currentState, setCurrentState] = useState("");
+  const [openLocationDialog, setOpenLocationDialog] = useState(false);
+  const [newLocation, setNewLocation] = useState("");
+  const [openDialog, setOpenDialog] = useState(false);
+  const [currentField, setCurrentField] = useState("");
+
+  const { options = [] } = useSelector((state) => state.leads || {});
+  const BOX_HEIGHT = 220;
 
   useEffect(() => {
     if (id) {
       console.log("Fetching package with ID:", id);
       setInitialized(false);
       setError(null);
-      setGroupedStayLocations({});
       setSelectedCountry("India");
       setPkg(createInitialPackageState());
       dispatch(clearCurrent());
@@ -237,17 +263,6 @@ const PackageEditView = () => {
           };
         });
 
-        // Group stay locations by state
-        const grouped = {};
-        initializedStayLocations.forEach((item) => {
-          const stateKey = item?.state || "Unknown";
-          if (!grouped[stateKey]) {
-            grouped[stateKey] = [];
-          }
-          grouped[stateKey].push(item);
-        });
-
-        setGroupedStayLocations(grouped);
 
         setPkg({
           // Step 1 Fields
@@ -308,6 +323,7 @@ const PackageEditView = () => {
         });
 
         setSelectedCountry(safeCurrent.destinationCountry || "India");
+        setCurrentState(safeCurrent.sector || "");
         setInitialized(true);
         setError(null);
 
@@ -315,12 +331,90 @@ const PackageEditView = () => {
         if (safeCurrent.destinationCountry) {
           dispatch(fetchStatesByCountry(safeCurrent.destinationCountry));
         }
+
+        // Fetch cities for the initial sector/state
+        if (safeCurrent.sector) {
+          if (DOMESTIC_TOUR_TYPES.includes(safeCurrent.tourType || "Domestic")) {
+            dispatch(fetchDomesticCities(safeCurrent.sector))
+              .unwrap()
+              .then((cityList) => {
+                const cities = cityList.map((c) => c.name || c.city || c);
+                setAllCities(cities);
+                setLocationList(cities);
+              });
+          } else {
+            dispatch(
+              fetchInternationalCities({
+                countryName: safeCurrent.destinationCountry || "India",
+                stateName: safeCurrent.sector,
+              }),
+            )
+              .unwrap()
+              .then((cityList) => {
+                const cities = cityList.map((c) => c.name || c.city || c);
+                setAllCities(cities);
+                setLocationList(cities);
+              });
+          }
+        }
       } catch (err) {
         console.error("Error initializing package data:", err);
         setError("Error processing package data");
       }
     }
   }, [current, initialized, id, dispatch]);
+
+  // Sync destinationNights with stayLocations
+  useEffect(() => {
+    if (!initialized || !pkg.stayLocations) return;
+
+    setPkg((prev) => {
+      const currentDestinations = prev.destinationNights || [];
+      const newStayLocations = prev.stayLocations || [];
+
+      // Create a map of existing destination data to preserve hotel info
+      // We use a map to quickly look up by city name
+      const destinationMap = {};
+      currentDestinations.forEach((dest) => {
+        if (dest.destination) {
+          destinationMap[dest.destination] = dest;
+        }
+      });
+
+      // Build new destinationNights based on stayLocations
+      const updatedDestinationNights = newStayLocations.map((stay) => {
+        const cityName = stay.city || "";
+        const existing = destinationMap[cityName];
+        
+        return {
+          destination: cityName,
+          nights: parseInt(stay.nights) || 1,
+          hotels: existing?.hotels || [
+            { category: "standard", hotelName: "TBD", pricePerPerson: 0 },
+            { category: "deluxe", hotelName: "TBD", pricePerPerson: 0 },
+            { category: "superior", hotelName: "TBD", pricePerPerson: 0 },
+          ],
+        };
+      });
+
+      // Only update if there's a real change to avoid infinite loops
+      // We check length and destination/nights values
+      const hasChanged = 
+        updatedDestinationNights.length !== currentDestinations.length ||
+        updatedDestinationNights.some((dest, i) => {
+          const oldDest = currentDestinations[i];
+          return !oldDest || 
+                 dest.destination !== oldDest.destination || 
+                 dest.nights !== oldDest.nights;
+        });
+
+      if (hasChanged) {
+        console.log("Syncing destinationNights with stayLocations:", updatedDestinationNights);
+        return { ...prev, destinationNights: updatedDestinationNights };
+      }
+      return prev;
+    });
+  }, [pkg.stayLocations, initialized]);
 
   // Loading state
   if (loading && !initialized) {
@@ -370,21 +464,20 @@ const PackageEditView = () => {
   // Handlers with safety checks
   const handleTourTypeChange = (e) => {
     const selectedType = e?.target?.value || "Domestic";
-    setPkg((prev) => ({
-      ...prev,
-      tourType: selectedType,
-      destinationCountry: DOMESTIC_TOUR_TYPES.includes(selectedType)
-        ? "India"
-        : prev.destinationCountry,
-      sector: "",
-      packageCategory: "",
-      packageSubType: [],
-      stayLocations: [],
-    }));
-    setSelectedCountry(
-      DOMESTIC_TOUR_TYPES.includes(selectedType) ? "India" : "",
-    );
-    setGroupedStayLocations({});
+    setPkg((prev) => {
+      return {
+        ...prev,
+        tourType: selectedType,
+        destinationCountry: DOMESTIC_TOUR_TYPES.includes(selectedType) ? "India" : prev.destinationCountry,
+        sector: "",
+        packageCategory: "",
+        packageSubType: [],
+        stayLocations: []
+      };
+    });
+    
+    const country = DOMESTIC_TOUR_TYPES.includes(selectedType) ? "India" : "";
+    setSelectedCountry(country);
     dispatch(clearStates());
     dispatch(clearCities());
 
@@ -396,15 +489,16 @@ const PackageEditView = () => {
   const handleCountryChange = (countryName) => {
     if (!countryName) return;
     setSelectedCountry(countryName);
-    setPkg((prev) => ({
-      ...prev,
-      destinationCountry: countryName,
-      sector: "",
-      packageCategory: "",
-      packageSubType: [],
-      stayLocations: [],
-    }));
-    setGroupedStayLocations({});
+    setPkg((prev) => {
+      return {
+        ...prev,
+        destinationCountry: countryName,
+        sector: "",
+        packageCategory: "",
+        packageSubType: [],
+        stayLocations: []
+      };
+    });
     dispatch(clearStates());
     dispatch(clearCities());
     dispatch(fetchStatesByCountry(countryName));
@@ -412,6 +506,121 @@ const PackageEditView = () => {
 
   const handleSectorChange = (selectedStateName) => {
     setPkg((prev) => ({ ...prev, sector: selectedStateName || "" }));
+    setCurrentState(selectedStateName);
+
+    if (DOMESTIC_TOUR_TYPES.includes(pkg.tourType)) {
+      dispatch(fetchDomesticCities(selectedStateName))
+        .unwrap()
+        .then((cityList) => {
+          const cities = cityList.map((c) => c.name || c.city || c);
+          setAllCities(cities);
+          setLocationList(cities);
+          setSearchText("");
+        });
+    } else {
+      dispatch(
+        fetchInternationalCities({
+          countryName: selectedCountry,
+          stateName: selectedStateName,
+        }),
+      )
+        .unwrap()
+        .then((cityList) => {
+          const cities = cityList.map((c) => c.name || c.city || c);
+          setAllCities(cities);
+          setLocationList(cities);
+          setSearchText("");
+        });
+    }
+  };
+
+  const handleSearch = (e) => {
+    const value = e.target.value.toLowerCase();
+    setSearchText(value);
+    if (!value) {
+      setLocationList(allCities);
+    } else {
+      setLocationList(allCities.filter((c) => c.toLowerCase().includes(value)));
+    }
+  };
+
+  const handleSelectCity = (city) => {
+    const cityWithState = {
+      city,
+      state: currentState,
+      country:
+        selectedCountry ||
+        (DOMESTIC_TOUR_TYPES.includes(pkg.tourType) ? "India" : ""),
+      nights: 1,
+    };
+
+    if (
+      !pkg.stayLocations.find(
+        (item) => item.city === city && item.state === currentState,
+      )
+    ) {
+      const updated = [...pkg.stayLocations, cityWithState];
+      setPkg({ ...pkg, stayLocations: updated });
+    }
+  };
+
+  // Add New Location Logic
+  const handleOpenLocationDialog = () => {
+    setNewLocation("");
+    setOpenLocationDialog(true);
+  };
+
+  const handleCloseLocationDialog = () => {
+    setOpenLocationDialog(false);
+  };
+
+  const handleAddNewLocation = () => {
+    if (!newLocation.trim()) return;
+    const locationName = newLocation.trim();
+    setAllCities((prev) => [...prev, locationName]);
+    setLocationList((prev) => [...prev, locationName]);
+    handleCloseLocationDialog();
+  };
+
+  const handleDeleteLocation = (locationToDelete, e) => {
+    e.stopPropagation();
+    setAllCities((prev) => prev.filter((loc) => loc !== locationToDelete));
+    setLocationList((prev) => prev.filter((loc) => loc !== locationToDelete));
+  };
+
+  // Lead Options Manager Logic
+  const handleOpenDialog = (field) => {
+    setCurrentField(field);
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    dispatch(getLeadOptions());
+  };
+
+  const handleOptionAdd = (newValue) => {
+    if (Array.isArray(pkg[currentField])) {
+      if (!pkg[currentField].includes(newValue)) {
+        setPkg({
+          ...pkg,
+          [currentField]: [...pkg[currentField], newValue],
+        });
+      }
+    } else {
+      setPkg({ ...pkg, [currentField]: newValue });
+    }
+  };
+
+  const getOptionsForField = (fieldName) => {
+    const filteredOptions = options
+      ?.filter((opt) => opt.fieldName === fieldName)
+      .map((opt) => ({ value: opt.value, label: opt.value }));
+
+    return [
+      ...(filteredOptions || []),
+      { value: "__add_new", label: "+ Add New" },
+    ];
   };
 
   const handleStayChange = (index, field, value) => {
@@ -419,11 +628,47 @@ const PackageEditView = () => {
       return;
 
     const updated = [...pkg.stayLocations];
+    const oldNights = parseInt(updated[index].nights) || 1;
+    const newNights = field === "nights" ? parseInt(value) || 0 : oldNights;
+
     if (field === "nights") {
       updated[index] = {
         ...updated[index],
-        [field]: parseInt(value) || 0,
+        [field]: newNights,
       };
+
+      // Adjust itinerary days if nights changed
+      if (newNights !== oldNights) {
+        const diff = newNights - oldNights;
+        const newDays = [...(pkg.days || [])];
+
+        // Find the split point (after this city's current block)
+        let splitPoint = 0;
+        for (let i = 0; i <= index; i++) {
+          splitPoint += parseInt(pkg.stayLocations[i].nights) || 1;
+        }
+
+        if (diff > 0) {
+          // Add days
+          const newDayEntries = Array(diff)
+            .fill(null)
+            .map(() => ({
+              title: "",
+              notes: "",
+              aboutCity: "",
+              dayImage: null,
+              sightseeing: [],
+              selectedSightseeing: [],
+            }));
+          newDays.splice(splitPoint, 0, ...newDayEntries);
+        } else if (diff < 0) {
+          // Remove days (from the end of this city's block)
+          newDays.splice(splitPoint + diff, Math.abs(diff));
+        }
+
+        setPkg({ ...pkg, stayLocations: updated, days: newDays });
+        return;
+      }
     } else {
       updated[index] = {
         ...updated[index],
@@ -431,40 +676,32 @@ const PackageEditView = () => {
       };
     }
     setPkg({ ...pkg, stayLocations: updated });
-
-    // Update grouped display
-    const grouped = {};
-    updated.forEach((item) => {
-      const stateKey = item?.state || "Unknown";
-      if (!grouped[stateKey]) {
-        grouped[stateKey] = [];
-      }
-      grouped[stateKey].push(item);
-    });
-    setGroupedStayLocations(grouped);
   };
 
   const handleRemoveCity = (cityToRemove) => {
     if (!cityToRemove || !pkg.stayLocations) return;
 
-    const updated = pkg.stayLocations.filter(
+    const index = pkg.stayLocations.findIndex(
       (item) =>
-        !(
-          item?.city === cityToRemove.city && item?.state === cityToRemove.state
-        ),
+        item?.city === cityToRemove.city && item?.state === cityToRemove.state,
     );
-    setPkg({ ...pkg, stayLocations: updated });
 
-    // Update grouped display
-    const grouped = {};
-    updated.forEach((item) => {
-      const stateKey = item?.state || "Unknown";
-      if (!grouped[stateKey]) {
-        grouped[stateKey] = [];
+    if (index !== -1) {
+      const nights = parseInt(pkg.stayLocations[index].nights) || 1;
+      const newDays = [...(pkg.days || [])];
+
+      // Calculate start index of days for this city
+      let startDayIndex = 0;
+      for (let i = 0; i < index; i++) {
+        startDayIndex += parseInt(pkg.stayLocations[i].nights) || 1;
       }
-      grouped[stateKey].push(item);
-    });
-    setGroupedStayLocations(grouped);
+
+      // Remove corresponding days
+      newDays.splice(startDayIndex, nights);
+
+      const updated = pkg.stayLocations.filter((_, i) => i !== index);
+      setPkg({ ...pkg, stayLocations: updated, days: newDays });
+    }
   };
 
   const handleDayChange = (index, field, value) => {
@@ -847,7 +1084,15 @@ const PackageEditView = () => {
   };
 
   const getStayLocationsByState = () => {
-    return groupedStayLocations || {};
+    const grouped = {};
+    (pkg.stayLocations || []).forEach((item) => {
+      const stateKey = item?.state || "Unknown";
+      if (!grouped[stateKey]) {
+        grouped[stateKey] = [];
+      }
+      grouped[stateKey].push(item);
+    });
+    return grouped;
   };
 
   const rooms = Number(pkg.numberOfRooms) || 1;
@@ -1062,105 +1307,270 @@ const PackageEditView = () => {
                 <Grid size={{ xs: 12, md: 6 }}>
                   <Autocomplete
                     multiple
-                    freeSolo
                     fullWidth
-                    options={[]}
+                    options={getOptionsForField("packageSubType").map(
+                      (opt) => opt.value,
+                    )}
                     value={pkg.packageSubType || []}
                     onChange={(e, newValue) => {
-                      setPkg({ ...pkg, packageSubType: newValue || [] });
+                      if (newValue.includes("__add_new")) {
+                        const filtered = newValue.filter(
+                          (v) => v !== "__add_new",
+                        );
+                        setPkg({ ...pkg, packageSubType: filtered });
+                        handleOpenDialog("packageSubType");
+                      } else {
+                        setPkg({ ...pkg, packageSubType: newValue });
+                      }
                     }}
                     renderInput={(params) => (
                       <TextField {...params} label="Package Sub Type *" />
                     )}
+                    renderOption={(props, option) => {
+                      if (option === "__add_new") {
+                        return (
+                          <li
+                            {...props}
+                            key="add_new"
+                            style={{ color: "#1976d2", fontWeight: 500 }}
+                          >
+                            + Add New
+                          </li>
+                        );
+                      }
+
+                      const optData = options.find(
+                        (o) =>
+                          o.fieldName === "packageSubType" &&
+                          o.value === option,
+                      );
+
+                      return (
+                        <li
+                          {...props}
+                          key={option}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span>{option}</span>
+                          {optData && (
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete "${option}"?`)) {
+                                  dispatch(deleteLeadOption(optData._id));
+                                }
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </li>
+                      );
+                    }}
                   />
                 </Grid>
               </Grid>
 
-              {/* Stay Locations */}
-              <Typography
-                variant="subtitle1"
-                fontWeight="bold"
-                color="primary"
-                gutterBottom
-              >
-                🏨 Stay Locations
-              </Typography>
-              <Paper sx={{ p: 2, mb: 3, backgroundColor: "#f8f9fa" }}>
-                {Object.entries(getStayLocationsByState()).length > 0 ? (
-                  Object.entries(getStayLocationsByState()).map(
-                    ([state, cities]) => (
-                      <Box key={state} sx={{ mb: 2 }}>
-                        <Typography
-                          variant="subtitle2"
+              {/* Location List + Stay Locations */}
+              <Grid container spacing={2} sx={{ mt: 2, mb: 4 }}>
+                {/* Available Locations */}
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontWeight: "bold",
+                      }}
+                      color="primary"
+                    >
+                      <LocationOnIcon sx={{ mr: 1, color: "red" }} />
+                      Available Locations {currentState && `- ${currentState}`}
+                    </Typography>
+                    <Button
+                      startIcon={<AddIcon />}
+                      size="small"
+                      variant="outlined"
+                      onClick={handleOpenLocationDialog}
+                      disabled={!pkg.sector}
+                    >
+                      Add Location
+                    </Button>
+                  </Box>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search city..."
+                    value={searchText}
+                    onChange={handleSearch}
+                    sx={{ mt: 1 }}
+                    disabled={!pkg.sector}
+                  />
+                  <Box
+                    sx={{
+                      border: "1px solid #ccc",
+                      height: BOX_HEIGHT,
+                      overflowY: "auto",
+                      mt: 1,
+                      p: 1,
+                      borderRadius: 2,
+                      background: "#fafafa",
+                    }}
+                  >
+                    {locationList.length > 0 ? (
+                      locationList.map((city, i) => (
+                        <Box
+                          key={i}
                           sx={{
-                            fontWeight: "bold",
-                            color: "primary.main",
+                            p: 1,
                             mb: 1,
+                            borderRadius: 1,
+                            background: "#f5f5f5",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            "&:hover": { background: "#e0f7fa" },
                           }}
+                          onClick={() => handleSelectCity(city)}
                         >
-                          {state}
-                        </Typography>
-                        {Array.isArray(cities) &&
-                          cities.map((item, index) => {
-                            const globalIndex = pkg.stayLocations?.findIndex(
-                              (stayItem) =>
-                                stayItem?.city === item?.city &&
-                                stayItem?.state === item?.state,
-                            );
+                          <Box sx={{ display: "flex", alignItems: "center" }}>
+                            <LocationOnIcon
+                              fontSize="small"
+                              sx={{ mr: 1, color: "grey.600" }}
+                            />
+                            {city}
+                            <Chip
+                              label={currentState}
+                              size="small"
+                              sx={{ ml: 1, height: 20 }}
+                              color="primary"
+                              variant="outlined"
+                            />
+                          </Box>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={(e) => handleDeleteLocation(city, e)}
+                            sx={{
+                              "&:hover": {
+                                backgroundColor: "rgba(211, 47, 47, 0.04)",
+                              },
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        textAlign="center"
+                        py={2}
+                      >
+                        {pkg.sector
+                          ? "No cities found"
+                          : "Select a state to see cities"}
+                      </Typography>
+                    )}
+                  </Box>
+                </Grid>
 
-                            if (globalIndex === -1 || globalIndex === undefined)
-                              return null;
+                {/* Stay Locations */}
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      fontWeight: "bold",
+                    }}
+                    color="primary"
+                  >
+                    <HomeWorkIcon sx={{ mr: 1, color: "#1976d2" }} />
+                    Stay Locations ({pkg.stayLocations?.length || 0})
+                  </Typography>
+                  <Box
+                    sx={{
+                      border: "1px solid #ccc",
+                      height: 270,
+                      overflowY: "auto",
+                      mt: 1,
+                      p: 1,
+                      borderRadius: 2,
+                      background: "#f0f8ff",
+                    }}
+                  >
+                    {Object.entries(getStayLocationsByState()).length > 0 ? (
+                      Object.entries(getStayLocationsByState()).map(
+                        ([state, cities]) => (
+                          <Box key={state} sx={{ mb: 2 }}>
+                            <Typography
+                              variant="subtitle2"
+                              sx={{
+                                fontWeight: "bold",
+                                color: "primary.main",
+                                mb: 1,
+                              }}
+                            >
+                              {state}
+                            </Typography>
+                            {cities.map((item, i) => {
+                              const globalIndex = pkg.stayLocations.findIndex(
+                                (stayItem) =>
+                                  stayItem.city === item.city &&
+                                  stayItem.state === item.state,
+                              );
 
-                            return (
-                              <Paper
-                                key={`${item?.city}-${item?.state}-${index}`}
-                                sx={{
-                                  p: 2,
-                                  mb: 2,
-                                  backgroundColor: "#e3f2fd",
-                                  borderRadius: 2,
-                                }}
-                              >
-                                <Grid container spacing={2} alignItems="center">
-                                  <Grid size={{ xs: 12, md: 5 }}>
-                                    <TextField
-                                      label="City"
-                                      fullWidth
-                                      size="small"
-                                      value={item?.city || ""}
-                                      onChange={(e) =>
-                                        handleStayChange(
-                                          globalIndex,
-                                          "city",
-                                          e.target.value,
-                                        )
-                                      }
-                                    />
-                                  </Grid>
-                                  <Grid size={{ xs: 12, md: 3 }}>
-                                    <TextField
-                                      label="Nights"
-                                      type="number"
-                                      fullWidth
-                                      size="small"
-                                      value={item?.nights || 1}
-                                      onChange={(e) =>
-                                        handleStayChange(
-                                          globalIndex,
-                                          "nights",
-                                          e.target.value,
-                                        )
-                                      }
-                                      inputProps={{ min: 1 }}
-                                    />
-                                  </Grid>
-                                  <Grid size={{ xs: 12, md: 4 }}>
+                              return (
+                                <Box
+                                  key={`${item.city}-${item.state}`}
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "flex-start",
+                                    p: 1,
+                                    mb: 1,
+                                    borderRadius: 1,
+                                    background: "#e3f2fd",
+                                    flexDirection: "column",
+                                  }}
+                                >
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                      width: "100%",
+                                    }}
+                                  >
                                     <Box
                                       sx={{
                                         display: "flex",
-                                        justifyContent: "flex-end",
+                                        alignItems: "center",
                                       }}
                                     >
+                                      <HomeWorkIcon
+                                        fontSize="small"
+                                        sx={{ mr: 1, color: "#1976d2" }}
+                                      />
+                                      {item.city}
+                                    </Box>
+                                    <Box>
                                       <IconButton
                                         size="small"
                                         disabled={globalIndex === 0}
@@ -1168,18 +1578,56 @@ const PackageEditView = () => {
                                           const newList = [
                                             ...pkg.stayLocations,
                                           ];
-                                          const [moved] = newList.splice(
+                                          const oldDays = [
+                                            ...(pkg.days || []),
+                                          ];
+
+                                          // Calculate day blocks
+                                          let currentDay = 0;
+                                          const blocks = newList.map(
+                                            (stay) => {
+                                              const nights =
+                                                parseInt(stay.nights) || 1;
+                                              const block = oldDays.slice(
+                                                currentDay,
+                                                currentDay + nights,
+                                              );
+                                              currentDay += nights;
+                                              return block;
+                                            },
+                                          );
+                                          const remaining =
+                                            oldDays.slice(currentDay);
+
+                                          // Swap locations
+                                          const [movedLoc] = newList.splice(
                                             globalIndex,
                                             1,
                                           );
                                           newList.splice(
                                             globalIndex - 1,
                                             0,
-                                            moved,
+                                            movedLoc,
                                           );
+
+                                          // Swap blocks
+                                          const [movedBlock] = blocks.splice(
+                                            globalIndex,
+                                            1,
+                                          );
+                                          blocks.splice(
+                                            globalIndex - 1,
+                                            0,
+                                            movedBlock,
+                                          );
+
                                           setPkg({
                                             ...pkg,
                                             stayLocations: newList,
+                                            days: [
+                                              ...blocks.flat(),
+                                              ...remaining,
+                                            ],
                                           });
                                         }}
                                       >
@@ -1195,18 +1643,56 @@ const PackageEditView = () => {
                                           const newList = [
                                             ...pkg.stayLocations,
                                           ];
-                                          const [moved] = newList.splice(
+                                          const oldDays = [
+                                            ...(pkg.days || []),
+                                          ];
+
+                                          // Calculate day blocks
+                                          let currentDay = 0;
+                                          const blocks = newList.map(
+                                            (stay) => {
+                                              const nights =
+                                                parseInt(stay.nights) || 1;
+                                              const block = oldDays.slice(
+                                                currentDay,
+                                                currentDay + nights,
+                                              );
+                                              currentDay += nights;
+                                              return block;
+                                            },
+                                          );
+                                          const remaining =
+                                            oldDays.slice(currentDay);
+
+                                          // Swap locations
+                                          const [movedLoc] = newList.splice(
                                             globalIndex,
                                             1,
                                           );
                                           newList.splice(
                                             globalIndex + 1,
                                             0,
-                                            moved,
+                                            movedLoc,
                                           );
+
+                                          // Swap blocks
+                                          const [movedBlock] = blocks.splice(
+                                            globalIndex,
+                                            1,
+                                          );
+                                          blocks.splice(
+                                            globalIndex + 1,
+                                            0,
+                                            movedBlock,
+                                          );
+
                                           setPkg({
                                             ...pkg,
                                             stayLocations: newList,
+                                            days: [
+                                              ...blocks.flat(),
+                                              ...remaining,
+                                            ],
                                           });
                                         }}
                                       >
@@ -1220,25 +1706,50 @@ const PackageEditView = () => {
                                         <DeleteIcon fontSize="small" />
                                       </IconButton>
                                     </Box>
-                                  </Grid>
-                                </Grid>
-                              </Paper>
-                            );
-                          })}
-                      </Box>
-                    ),
-                  )
-                ) : (
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    textAlign="center"
-                    py={2}
-                  >
-                    No stay locations added yet
-                  </Typography>
-                )}
-              </Paper>
+                                  </Box>
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      mt: 1,
+                                      width: "100%",
+                                    }}
+                                  >
+                                    <TextField
+                                      label="Nights"
+                                      type="number"
+                                      size="small"
+                                      sx={{ width: 100 }}
+                                      value={item.nights || 1}
+                                      onChange={(e) =>
+                                        handleStayChange(
+                                          globalIndex,
+                                          "nights",
+                                          e.target.value,
+                                        )
+                                      }
+                                      inputProps={{ min: 1 }}
+                                    />
+                                  </Box>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        ),
+                      )
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        textAlign="center"
+                        py={2}
+                      >
+                        Select a state to see cities
+                      </Typography>
+                    )}
+                  </Box>
+                </Grid>
+              </Grid>
 
               {/* ===== STEP 2 FIELDS ===== */}
               <Typography
@@ -1413,14 +1924,46 @@ const PackageEditView = () => {
                       alignItems="center"
                     >
                       <Typography fontWeight="bold">Day {index + 1}</Typography>
-                      {index > 0 && (
+                      <Box>
+                        <IconButton
+                          size="small"
+                          disabled={index === 0}
+                          onClick={() => {
+                            const newList = [...pkg.days];
+                            [newList[index - 1], newList[index]] = [
+                              newList[index],
+                              newList[index - 1],
+                            ];
+                            setPkg({ ...pkg, days: newList });
+                          }}
+                          title="Move Up"
+                        >
+                          <ArrowUpwardIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          disabled={index === pkg.days.length - 1}
+                          onClick={() => {
+                            const newList = [...pkg.days];
+                            [newList[index + 1], newList[index]] = [
+                              newList[index],
+                              newList[index + 1],
+                            ];
+                            setPkg({ ...pkg, days: newList });
+                          }}
+                          title="Move Down"
+                        >
+                          <ArrowDownwardIcon fontSize="small" />
+                        </IconButton>
                         <IconButton
                           color="error"
+                          size="small"
                           onClick={() => handleRemoveDay(index)}
+                          title="Delete Day"
                         >
-                          <DeleteIcon />
+                          <DeleteIcon fontSize="small" />
                         </IconButton>
-                      )}
+                      </Box>
                     </Box>
 
                     <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -2368,6 +2911,51 @@ const PackageEditView = () => {
           </Grid>
         </Grid>
       </Box>
+      {/* Dialog for adding new locations */}
+      <Dialog
+        open={openLocationDialog}
+        onClose={handleCloseLocationDialog}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Add New Location</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Location Name"
+            fullWidth
+            variant="outlined"
+            value={newLocation}
+            onChange={(e) => setNewLocation(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseLocationDialog}>Cancel</Button>
+          <Button onClick={handleAddNewLocation} variant="contained">
+            Add
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Lead Options Manager Dialog */}
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Manage Options</DialogTitle>
+        <DialogContent>
+          <LeadOptionsManager
+            fieldName={currentField}
+            onAdd={handleOptionAdd}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </LocalizationProvider>
   );
 };

@@ -39,6 +39,7 @@ import {
   deleteLeadOption,
 } from "../../../../features/leads/leadSlice";
 import DeleteIcon from "@mui/icons-material/Delete";
+import LeadOptionsManager from "../../../../Components/LeadOptionsManager";
 
 // ✅ NEW: Tour Type Constants
 const TOUR_TYPES = [
@@ -98,6 +99,36 @@ const PackageEntryForm = ({ onNext, initialData }) => {
       setSelectedCountry("India");
     }
   }, [dispatch, tourType]);
+
+  // Fetch initial cities if sector exists in initialData
+  useEffect(() => {
+    if (initialData?.sector) {
+      const sector = initialData.sector;
+      setCurrentState(sector);
+      if (DOMESTIC_TOUR_TYPES.includes(tourType)) {
+        dispatch(fetchDomesticCities(sector))
+          .unwrap()
+          .then((cityList) => {
+            const cities = cityList.map((c) => c.name || c.city || c);
+            setAllCities(cities);
+            setLocationList(cities);
+          });
+      } else if (selectedCountry) {
+        dispatch(
+          fetchInternationalCities({
+            countryName: selectedCountry,
+            stateName: sector,
+          }),
+        )
+          .unwrap()
+          .then((cityList) => {
+            const cities = cityList.map((c) => c.name || c.city || c);
+            setAllCities(cities);
+            setLocationList(cities);
+          });
+      }
+    }
+  }, [initialData?.sector, tourType, selectedCountry, dispatch]);
 
   const formik = useFormik({
     initialValues: {
@@ -282,27 +313,21 @@ const PackageEntryForm = ({ onNext, initialData }) => {
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
+    dispatch(getLeadOptions()); // Ensure options are refreshed
   };
 
-  const handleAddNewItem = async () => {
-    if (!addMore.trim()) return;
-
-    try {
-      const newValue = addMore.trim();
-      const backendField = currentField;
-
-      await dispatch(
-        addLeadOption({ fieldName: backendField, value: newValue }),
-      ).unwrap();
-      await dispatch(getLeadOptions()).unwrap();
-      formik.setFieldValue(backendField, [
-        ...formik.values[backendField],
-        newValue,
-      ]);
-
-      handleCloseDialog();
-    } catch (error) {
-      console.error("Failed to add new option", error);
+  const handleOptionAdd = (newValue) => {
+    // If the field is an array (like packageSubType), add the new value to it
+    if (Array.isArray(formik.values[currentField])) {
+      if (!formik.values[currentField].includes(newValue)) {
+        formik.setFieldValue(currentField, [
+          ...formik.values[currentField],
+          newValue,
+        ]);
+      }
+    } else {
+      // For single value fields
+      formik.setFieldValue(currentField, newValue);
     }
   };
 
@@ -915,24 +940,22 @@ const PackageEntryForm = ({ onNext, initialData }) => {
         </Grid>
       </form>
 
-      {/* Add New Option Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog}>
-        <DialogTitle>Add New {currentField}</DialogTitle>
+      {/* Dialog for adding new options (Sub Type, Source, etc) */}
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Manage Options</DialogTitle>
         <DialogContent>
-          <TextField
-            fullWidth
-            autoFocus
-            margin="dense"
-            label={`New ${currentField}`}
-            value={addMore}
-            onChange={(e) => setAddMore(e.target.value)}
+          <LeadOptionsManager
+            fieldName={currentField}
+            onAdd={handleOptionAdd}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleAddNewItem} variant="contained">
-            Add
-          </Button>
+          <Button onClick={handleCloseDialog}>Close</Button>
         </DialogActions>
       </Dialog>
 

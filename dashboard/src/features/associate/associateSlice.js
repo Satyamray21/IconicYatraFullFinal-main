@@ -7,6 +7,11 @@ export const fetchAllAssociates = createAsyncThunk("associate/fetchAll", async (
   return res.data;
 });
 
+export const fetchAssociateStats = createAsyncThunk("associate/fetchStats", async () => {
+  const res = await axios.get("/associate/stats");
+  return res.data;
+});
+
 // Fetch single associate by ID
 export const fetchAssociateById = createAsyncThunk("associate/fetchById", async (id) => {
   const res = await axios.get(`/associate/${id}`);
@@ -114,8 +119,10 @@ const associateSlice = createSlice({
   name: "associate",
   initialState: {
     list: [],
+    stats: [],
     selected: null,
     loading: false,
+    statsLoading: false,
     deleting: false,
     error: null,
     quotations: [],
@@ -152,6 +159,17 @@ const associateSlice = createSlice({
       .addCase(fetchAllAssociates.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message;
+      })
+      // Fetch associate stats
+      .addCase(fetchAssociateStats.pending, (state) => {
+        state.statsLoading = true;
+      })
+      .addCase(fetchAssociateStats.fulfilled, (state, action) => {
+        state.statsLoading = false;
+        state.stats = action.payload;
+      })
+      .addCase(fetchAssociateStats.rejected, (state) => {
+        state.statsLoading = false;
       })
       // Fetch associate by ID
       .addCase(fetchAssociateById.pending, (state) => {

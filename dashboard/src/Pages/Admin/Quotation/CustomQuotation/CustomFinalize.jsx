@@ -61,6 +61,8 @@ import {
     Download,
     Error,
     Calculate,
+    ArrowUpward,
+    ArrowDownward,
 } from "@mui/icons-material";
 import html2pdf from "html2pdf.js";
 import InvoiceView from "../../../../Components/InvoiceView";
@@ -1097,6 +1099,7 @@ useEffect(() => {
         return {
             _id: apiData._id,
             quotationId: quotationId,
+            bookingId: apiData.bookingId,
             date: formatDate(createdAt),
             arrivalDate,
             reference: quotationId,
@@ -1375,7 +1378,8 @@ useEffect(() => {
             return;
         }
         setEmailTemplateType("normal");
-        const defaultCompanyId = company?._id || mailCompanies?.[0]?._id;
+        // Prefer the company chosen at finalization
+        const defaultCompanyId = selectedQuotation?.companyId || company?._id || mailCompanies?.[0]?._id;
         try {
             await refreshEmailTemplates(defaultCompanyId);
         } catch (e) {
@@ -1485,6 +1489,8 @@ useEffect(() => {
         const source = selectedQuotation || {};
         const type = emailTemplateType === "booking" ? "booking" : "normal";
         const tpl = emailTemplateBodies[type];
+        // Prefer the company chosen during finalization so the user doesn't have to re-select
+        const defaultCompanyId = selectedQuotation?.companyId || company?._id || mailCompanies?.[0]?._id || "";
         return {
             to: "",
             cc: "",
@@ -1496,7 +1502,7 @@ useEffect(() => {
             signature: "",
             mailType: type,
             senderAccount: "",
-            companyId: company?._id || mailCompanies?.[0]?._id || "",
+            companyId: defaultCompanyId,
             nextPayableAmount: "",
             paymentDueDate: "",
         };
@@ -1841,6 +1847,8 @@ useEffect(() => {
                     finalizedPackage: packages[0], // Keep for backward compatibility
                     finalizedPackages: packages, // New field for multiple packages
                     selectedBank: values?.selectedBank,
+                    companyId: values?.companyId,
+                    companyName: values?.companyName,
                 })
             ).unwrap();
 
@@ -2161,6 +2169,70 @@ useEffect(() => {
         await persistItineraryToServer(next);
     };
 
+    const handleMoveDestination = async (index, direction) => {
+        const nextIndex = index + direction;
+        if (nextIndex < 0 || nextIndex >= (quotation.hotelPricingData.length - 2)) return;
+
+        setItinerarySaving(true);
+        try {
+            // 1. Swap destinations in currentQuotation
+            const nextDestinations = [...currentQuotation.tourDetails.quotationDetails.destinations];
+            const [movedDest] = nextDestinations.splice(index, 1);
+            nextDestinations.splice(nextIndex, 0, movedDest);
+
+            // 2. Swap day blocks in itinerary
+            const nextDays = [...days];
+            const getDayRange = (idx) => {
+                let start = 0;
+                for (let i = 0; i < idx; i++) {
+                    start += currentQuotation.tourDetails.quotationDetails.destinations[i].nights || 0;
+                }
+                return { start, count: currentQuotation.tourDetails.quotationDetails.destinations[idx].nights || 0 };
+            };
+
+            const range1 = getDayRange(index);
+            const range2 = getDayRange(nextIndex);
+
+            if (direction === 1) { // Move Down
+                const block1 = nextDays.splice(range1.start, range1.count);
+                nextDays.splice(range1.start + range2.count, 0, ...block1);
+            } else { // Move Up
+                const block2 = nextDays.splice(range2.start, range2.count);
+                nextDays.splice(range2.start + range1.count, 0, ...block2);
+            }
+
+            // 3. Update days state
+            setDays(nextDays);
+
+            // 4. Persist everything to server
+            await dispatch(updateQuotationStep({
+                quotationId: id,
+                stepNumber: 6,
+                stepData: {
+                    clientDetails: currentQuotation.clientDetails,
+                    pickupDrop: currentQuotation.pickupDrop,
+                    tourDetails: {
+                        ...currentQuotation.tourDetails,
+                        quotationDetails: {
+                            ...currentQuotation.tourDetails.quotationDetails,
+                            destinations: nextDestinations
+                        }
+                    }
+                }
+            })).unwrap();
+
+            await persistItineraryToServer(nextDays);
+            await refreshQuotationFromApi();
+
+            setSnackbar({ open: true, message: "Destinations and itinerary reordered", severity: "success" });
+        } catch (err) {
+            console.error(err);
+            setSnackbar({ open: true, message: "Failed to reorder destinations", severity: "error" });
+        } finally {
+            setItinerarySaving(false);
+        }
+    };
+
     // PDF Dialog Handlers - FIXED VERSION
     const handlePreviewPdf = () => {
         console.log("Opening PDF dialog...");
@@ -2426,7 +2498,7 @@ useEffect(() => {
                 {quotation.actions
                     .filter(
                         (a) =>
-                            !(a === "Finalize" && isFinalized) &&
+                            !(a === "Finalize" && isFinalized && quotation.bookingId) &&
                             !(a === "Transaction" && !isFinalized)
                     )
                     .map((a, i) => (
@@ -2776,6 +2848,14 @@ useEffect(() => {
                                     Ref: {quotation.reference}
                                 </Typography>
                             </Box>
+                            {quotation.bookingId && (
+                                <Box display="flex" alignItems="center" mt={1}>
+                                    <CheckCircle sx={{ fontSize: 18, mr: 0.5, color: "error.main" }} />
+                                    <Typography variant="body2" fontWeight="bold" color="error.main">
+                                        Booking ID: {quotation.bookingId}
+                                    </Typography>
+                                </Box>
+                            )}
 
                             <Box display="flex" alignItems="center" mt={2}>
                                 <Person sx={{ fontSize: 18, mr: 0.5 }} />
@@ -3084,6 +3164,32 @@ useEffect(() => {
                                                             <Box>
                                                                 <IconButton
                                                                     size="small"
+                                                                    disabled={index === 0 || itinerarySaving}
+                                                                    onClick={async () => {
+                                                                        const next = [...days];
+                                                                        const [moved] = next.splice(index, 1);
+                                                                        next.splice(index - 1, 0, moved);
+                                                                        setDays(next);
+                                                                        await persistItineraryToServer(next);
+                                                                    }}
+                                                                >
+                                                                    <ArrowUpward fontSize="small" />
+                                                                </IconButton>
+                                                                <IconButton
+                                                                    size="small"
+                                                                    disabled={index === days.length - 1 || itinerarySaving}
+                                                                    onClick={async () => {
+                                                                        const next = [...days];
+                                                                        const [moved] = next.splice(index, 1);
+                                                                        next.splice(index + 1, 0, moved);
+                                                                        setDays(next);
+                                                                        await persistItineraryToServer(next);
+                                                                    }}
+                                                                >
+                                                                    <ArrowDownward fontSize="small" />
+                                                                </IconButton>
+                                                                <IconButton
+                                                                    size="small"
                                                                     onClick={() => handleEditItinerary(day, index)}
                                                                     disabled={itinerarySaving}
                                                                 >
@@ -3217,6 +3323,7 @@ useEffect(() => {
                                                         {h}
                                                     </TableCell>
                                                 ))}
+                                                <TableCell sx={{ color: "white", fontWeight: "bold" }}>Actions</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -3229,6 +3336,22 @@ useEffect(() => {
                                                         <TableCell>{row.standard}</TableCell>
                                                         <TableCell>{row.deluxe}</TableCell>
                                                         <TableCell>{row.superior}</TableCell>
+                                                        <TableCell>
+                                                            <IconButton
+                                                                size="small"
+                                                                disabled={index === 0 || itinerarySaving}
+                                                                onClick={() => handleMoveDestination(index, -1)}
+                                                            >
+                                                                <ArrowUpward fontSize="small" />
+                                                            </IconButton>
+                                                            <IconButton
+                                                                size="small"
+                                                                disabled={index === (quotation.hotelPricingData.length - 3) || itinerarySaving}
+                                                                onClick={() => handleMoveDestination(index, 1)}
+                                                            >
+                                                                <ArrowDownward fontSize="small" />
+                                                            </IconButton>
+                                                        </TableCell>
                                                     </TableRow>
                                                 ))}
 
@@ -3491,6 +3614,7 @@ useEffect(() => {
                 onClose={handleFinalizeClose}
                 onConfirm={handleConfirm}
                 additionalServicesSum={billableServicesSum}
+                companyOptions={mailCompanies}
             />
             <HotelVendorDialog
                 open={openBankDialog}

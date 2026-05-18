@@ -6,6 +6,11 @@ export const fetchAllStaff = createAsyncThunk("staff/fetchAll", async () => {
   return res.data.data;
 });
 
+export const fetchStaffStats = createAsyncThunk("staff/fetchStats", async () => {
+  const res = await axios.get("/staff/stats");
+  return res.data.data;
+});
+
 export const fetchStaffById = createAsyncThunk("staff/fetchById", async (id) => {
   const res = await axios.get(`/staff/${id}`);
   return res.data.data;
@@ -84,8 +89,10 @@ const staffSlice = createSlice({
   name: "staff",
   initialState: {
     list: [],
+    stats: [],
     selected: null,
     loading: false,
+    statsLoading: false,
     updating: false,
     error: null,
   },
@@ -106,6 +113,17 @@ const staffSlice = createSlice({
       .addCase(fetchAllStaff.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message;
+      })
+      
+      .addCase(fetchStaffStats.pending, (state) => {
+        state.statsLoading = true;
+      })
+      .addCase(fetchStaffStats.fulfilled, (state, action) => {
+        state.statsLoading = false;
+        state.stats = action.payload;
+      })
+      .addCase(fetchStaffStats.rejected, (state, action) => {
+        state.statsLoading = false;
       })
       
       .addCase(fetchStaffById.pending, (state) => {

@@ -1046,6 +1046,14 @@ const FlightFinalize = () => {
                     Ref: {quotation.flightQuotationId}
                   </Typography>
                 </Box>
+                {quotation.bookingId && (
+                  <Box display="flex" alignItems="center" mt={1}>
+                    <CheckCircle sx={{ fontSize: 18, mr: 0.5, color: "error.main" }} />
+                    <Typography variant="body2" fontWeight="bold" color="error.main">
+                      Booking ID: {quotation.bookingId}
+                    </Typography>
+                  </Box>
+                )}
                 <Box display="flex" alignItems="center" mt={2}>
                   <Person sx={{ fontSize: 18, mr: 0.5 }} />
                   <Typography variant="subtitle1" fontWeight="bold">
@@ -1392,6 +1400,30 @@ const FlightFinalize = () => {
                 </Grid>
               </Grid>
             ))}
+
+            {/* Company Selection */}
+            <Grid size={{ xs: 12 }} sx={{ mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 0.5 }}>
+                <span style={{ color: "red" }}>*</span> Select Branding Company
+              </Typography>
+              <FormControl fullWidth size="small">
+                <InputLabel>Company</InputLabel>
+                <Select
+                  value={selectedCompanyId}
+                  label="Company"
+                  onChange={(e) => setSelectedCompanyId(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>-- Choose Company --</em>
+                  </MenuItem>
+                  {mailCompanies.map((c) => (
+                    <MenuItem key={c._id} value={c._id}>
+                      {c.companyName}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
 
             {/* GST Section */}
             <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>

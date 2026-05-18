@@ -16,7 +16,7 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
   const paymentLink = pickHttp(options.paymentLink);
 
   const guestName = quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
-  const bookingId = quotation?.quotationId || quotation?.quickQuotationId || "Booking Id";
+  const bookingId = quotation?.bookingId || quotation?.quotationId || quotation?.quickQuotationId || "Booking Id";
 
   let packageTitle = options.packageTitle || quotation?.tourDetails?.quotationTitle || "Tour Package";
   if (!packageTitle.includes("Nights") && !packageTitle.includes("Days")) {

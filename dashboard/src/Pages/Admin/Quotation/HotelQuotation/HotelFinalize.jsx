@@ -313,6 +313,7 @@ const HotelFinalize = () => {
             // Basic info
             date: formatDate(apiData.createdAt),
             reference: apiData.hotelQuotationId || "N/A",
+            bookingId: apiData.bookingId,
 
             // Customer info
             customer: {
@@ -447,10 +448,19 @@ const HotelFinalize = () => {
         setEditDialog({ ...editDialog, value: e.target.value });
     };
 
-    const handleConfirm = () => {
-        setIsFinalized(true);
-        setOpenFinalize(false);
-        setOpenBankDialog(true);
+    const handleConfirm = async ({ bank, companyId, companyName }) => {
+        try {
+            await axios.post(`/hotelQT/finalize/${id}`, {
+                companyId,
+                companyName
+            });
+            setIsFinalized(true);
+            setOpenFinalize(false);
+            setOpenBankDialog(true);
+        } catch (error) {
+            console.error("Error finalizing hotel quotation:", error);
+            alert("Failed to finalize quotation. Please try again.");
+        }
     };
 
     const handleBankDialogClose = () => {
@@ -902,6 +912,14 @@ const HotelFinalize = () => {
                                     Ref: {quotationData.reference}
                                 </Typography>
                             </Box>
+                            {quotationData.bookingId && (
+                                <Box display="flex" alignItems="center" mt={1}>
+                                    <CheckCircle sx={{ fontSize: 18, mr: 0.5, color: "error.main" }} />
+                                    <Typography variant="body2" fontWeight="bold" color="error.main">
+                                        Booking ID: {quotationData.bookingId}
+                                    </Typography>
+                                </Box>
+                            )}
                             <Box display="flex" alignItems="center" mt={2}>
                                 <Person sx={{ fontSize: 18, mr: 0.5 }} />
                                 <Typography variant="subtitle1" fontWeight="bold">
@@ -1260,6 +1278,7 @@ const HotelFinalize = () => {
                 vendor={vendor}
                 setVendor={setVendor}
                 onConfirm={handleConfirm}
+                companyOptions={mailCompanies}
             />
 
             <BankDetailsDialog

@@ -47,8 +47,8 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
   const defaultPaxCount =
     (Number(clientMembers?.adults) || Number(clientDetails?.adults) || 0) +
     (Number(clientMembers?.children) || Number(clientDetails?.children) || 0) +
-    (Number(clientMembers?.kidsWithoutMattress) || 0) +
-    (Number(clientMembers?.infants) || 0);
+    (Number(clientMembers?.kidsWithoutMattress) || Number(clientDetails?.kids) || 0) +
+    (Number(clientMembers?.infants) || Number(clientDetails?.infants) || 0);
 
   // Dialog state
   const [openDialog, setOpenDialog] = useState(false);
@@ -291,6 +291,8 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
         setFieldValue("departureDate", "");
         setFieldValue("numberOfPax", "");
         setFieldValue("noOfRooms", "");
+        setFieldValue("noOfMattress", "");
+        setFieldValue("roomType", "");
         setFieldValue("transportationCost", "");
         setFieldValue("hotelTotalCost", "");
         setFieldValue("standardCost", "");
@@ -340,11 +342,15 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
         itinerary: [{ title: "", description: "", activities: "" }],
         // Additional fields
         numberOfPax: defaultPaxCount || "",
-        roomType: clientAccommodation?.sharingType || "",
+        roomType: clientAccommodation?.sharingType || clientDetails?.roomType || "",
         noOfRooms:
           Number(clientAccommodation?.noOfRooms) ||
           Number(clientDetails?.noOfRooms) ||
           1,
+        noOfMattress:
+          Number(clientAccommodation?.noOfMattress) ||
+          Number(clientDetails?.noOfMattress) ||
+          0,
         arrivalDate:
           clientPickupDrop?.arrivalDate || clientDetails?.arrivalDate || "",
         departureDate:
@@ -392,6 +398,7 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
             ...values,
             numberOfPax: Number(values.numberOfPax) || 0,
             noOfRooms: Number(values.noOfRooms) || 0,
+            noOfMattress: Number(values.noOfMattress) || 0,
             transportationCost: Number(values.transportationCost) || 0,
             hotelTotalCost: Number(values.hotelTotalCost) || 0,
             standardCost: Number(values.standardCost) || 0,
@@ -971,6 +978,29 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
                 label="No of Rooms"
                 name="noOfRooms"
                 value={values.noOfRooms}
+                onChange={handleChange}
+                InputProps={{ inputProps: { min: 0 } }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                label="Room Type"
+                name="roomType"
+                value={values.roomType}
+                onChange={handleChange}
+                placeholder="e.g., Deluxe, Triple Sharing"
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="No of Mattress"
+                name="noOfMattress"
+                value={values.noOfMattress}
                 onChange={handleChange}
                 InputProps={{ inputProps: { min: 0 } }}
               />

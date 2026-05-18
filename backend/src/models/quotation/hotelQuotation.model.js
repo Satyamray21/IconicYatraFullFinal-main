@@ -123,8 +123,22 @@ const hotelQuotationSchema = new mongoose.Schema(
         hotelQuotationId: {
             type: String,
             unique: true
-        }
-
+        },
+        bookingId: {
+            type: String,
+        },
+        companyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Company",
+        },
+        companyName: {
+            type: String,
+        },
+        finalizeStatus: {
+            type: String,
+            enum: ["draft", "finalized", "cancelled"],
+            default: "draft",
+        },
     }, { timestamps: true }
 )
 export const HotelQuotation = mongoose.model("HotelQuotation", hotelQuotationSchema)

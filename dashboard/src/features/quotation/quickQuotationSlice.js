@@ -8,7 +8,7 @@ export const createQuickQuotation = createAsyncThunk(
     async (formData, { rejectWithValue }) => {
         try {
             const { data } = await api.post("/quickQT", formData);
-            return data.quotation;
+            return data.data ?? data.quotation ?? data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Failed to create quotation");
         }
@@ -21,7 +21,7 @@ export const fetchQuickQuotations = createAsyncThunk(
     async (_, { rejectWithValue }) => {
         try {
             const { data } = await api.get("/quickQT");
-            return data.quotations;
+            return data.data?.quotations ?? data.data ?? data.quotations ?? data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Failed to load quotations");
         }
@@ -34,7 +34,7 @@ export const fetchQuickQuotationById = createAsyncThunk(
     async (id, { rejectWithValue }) => {
         try {
             const { data } = await api.get(`/quickQT/${id}`);
-            return data;
+            return data.data ?? data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Failed to load quotation");
         }
@@ -47,7 +47,7 @@ export const updateQuickQuotation = createAsyncThunk(
     async ({ id, formData }, { rejectWithValue }) => {
         try {
             const { data } = await api.put(`/quickQT/${id}`, formData);
-            return data.quotation;
+            return data.data ?? data.quotation ?? data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Failed to update quotation");
         }
@@ -83,7 +83,7 @@ export const sendQuickQuotationMail = createAsyncThunk(
 
 export const finalizeQuickQuotation = createAsyncThunk(
     "quickQuotation/finalize",
-    async ({ id, finalizedPackage, finalizedVendorsWithAmounts }, { rejectWithValue, getState }) => {
+    async ({ id, finalizedPackage, finalizedVendorsWithAmounts, companyId, companyName }, { rejectWithValue, getState }) => {
         try {
             const currentQuotation = getState()?.quickQuotation?.currentQuotation;
             const existingPackage = currentQuotation?.finalizedPackage;
@@ -102,6 +102,8 @@ export const finalizeQuickQuotation = createAsyncThunk(
             }
             const { data } = await api.patch(`/quickQT/${id}/finalize`, {
                 ...payload,
+                companyId,
+                companyName
             });
             return data?.data ?? data;
         } catch (err) {
