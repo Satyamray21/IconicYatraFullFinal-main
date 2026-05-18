@@ -35,6 +35,7 @@ import {
     Sync as SyncIcon,
     Hotel as HotelIcon,
     CalendarMonth as CalendarIcon,
+    Undo as UndoIcon,
 } from "@mui/icons-material";
 import { Autocomplete } from "@mui/material";
 import axios from "../../../../../utils/axios";
@@ -60,7 +61,20 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     const [splitDialogOpen, setSplitDialogOpen] = useState(false);
     const [splitTargetHotel, setSplitTargetHotel] = useState(null);
     const [splitFirstNights, setSplitFirstNights] = useState(1);
+    const [hotelsHistory, setHotelsHistory] = useState([]);
     const receiptHiddenRef = React.useRef();
+
+    const saveToHistory = (currentHotels = hotels) => {
+        setHotelsHistory((prev) => [...prev, JSON.parse(JSON.stringify(currentHotels))]);
+    };
+
+    const handleUndo = () => {
+        if (hotelsHistory.length === 0) return;
+        const previousState = hotelsHistory[hotelsHistory.length - 1];
+        setHotels(previousState);
+        setHotelsHistory((prev) => prev.slice(0, -1));
+        setSnackbar({ open: true, message: "Last action undone successfully!", severity: "info" });
+    };
 
     const fetchHotelsForCity = async (city) => {
         const trimmedCity = (city || "").trim();
@@ -163,6 +177,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     }, [senderAccount, emailAccounts]);
 
     const handleAutoFillDates = (currentHotels = hotels) => {
+        saveToHistory(currentHotels);
         const arrivalDateStr = quotation?.tourDetails?.arrivalDate || quotation?.arrivalDate || quotation?.packageSnapshot?.quotationDetails?.arrivalDate;
         if (!arrivalDateStr) {
             setSnackbar({ open: true, message: "Arrival date is missing in quotation to auto-fill dates", severity: "warning" });
@@ -204,6 +219,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
 
     const handleConfirmSplit = () => {
         if (!splitTargetHotel) return;
+        saveToHistory();
         const index = hotels.findIndex(h => h.id === splitTargetHotel.id);
         if (index === -1) return;
 
@@ -324,6 +340,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     }, [open, quotation]);
 
     const handleAddHotel = () => {
+        saveToHistory();
         const newHotel = {
             id: Date.now(),
             hotelName: "",
@@ -365,6 +382,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     };
 
     const handleRemoveHotel = (id) => {
+        saveToHistory();
         const remaining = hotels.filter((h) => h.id !== id);
         
         // Auto-recalculate dates for the remaining sequence
@@ -518,6 +536,25 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                     <Typography variant="h6" fontWeight="bold" sx={{ letterSpacing: 0.5 }}>Hotel Confirmation Details</Typography>
                 </Box>
                 <Box display="flex" gap={1.5}>
+                    {hotelsHistory.length > 0 && (
+                        <Tooltip title="Undo last structural action (Split, Delete, Sync)">
+                            <Button 
+                                startIcon={<UndoIcon />} 
+                                variant="contained" 
+                                size="small" 
+                                onClick={handleUndo}
+                                sx={{ 
+                                    bgcolor: "#e65100", 
+                                    color: "#fff",
+                                    '&:hover': { bgcolor: "#bf360c" },
+                                    textTransform: "none",
+                                    fontWeight: "bold"
+                                }}
+                            >
+                                Undo Action
+                            </Button>
+                        </Tooltip>
+                    )}
                     <Tooltip title="Recalculate and fill check-in/out dates sequentially based on arrival date">
                         <Button 
                             startIcon={<SyncIcon />} 
