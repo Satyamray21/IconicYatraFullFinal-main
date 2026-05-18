@@ -784,11 +784,24 @@ function formatQuickMealPlan(pkg) {
 }
 
 function formatQuickRooms(pkg) {
-  const r = pkg?.quotationDetails?.rooms;
+  const qd = pkg?.quotationDetails || {};
+  const r = qd.rooms;
   const n =
-    r?.numberOfRooms != null && r.numberOfRooms !== "" ? r.numberOfRooms : 1;
+    r?.numberOfRooms != null && r.numberOfRooms !== ""
+      ? r.numberOfRooms
+      : qd.noOfRooms != null && qd.noOfRooms !== ""
+        ? qd.noOfRooms
+        : qd.numberOfRooms != null && qd.numberOfRooms !== ""
+          ? qd.numberOfRooms
+          : pkg.noOfRooms != null && pkg.noOfRooms !== ""
+            ? pkg.noOfRooms
+            : pkg.numberOfRooms != null && pkg.numberOfRooms !== ""
+              ? pkg.numberOfRooms
+              : 1;
   const sharingRaw =
-    String(r?.sharingType || "Double sharing").trim() || "Double sharing";
+    String(
+      r?.sharingType || qd.sharingType || pkg.sharingType || "Double sharing",
+    ).trim() || "Double sharing";
   return `${n} (${titleCaseWords(sharingRaw)})`;
 }
 
