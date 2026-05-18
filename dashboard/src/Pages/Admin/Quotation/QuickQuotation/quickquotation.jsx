@@ -96,6 +96,8 @@ const QuickQuotationForm = () => {
         clientLocation: finalData.clientDetails?.clientLocation?.trim() || "",
         adults: parseInt(finalData.clientDetails?.adults) || 0,
         children: parseInt(finalData.clientDetails?.children) || 0,
+        kids: parseInt(finalData.clientDetails?.kids) || 0,
+        infants: parseInt(finalData.clientDetails?.infants) || 0,
         message: finalData.clientDetails?.message?.trim() || "",
 
         packageId: finalData.packageDetails?.selectedPackage || "",
@@ -117,6 +119,8 @@ const QuickQuotationForm = () => {
           "",
         numberOfPax: Number(finalData.packageDetails?.numberOfPax) || 0,
         noOfRooms: Number(finalData.packageDetails?.noOfRooms) || 0,
+        noOfMattress: Number(finalData.packageDetails?.noOfMattress) || 0,
+        roomType: finalData.packageDetails?.roomType || "",
         transportationCost:
           Number(finalData.packageDetails?.transportationCost) || 0,
         hotelTotalCost: Number(finalData.packageDetails?.hotelTotalCost) || 0,
@@ -166,6 +170,7 @@ const QuickQuotationForm = () => {
             finalData.clientDetails?.dropTime ||
             "",
           noOfRooms: Number(finalData.packageDetails?.noOfRooms) || 0,
+          noOfMattress: Number(finalData.packageDetails?.noOfMattress) || 0,
           transportationCost:
             Number(finalData.packageDetails?.transportationCost) || 0,
           hotelTotalCost: Number(finalData.packageDetails?.hotelTotalCost) || 0,
