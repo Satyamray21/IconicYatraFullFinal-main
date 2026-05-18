@@ -800,9 +800,22 @@ function formatQuickRooms(pkg) {
               : 1;
   const sharingRaw =
     String(
-      r?.sharingType || qd.sharingType || pkg.sharingType || "Double sharing",
+      r?.sharingType || qd.roomType || qd.sharingType || pkg.roomType || pkg.sharingType || "Double sharing",
     ).trim() || "Double sharing";
-  return `${n} (${titleCaseWords(sharingRaw)})`;
+  const mattresses =
+    r?.numberOfMattress != null && r.numberOfMattress !== ""
+      ? r.numberOfMattress
+      : qd.noOfMattress != null && qd.noOfMattress !== ""
+        ? qd.noOfMattress
+        : pkg.noOfMattress != null && pkg.noOfMattress !== ""
+          ? pkg.noOfMattress
+          : 0;
+
+  let line = `${n} Room(s) (${titleCaseWords(sharingRaw)})`;
+  if (Number(mattresses) > 0) {
+    line += ` + ${mattresses} Extra Mattress(es)`;
+  }
+  return line;
 }
 
 /** Matches requested copy: "2 Guests (2 Adults, 0 Children ,0 Kids , 0 Infants)" */
@@ -1392,6 +1405,12 @@ const QuickFinalize = () => {
     kids: 0,
     infants: 0,
   });
+  const [roomDetailsDialog, setRoomDetailsDialog] = useState({
+    open: false,
+    noOfRooms: 1,
+    noOfMattress: 0,
+    roomType: "Double sharing",
+  });
   const [bannerUploading, setBannerUploading] = useState(false);
   const [itinerarySaving, setItinerarySaving] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -1571,6 +1590,71 @@ const QuickFinalize = () => {
       setSnackbar({
         open: true,
         message: "Guest counts saved",
+        severity: "success",
+      });
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: String(e?.message || e || "Save failed"),
+        severity: "error",
+      });
+    }
+  };
+
+  const openRoomDetailsDialog = () => {
+    const q = currentQuotation;
+    if (!q) return;
+    const qd = q.packageSnapshot?.quotationDetails;
+    setRoomDetailsDialog({
+      open: true,
+      noOfRooms: Number(q.noOfRooms) || Number(qd?.noOfRooms) || Number(qd?.rooms?.numberOfRooms) || 1,
+      noOfMattress: Number(q.noOfMattress) || Number(qd?.noOfMattress) || Number(qd?.rooms?.numberOfMattress) || 0,
+      roomType: q.roomType || qd?.roomType || qd?.rooms?.sharingType || "Double sharing",
+    });
+  };
+
+  const handleSaveRoomDetails = async () => {
+    const { noOfRooms, noOfMattress, roomType } = roomDetailsDialog;
+    const rCount = Math.max(1, Number(noOfRooms) || 1);
+    const mCount = Math.max(0, Number(noOfMattress) || 0);
+    const rType = String(roomType || "Double sharing").trim();
+
+    if (!apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Missing quotation id",
+        severity: "error",
+      });
+      return;
+    }
+    setRoomDetailsDialog((s) => ({ ...s, open: false }));
+    try {
+      await dispatch(
+        updateQuickQuotation({
+          id: apiEntityId,
+          formData: {
+            noOfRooms: rCount,
+            noOfMattress: mCount,
+            roomType: rType,
+            packageSnapshot: {
+              quotationDetails: {
+                noOfRooms: rCount,
+                noOfMattress: mCount,
+                roomType: rType,
+                rooms: {
+                  numberOfRooms: rCount,
+                  sharingType: rType,
+                  numberOfMattress: mCount,
+                }
+              },
+            },
+          },
+        }),
+      ).unwrap();
+      await refreshQuotationFromApi();
+      setSnackbar({
+        open: true,
+        message: "Room details saved",
         severity: "success",
       });
     } catch (e) {
@@ -3000,6 +3084,12 @@ const QuickFinalize = () => {
       editable: true,
       editGuestCounts: true,
     },
+    {
+      icon: <Business sx={{ fontSize: 16, mr: 0.5 }} />,
+      text: `Rooms: ${quotation.hotel.rooms}`,
+      editable: true,
+      editRoomsDetails: true,
+    },
   ];
 
   return (
@@ -3180,11 +3270,19 @@ const QuickFinalize = () => {
                               </Box>
                               {quotation.hotel.guests}
                             </Typography>
-                            <Typography variant="body2">
-                              <Box component="span" fontWeight={600}>
+                            <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Box component="span" fontWeight={600} sx={{ mr: 0.5 }}>
                                 Rooms:{" "}
                               </Box>
                               {quotation.hotel.rooms}
+                              <IconButton
+                                size="small"
+                                onClick={openRoomDetailsDialog}
+                                sx={{ ml: 0.5, p: 0.25 }}
+                                title="Edit Rooms"
+                              >
+                                <Edit fontSize="small" style={{ fontSize: "0.95rem" }} />
+                              </IconButton>
                             </Typography>
                             <Typography variant="body2">
                               <Box component="span" fontWeight={600}>
@@ -3359,15 +3457,17 @@ const QuickFinalize = () => {
                         onClick={() =>
                           i.editGuestCounts
                             ? openGuestCountsDialog()
-                            : handleEditOpen(
-                              i.field,
-                              i.field === "pickup"
-                                ? editablePickupDropPoint(i.text)
-                                : i.text,
-                              i.nestedKey || i.field,
-                              !!i.nestedKey,
-                              i.nestedKey,
-                            )
+                            : i.editRoomsDetails
+                              ? openRoomDetailsDialog()
+                              : handleEditOpen(
+                                i.field,
+                                i.field === "pickup"
+                                  ? editablePickupDropPoint(i.text)
+                                  : i.text,
+                                i.nestedKey || i.field,
+                                !!i.nestedKey,
+                                i.nestedKey,
+                              )
                         }
                       >
                         <Edit fontSize="small" />
@@ -4143,6 +4243,74 @@ const QuickFinalize = () => {
             Cancel
           </Button>
           <Button variant="contained" onClick={handleSaveGuestCounts}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={roomDetailsDialog.open}
+        onClose={() => setRoomDetailsDialog((s) => ({ ...s, open: false }))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Room Details</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Update the number of rooms, room type, and extra mattresses for this quick quotation.
+          </Typography>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                label="Room Type (Sharing Type)"
+                fullWidth
+                value={roomDetailsDialog.roomType}
+                onChange={(e) =>
+                  setRoomDetailsDialog((s) => ({
+                    ...s,
+                    roomType: e.target.value,
+                  }))
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="No of Rooms"
+                type="number"
+                fullWidth
+                inputProps={{ min: 1 }}
+                value={roomDetailsDialog.noOfRooms}
+                onChange={(e) =>
+                  setRoomDetailsDialog((s) => ({
+                    ...s,
+                    noOfRooms: e.target.value,
+                  }))
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="No of Extra Mattresses"
+                type="number"
+                fullWidth
+                inputProps={{ min: 0 }}
+                value={roomDetailsDialog.noOfMattress}
+                onChange={(e) =>
+                  setRoomDetailsDialog((s) => ({
+                    ...s,
+                    noOfMattress: e.target.value,
+                  }))
+                }
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setRoomDetailsDialog((s) => ({ ...s, open: false }))}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSaveRoomDetails}>
             Save
           </Button>
         </DialogActions>

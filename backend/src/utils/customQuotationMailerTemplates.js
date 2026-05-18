@@ -432,10 +432,10 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 
         <p><b>No. of Pax:</b> ${guestSummary(qd)}</p>
 
-        <p><b>No. of Room:</b> ${toNum(rooms.numberOfRooms)} ${safe(
+        <p><b>No. of Room:</b> ${toNum(rooms.numberOfRooms)} Room(s) - ${safe(
           rooms.sharingType,
-          "",
-        )}</p>
+          "Double sharing",
+        )}${toNum(rooms.numberOfMattress) > 0 ? ` + ${toNum(rooms.numberOfMattress)} Extra Mattress(es)` : ""}</p>
          <p><b>Transportation:</b> ${safe(
            vehicle?.basicsDetails?.vehicleType,
            "As per itinerary",
@@ -665,7 +665,10 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         </p>
         
         <p><b>No. of Pax:</b> ${guests}</p>
-        <p><b>No. of Room:</b> ${toNum(rooms.numberOfRooms)} ${safe(rooms.sharingType, "")}</p>
+        <p><b>No. of Room:</b> ${toNum(rooms.numberOfRooms)} Room(s) - ${safe(
+          rooms.sharingType,
+          "Double sharing",
+        )}${toNum(rooms.numberOfMattress) > 0 ? ` + ${toNum(rooms.numberOfMattress)} Extra Mattress(es)` : ""}</p>
         <p><b>Transportation:</b> ${safe(vehicle?.basicsDetails?.vehicleType, "As per itinerary")}</p>
         <p><b>Tour Duration:</b> ${duration.nights} Nights ${duration.days} Days</p>
         <p><b>Arrival Date:</b> ${fmtDate(td.arrivalDate)} ${pd.pickupTime ? `, Time: ${pd.pickupTime}` : ""}</p>
@@ -989,21 +992,31 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
             kids: toNum(quick.kids),
             infants: toNum(quick.infants),
             mealPlan: safe(qdSnap.mealPlan || pkg.mealPlan?.planType, "CP"),
-            rooms:
-              qdSnap.rooms && typeof qdSnap.rooms === "object"
-                ? qdSnap.rooms
-                : {
-                    numberOfRooms: toNum(
-                      qdSnap.noOfRooms ||
-                        qdSnap.numberOfRooms ||
-                        snap.noOfRooms ||
-                        quick.numberOfRooms ||
-                        1,
-                    ),
-                    sharingType: safe(
-                      qdSnap.sharingType || snap.sharingType || "Double sharing",
-                    ),
-                  },
+            rooms: {
+              numberOfRooms: toNum(
+                quick.noOfRooms ||
+                  qdSnap.noOfRooms ||
+                  qdSnap.numberOfRooms ||
+                  snap.noOfRooms ||
+                  qdSnap.rooms?.numberOfRooms ||
+                  quick.numberOfRooms ||
+                  1,
+              ),
+              sharingType: safe(
+                quick.roomType ||
+                  qdSnap.roomType ||
+                  qdSnap.sharingType ||
+                  snap.sharingType ||
+                  qdSnap.rooms?.sharingType ||
+                  "Double sharing",
+              ),
+              numberOfMattress: toNum(
+                quick.noOfMattress ||
+                  qdSnap.noOfMattress ||
+                  qdSnap.rooms?.numberOfMattress ||
+                  0,
+              ),
+            },
             destinations:
               Array.isArray(qdSnap.destinations) && qdSnap.destinations.length
                 ? qdSnap.destinations
@@ -1025,14 +1038,27 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
             mealPlan: safe(pkg.mealPlan?.planType, "CP"),
             rooms: {
               numberOfRooms: toNum(
-                qdSnap.noOfRooms ||
+                quick.noOfRooms ||
+                  qdSnap.noOfRooms ||
                   qdSnap.numberOfRooms ||
                   snap.noOfRooms ||
+                  qdSnap.rooms?.numberOfRooms ||
                   quick.numberOfRooms ||
                   1,
               ),
               sharingType: safe(
-                qdSnap.sharingType || snap.sharingType || "Double sharing",
+                quick.roomType ||
+                  qdSnap.roomType ||
+                  qdSnap.sharingType ||
+                  snap.sharingType ||
+                  qdSnap.rooms?.sharingType ||
+                  "Double sharing",
+              ),
+              numberOfMattress: toNum(
+                quick.noOfMattress ||
+                  qdSnap.noOfMattress ||
+                  qdSnap.rooms?.numberOfMattress ||
+                  0,
               ),
             },
             destinations,
@@ -1084,11 +1110,35 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
   const bookingId = safe(quotation?.bookingId || quotation?.quotationId || quotation?.quickQuotationId, "Booking Id");
   const adults = toNum(quotation?.adults || qd?.adults);
   const children = toNum(quotation?.children || qd?.children);
-  const kids = toNum(quotation?.kids || qd?.kids);
+  const kids = toNum(quotation?.kids || qd?.kids || qd?.kidsWithoutMattress);
   const infants = toNum(quotation?.infants || qd?.infants);
   
-  const guestsLine = `${adults} Adults, ${children + kids} Child (${children > 0 ? children + 'y' : ''}${kids > 0 ? ', ' + kids + 'y' : ''})`;
-  const roomsLine = `${qd?.rooms?.numberOfRooms || 1} ${safe(qd?.rooms?.sharingType, "Double sharing")}`;
+  let guestsParts = [`${adults} Adults`];
+  if (children > 0) guestsParts.push(`${children} Children`);
+  if (kids > 0) guestsParts.push(`${kids} Kids (Without Mattress)`);
+  if (infants > 0) guestsParts.push(`${infants} Infants`);
+  const guestsLine = guestsParts.join(", ");
+
+  const resolvedNumberOfRooms = toNum(
+    quotation?.noOfRooms ||
+      qd?.rooms?.numberOfRooms ||
+      qd?.noOfRooms ||
+      1
+  );
+  const resolvedSharingType = safe(
+    quotation?.roomType ||
+      qd?.rooms?.sharingType ||
+      qd?.roomType ||
+      "Double sharing"
+  );
+  const resolvedNumberOfMattress = toNum(
+    quotation?.noOfMattress ||
+      qd?.rooms?.numberOfMattress ||
+      qd?.noOfMattress ||
+      0
+  );
+
+  const roomsLine = `${resolvedNumberOfRooms} Room(s) - ${resolvedSharingType}${resolvedNumberOfMattress > 0 ? ` + ${resolvedNumberOfMattress} Extra Mattress(es)` : ""}`;
   const packageType = safe(quotation?.finalizedPackage || "Family Tour Package");
   
   const destinations = qd?.destinations || pkg?.destinationNights || [];
