@@ -992,7 +992,18 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
             rooms:
               qdSnap.rooms && typeof qdSnap.rooms === "object"
                 ? qdSnap.rooms
-                : { numberOfRooms: 1, sharingType: "Double sharing" },
+                : {
+                    numberOfRooms: toNum(
+                      qdSnap.noOfRooms ||
+                        qdSnap.numberOfRooms ||
+                        snap.noOfRooms ||
+                        quick.numberOfRooms ||
+                        1,
+                    ),
+                    sharingType: safe(
+                      qdSnap.sharingType || snap.sharingType || "Double sharing",
+                    ),
+                  },
             destinations:
               Array.isArray(qdSnap.destinations) && qdSnap.destinations.length
                 ? qdSnap.destinations
@@ -1012,7 +1023,18 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
             kids: toNum(quick.kids),
             infants: toNum(quick.infants),
             mealPlan: safe(pkg.mealPlan?.planType, "CP"),
-            rooms: { numberOfRooms: 1, sharingType: "Double sharing" },
+            rooms: {
+              numberOfRooms: toNum(
+                qdSnap.noOfRooms ||
+                  qdSnap.numberOfRooms ||
+                  snap.noOfRooms ||
+                  quick.numberOfRooms ||
+                  1,
+              ),
+              sharingType: safe(
+                qdSnap.sharingType || snap.sharingType || "Double sharing",
+              ),
+            },
             destinations,
             packageCalculations: normalizedCalcSnap,
             taxes: { taxPercent: 5, applyGST: true, gstOn: "package" },
