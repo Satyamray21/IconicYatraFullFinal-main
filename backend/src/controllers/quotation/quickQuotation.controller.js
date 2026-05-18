@@ -21,7 +21,7 @@ import PDFDocument from "pdfkit";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
-import { clearPattern } from "../../utils/cache.js";
+import { getCache, setCache, clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
 import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 import path from "path";
@@ -143,6 +143,8 @@ export const createQuickQuotation = async (req, res) => {
       departureDate,
       numberOfPax,
       noOfRooms,
+      noOfMattress,
+      roomType,
       transportationCost,
       hotelTotalCost,
       standardCost,
@@ -176,6 +178,8 @@ export const createQuickQuotation = async (req, res) => {
         departureDate: departureDate || "",
         numberOfPax: Number(numberOfPax) || 0,
         noOfRooms: Number(noOfRooms) || 0,
+        noOfMattress: Number(noOfMattress) || 0,
+        roomType: roomType || "",
         transportationCost: Number(transportationCost) || 0,
         hotelTotalCost: Number(hotelTotalCost) || 0,
         standardCost: Number(standardCost) || 0,
@@ -199,6 +203,9 @@ export const createQuickQuotation = async (req, res) => {
       children,
       kids: kids ?? 0,
       infants: infants ?? 0,
+      noOfRooms: noOfRooms ?? 0,
+      noOfMattress: noOfMattress ?? 0,
+      roomType: roomType || "",
       message,
 
       pickupPoint: pickupPoint || "",
@@ -220,11 +227,14 @@ export const createQuickQuotation = async (req, res) => {
       user: req.user?.name || "Admin",
     });
 
+    await clearPattern("quickQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
     await clearPattern('dashboard:stats:*');
-    res.status(201).json({
-      message: "Quick quotation created successfully",
-      quotation: newQuotation,
-    });
+
+    res.status(201).json(
+      new ApiResponse(201, newQuotation, "Quick quotation created successfully", "database")
+    );
   } catch (error) {
     console.error("Error creating quotation:", error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -236,11 +246,34 @@ export const createQuickQuotation = async (req, res) => {
 // ==========================
 export const getAllQuickQuotations = async (req, res) => {
   try {
+    const cacheKey = "quickQuotations:all";
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          { count: cachedData.length, quotations: cachedData },
+          "Quotations fetched from cache",
+          "cache"
+        )
+      );
+    }
+
     const quotations = await QuickQuotation.find()
       .populate("packageId", "packageName price duration")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({ count: quotations.length, quotations });
+    await setCache(cacheKey, quotations, 3600); // Cache for 1 hour
+
+    res.status(200).json(
+      new ApiResponse(
+        200,
+        { count: quotations.length, quotations },
+        "Quotations fetched from database",
+        "database"
+      )
+    );
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -255,13 +288,27 @@ export const getQuickQuotationById = async (req, res) => {
     if (!mongoId)
       return res.status(404).json({ message: "Quotation not found" });
 
+    const cacheKey = `quickQuotation:${mongoId}`;
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+      return res.status(200).json(
+        new ApiResponse(200, cachedData, "Quotation fetched from cache", "cache")
+      );
+    }
+
     const quotation =
       await QuickQuotation.findById(mongoId).populate("packageId");
 
     if (!quotation)
       return res.status(404).json({ message: "Quotation not found" });
 
-    res.status(200).json(quotation);
+    const quotationData = quotation.toObject ? quotation.toObject() : quotation;
+    await setCache(cacheKey, quotationData, 3600); // Cache for 1 hour
+
+    res.status(200).json(
+      new ApiResponse(200, quotationData, "Quotation fetched from database", "database")
+    );
   } catch (error) {
     if (error instanceof ApiError) {
       return res.status(error.statusCode).json({
@@ -314,6 +361,12 @@ export const updateQuickQuotation = async (req, res) => {
     if (!updated)
       return res.status(404).json({ message: "Quotation not found" });
 
+    // Invalidate Cache
+    await clearPattern(`quickQuotation:${mongoId}`);
+    await clearPattern("quickQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
+
     const shortRef = `QT-${updated._id.toString().slice(-6).toUpperCase()}`;
     await logActivity({
       action: "UPDATE",
@@ -324,7 +377,9 @@ export const updateQuickQuotation = async (req, res) => {
     });
 
     await clearPattern('dashboard:stats:*');
-    res.status(200).json({ message: "Quotation updated", quotation: updated });
+    res.status(200).json(
+      new ApiResponse(200, updated, "Quotation updated successfully", "database")
+    );
   } catch (error) {
     if (error instanceof ApiError) {
       return res.status(error.statusCode).json({ message: error.message });
@@ -419,6 +474,10 @@ export const deleteQuickQuotation = async (req, res) => {
       user: req.user?.name || "Admin",
     });
 
+    await clearPattern(`quickQuotation:${mongoId}`);
+    await clearPattern("quickQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
     await clearPattern('dashboard:stats:*');
 
     res.status(200).json({ message: "Quotation deleted successfully" });

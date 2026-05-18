@@ -99,10 +99,15 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
         user: req.user?.name || "System",
       });
 
+      await clearPattern("customQuotations:all");
+      await clearPattern("quotations:search:*");
+      await clearPattern("quotations:stats");
+      await clearPattern('dashboard:stats:*');
+
       return res
         .status(201)
         .json(
-          new ApiResponse(201, quotation, "Quotation created successfully"),
+          new ApiResponse(201, quotation, "Quotation created successfully", "database"),
         );
     } catch (error) {
       if (
@@ -136,25 +141,52 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
 
 // Get All Quotations
 export const getAllCustomQuotations = asyncHandler(async (req, res) => {
+  const cacheKey = "customQuotations:all";
+  const cachedData = await getCache(cacheKey);
+
+  if (cachedData) {
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        cachedData,
+        "Quotations fetched from cache",
+        "cache"
+      )
+    );
+  }
+
   const quotations = await CustomQuotation.find();
+
+  await setCache(cacheKey, quotations, 3600);
 
   return res
     .status(200)
-    .json(new ApiResponse(200, quotations, "Quotations fetched successfully"));
+    .json(new ApiResponse(200, quotations, "Quotations fetched from database", "database"));
 });
 
 // Get Single Quotation by quotationId
 export const getCustomQuotationById = asyncHandler(async (req, res) => {
   const { quotationId } = req.params;
 
+  const cacheKey = `customQuotation:${quotationId}`;
+  const cachedData = await getCache(cacheKey);
+
+  if (cachedData) {
+    return res.status(200).json(
+      new ApiResponse(200, cachedData, "Quotation fetched from cache", "cache")
+    );
+  }
+
   const quotation = await CustomQuotation.findOne({ quotationId });
   if (!quotation) {
     throw new ApiError(404, "Quotation not found");
   }
 
+  await setCache(cacheKey, quotation, 3600);
+
   return res
     .status(200)
-    .json(new ApiResponse(200, quotation, "Quotation fetched successfully"));
+    .json(new ApiResponse(200, quotation, "Quotation fetched from database", "database"));
 });
 
 // Update Full Quotation (Mongo _id)
@@ -172,15 +204,21 @@ export const updateCustomQuotation = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Quotation not found");
     }
 
+    if (updatedQuotation.quotationId) {
+      await clearPattern(`customQuotation:${updatedQuotation.quotationId}`);
+    }
+    await clearPattern("customQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
+    await clearPattern('dashboard:stats:*');
+
     return res
       .status(200)
       .json(
-        new ApiResponse(200, updatedQuotation, "Quotation updated successfully"),
+        new ApiResponse(200, updatedQuotation, "Quotation updated successfully", "database"),
       );
   } catch (error) {
     throw error;
-  } finally {
-    await clearPattern('dashboard:stats:*');
   }
 });
 
@@ -201,6 +239,12 @@ export const updateCustomQuotationByQuotationId = asyncHandler(
         throw new ApiError(404, "Quotation not found");
       }
 
+      await clearPattern(`customQuotation:${quotationId}`);
+      await clearPattern("customQuotations:all");
+      await clearPattern("quotations:search:*");
+      await clearPattern("quotations:stats");
+      await clearPattern('dashboard:stats:*');
+
       return res
         .status(200)
         .json(
@@ -208,12 +252,11 @@ export const updateCustomQuotationByQuotationId = asyncHandler(
             200,
             updatedQuotation,
             "Quotation updated successfully",
+            "database"
           ),
         );
     } catch (error) {
       throw error;
-    } finally {
-      await clearPattern('dashboard:stats:*');
     }
   },
 );
@@ -511,6 +554,12 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
     await quotation.save();
     console.log("✅ Step", stepNumber, "updated successfully!");
 
+    await clearPattern(`customQuotation:${quotationId}`);
+    await clearPattern("customQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
+    await clearPattern('dashboard:stats:*');
+
     return res
       .status(200)
       .json(
@@ -518,13 +567,12 @@ export const updateQuotationStep = asyncHandler(async (req, res) => {
           200,
           quotation,
           `Step ${stepNumber} updated successfully`,
+          "database"
         ),
       );
   } catch (error) {
     console.error("💥 Error during quotation update:", error);
     throw error;
-  } finally {
-    await clearPattern('dashboard:stats:*');
   }
 }
 );
@@ -764,13 +812,17 @@ export const finalizeCustomQuotation = asyncHandler(async (req, res) => {
       user: req.user?.name || "System",
     });
 
+    await clearPattern(`customQuotation:${quotationId}`);
+    await clearPattern("customQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
+    await clearPattern('dashboard:stats:*');
+
     return res
       .status(200)
-      .json(new ApiResponse(200, quotation, "Quotation finalized successfully"));
+      .json(new ApiResponse(200, quotation, "Quotation finalized successfully", "database"));
   } catch (error) {
     throw error;
-  } finally {
-    await clearPattern('dashboard:stats:*');
   }
 });
 
@@ -993,6 +1045,12 @@ export const deleteCustomQuotation = asyncHandler(async (req, res) => {
     user: req.user?.name || "System",
   });
 
+  if (deletedQuotation.quotationId) {
+    await clearPattern(`customQuotation:${deletedQuotation.quotationId}`);
+  }
+  await clearPattern("customQuotations:all");
+  await clearPattern("quotations:search:*");
+  await clearPattern("quotations:stats");
   await clearPattern('dashboard:stats:*');
 
   return res

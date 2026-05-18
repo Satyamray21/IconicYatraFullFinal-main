@@ -21,8 +21,22 @@ import {
     Snackbar,
     Alert,
     MenuItem,
+    Chip,
+    Tooltip,
+    Divider,
 } from "@mui/material";
-import { Delete as DeleteIcon, Add as AddIcon, Email as EmailIcon, Save as SaveIcon, Search as SearchIcon } from "@mui/icons-material";
+import { 
+    Delete as DeleteIcon, 
+    Add as AddIcon, 
+    Email as EmailIcon, 
+    Save as SaveIcon, 
+    Search as SearchIcon,
+    CallSplit as SplitIcon,
+    Sync as SyncIcon,
+    Hotel as HotelIcon,
+    CalendarMonth as CalendarIcon,
+    Undo as UndoIcon,
+} from "@mui/icons-material";
 import { Autocomplete } from "@mui/material";
 import axios from "../../../../../utils/axios";
 import InvoiceView from "../../../../../Components/InvoiceView";
@@ -44,7 +58,23 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     const [receipts, setReceipts] = useState([]);
     const [selectedReceiptId, setSelectedReceiptId] = useState("");
     const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+    const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+    const [splitTargetHotel, setSplitTargetHotel] = useState(null);
+    const [splitFirstNights, setSplitFirstNights] = useState(1);
+    const [hotelsHistory, setHotelsHistory] = useState([]);
     const receiptHiddenRef = React.useRef();
+
+    const saveToHistory = (currentHotels = hotels) => {
+        setHotelsHistory((prev) => [...prev, JSON.parse(JSON.stringify(currentHotels))]);
+    };
+
+    const handleUndo = () => {
+        if (hotelsHistory.length === 0) return;
+        const previousState = hotelsHistory[hotelsHistory.length - 1];
+        setHotels(previousState);
+        setHotelsHistory((prev) => prev.slice(0, -1));
+        setSnackbar({ open: true, message: "Last action undone successfully!", severity: "info" });
+    };
 
     const fetchHotelsForCity = async (city) => {
         const trimmedCity = (city || "").trim();
@@ -80,7 +110,6 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 const accounts = Array.isArray(res?.data?.data) ? res.data.data : [];
                 setEmailAccounts(accounts);
                 
-                // If company was already selected or just fetched, try to set initial sender account
                 if (selectedCompanyId) {
                     const firstAcc = accounts.find(acc => (acc.companyId?._id || acc.companyId) === selectedCompanyId);
                     if (firstAcc) setSenderAccount(firstAcc._id);
@@ -92,17 +121,15 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
 
         const fetchReceipts = async () => {
             try {
-                // Use the provided quotationRef if available, otherwise try common fields
                 const ref = quotationRef || quotation?.quotationId || quotation?.quickQuotationId || quotation?._id;
                 if (!ref) return;
 
                 const res = await axios.get(`/payment/by-quotation/${ref}`);
                 const list = res.data?.data || [];
-                // Filter only Receive Vouchers
                 const receiveVouchers = list.filter(v => v.paymentType === "Receive Voucher");
                 setReceipts(receiveVouchers);
                 if (receiveVouchers.length > 0) {
-                    setSelectedReceiptId(receiveVouchers[0]._id); // Latest first due to backend sort
+                    setSelectedReceiptId(receiveVouchers[0]._id);
                 }
             } catch (err) {
                 console.error("Failed to fetch receipts:", err);
@@ -149,27 +176,125 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         }
     }, [senderAccount, emailAccounts]);
 
+    const handleAutoFillDates = (currentHotels = hotels) => {
+        saveToHistory(currentHotels);
+        const arrivalDateStr = quotation?.tourDetails?.arrivalDate || quotation?.arrivalDate || quotation?.packageSnapshot?.quotationDetails?.arrivalDate;
+        if (!arrivalDateStr) {
+            setSnackbar({ open: true, message: "Arrival date is missing in quotation to auto-fill dates", severity: "warning" });
+            return;
+        }
+
+        let currentDate = new Date(arrivalDateStr);
+        if (isNaN(currentDate.getTime())) {
+            setSnackbar({ open: true, message: "Invalid arrival date in quotation", severity: "error" });
+            return;
+        }
+
+        const updated = currentHotels.map((h) => {
+            const checkIn = new Date(currentDate);
+            currentDate.setDate(currentDate.getDate() + Number(h.nights || 1));
+            const checkOut = new Date(currentDate);
+
+            return {
+                ...h,
+                checkInDate: checkIn.toISOString().split('T')[0],
+                checkOutDate: checkOut.toISOString().split('T')[0]
+            };
+        });
+
+        setHotels(updated);
+        setSnackbar({ open: true, message: "Dates synchronized successfully!", severity: "success" });
+    };
+
+    const handleSplitClick = (hotel) => {
+        const nights = Number(hotel.nights || 1);
+        if (nights <= 1) {
+            setSnackbar({ open: true, message: "Cannot split a stay of 1 night", severity: "warning" });
+            return;
+        }
+        setSplitTargetHotel(hotel);
+        setSplitFirstNights(Math.max(1, nights - 1));
+        setSplitDialogOpen(true);
+    };
+
+    const handleConfirmSplit = () => {
+        if (!splitTargetHotel) return;
+        saveToHistory();
+        const index = hotels.findIndex(h => h.id === splitTargetHotel.id);
+        if (index === -1) return;
+
+        const totalNights = Number(splitTargetHotel.nights || 2);
+        const firstNights = Number(splitFirstNights);
+
+        if (firstNights < 1 || firstNights >= totalNights) {
+            setSnackbar({ open: true, message: `Please enter nights between 1 and ${totalNights - 1}`, severity: "warning" });
+            return;
+        }
+
+        const secondNights = totalNights - firstNights;
+
+        const updatedTarget = {
+            ...splitTargetHotel,
+            nights: firstNights
+        };
+
+        const newHotel = {
+            ...splitTargetHotel,
+            id: Date.now(),
+            hotelName: "", // Let user select the new hotel name
+            hotelAddress: "",
+            contactNo: "",
+            bookingPnr: "",
+            nights: secondNights
+        };
+
+        const newHotels = [...hotels];
+        newHotels.splice(index, 1, updatedTarget);
+        newHotels.splice(index + 1, 0, newHotel);
+
+        // Auto-recalculate dates for the new sequence
+        const arrivalDateStr = quotation?.tourDetails?.arrivalDate || quotation?.arrivalDate || quotation?.packageSnapshot?.quotationDetails?.arrivalDate;
+        if (arrivalDateStr && !isNaN(new Date(arrivalDateStr).getTime())) {
+            let currentDate = new Date(arrivalDateStr);
+            const recalculated = newHotels.map((h) => {
+                const checkIn = new Date(currentDate);
+                currentDate.setDate(currentDate.getDate() + Number(h.nights || 1));
+                const checkOut = new Date(currentDate);
+
+                return {
+                    ...h,
+                    checkInDate: checkIn.toISOString().split('T')[0],
+                    checkOutDate: checkOut.toISOString().split('T')[0]
+                };
+            });
+            setHotels(recalculated);
+        } else {
+            setHotels(newHotels);
+        }
+
+        setSplitDialogOpen(false);
+        setSplitTargetHotel(null);
+        setSnackbar({ open: true, message: `Stay split successfully: ${firstNights} Nights and ${secondNights} Nights!`, severity: "success" });
+    };
 
     useEffect(() => {
         if (open && quotation) {
             setRecipientEmail(quotation.email || quotation.clientDetails?.email || "");
-            // Pre-fill from existing confirmedHotels if any
+            
             if (quotation.confirmedHotels && quotation.confirmedHotels.length > 0) {
                 setHotels(quotation.confirmedHotels.map((h, i) => ({
                     ...h,
                     id: h.id || h._id || Date.now() + i
                 })));
             } else {
-                // Try to pre-fill from destinations
                 const pkg = quotation.packageSnapshot || quotation.tourDetails || {};
                 const qd = pkg.quotationDetails || quotation.tourDetails?.quotationDetails || {};
                 const destinations = qd.destinations || pkg.destinationNights || pkg.stayLocations || [];
 
-                const initialHotels = destinations.map((d, i) => {
+                let initialHotels = destinations.map((d, i) => {
                     const cityName = d.cityName || d.destination || d.city || "";
                     const nights = d.nights || 0;
 
-                    // Try to guess hotel name from standard/deluxe/superior
                     const finalizedCat = (quotation.finalizedPackage || "Standard").toLowerCase();
                     const hotelNames = d[`${finalizedCat}Hotels`] || [];
                     const hotelName = hotelNames[0] || "";
@@ -191,62 +316,138 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                         bookingPnr: "",
                     };
                 });
+
+                // Auto-fill dates on initial loading if arrival date exists
+                const arrivalDateStr = quotation.tourDetails?.arrivalDate || quotation.arrivalDate || quotation.packageSnapshot?.quotationDetails?.arrivalDate;
+                if (arrivalDateStr && !isNaN(new Date(arrivalDateStr).getTime())) {
+                    let currentDate = new Date(arrivalDateStr);
+                    initialHotels = initialHotels.map((h) => {
+                        const checkIn = new Date(currentDate);
+                        currentDate.setDate(currentDate.getDate() + Number(h.nights || 1));
+                        const checkOut = new Date(currentDate);
+
+                        return {
+                            ...h,
+                            checkInDate: checkIn.toISOString().split('T')[0],
+                            checkOutDate: checkOut.toISOString().split('T')[0]
+                        };
+                    });
+                }
+
                 setHotels(initialHotels);
             }
         }
     }, [open, quotation]);
 
     const handleAddHotel = () => {
-        setHotels([
-            ...hotels,
-            {
-                id: Date.now(),
-                hotelName: "",
-                hotelAddress: "",
-                city: "",
-                nights: 1,
-                roomType: "",
-                noOfRooms: "1",
-                checkInDate: "",
-                checkInTime: "12:00",
-                checkOutDate: "",
-                checkOutTime: "10:00",
-                mealPlan: "",
-                contactNo: "",
-                bookingPnr: "",
-            },
-        ]);
+        saveToHistory();
+        const newHotel = {
+            id: Date.now(),
+            hotelName: "",
+            hotelAddress: "",
+            city: "",
+            nights: 1,
+            roomType: "",
+            noOfRooms: "1",
+            checkInDate: "",
+            checkInTime: "12:00",
+            checkOutDate: "",
+            checkOutTime: "10:00",
+            mealPlan: "",
+            contactNo: "",
+            bookingPnr: "",
+        };
+
+        const updatedHotels = [...hotels, newHotel];
+
+        // Recalculate dates automatically for the whole sequence including the new stay
+        const arrivalDateStr = quotation?.tourDetails?.arrivalDate || quotation?.arrivalDate || quotation?.packageSnapshot?.quotationDetails?.arrivalDate;
+        if (arrivalDateStr && !isNaN(new Date(arrivalDateStr).getTime())) {
+            let currentDate = new Date(arrivalDateStr);
+            const recalculated = updatedHotels.map((h) => {
+                const checkIn = new Date(currentDate);
+                currentDate.setDate(currentDate.getDate() + Number(h.nights || 1));
+                const checkOut = new Date(currentDate);
+
+                return {
+                    ...h,
+                    checkInDate: checkIn.toISOString().split('T')[0],
+                    checkOutDate: checkOut.toISOString().split('T')[0]
+                };
+            });
+            setHotels(recalculated);
+        } else {
+            setHotels(updatedHotels);
+        }
     };
 
     const handleRemoveHotel = (id) => {
-        setHotels(hotels.filter((h) => h.id !== id));
+        saveToHistory();
+        const remaining = hotels.filter((h) => h.id !== id);
+        
+        // Auto-recalculate dates for the remaining sequence
+        const arrivalDateStr = quotation?.tourDetails?.arrivalDate || quotation?.arrivalDate || quotation?.packageSnapshot?.quotationDetails?.arrivalDate;
+        if (arrivalDateStr && !isNaN(new Date(arrivalDateStr).getTime())) {
+            let currentDate = new Date(arrivalDateStr);
+            const recalculated = remaining.map((h) => {
+                const checkIn = new Date(currentDate);
+                currentDate.setDate(currentDate.getDate() + Number(h.nights || 1));
+                const checkOut = new Date(currentDate);
+
+                return {
+                    ...h,
+                    checkInDate: checkIn.toISOString().split('T')[0],
+                    checkOutDate: checkOut.toISOString().split('T')[0]
+                };
+            });
+            setHotels(recalculated);
+        } else {
+            setHotels(remaining);
+        }
     };
 
     const handleChange = (id, field, value) => {
-        setHotels(
-            hotels.map((h) => {
-                if (h.id === id) {
-                    const updated = { ...h, [field]: value };
+        let updatedHotels = hotels.map((h) => {
+            if (h.id === id) {
+                const updated = { ...h, [field]: value };
 
-                    // If city changed, fetch hotels for new city
-                    if (field === "city" && value) {
-                        fetchHotelsForCity(value);
-                    }
-
-                    // If hotelName changed, try to find and auto-fill details from this city's list
-                    if (field === "hotelName") {
-                        const cityHotels = hotelsMap[h.city] || [];
-                        const matched = cityHotels.find(ah => ah.hotelName === value);
-                        if (matched) {
-                            updated.hotelAddress = matched.location?.address || "";
-                            updated.contactNo = matched.contactDetails?.mobile || matched.contactDetails?.contactPerson || "";
-                        }
-                    }
-                    return updated;
+                if (field === "city" && value) {
+                    fetchHotelsForCity(value);
                 }
-                return h;
-            })
-        );
+
+                if (field === "hotelName") {
+                    const cityHotels = hotelsMap[h.city] || [];
+                    const matched = cityHotels.find(ah => ah.hotelName === value);
+                    if (matched) {
+                        updated.hotelAddress = matched.location?.address || "";
+                        updated.contactNo = matched.contactDetails?.mobile || matched.contactDetails?.contactPerson || "";
+                    }
+                }
+                return updated;
+            }
+            return h;
+        });
+
+        // Recalculate check-in and check-out dates dynamically when nights change
+        if (field === "nights") {
+            const arrivalDateStr = quotation?.tourDetails?.arrivalDate || quotation?.arrivalDate || quotation?.packageSnapshot?.quotationDetails?.arrivalDate;
+            if (arrivalDateStr && !isNaN(new Date(arrivalDateStr).getTime())) {
+                let currentDate = new Date(arrivalDateStr);
+                updatedHotels = updatedHotels.map((h) => {
+                    const checkIn = new Date(currentDate);
+                    currentDate.setDate(currentDate.getDate() + Number(h.nights || 1));
+                    const checkOut = new Date(currentDate);
+
+                    return {
+                        ...h,
+                        checkInDate: checkIn.toISOString().split('T')[0],
+                        checkOutDate: checkOut.toISOString().split('T')[0]
+                    };
+                });
+            }
+        }
+
+        setHotels(updatedHotels);
     };
 
     const handleSave = async () => {
@@ -272,8 +473,6 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             let receiptPdfAttachment = null;
 
             if (selectedReceiptId) {
-                // Wait for the hidden InvoiceView to potentially render/load
-                // We'll give it a small timeout or just try to capture it
                 const element = document.getElementById("hidden-receipt-container");
                 if (element) {
                     const opt = {
@@ -305,9 +504,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 toEmail: recipientEmail,
                 companyId: selectedCompanyId,
                 senderAccount: senderAccount,
-                // If we have the frontend PDF, we pass it. The backend should prioritize it.
                 receiptPdf: receiptPdfAttachment,
-                // Fallback for backend generation if frontend fails for some reason
                 paymentVoucherId: selectedReceiptId,
                 customText: { additionalNote: customMessage, signature: signatureHtml }
             });
@@ -323,23 +520,87 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-            <DialogTitle sx={{ fontWeight: "bold", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                Hotel Confirmation Details
-                <Button startIcon={<AddIcon />} variant="outlined" size="small" onClick={handleAddHotel}>
-                    Add Destination
-                </Button>
+            <DialogTitle sx={{ 
+                fontWeight: "bold", 
+                display: "flex", 
+                justifyContent: "space-between", 
+                alignItems: "center",
+                background: "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)",
+                color: "#fff",
+                py: 2.25,
+                px: 3,
+                boxShadow: "0 4px 10px rgba(0,0,0,0.15)"
+            }}>
+                <Box display="flex" alignItems="center" gap={1.25}>
+                    <HotelIcon sx={{ fontSize: 28 }} />
+                    <Typography variant="h6" fontWeight="bold" sx={{ letterSpacing: 0.5 }}>Hotel Confirmation Details</Typography>
+                </Box>
+                <Box display="flex" gap={1.5}>
+                    {hotelsHistory.length > 0 && (
+                        <Tooltip title="Undo last structural action (Split, Delete, Sync)">
+                            <Button 
+                                startIcon={<UndoIcon />} 
+                                variant="contained" 
+                                size="small" 
+                                onClick={handleUndo}
+                                sx={{ 
+                                    bgcolor: "#e65100", 
+                                    color: "#fff",
+                                    '&:hover': { bgcolor: "#bf360c" },
+                                    textTransform: "none",
+                                    fontWeight: "bold"
+                                }}
+                            >
+                                Undo Action
+                            </Button>
+                        </Tooltip>
+                    )}
+                    <Tooltip title="Recalculate and fill check-in/out dates sequentially based on arrival date">
+                        <Button 
+                            startIcon={<SyncIcon />} 
+                            variant="contained" 
+                            size="small" 
+                            onClick={() => handleAutoFillDates()}
+                            sx={{ 
+                                bgcolor: "rgba(255,255,255,0.15)", 
+                                color: "#fff",
+                                '&:hover': { bgcolor: "rgba(255,255,255,0.25)" },
+                                textTransform: "none",
+                                fontWeight: "bold"
+                            }}
+                        >
+                            Sync Dates
+                        </Button>
+                    </Tooltip>
+                    <Button 
+                        startIcon={<AddIcon />} 
+                        variant="contained" 
+                        size="small" 
+                        onClick={handleAddHotel}
+                        sx={{ 
+                            bgcolor: "#4caf50", 
+                            color: "#fff",
+                            '&:hover': { bgcolor: "#45a049" },
+                            textTransform: "none",
+                            fontWeight: "bold"
+                        }}
+                    >
+                        Add Stay
+                    </Button>
+                </Box>
             </DialogTitle>
-            <DialogContent>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Fill in the details for each hotel. These will be used to generate the Hotel Confirmation Mailer.
+            <DialogContent sx={{ p: 3, bgcolor: "#f8f9fa", mt: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Fill in the details for each hotel stay. Use <b>Sync Dates</b> to auto-calculate the dates sequentially based on package arrival date, or <b>Split Stay</b> to divide any multi-night destination stay.
                 </Typography>
 
-                <Box sx={{ mb: 3, p: 2, bgcolor: "#f0f7ff", borderRadius: 1, border: "1px solid #cce3ff" }}>
-                    <Typography variant="subtitle2" sx={{ mb: 2, color: "#1a237e", fontWeight: "bold" }}>
-                        Email Configuration
+                <Box sx={{ mb: 4, p: 2.5, bgcolor: "#fff", borderRadius: 2, border: "1px solid #e0e6ed", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                    <Typography variant="subtitle2" sx={{ mb: 2.5, color: "#1a237e", fontWeight: "bold", display: "flex", alignItems: "center", gap: 1 }}>
+                        <span style={{ display: "inline-block", width: 6, height: 16, backgroundColor: "#1e3c72", borderRadius: 2 }}></span>
+                        Email & Receipt Configuration
                     </Typography>
 
-                    <Grid container spacing={2} sx={{ mb: 2 }}>
+                    <Grid container spacing={2}>
                         <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                                 select
@@ -398,6 +659,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                             </Box>
                                         </MenuItem>
                                     ))}
+                                {emailAccounts.filter(acc => (acc.companyId?._id || acc.companyId) === selectedCompanyId).length === 0 && (
+                                    <MenuItem disabled>No email accounts configured for this company</MenuItem>
+                                )}
                             </TextField>
                         </Grid>
                         <Grid size={{ xs: 12, md: 6 }}>
@@ -456,21 +720,99 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                             </Grid>
                         )}
                     </Grid>
+                </Box>
 
+                <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, color: "#1e3c72", fontWeight: "bold", display: "flex", alignItems: "center", gap: 1 }}>
+                        <span style={{ display: "inline-block", width: 6, height: 16, backgroundColor: "#4caf50", borderRadius: 2 }}></span>
+                        Stay Destinations & Hotels
+                    </Typography>
                 </Box>
 
                 {hotels.map((hotel, index) => (
-                    <Paper key={hotel.id || index} variant="outlined" sx={{ p: 2, mb: 2, position: "relative" }}>
-                        <IconButton
-                            size="small"
-                            color="error"
-                            sx={{ position: "absolute", top: 8, right: 8 }}
-                            onClick={() => handleRemoveHotel(hotel.id)}
-                        >
-                            <DeleteIcon />
-                        </IconButton>
+                    <Paper 
+                        key={hotel.id || index} 
+                        variant="outlined" 
+                        sx={{ 
+                            p: 3, 
+                            mb: 3, 
+                            position: "relative",
+                            borderRadius: 2.5,
+                            border: "1px solid #e0e6ed",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+                            transition: "all 0.3s ease",
+                            '&:hover': {
+                                boxShadow: "0 6px 20px rgba(0,0,0,0.07)",
+                                borderColor: "#1e3c72"
+                            },
+                            borderLeft: "6px solid #1e3c72",
+                            bgcolor: "#fff"
+                        }}
+                    >
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2.5} pb={1.5} borderBottom="1px solid #f0f4f8">
+                            <Box display="flex" alignItems="center" gap={1.5}>
+                                <Typography variant="subtitle1" fontWeight="bold" color="#1e3c72">
+                                    🏨 Stay #${index + 1}
+                                </Typography>
+                                {hotel.city && (
+                                    <Chip 
+                                        label={hotel.city} 
+                                        size="small" 
+                                        sx={{ bgcolor: "#e8eaf6", color: "#1e3c72", fontWeight: "bold" }} 
+                                    />
+                                )}
+                                <Chip 
+                                    label={`${hotel.nights || 1} Night${(hotel.nights || 1) > 1 ? 's' : ''}`} 
+                                    size="small" 
+                                    color="secondary" 
+                                    variant="outlined" 
+                                    sx={{ fontWeight: "bold" }}
+                                />
+                            </Box>
+                            
+                            <Box display="flex" gap={1.25}>
+                                {Number(hotel.nights || 1) > 1 && (
+                                    <Tooltip title={`Split this ${hotel.nights}-night stay into two separate hotel bookings`}>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="primary"
+                                            startIcon={<SplitIcon />}
+                                            onClick={() => handleSplitClick(hotel)}
+                                            sx={{ 
+                                                textTransform: "none", 
+                                                py: 0.25, 
+                                                fontWeight: "bold",
+                                                borderRadius: 1.5,
+                                                borderColor: "#1e3c72",
+                                                color: "#1e3c72",
+                                                '&:hover': {
+                                                    borderColor: "#122c5a",
+                                                    bgcolor: "rgba(30, 60, 114, 0.04)"
+                                                }
+                                            }}
+                                        >
+                                            Split Stay
+                                        </Button>
+                                    </Tooltip>
+                                )}
+                                <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleRemoveHotel(hotel.id)}
+                                    sx={{ 
+                                        bgcolor: "#ffebee", 
+                                        color: "#d32f2f",
+                                        '&:hover': { bgcolor: "#ffcdd2" },
+                                        borderRadius: 1.5
+                                    }}
+                                >
+                                    <DeleteIcon fontSize="small" />
+                                </IconButton>
+                            </Box>
+                        </Box>
 
-                        <Grid container spacing={2}>
+                        <Grid container spacing={2.5}>
                             <Grid size={{ xs: 12, md: 4 }}>
                                 <Autocomplete
                                     freeSolo
@@ -506,6 +848,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     type="number"
                                     value={hotel.nights}
                                     onChange={(e) => handleChange(hotel.id, "nights", e.target.value)}
+                                    inputProps={{ min: 1 }}
                                 />
                             </Grid>
                             <Grid size={{ xs: 12 }}>
@@ -537,7 +880,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     onChange={(e) => handleChange(hotel.id, "noOfRooms", e.target.value)}
                                 />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 2 }}>
+                            <Grid size={{ xs: 12, md: 3 }}>
                                 <TextField
                                     label="Check-in Date"
                                     fullWidth
@@ -548,7 +891,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     onChange={(e) => handleChange(hotel.id, "checkInDate", e.target.value)}
                                 />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 2 }}>
+                            <Grid size={{ xs: 12, md: 3 }}>
                                 <TextField
                                     label="Check-in Time"
                                     fullWidth
@@ -559,7 +902,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     onChange={(e) => handleChange(hotel.id, "checkInTime", e.target.value)}
                                 />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 2 }}>
+                            <Grid size={{ xs: 12, md: 3 }}>
                                 <TextField
                                     label="Check-out Date"
                                     fullWidth
@@ -570,7 +913,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     onChange={(e) => handleChange(hotel.id, "checkOutDate", e.target.value)}
                                 />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 2 }}>
+                            <Grid size={{ xs: 12, md: 3 }}>
                                 <TextField
                                     label="Check-out Time"
                                     fullWidth
@@ -581,7 +924,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     onChange={(e) => handleChange(hotel.id, "checkOutTime", e.target.value)}
                                 />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 4 }}>
+                            <Grid size={{ xs: 12, md: 6 }}>
                                 <TextField
                                     label="Meal Plan"
                                     fullWidth
@@ -590,7 +933,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     onChange={(e) => handleChange(hotel.id, "mealPlan", e.target.value)}
                                 />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 4 }}>
+                            <Grid size={{ xs: 12, md: 6 }}>
                                 <TextField
                                     label="Contact No (Manager)"
                                     fullWidth
@@ -599,7 +942,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     onChange={(e) => handleChange(hotel.id, "contactNo", e.target.value)}
                                 />
                             </Grid>
-                            <Grid size={{ xs: 12, md: 4 }}>
+                            <Grid size={{ xs: 12, md: 6 }}>
                                 <TextField
                                     label="Booking PNR / Confirmation"
                                     fullWidth
@@ -613,19 +956,20 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 ))}
 
                 {hotels.length === 0 && (
-                    <Box sx={{ textAlign: "center", py: 4, bgcolor: "#f9f9f9", borderRadius: 1 }}>
-                        <Typography color="text.secondary">No destinations added yet.</Typography>
+                    <Box sx={{ textAlign: "center", py: 6, bgcolor: "#fff", borderRadius: 3, border: "1px dashed #ced4da" }}>
+                        <Typography color="text.secondary" variant="body1">No hotel stays added yet. Click <b>Add Stay</b> to start.</Typography>
                     </Box>
                 )}
             </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2 }}>
-                <Button onClick={onClose} color="inherit">Cancel</Button>
+            <DialogActions sx={{ px: 3, py: 2.5, bgcolor: "#f1f3f5", borderTop: "1px solid #e9ecef" }}>
+                <Button onClick={onClose} color="inherit" sx={{ fontWeight: "bold", textTransform: "none" }}>Cancel</Button>
                 <Button
                     startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
                     variant="contained"
                     color="primary"
                     onClick={handleSave}
                     disabled={loading}
+                    sx={{ fontWeight: "bold", textTransform: "none", bgcolor: "#1e3c72", '&:hover': { bgcolor: "#122c5a" } }}
                 >
                     Save Details
                 </Button>
@@ -635,6 +979,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                     color="success"
                     onClick={handleSendMail}
                     disabled={sending || loading || hotels.length === 0}
+                    sx={{ fontWeight: "bold", textTransform: "none", bgcolor: "#2e7d32", '&:hover': { bgcolor: "#1b5e20" } }}
                 >
                     Send Mailer
                 </Button>
@@ -644,8 +989,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 open={snackbar.open}
                 autoHideDuration={6000}
                 onClose={() => setSnackbar({ ...snackbar, open: false })}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
             >
-                <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
+                <Alert severity={snackbar.severity} sx={{ width: '100%', fontWeight: "bold", boxShadow: 3 }}>
                     {snackbar.message}
                 </Alert>
             </Snackbar>
@@ -658,6 +1004,89 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                     </div>
                 )}
             </Box>
+
+            {/* Split Stay Dialog */}
+            <Dialog 
+                open={splitDialogOpen} 
+                onClose={() => setSplitDialogOpen(false)}
+                maxWidth="xs"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+                    }
+                }}
+            >
+                <DialogTitle sx={{ 
+                    fontWeight: "bold", 
+                    textAlign: "center", 
+                    background: "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)",
+                    color: "#fff",
+                    py: 2
+                }}>
+                    Split Stay Duration
+                </DialogTitle>
+                <DialogContent sx={{ p: 3, mt: 1 }}>
+                    <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+                        Choose how many nights to allocate to each split stay for <b>{splitTargetHotel?.city}</b>.
+                    </Typography>
+                    
+                    <Box display="flex" flexDirection="column" gap={2}>
+                        <TextField
+                            label="Nights for First Stay"
+                            type="number"
+                            fullWidth
+                            size="small"
+                            inputProps={{ 
+                                min: 1, 
+                                max: splitTargetHotel ? Number(splitTargetHotel.nights || 2) - 1 : 1 
+                            }}
+                            value={splitFirstNights}
+                            onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setSplitFirstNights(val);
+                            }}
+                            helperText={`Max nights for first stay: ${splitTargetHotel ? Number(splitTargetHotel.nights || 2) - 1 : 1}`}
+                        />
+
+                        <Divider />
+
+                        <Box sx={{ bgcolor: "#f8f9fa", p: 2, borderRadius: 2, border: "1px dashed #ced4da" }}>
+                            <Typography variant="subtitle2" fontWeight="bold" color="primary.main" gutterBottom>
+                                Split Preview:
+                            </Typography>
+                            <Box display="flex" justifyContent="space-between" sx={{ mt: 1 }}>
+                                <Typography variant="body2">
+                                    🏨 <b>Stay 1:</b> {splitFirstNights} Night{splitFirstNights > 1 ? 's' : ''}
+                                </Typography>
+                                <Typography variant="body2">
+                                    🏨 <b>Stay 2:</b> {splitTargetHotel ? Number(splitTargetHotel.nights) - splitFirstNights : 0} Night{splitTargetHotel && (Number(splitTargetHotel.nights) - splitFirstNights) > 1 ? 's' : ''}
+                                </Typography>
+                            </Box>
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, py: 2, bgcolor: "#f1f3f5" }}>
+                    <Button onClick={() => setSplitDialogOpen(false)} color="inherit" sx={{ fontWeight: "bold", textTransform: "none" }}>
+                        Cancel
+                    </Button>
+                    <Button 
+                        variant="contained" 
+                        color="primary" 
+                        onClick={handleConfirmSplit}
+                        disabled={!splitFirstNights || splitFirstNights < 1 || (splitTargetHotel && splitFirstNights >= Number(splitTargetHotel.nights))}
+                        sx={{ 
+                            fontWeight: "bold", 
+                            textTransform: "none", 
+                            bgcolor: "#1e3c72", 
+                            '&:hover': { bgcolor: "#122c5a" } 
+                        }}
+                    >
+                        Split Now
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Dialog>
     );
 };

@@ -2,7 +2,7 @@ import { Vehicle } from "../../models/quotation/vehicle.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
-import { clearPattern } from "../../utils/cache.js";
+import { getCache, setCache, clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
 import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 import { Lead } from "../../models/lead.model.js";
@@ -156,7 +156,11 @@ export const createVehicle = asyncHandler(async (req, res) => {
     user: req.user?.name || "System",
   });
 
+  await clearPattern("vehicleQuotations:all");
+  await clearPattern("quotations:search:*");
+  await clearPattern("quotations:stats");
   await clearPattern('dashboard:stats:*');
+
   return res
     .status(201)
     .json(
@@ -164,21 +168,53 @@ export const createVehicle = asyncHandler(async (req, res) => {
         201,
         newVehicle,
         "Vehicle quotation created successfully",
+        "database"
       ),
     );
 });
 
 export const getAllVehicles = asyncHandler(async (req, res) => {
+  const cacheKey = "vehicleQuotations:all";
+  const cachedData = await getCache(cacheKey);
+
+  if (cachedData) {
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        cachedData,
+        "Vehicle quotations fetched from cache",
+        "cache"
+      )
+    );
+  }
+
   const vehicles = await Vehicle.find().sort({ createdAt: -1 });
+
+  await setCache(cacheKey, vehicles, 3600);
+
   return res
     .status(200)
     .json(
-      new ApiResponse(200, vehicles, "Vehicle quotations fetched successfully"),
+      new ApiResponse(200, vehicles, "Vehicle quotations fetched from database", "database"),
     );
 });
 
 export const getVehicleById = asyncHandler(async (req, res) => {
   const { vehicleQuotationId } = req.params;
+
+  const cacheKey = `vehicleQuotation:${vehicleQuotationId}`;
+  const cachedData = await getCache(cacheKey);
+
+  if (cachedData) {
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        cachedData,
+        "Vehicle quotation fetched from cache",
+        "cache"
+      ),
+    );
+  }
 
   const vehicle = await Vehicle.findOne({ vehicleQuotationId });
 
@@ -198,13 +234,17 @@ export const getVehicleById = asyncHandler(async (req, res) => {
     vehicle,
     lead,
   };
+
+  await setCache(cacheKey, responseData, 3600);
+
   return res
     .status(200)
     .json(
       new ApiResponse(
         200,
         responseData,
-        "Vehicle quotation fetched successfully",
+        "Vehicle quotation fetched from database",
+        "database"
       ),
     );
 });
@@ -270,7 +310,12 @@ export const updateVehicle = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Vehicle quotation not found");
   }
 
+  await clearPattern(`vehicleQuotation:${vehicleQuotationId}`);
+  await clearPattern("vehicleQuotations:all");
+  await clearPattern("quotations:search:*");
+  await clearPattern("quotations:stats");
   await clearPattern('dashboard:stats:*');
+
   return res
     .status(200)
     .json(
@@ -278,6 +323,7 @@ export const updateVehicle = asyncHandler(async (req, res) => {
         200,
         updatedVehicle,
         "Vehicle quotation updated successfully",
+        "database"
       ),
     );
 });
@@ -299,6 +345,10 @@ export const deleteVehicle = asyncHandler(async (req, res) => {
     user: req.user?.name || "System",
   });
 
+  await clearPattern(`vehicleQuotation:${vehicleQuotationId}`);
+  await clearPattern("vehicleQuotations:all");
+  await clearPattern("quotations:search:*");
+  await clearPattern("quotations:stats");
   await clearPattern('dashboard:stats:*');
 
   return res
@@ -455,11 +505,16 @@ export const finalizeVehicleQuotation = asyncHandler(async (req, res) => {
 
   await vehicle.save();
 
+  await clearPattern(`vehicleQuotation:${vehicleQuotationId}`);
+  await clearPattern("vehicleQuotations:all");
+  await clearPattern("quotations:search:*");
+  await clearPattern("quotations:stats");
   await clearPattern('dashboard:stats:*');
+
   return res
     .status(200)
     .json(
-      new ApiResponse(200, vehicle, "Vehicle quotation finalized successfully"),
+      new ApiResponse(200, vehicle, "Vehicle quotation finalized successfully", "database"),
     );
 });
 
