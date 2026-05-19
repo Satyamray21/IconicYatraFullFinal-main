@@ -1183,7 +1183,7 @@ export const saveConfirmedHotels = async (req, res) => {
 export const sendHotelConfirmationMail = async (req, res) => {
   try {
     const { id } = req.params;
-    const { toEmail, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
+    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
 
     const quotation = await CustomQuotation.findById(id).lean();
     if (!quotation) {
@@ -1229,7 +1229,28 @@ export const sendHotelConfirmationMail = async (req, res) => {
       mealPlan: qd?.mealPlan || quotation?.mealPlan
     };
 
-    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    if (nextPayableAmount !== undefined) options.nextPayableAmount = nextPayableAmount;
+    if (paymentDueDate !== undefined) options.dueDate = paymentDueDate;
+
+    let htmlBody = bodyHtml;
+    if (!htmlBody) {
+      if (mailType === "booking") {
+        const companyMeta = await loadEmailMeta(company);
+        const bookingPayload = await mergeBookingEmailPayload(
+          quotation,
+          companyMeta,
+          {
+            nextPayableAmount,
+            dueDate: paymentDueDate,
+            ...customText,
+          }
+        );
+        htmlBody = buildCustomQuotationBookingEmail(quotation, bookingPayload);
+      } else {
+        htmlBody = buildHotelConfirmationEmail(quotation, options);
+      }
+    }
+
     const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
     
     const auth = await resolveMailAuth(senderAccount, company);
@@ -1239,24 +1260,12 @@ export const sendHotelConfirmationMail = async (req, res) => {
       auth: { user: auth.user, pass: auth.pass },
     });
 
-    const guestName = quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
-
     const mailOptions = {
       from: `"${options.companyName}" <${auth.user}>`,
       to: toEmail || quotation.clientDetails?.email,
-      subject: `Hotel Confirmation Voucher - ${quotation.quotationId}`,
-      html: `
-        <p>Dear ${guestName},</p>
-        <p>Please find attached the <b>Hotel Confirmation Voucher</b> for your upcoming trip.</p>
-        <p>Thank you for choosing ${options.companyName}.</p>
-        <br/>
-        ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
-        <br/>
-        ${options.signature ? options.signature : `
-        <p>Best Regards,</p>
-        <p><b>${options.companyName}</b></p>
-        `}
-      `,
+      cc: cc && cc.length ? cc : undefined,
+      subject: subject || (mailType === "booking" ? `Booking Confirmation ${quotation.quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}` : `Hotel Confirmation Voucher - ${quotation.quotationId}`),
+      html: htmlBody,
       attachments: [
         {
           filename: `Hotel_Confirmation_${quotation.quotationId}.pdf`,
@@ -1295,7 +1304,7 @@ export const sendHotelConfirmationMail = async (req, res) => {
 export const previewHotelConfirmation = async (req, res) => {
   try {
     const { id } = req.params;
-    const { customText } = req.body;
+    const { customText, mailType, nextPayableAmount, paymentDueDate } = req.body;
 
     const quotation = await CustomQuotation.findById(id).lean();
     if (!quotation) {
@@ -1337,7 +1346,26 @@ export const previewHotelConfirmation = async (req, res) => {
       mealPlan: qd?.mealPlan || quotation?.mealPlan
     };
 
-    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    if (nextPayableAmount !== undefined) options.nextPayableAmount = nextPayableAmount;
+    if (paymentDueDate !== undefined) options.dueDate = paymentDueDate;
+
+    let htmlBody;
+    if (mailType === "booking") {
+      const companyMeta = await loadEmailMeta(company);
+      const bookingPayload = await mergeBookingEmailPayload(
+        quotation,
+        companyMeta,
+        {
+          nextPayableAmount,
+          dueDate: paymentDueDate,
+          ...customText,
+        }
+      );
+      htmlBody = buildCustomQuotationBookingEmail(quotation, bookingPayload);
+    } else {
+      htmlBody = buildHotelConfirmationEmail(quotation, options);
+    }
+
     res.status(200).json(new ApiResponse(200, { html: htmlBody }, "Preview generated"));
   } catch (error) {
     res.status(500).json({ message: error.message });
