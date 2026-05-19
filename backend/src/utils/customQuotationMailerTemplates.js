@@ -643,6 +643,20 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
   );
   const paymentLink = safe(customText?.companyPaymentLink, "");
 
+  const confirmedHotels = quotation.confirmedHotels || [];
+  let hotelSectionHtml = "";
+  if (confirmedHotels && confirmedHotels.length > 0) {
+    hotelSectionHtml = `
+      <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES</b></p>
+      <p><b>${confirmedHotels.map((h, i) => `${i + 1}. ${safe(h.hotelName)} in ${safe(h.city)} (${h.nights || 1} Night)`).join("<br/>")}</b></p>
+    `;
+  } else {
+    hotelSectionHtml = `
+      <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
+      <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p>
+    `;
+  }
+
   return `
     <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
         <p style="color:red; font-weight:bold;">
@@ -688,8 +702,7 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p style="color:#d32f2f; font-weight:bold;">Please clear your all dues as per the payment policy.</p>
         <p style="color:#000; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
-        <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p>
+        ${hotelSectionHtml}
         <br/>
         <p style="color:#d32f2f; font-weight:bold;">DAY WISE ITINERARY</p>
         <div>${itineraryLines(td?.itinerary)}</div>
@@ -970,6 +983,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     bookingId: safe(quick.bookingId, ""),
     clientDetails: { clientName: safe(quick.customerName, "Guest") },
     finalizedPackage,
+    confirmedHotels: quick.confirmedHotels || [],
     tourDetails: {
       quotationTitle: safe(
         pkg.displayTitle,
