@@ -71,7 +71,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     const receiptHiddenRef = React.useRef();
 
     // Rich Booking Email states
-    const [mailType, setMailType] = useState("hotel"); // "hotel" or "booking"
+    const [mailType, setMailType] = useState("booking"); // "hotel" or "booking"
     const [ccEmail, setCcEmail] = useState("");
     const [recipientName, setRecipientName] = useState("");
     const [salutation, setSalutation] = useState("");
@@ -768,7 +768,6 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                 onChange={(e) => setMailType(e.target.value)}
                                 sx={{ bgcolor: "#fff" }}
                             >
-                                <MenuItem value="hotel">Hotel Confirmation</MenuItem>
                                 <MenuItem value="booking">Booking Confirmation</MenuItem>
                             </TextField>
                         </Grid>
