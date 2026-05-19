@@ -1290,16 +1290,6 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 </Alert>
             </Snackbar>
 
-
-            {/* Hidden container for PDF generation */}
-            <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
-                {selectedReceiptId && (
-                    <div id="hotel-dialog-hidden-receipt-container">
-                        <InvoiceView id={selectedReceiptId} hideButtons={true} />
-                    </div>
-                )}
-            </Box>
-
             {/* Split Stay Dialog */}
             <Dialog 
                 open={splitDialogOpen} 
@@ -1383,6 +1373,15 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 </DialogActions>
             </Dialog>
         </Dialog>
+
+        {/* Hidden container for PDF generation */}
+        <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+            {selectedReceiptId && (
+                <div id="hotel-dialog-hidden-receipt-container">
+                    <InvoiceView id={selectedReceiptId} hideButtons={true} />
+                </div>
+            )}
+        </Box>
     </LocalizationProvider>
 );
 };
