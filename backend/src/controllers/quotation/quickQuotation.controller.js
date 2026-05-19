@@ -1359,7 +1359,7 @@ export const saveQuickConfirmedHotels = async (req, res) => {
 export const sendQuickHotelConfirmationMail = async (req, res) => {
   try {
     const mongoId = await resolveQuickQuotationMongoId(req.params.id);
-    const { toEmail, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
+    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
 
     const quotation = await QuickQuotation.findById(mongoId).lean();
     if (!quotation) {
@@ -1406,7 +1406,30 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
       mealPlan: qd?.mealPlan || quotation?.mealPlan
     };
 
-    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    if (nextPayableAmount !== undefined) options.nextPayableAmount = nextPayableAmount;
+    if (paymentDueDate !== undefined) options.dueDate = paymentDueDate;
+
+    let htmlBody = bodyHtml;
+    if (!htmlBody) {
+      if (mailType === "booking") {
+        const shaped = adaptQuickQuotationForCustomMailer(quotation);
+        const metaInfo = await loadEmailMetaQuick(company);
+        const bookingPayload = await mergeQuickBookingEmailPayload(
+          shaped,
+          metaInfo,
+          {
+            nextPayableAmount,
+            dueDate: paymentDueDate,
+            ...customText,
+          },
+          mongoId
+        );
+        htmlBody = buildCustomQuotationBookingEmail(shaped, bookingPayload);
+      } else {
+        htmlBody = buildHotelConfirmationEmail(quotation, options);
+      }
+    }
+
     const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
     const auth = await resolveMailAuth(senderAccount, company);
     const transporter = nodemailer.createTransport({
@@ -1414,24 +1437,12 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
       auth: { user: auth.user, pass: auth.pass },
     });
 
-    const guestName = quotation?.customerName || "Guest";
-
     const mailOptions = {
       from: `"${options.companyName}" <${auth.user}>`,
       to: toEmail || quotation.email,
-      subject: `Hotel Confirmation Voucher - ${quotation.quickQuotationId}`,
-      html: `
-        <p>Dear ${guestName},</p>
-        <p>Please find attached the <b>Hotel Confirmation Voucher</b> for your upcoming trip.</p>
-        <p>Thank you for choosing ${options.companyName}.</p>
-        <br/>
-        ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
-        <br/>
-        ${options.signature ? options.signature : `
-        <p>Best Regards,</p>
-        <p><b>${options.companyName}</b></p>
-        `}
-      `,
+      cc: cc && cc.length ? cc : undefined,
+      subject: subject || (mailType === "booking" ? `Booking Confirmation QT-${mongoId.slice(-6)} - ${quotation.customerName || "Guest"}` : `Hotel Confirmation Voucher - ${quotation.quickQuotationId}`),
+      html: htmlBody,
       attachments: [
         {
           filename: `Hotel_Confirmation_${quotation.quickQuotationId}.pdf`,
@@ -1470,7 +1481,7 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
 export const previewQuickHotelConfirmation = async (req, res) => {
   try {
     const mongoId = await resolveQuickQuotationMongoId(req.params.id);
-    const { customText } = req.body;
+    const { customText, mailType, nextPayableAmount, paymentDueDate } = req.body;
 
     const quotation = await QuickQuotation.findById(mongoId).lean();
     if (!quotation) {
@@ -1513,7 +1524,28 @@ export const previewQuickHotelConfirmation = async (req, res) => {
       mealPlan: qd?.mealPlan || quotation?.mealPlan
     };
 
-    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    if (nextPayableAmount !== undefined) options.nextPayableAmount = nextPayableAmount;
+    if (paymentDueDate !== undefined) options.dueDate = paymentDueDate;
+
+    let htmlBody;
+    if (mailType === "booking") {
+      const shaped = adaptQuickQuotationForCustomMailer(quotation);
+      const metaInfo = await loadEmailMetaQuick(company);
+      const bookingPayload = await mergeQuickBookingEmailPayload(
+        shaped,
+        metaInfo,
+        {
+          nextPayableAmount,
+          dueDate: paymentDueDate,
+          ...customText,
+        },
+        mongoId
+      );
+      htmlBody = buildCustomQuotationBookingEmail(shaped, bookingPayload);
+    } else {
+      htmlBody = buildHotelConfirmationEmail(quotation, options);
+    }
+
     res.status(200).json({ success: true, data: { html: htmlBody } });
   } catch (error) {
     res.status(500).json({ message: error.message });
