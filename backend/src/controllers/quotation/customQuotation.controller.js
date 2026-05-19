@@ -1174,6 +1174,15 @@ export const saveConfirmedHotels = async (req, res) => {
     quotation.confirmedHotels = confirmedHotels;
     await quotation.save();
 
+    // Clear cache
+    if (quotation.quotationId) {
+      await clearPattern(`customQuotation:${quotation.quotationId}`);
+    }
+    await clearPattern("customQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
+    await clearPattern('dashboard:stats:*');
+
     res.status(200).json(new ApiResponse(200, quotation, "Confirmed hotels saved successfully"));
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1399,3 +1408,65 @@ export const getQuotationList = asyncHandler(async (req, res) => {
 
   return res.status(200).json(new ApiResponse(200, formattedQuotations, "Quotation list fetched successfully"));
 });
+
+export const downloadHotelConfirmationPdf = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let quotation;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      quotation = await CustomQuotation.findById(id).lean();
+    } else {
+      quotation = await CustomQuotation.findOne({ quotationId: id }).lean();
+    }
+
+    if (!quotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    const company = await resolveCompanyForEmail({ 
+      companyId: req.query.companyId || req.user?.companyId, 
+      companyName: req.query.companyName || "Iconic Travel" 
+    });
+
+    if (!company) {
+      return res.status(404).json({ message: "Company settings not found" });
+    }
+
+    const meta = await loadBookingPaymentDefaults(quotation);
+    const td = quotation?.tourDetails || {};
+    const qd = td?.quotationDetails || {};
+    const destinations = qd?.destinations || [];
+
+    const adults = Number(quotation?.clientDetails?.adults || qd?.adults) || 0;
+    const children = Number(quotation?.clientDetails?.children || qd?.children) || 0;
+    const kids = Number(quotation?.clientDetails?.kids || qd?.kids) || 0;
+
+    const options = {
+      ...meta,
+      ...company,
+      guestsLine: `${adults} Adults, ${children + kids} Child`,
+      roomsLine: `${qd?.rooms?.numberOfRooms || 1} ${qd?.rooms?.sharingType || "Double sharing"}`,
+      packageType: quotation?.finalizedPackage || "Family Tour Package",
+      duration: {
+        nights: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0),
+        days: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0) + 1
+      },
+      startDate: td?.arrivalDate,
+      endDate: td?.departureDate,
+      packageTitle: td?.quotationTitle,
+      destinationSummary: td?.destinationSummary,
+      stayLocations: quotation?.pickupDrop || [],
+      pickupPoint: td?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint,
+      dropPoint: td?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint,
+      mealPlan: qd?.mealPlan || quotation?.mealPlan
+    };
+
+    const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=Hotel_Confirmation_${quotation.quotationId || "Voucher"}.pdf`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

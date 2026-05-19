@@ -36,6 +36,8 @@ import {
     Hotel as HotelIcon,
     CalendarMonth as CalendarIcon,
     Undo as UndoIcon,
+    ArrowUpward as ArrowUpwardIcon,
+    ArrowDownward as ArrowDownwardIcon,
 } from "@mui/icons-material";
 import { Autocomplete } from "@mui/material";
 import axios from "../../../../../utils/axios";
@@ -46,7 +48,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
 
-const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quotationRef }) => {
+const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quotationRef, onSaveSuccess }) => {
         const [hotels, setHotels] = useState([]);
     const [hotelsMap, setHotelsMap] = useState({}); // { city: [hotels] }
     const [loading, setLoading] = useState(false);
@@ -244,6 +246,38 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
 
         setHotels(updated);
         setSnackbar({ open: true, message: "Dates synchronized successfully!", severity: "success" });
+    };
+
+    const handleMoveHotel = (index, direction) => {
+        saveToHistory();
+        const nextHotels = [...hotels];
+        const targetIndex = direction === "up" ? index - 1 : index + 1;
+        
+        // Swap elements
+        const temp = nextHotels[index];
+        nextHotels[index] = nextHotels[targetIndex];
+        nextHotels[targetIndex] = temp;
+
+        // Auto-recalculate dates for the new sequence if arrival date exists
+        const arrivalDateStr = quotation?.tourDetails?.arrivalDate || quotation?.arrivalDate || quotation?.packageSnapshot?.quotationDetails?.arrivalDate;
+        if (arrivalDateStr && !isNaN(new Date(arrivalDateStr).getTime())) {
+            let currentDate = new Date(arrivalDateStr);
+            const recalculated = nextHotels.map((h) => {
+                const checkIn = new Date(currentDate);
+                currentDate.setDate(currentDate.getDate() + Number(h.nights || 1));
+                const checkOut = new Date(currentDate);
+
+                return {
+                    ...h,
+                    checkInDate: checkIn.toISOString().split('T')[0],
+                    checkOutDate: checkOut.toISOString().split('T')[0]
+                };
+            });
+            setHotels(recalculated);
+        } else {
+            setHotels(nextHotels);
+        }
+        setSnackbar({ open: true, message: `Stay moved ${direction}! Dates auto-synchronized.`, severity: "success" });
     };
 
     const handleSplitClick = (hotel) => {
@@ -559,6 +593,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             await axios.post(endpoint, { confirmedHotels: hotels });
 
             setSnackbar({ open: true, message: "Hotel details saved successfully", severity: "success" });
+            if (onSaveSuccess) {
+                onSaveSuccess();
+            }
         } catch (error) {
             setSnackbar({ open: true, message: error.response?.data?.message || "Failed to save", severity: "error" });
         } finally {
@@ -1065,6 +1102,40 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                             </Box>
                             
                             <Box display="flex" gap={1.25}>
+                                {index > 0 && (
+                                    <Tooltip title="Move this stay up">
+                                        <IconButton
+                                            size="small"
+                                            color="primary"
+                                            onClick={() => handleMoveHotel(index, "up")}
+                                            sx={{ 
+                                                border: "1px solid #1e3c72", 
+                                                color: "#1e3c72",
+                                                borderRadius: 1.5,
+                                                '&:hover': { bgcolor: "rgba(30, 60, 114, 0.04)" }
+                                            }}
+                                        >
+                                            <ArrowUpwardIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                )}
+                                {index < hotels.length - 1 && (
+                                    <Tooltip title="Move this stay down">
+                                        <IconButton
+                                            size="small"
+                                            color="primary"
+                                            onClick={() => handleMoveHotel(index, "down")}
+                                            sx={{ 
+                                                border: "1px solid #1e3c72", 
+                                                color: "#1e3c72",
+                                                borderRadius: 1.5,
+                                                '&:hover': { bgcolor: "rgba(30, 60, 114, 0.04)" }
+                                            }}
+                                        >
+                                            <ArrowDownwardIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                )}
                                 {Number(hotel.nights || 1) > 1 && (
                                     <Tooltip title={`Split this ${hotel.nights}-night stay into two separate hotel bookings`}>
                                         <Button

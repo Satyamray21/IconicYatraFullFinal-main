@@ -1285,6 +1285,38 @@ const QuickFinalize = () => {
     severity: "success",
   });
   const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
+  const [downloadingHotelPdf, setDownloadingHotelPdf] = useState(false);
+
+  const handleDownloadHotelConfirmation = async () => {
+    if (!id) return;
+    setDownloadingHotelPdf(true);
+    try {
+      const response = await axios.get(`/quickQT/${id}/hotel-confirmation/download`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Hotel_Confirmation_${quotation?.reference || "Voucher"}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setSnackbar({
+        open: true,
+        message: "Hotel confirmation PDF downloaded successfully!",
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Failed to download hotel confirmation PDF:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to download hotel confirmation PDF. Please try again.",
+        severity: "error",
+      });
+    } finally {
+      setDownloadingHotelPdf(false);
+    }
+  };
   const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState(null);
   const [openReceiptPreview, setOpenReceiptPreview] = useState(false);
   const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
@@ -3514,6 +3546,17 @@ const QuickFinalize = () => {
                     >
                       Hotel Confirmation
                     </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<Download />}
+                      sx={{ ml: 1 }}
+                      onClick={handleDownloadHotelConfirmation}
+                      disabled={downloadingHotelPdf}
+                    >
+                      {downloadingHotelPdf ? "Downloading..." : "Download Voucher"}
+                    </Button>
                   </Box>
 
                   {finalizedVendors.length ? (
@@ -4481,6 +4524,7 @@ const QuickFinalize = () => {
         quotation={currentQuotation}
         quotationRef={apiEntityId}
         type="quick"
+        onSaveSuccess={refreshQuotationFromApi}
       />
 
       <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
