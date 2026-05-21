@@ -69,6 +69,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     const [splitFirstNights, setSplitFirstNights] = useState(1);
     const [hotelsHistory, setHotelsHistory] = useState([]);
     const receiptHiddenRef = React.useRef();
+    const prevOpenRef = React.useRef(false);
 
     // Rich Booking Email states
     const [mailType, setMailType] = useState("booking"); // "hotel" or "booking"
@@ -409,10 +410,12 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
 
     useEffect(() => {
         if (open && quotation) {
-            setRecipientEmail(quotation.email || quotation.clientDetails?.email || "");
-            setRecipientName(quotation.clientDetails?.clientName || quotation.customerName || "");
-            const qId = quotation.quotationId || quotation.quickQuotationId || quotation._id;
-            setSubject(`Hotel Confirmation Voucher - ${qId || ""}`);
+            if (!prevOpenRef.current) {
+                setRecipientEmail(quotation.email || quotation.clientDetails?.email || "");
+                setRecipientName(quotation.clientDetails?.clientName || quotation.customerName || "");
+                const qId = quotation.quotationId || quotation.quickQuotationId || quotation._id;
+                setSubject(`Hotel Confirmation Voucher - ${qId || ""}`);
+            }
             
             if (quotation.confirmedHotels && quotation.confirmedHotels.length > 0) {
                 setHotels(quotation.confirmedHotels.map((h, i) => ({
@@ -469,6 +472,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
 
                 setHotels(initialHotels);
             }
+            prevOpenRef.current = open;
+        } else {
+            prevOpenRef.current = false;
         }
     }, [open, quotation]);
 
