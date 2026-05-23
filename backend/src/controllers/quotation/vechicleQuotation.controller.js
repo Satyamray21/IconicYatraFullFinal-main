@@ -51,6 +51,16 @@ const DEFAULT_PAYMENT_POLICY = [
 // Default Terms and Conditions URL
 const DEFAULT_TERMS_AND_CONDITIONS = "https://www.iconicyatra.com/terms-conditions";
 
+/** Resolve vehicle by business id (IY_VQ_xxx) or Mongo _id from URL params. */
+const resolveVehicleQuery = (idOrRef) => {
+  const raw = String(idOrRef || "").trim();
+  if (!raw) return null;
+  if (/^[a-f\d]{24}$/i.test(raw)) {
+    return { $or: [{ _id: raw }, { vehicleQuotationId: raw }] };
+  }
+  return { vehicleQuotationId: raw };
+};
+
 const generateVehicleQuotationId = async () => {
   const lastVehicle = await Vehicle.findOne({})
     .sort({ createdAt: -1 })
@@ -440,19 +450,33 @@ export const viewItinerary = asyncHandler(async (req, res) => {
 /** Partial update by business vehicleQuotationId — used from finalize / admin UI */
 export const updateVehicleQuotationByQuotationId = asyncHandler(
   async (req, res) => {
-    const { vehicleQuotationId } = req.params;
+    const { vehicleQuotationId: idParam } = req.params;
+    const query = resolveVehicleQuery(idParam);
+    if (!query) {
+      throw new ApiError(400, "Vehicle quotation id is required");
+    }
 
     const updatedVehicle = await Vehicle.findOneAndUpdate(
-      { vehicleQuotationId },
+      query,
       { $set: req.body },
       { new: true, runValidators: true },
     );
+
+    if (!updatedVehicle) {
+      throw new ApiError(404, "Vehicle quotation not found");
+    }
+
+    const refKey = updatedVehicle.vehicleQuotationId || idParam;
+    await clearPattern(`vehicleQuotation:${refKey}`);
+    await clearPattern(`vehicleQuotation:${idParam}`);
+    await clearPattern("vehicleQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("dashboard:stats:*");
 
     const lead = await Lead.findOne({
       "personalDetails.fullName": updatedVehicle.basicsDetails.clientName,
     });
 
-    await clearPattern('dashboard:stats:*');
     return res
       .status(200)
       .json(
