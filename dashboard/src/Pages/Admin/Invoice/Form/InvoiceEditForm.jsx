@@ -192,26 +192,7 @@ const InvoiceEditForm = () => {
 
     const { values, handleChange, handleSubmit, setFieldValue, setValues } = formik;
 
-    /* ================= AUTO-FILL COMPANY DETAILS ================= */
-    useEffect(() => {
-        if (values.companyId && companies.length > 0) {
-            const selectedCompany = companies.find(c => c._id === values.companyId);
-            if (selectedCompany) {
-                setFieldValue('billingName', selectedCompany.companyName || '');
-                setFieldValue('mobile', selectedCompany.phone || selectedCompany.mobile || '');
-                setFieldValue('billingAddress', selectedCompany.address || '');
-                setFieldValue('gstin', selectedCompany.gstin || '');
-
-                // Update Redux state as well
-                dispatch(setSelectedInvoiceField({ field: 'billingName', value: selectedCompany.companyName || '' }));
-                dispatch(setSelectedInvoiceField({ field: 'mobile', value: selectedCompany.phone || selectedCompany.mobile || '' }));
-                dispatch(setSelectedInvoiceField({ field: 'billingAddress', value: selectedCompany.address || '' }));
-                dispatch(setSelectedInvoiceField({ field: 'gstin', value: selectedCompany.gstin || '' }));
-            }
-        }
-    }, [values.companyId, companies, setFieldValue, dispatch]);
-
-    /* ================= COMPUTE TOTALS ================= */
+    /* ================= AUTO-FILL COMPANY DETAILS (Removed from useEffect) ================= */
     const computeTotals = useCallback((itemsArr, received, taxType) => {
         let total = 0;
         let invoiceValuePurchase = 0;
@@ -405,7 +386,16 @@ const InvoiceEditForm = () => {
                             label="Company"
                             name="companyId"
                             value={values.companyId}
-                            onChange={handleChange}
+                            onChange={(e) => {
+                                handleChange(e);
+                                const selectedCompany = companies.find(c => c._id === e.target.value);
+                                if (selectedCompany) {
+                                    setFieldValue('billingName', selectedCompany.companyName || '');
+                                    setFieldValue('mobile', selectedCompany.phone || selectedCompany.mobile || '');
+                                    setFieldValue('billingAddress', selectedCompany.address || '');
+                                    setFieldValue('gstin', selectedCompany.gstin || '');
+                                }
+                            }}
                             error={formik.touched.companyId && Boolean(formik.errors.companyId)}
                             helperText={formik.touched.companyId && formik.errors.companyId}
                         >

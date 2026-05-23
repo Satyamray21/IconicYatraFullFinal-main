@@ -18,6 +18,7 @@ import {
   TableRow,
   TableCell,
   TableBody,
+  TableContainer,
   IconButton,
   Paper,
   Menu,
@@ -161,7 +162,7 @@ const HotelCard = () => {
         </Box>
       </Box>
 
-      <Paper sx={{ overflow: "hidden" }}>
+      <TableContainer component={Paper} sx={{ overflowX: "auto" }}>
         <Table>
           <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
             <TableRow>
@@ -184,7 +185,7 @@ const HotelCard = () => {
               <TableCell sx={{ fontWeight: "bold", }}>Country</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>City</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Action</TableCell>
+              <TableCell sx={{ fontWeight: "bold", whiteSpace: "nowrap", minWidth: 140 }}>Action</TableCell>
             </TableRow>
           </TableHead>
 
@@ -235,7 +236,7 @@ const HotelCard = () => {
             ))}
           </TableBody>
         </Table>
-      </Paper>
+      </TableContainer>
 
       {/* More Menu */}
       <Menu

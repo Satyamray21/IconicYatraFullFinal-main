@@ -49,7 +49,7 @@ const InvoiceCard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState("all");
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
 
   // 🔴 Confirm dialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -404,7 +404,7 @@ const InvoiceCard = () => {
           rowsPerPage={rowsPerPage}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
-          rowsPerPageOptions={[7, 25, 50]}
+          rowsPerPageOptions={[25, 50, 100]}
         />
       </Box>
 

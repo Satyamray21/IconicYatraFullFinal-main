@@ -771,6 +771,59 @@ export const changePassword = async (req, res) => {
   }
 };
 
+export const changeMyPassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current password and new password are required" });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+
+    const decoded = req.user;
+    if (!decoded) return res.status(401).json({ error: "Unauthorized" });
+
+    // 1) Handle Staff Login
+    if (decoded.staffUserId || decoded.loginId || decoded.staffKey || decoded.role !== 'Admin') {
+      let staff = await loadStaffFromTokenPayload(decoded);
+      if (staff) {
+        const permission = await StaffPermission.findOne({ staffId: staff._id });
+        if (!permission) return res.status(404).json({ error: "Staff permission not found" });
+
+        const isMatch = await comparePassword(currentPassword, permission.credentials.password);
+        if (!isMatch) return res.status(400).json({ error: "Current password is incorrect" });
+
+        permission.credentials.password = await bcrypt.hash(newPassword, 10);
+        permission.credentials.lastChangedAt = new Date();
+        permission.credentials.isTemporary = false;
+        await permission.save();
+        
+        return res.json({ success: true, message: "Password changed successfully" });
+      }
+    }
+
+    // 2) Handle User (B2C / Admin) Login
+    if (decoded.userKey || decoded.role === 'Admin' || decoded.role === 'Superadmin') {
+      const user = await loadUserFromTokenPayload(decoded);
+      if (user) {
+        const fullUser = await User.findById(user._id);
+        const isMatch = await bcrypt.compare(currentPassword, fullUser.password);
+        if (!isMatch) return res.status(400).json({ error: "Current password is incorrect" });
+
+        fullUser.password = await bcrypt.hash(newPassword, 10);
+        await fullUser.save();
+        
+        return res.json({ success: true, message: "Password changed successfully" });
+      }
+    }
+
+    return res.status(404).json({ error: "User not found" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const getLoginHistory = async (req, res) => {
   try {
     const { userId } = req.params;

@@ -22,6 +22,18 @@ const StepClientDetails = ({ onNext }) => {
   const dispatch = useDispatch();
   const { list: leads, status } = useSelector((state) => state.leads);
 
+  const activeLeads = leads ? leads.filter((lead) => {
+    if (lead.status === "Cancelled") return false;
+    const departure = lead.tourDetails?.pickupDrop?.departureDate || lead.tourDetails?.departureDate || lead.tourDetails?.travelDate;
+    if (departure) {
+      const depDate = new Date(departure);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (!isNaN(depDate) && depDate < today) return false;
+    }
+    return true;
+  }) : [];
+
   useEffect(() => {
     // Fetch all leads when component mounts
     dispatch(getAllLeads());
@@ -105,7 +117,7 @@ const StepClientDetails = ({ onNext }) => {
                   setFieldValue("customerName", selectedName);
 
                   // Find selected client details
-                  const selectedClient = leads.find(
+                  const selectedClient = activeLeads.find(
                     (lead) => lead.personalDetails?.fullName === selectedName,
                   );
 
@@ -226,8 +238,8 @@ const StepClientDetails = ({ onNext }) => {
                     <CircularProgress size={20} />
                     Loading clients...
                   </MenuItem>
-                ) : leads && leads.length > 0 ? (
-                  leads.map((lead) => (
+                ) : activeLeads && activeLeads.length > 0 ? (
+                  activeLeads.map((lead) => (
                     <MenuItem
                       key={lead._id}
                       value={lead.personalDetails?.fullName}
