@@ -147,7 +147,7 @@ export const getHotels = async (req, res) => {
             query['location.city'] = { $regex: new RegExp(`^${city.trim()}$`, 'i') };
         }
 
-        const hotels = await Hotel.find(query);
+        const hotels = await Hotel.find(query).sort({ createdAt: -1 });
         await setCache(cacheKey, hotels, 3600);
         console.log(`[DB] Hotel list fetched from MongoDB`);
         res.status(200).json({ fromCache: false, success: true, data: hotels });

@@ -39,17 +39,35 @@ const CustomQuotation = ({ onNext }) => {
     },
   });
 
-  // ✅ FIXED: Load ALL client names
+  // Filter active leads
+  const activeLeadList = leadList.filter((lead) => {
+    // 1. Check if lead is cancelled
+    if (lead.status === "Cancelled") return false;
+    
+    // 2. Check if departure date is passed
+    const departure = lead.tourDetails?.pickupDrop?.departureDate || lead.tourDetails?.departureDate || lead.tourDetails?.travelDate;
+    if (departure) {
+      const depDate = new Date(departure);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (!isNaN(depDate) && depDate < today) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // ✅ FIXED: Load ALL client names from active leads
   const clientOptions = [
     ...new Set(
-      leadList.map((lead) => lead?.personalDetails?.fullName).filter(Boolean),
+      activeLeadList.map((lead) => lead?.personalDetails?.fullName).filter(Boolean),
     ),
   ];
 
-  // ✅ FIXED: Load sector based on selected client
+  // ✅ FIXED: Load sector based on selected client from active leads
   const sectorOptions = [
     ...new Set(
-      leadList
+      activeLeadList
         .filter(
           (lead) =>
             lead?.personalDetails?.fullName === formik.values.clientName,

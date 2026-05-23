@@ -1,4 +1,5 @@
 import { CustomQuotation } from "../../models/quotation/customQuotation.model.js";
+import ReceivedVoucher from "../../models/payment.model.js";
 import QuickQuotation from "../../models/quotation/quickQuotation.model.js";
 import { Vehicle } from "../../models/quotation/vehicle.model.js";
 import { FlightQuotation } from "../../models/quotation/flightQuotation.model.js";
@@ -150,3 +151,120 @@ export const getUnifiedQuotationStats = asyncHandler(async (req, res) => {
 
   return res.status(200).json(new ApiResponse(200, stats, "Quotation stats fetched successfully", "database"));
 });
+
+export const getPaymentSummary = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 50;
+  const search = req.query.search || "";
+  
+  const searchRegex = search ? new RegExp(search, "i") : null;
+
+  const customQuery = { finalizeStatus: "finalized" };
+  const quickQuery = { finalizeStatus: "finalized" };
+  const flightQuery = { finalizeStatus: "finalized" };
+  const vehicleQuery = { finalizeStatus: "finalized" };
+  const hotelQuery = { finalizeStatus: "finalized" };
+  const voucherQuery = { accountType: { $regex: /^client$/i } };
+
+  if (searchRegex) {
+    customQuery["clientDetails.clientName"] = searchRegex;
+    quickQuery["customerName"] = searchRegex;
+    flightQuery.$or = [
+      { "clientDetails.clientName": searchRegex },
+      { "personalDetails.fullName": searchRegex }
+    ];
+    vehicleQuery["basicsDetails.clientName"] = searchRegex;
+    hotelQuery["clientDetails.clientName"] = searchRegex;
+    voucherQuery["partyName"] = searchRegex;
+  }
+
+  // Fetch all finalized quotations matching search to get total amounts per client
+  const [custom, quick, flight, vehicle, hotel] = await Promise.all([
+    CustomQuotation.find(customQuery).lean(),
+    QuickQuotation.find(quickQuery).lean(),
+    FlightQuotation.find(flightQuery).lean(),
+    Vehicle.find(vehicleQuery).lean(),
+    HotelQuotation.find(hotelQuery).lean(),
+  ]);
+
+  const clientMap = {};
+
+  const getClientNode = (name) => {
+    const cName = name || "Unknown";
+    if (!clientMap[cName]) {
+      clientMap[cName] = { clientName: cName, totalAmount: 0, receivedBalance: 0, due: 0, transactions: [] };
+    }
+    return clientMap[cName];
+  };
+
+  // Custom
+  custom.forEach(q => {
+    const pkg = q.finalizedPackage?.toLowerCase() || 'standard';
+    let base = q.tourDetails?.quotationDetails?.packageCalculations?.[pkg]?.finalTotal || 0;
+    (q.tourDetails?.quotationDetails?.additionalServices || []).forEach(s => {
+      if (s.included === 'no') base += (s.totalAmount || 0);
+    });
+    getClientNode(q.clientDetails?.clientName).totalAmount += base;
+  });
+
+  // Quick
+  quick.forEach(q => {
+    getClientNode(q.customerName).totalAmount += (q.totalCost || 0);
+  });
+
+  // Flight
+  flight.forEach(q => {
+    const name = q.clientDetails?.clientName || q.personalDetails?.fullName;
+    getClientNode(name).totalAmount += (q.totalFare || 0);
+  });
+
+  // Vehicle
+  vehicle.forEach(q => {
+    getClientNode(q.basicsDetails?.clientName).totalAmount += (q.totalAmount || 0);
+  });
+
+  // Fetch payments only for Clients (exclude associate/vendor) matching search
+  const vouchers = await ReceivedVoucher.find(voucherQuery).lean();
+  
+  vouchers.forEach(v => {
+    const node = getClientNode(v.partyName);
+    const amount = Number(v.amount) || 0;
+    const isReceive = v.drCr === "Cr" || v.paymentType === "Receive Voucher";
+    const isPayment = v.drCr === "Dr" || v.paymentType === "Payment Voucher";
+
+    if (isReceive) node.receivedBalance += amount;
+    else if (isPayment) node.receivedBalance -= amount;
+
+    node.transactions.push({
+      amount: v.amount,
+      date: v.date,
+      status: v.paymentType || v.drCr
+    });
+  });
+
+  const summary = [];
+  for (const key in clientMap) {
+    const c = clientMap[key];
+    c.due = Math.max(0, c.totalAmount - c.receivedBalance);
+    // Exclude clients whose due is 0
+    if (c.due > 0) {
+      c.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+      summary.push(c);
+    }
+  }
+
+  summary.sort((a, b) => b.due - a.due);
+
+  const startIndex = (page - 1) * limit;
+  const endIndex = page * limit;
+  const paginatedSummary = summary.slice(startIndex, endIndex);
+
+  return res.status(200).json(new ApiResponse(200, {
+    data: paginatedSummary,
+    totalCount: summary.length,
+    page,
+    totalPages: Math.ceil(summary.length / limit)
+  }, "Payment summary fetched successfully"));
+});
+
+

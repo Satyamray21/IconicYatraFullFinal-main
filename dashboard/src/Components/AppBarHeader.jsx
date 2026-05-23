@@ -28,6 +28,7 @@ import {
   Tooltip,
   CircularProgress,
   Badge,
+  TextField,
 } from "@mui/material";
 import {
   ChevronLeft,
@@ -41,6 +42,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { fetchProfile } from "../features/user/userSlice";
 import axios from "../utils/axios";
+import TablePagination from '@mui/material/TablePagination';
+import { toast } from "react-toastify";
 
 const DashboardHeader = () => {
   const theme = useTheme();
@@ -59,6 +62,84 @@ const DashboardHeader = () => {
   const [loginHistory, setLoginHistory] = useState([]);
   const [loginHistoryLoading, setLoginHistoryLoading] = useState(false);
   const [loginHistoryError, setLoginHistoryError] = useState(null);
+
+  // Payment Summary State
+  const [paymentSummaryOpen, setPaymentSummaryOpen] = useState(false);
+  const [paymentSummary, setPaymentSummary] = useState([]);
+  const [paymentSummaryLoading, setPaymentSummaryLoading] = useState(false);
+  const [paymentSummaryError, setPaymentSummaryError] = useState(null);
+  const [expandedClient, setExpandedClient] = useState(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [paymentSummarySearch, setPaymentSummarySearch] = useState("");
+  const [paymentSummaryPage, setPaymentSummaryPage] = useState(0);
+  const [paymentSummaryTotal, setPaymentSummaryTotal] = useState(0);
+
+  // Change Password State
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  const handleChangePasswordSubmit = async () => {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error("New passwords do not match!");
+      return;
+    }
+    if (passwordForm.newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters!");
+      return;
+    }
+    try {
+      await axios.post("/user/me/change-password", {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      toast.success("Password changed successfully!");
+      setChangePasswordOpen(false);
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (e) {
+      toast.error(e.response?.data?.error || "Failed to change password");
+    }
+  };
+
+  const fetchPaymentSummary = useCallback(async (searchQuery = "", page = 1) => {
+    setPaymentSummaryLoading(true);
+    setPaymentSummaryError(null);
+    try {
+      const { data } = await axios.get("/quotations/payment-summary", {
+        params: { search: searchQuery, page: page, limit: 50 }
+      });
+      setPaymentSummary(Array.isArray(data?.data?.data) ? data.data.data : []);
+      setPaymentSummaryTotal(data?.data?.totalCount || 0);
+    } catch (e) {
+      setPaymentSummaryError(
+        e.response?.data?.message ||
+        e.response?.data?.error ||
+        "Could not load payment summary"
+      );
+      setPaymentSummary([]);
+    } finally {
+      setPaymentSummaryLoading(false);
+    }
+  }, []);
+
+  // Debounce user input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPaymentSummarySearch(searchInput);
+      setPaymentSummaryPage(0);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Fetch when search or page changes
+  useEffect(() => {
+    if (paymentSummaryOpen) {
+      fetchPaymentSummary(paymentSummarySearch, paymentSummaryPage + 1);
+    }
+  }, [paymentSummaryOpen, paymentSummarySearch, paymentSummaryPage, fetchPaymentSummary]);
 
   const fetchLoginHistory = useCallback(async () => {
     setLoginHistoryLoading(true);
@@ -240,6 +321,21 @@ const DashboardHeader = () => {
           >
             Website Enquiry
           </Button>
+          <Button
+            variant="contained"
+            size="small"
+            sx={{
+              textTransform: "none",
+              borderRadius: "20px",
+              background: "linear-gradient(90deg, #4caf50, #2e7d32)",
+              "&:hover": {
+                background: "linear-gradient(90deg, #2e7d32, #1b5e20)",
+              },
+            }}
+            onClick={() => setPaymentSummaryOpen(true)}
+          >
+            Payment Summary
+          </Button>
 
           <IconButton onClick={(e) => setNotificationMenuAnchor(e.currentTarget)}>
             <Badge badgeContent={unreadCount} color="error">
@@ -420,7 +516,7 @@ const DashboardHeader = () => {
               <MenuItem
                 onClick={() => {
                   handleClose();
-                  navigate("/change-password");
+                  setChangePasswordOpen(true);
                 }}
                 sx={{
                   "&:hover": { backgroundColor: "#f0f0f0" },
@@ -522,6 +618,160 @@ const DashboardHeader = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setLoginHistoryOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={paymentSummaryOpen}
+        onClose={() => setPaymentSummaryOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Payment Summary
+          <TextField
+            size="small"
+            placeholder="Search client..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            sx={{ width: 250 }}
+            InputProps={{
+              endAdornment: paymentSummaryLoading && paymentSummary.length > 0 ? <CircularProgress size={20} /> : null
+            }}
+          />
+        </DialogTitle>
+        <DialogContent dividers>
+          {paymentSummaryLoading && paymentSummary.length === 0 ? (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
+              <CircularProgress size={40} />
+            </Box>
+          ) : paymentSummaryError ? (
+            <Typography color="error">{paymentSummaryError}</Typography>
+          ) : paymentSummary.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 2 }}>
+              No payment summary found.
+            </Typography>
+          ) : (
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "action.hover" }}>
+                    <TableCell>Client Name</TableCell>
+                    <TableCell align="right">Total Quotation</TableCell>
+                    <TableCell align="right">Received</TableCell>
+                    <TableCell align="right">Due</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paymentSummary.map((client, index) => (
+                    <React.Fragment key={index}>
+                      <TableRow 
+                        sx={{ cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }}
+                        onClick={() => setExpandedClient(expandedClient === index ? null : index)}
+                      >
+                        <TableCell>
+                          <Typography fontWeight="bold" color="primary">{client.clientName || "Unknown"}</Typography>
+                        </TableCell>
+                        <TableCell align="right">₹{client.totalAmount?.toLocaleString()}</TableCell>
+                        <TableCell align="right">₹{client.receivedBalance?.toLocaleString()}</TableCell>
+                        <TableCell align="right">
+                          <Typography fontWeight="bold" color="error">
+                            ₹{client.due?.toLocaleString()}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                      {expandedClient === index && (
+                        <TableRow>
+                          <TableCell colSpan={4} sx={{ pb: 2, pt: 0, bgcolor: "#fafafa" }}>
+                            <Box sx={{ margin: 1 }}>
+                              <Typography variant="subtitle2" gutterBottom component="div" color="text.secondary">
+                                Transactions
+                              </Typography>
+                              <Table size="small" aria-label="transactions">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Date</TableCell>
+                                    <TableCell>Amount</TableCell>
+                                    <TableCell>Status</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {client.transactions?.length > 0 ? (
+                                    client.transactions.map((txn, idx) => (
+                                      <TableRow key={idx}>
+                                        <TableCell>{new Date(txn.date).toLocaleDateString()}</TableCell>
+                                        <TableCell>₹{txn.amount?.toLocaleString()}</TableCell>
+                                        <TableCell>
+                                          <Chip size="small" label={txn.status} color={['Receive Voucher', 'Cr'].includes(txn.status) ? 'success' : 'default'} />
+                                        </TableCell>
+                                      </TableRow>
+                                    ))
+                                  ) : (
+                                    <TableRow>
+                                      <TableCell colSpan={3}>No transactions found.</TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </TableBody>
+              </Table>
+              <TablePagination
+                component="div"
+                count={paymentSummaryTotal}
+                page={paymentSummaryPage}
+                onPageChange={(e, newPage) => setPaymentSummaryPage(newPage)}
+                rowsPerPage={50}
+                rowsPerPageOptions={[50]}
+              />
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPaymentSummaryOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Change Password</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" gap={2} mt={1}>
+            <TextField
+              label="Current Password"
+              type="password"
+              fullWidth
+              size="small"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+            />
+            <TextField
+              label="New Password"
+              type="password"
+              fullWidth
+              size="small"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+            />
+            <TextField
+              label="Confirm New Password"
+              type="password"
+              fullWidth
+              size="small"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setChangePasswordOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleChangePasswordSubmit} disabled={!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}>
+            Update Password
+          </Button>
         </DialogActions>
       </Dialog>
     </AppBar>

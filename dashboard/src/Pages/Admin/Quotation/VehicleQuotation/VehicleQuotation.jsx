@@ -59,6 +59,18 @@ const VehicleQuotationStep1 = () => {
     error,
   } = useSelector((state) => state.leads);
 
+  const activeLeadList = leadList.filter((lead) => {
+    if (lead.status === "Cancelled") return false;
+    const departure = lead.tourDetails?.pickupDrop?.departureDate || lead.tourDetails?.departureDate || lead.tourDetails?.travelDate;
+    if (departure) {
+      const depDate = new Date(departure);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (!isNaN(depDate) && depDate < today) return false;
+    }
+    return true;
+  });
+
   const formik = useFormik({
     initialValues: {
       clientName: "",
@@ -107,7 +119,7 @@ const VehicleQuotationStep1 = () => {
 
     formik.handleChange(event);
 
-    const selectedLead = leadList.find(
+    const selectedLead = activeLeadList.find(
       (lead) => lead.personalDetails.fullName === selectedClientName
     );
 
@@ -208,7 +220,7 @@ const VehicleQuotationStep1 = () => {
                     error={formik.touched.clientName && Boolean(formik.errors.clientName)}
                     helperText={formik.touched.clientName && formik.errors.clientName}
                   >
-                    {leadList.map((lead) => (
+                    {activeLeadList.map((lead) => (
                       <MenuItem
                         key={lead._id}
                         value={lead.personalDetails.fullName}
