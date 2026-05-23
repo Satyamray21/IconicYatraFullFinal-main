@@ -73,6 +73,7 @@ import {
   addItinerary,
   editItinerary,
 } from "../../../../features/quotation/vehicleQuotationSlice";
+import { fetchPackages } from "../../../../features/package/packageSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../../../../utils/axios";
@@ -171,6 +172,53 @@ function buildMongoSetFromDisplayField(field, value) {
   }
 }
 
+/** Total nights from package (stayLocations / destinationNights / days length). */
+function getPackageTotalNights(pkg) {
+  if (!pkg) return 0;
+  if (Array.isArray(pkg.stayLocations) && pkg.stayLocations.length > 0) {
+    return pkg.stayLocations.reduce(
+      (sum, loc) => sum + (Number(loc?.nights) || 0),
+      0,
+    );
+  }
+  if (Array.isArray(pkg.destinationNights) && pkg.destinationNights.length > 0) {
+    return pkg.destinationNights.reduce(
+      (sum, dest) => sum + (Number(dest?.nights) || 0),
+      0,
+    );
+  }
+  return Array.isArray(pkg.days) ? pkg.days.length : 0;
+}
+
+function packageMatchesDestination(pkg, destination) {
+  if (!destination) return true;
+  const dest = String(destination).trim().toLowerCase();
+  if (!dest) return true;
+  if (String(pkg?.sector || "").trim().toLowerCase() === dest) return true;
+  if (
+    pkg?.stayLocations?.some(
+      (loc) => String(loc?.city || "").trim().toLowerCase() === dest,
+    )
+  ) {
+    return true;
+  }
+  if (
+    pkg?.destinationNights?.some(
+      (d) => String(d?.destination || "").trim().toLowerCase() === dest,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Exact nights match — 5 nights on quotation shows only 5-night packages. */
+function packageMatchesTripNights(pkg, targetNights) {
+  const nights = Number(targetNights) || 0;
+  if (!nights) return true;
+  return getPackageTotalNights(pkg) === nights;
+}
+
 // Resolves $set payload including nested pickup (arrival / departure) edits
 function buildMongoSetFromEditDialog(editDialog, newValue) {
   if (editDialog.field === "pickup" && editDialog.nestedKey === "arrival") {
@@ -205,6 +253,10 @@ const VehicleQuotationPage = () => {
     severity: "success",
   });
   const [localItinerary, setLocalItinerary] = useState([]);
+  const [selectedPackageId, setSelectedPackageId] = useState("");
+  const { items: tourPackages = [], loading: packagesLoading } = useSelector(
+    (state) => state.packages,
+  );
 
   // Policy states for editing
   const [policyInputs, setPolicyInputs] = useState({
@@ -233,12 +285,25 @@ const VehicleQuotationPage = () => {
   );
   const { data: company, status } = useSelector((state) => state.companyUI);
 
+  /** Mongo _id preferred for payments (matches QuotationSelector in Payments form). */
   const apiEntityId = React.useMemo(() => {
-    if (q?.vehicle?.vehicleQuotationId) return String(q.vehicle.vehicleQuotationId);
     if (q?.vehicle?._id) return String(q.vehicle._id);
     if (id && /^[a-f\d]{24}$/i.test(String(id))) return String(id);
+    if (q?.vehicle?.vehicleQuotationId) return String(q.vehicle.vehicleQuotationId);
     return id;
-  }, [q?.vehicle?.vehicleQuotationId, q?.vehicle?._id, id]);
+  }, [q?.vehicle?._id, q?.vehicle?.vehicleQuotationId, id]);
+
+  /** All ids that may appear on payment vouchers for this quotation. */
+  const paymentQuotationRefs = React.useMemo(() => {
+    const refs = [
+      q?.vehicle?._id,
+      q?.vehicle?.vehicleQuotationId,
+      id,
+    ]
+      .filter(Boolean)
+      .map((r) => String(r));
+    return [...new Set(refs)];
+  }, [q?.vehicle?._id, q?.vehicle?.vehicleQuotationId, id]);
   // Initialize local itinerary from API data
   useEffect(() => {
     if (q?.vehicle?.itinerary) {
@@ -331,20 +396,44 @@ const VehicleQuotationPage = () => {
     }
   }, [dispatch, id]);
 
-  const loadPaymentHistory = async () => {
-    if (!apiEntityId) return;
+  useEffect(() => {
+    dispatch(fetchPackages({ page: 1, limit: 100 }));
+  }, [dispatch]);
+
+  const loadPaymentHistory = React.useCallback(async () => {
+    if (!paymentQuotationRefs.length) return;
     setPaymentHistoryLoading(true);
     try {
-      const res = await axios.get(
-        `/payment/by-quotation/${encodeURIComponent(apiEntityId)}`,
+      const lists = await Promise.all(
+        paymentQuotationRefs.map((ref) =>
+          axios
+            .get(`/payment/by-quotation/${encodeURIComponent(ref)}`)
+            .then((res) => res.data?.data || [])
+            .catch(() => []),
+        ),
       );
-      setPaymentHistory(res.data?.data || []);
-    } catch (e) {
+      const seen = new Set();
+      const merged = [];
+      for (const list of lists) {
+        for (const row of list) {
+          const key = row?._id ? String(row._id) : `${row?.invoiceId}-${row?.date}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          merged.push(row);
+        }
+      }
+      merged.sort((a, b) => {
+        const da = new Date(a?.date || a?.createdAt || 0).getTime();
+        const db = new Date(b?.date || b?.createdAt || 0).getTime();
+        return db - da;
+      });
+      setPaymentHistory(merged);
+    } catch {
       setPaymentHistory([]);
     } finally {
       setPaymentHistoryLoading(false);
     }
-  };
+  }, [paymentQuotationRefs]);
 
   const loadMailCompanies = async () => {
     try {
@@ -414,7 +503,21 @@ const VehicleQuotationPage = () => {
     loadPaymentHistory();
     loadMailCompanies();
     fetchEmailAccounts();
-  }, [apiEntityId]);
+  }, [loadPaymentHistory]);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    const refresh = () => loadPaymentHistory();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [id, loadPaymentHistory]);
 
   const actions = [
     "Finalize",
@@ -486,11 +589,12 @@ const VehicleQuotationPage = () => {
 
   const handlePaymentOpen = () => {
     const clientName = q?.vehicle?.basicsDetails?.clientName?.trim() || "";
+    const paymentRef = apiEntityId || id;
     try {
       sessionStorage.setItem(
         "paymentFormPartyPrefill",
         JSON.stringify({
-          quotationRef: id,
+          quotationRef: paymentRef,
           partyName: clientName,
         }),
       );
@@ -499,7 +603,7 @@ const VehicleQuotationPage = () => {
     }
     const party = encodeURIComponent(clientName);
     navigate(
-      `/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`,
+      `/payments-form?quotationRef=${encodeURIComponent(paymentRef)}&party=${party}`,
     );
   };
   const handlePaymentClose = () => setOpenPaymentDialog(false);
@@ -1037,21 +1141,25 @@ const VehicleQuotationPage = () => {
   };
 
   const handleBulkSaveItinerary = async () => {
-    if (!id) return;
+    const saveId = q?.vehicle?.vehicleQuotationId || id;
+    if (!saveId || localItinerary.length === 0) return;
 
     try {
-      // Simplify itinerary payload to avoid validation issues
       const cleanedItinerary = localItinerary.map((item) => ({
-        title: item.title,
-        description: item.description,
+        title: String(item.title || "").trim(),
+        description: String(item.description || "").trim(),
       }));
 
-      await axios.patch(`/vehicleQT/${encodeURIComponent(id)}`, {
-        itinerary: cleanedItinerary,
-      });
+      const res = await axios.patch(
+        `/vehicleQT/${encodeURIComponent(saveId)}`,
+        { itinerary: cleanedItinerary },
+      );
 
-      // Refresh the data
-      await dispatch(getVehicleQuotationById(id));
+      const savedItinerary =
+        res.data?.data?.vehicle?.itinerary || cleanedItinerary;
+      setLocalItinerary(savedItinerary);
+
+      await dispatch(getVehicleQuotationById(saveId));
 
       setSnackbar({
         open: true,
@@ -1075,6 +1183,88 @@ const VehicleQuotationPage = () => {
       title: "",
       description: "",
       id: null,
+    });
+  };
+
+  const tripDestination = React.useMemo(() => {
+    const lead = q?.lead || {};
+    const vehicleData = q?.vehicle || {};
+    return (
+      lead?.tourDetails?.tourDestination ||
+      vehicleData?.destinationSummary ||
+      lead?.location?.state ||
+      ""
+    );
+  }, [q]);
+
+  /** Lead stores nights; vehicle noOfDays is typically nights + 1. */
+  const tripNights = React.useMemo(() => {
+    const fromLead = parseInt(
+      q?.lead?.tourDetails?.accommodation?.noOfNights,
+      10,
+    );
+    if (fromLead > 0) return fromLead;
+    const vehicleDays = parseInt(q?.vehicle?.basicsDetails?.noOfDays, 10) || 0;
+    return vehicleDays > 1 ? vehicleDays - 1 : vehicleDays;
+  }, [q]);
+
+  const matchingTourPackages = React.useMemo(() => {
+    if (!Array.isArray(tourPackages) || tourPackages.length === 0) return [];
+    return tourPackages.filter(
+      (pkg) =>
+        packageMatchesDestination(pkg, tripDestination) &&
+        packageMatchesTripNights(pkg, tripNights),
+    );
+  }, [tourPackages, tripDestination, tripNights]);
+
+  const handleImportPackageItinerary = async (packageId) => {
+    if (!packageId) return;
+    let pkg = tourPackages.find((p) => String(p._id) === String(packageId));
+    try {
+      if (!pkg?.days?.length) {
+        const res = await axios.get(`/packages/${encodeURIComponent(packageId)}`);
+        pkg =
+          res.data?.package ||
+          res.data?.data?.package ||
+          res.data?.data ||
+          res.data;
+      }
+    } catch {
+      setSnackbar({
+        open: true,
+        message: "Failed to load package details",
+        severity: "error",
+      });
+      return;
+    }
+    if (!pkg) {
+      setSnackbar({
+        open: true,
+        message: "Package not found",
+        severity: "error",
+      });
+      return;
+    }
+    const days = Array.isArray(pkg.days) ? pkg.days : [];
+    if (days.length === 0) {
+      setSnackbar({
+        open: true,
+        message: "This package has no itinerary days",
+        severity: "warning",
+      });
+      return;
+    }
+    const imported = days.map((day, index) => ({
+      _id: `temp_${Date.now()}_${index}`,
+      title: day.title?.trim() || `Day ${index + 1}`,
+      description: (day.notes || day.aboutCity || "").trim(),
+    }));
+    setLocalItinerary(imported);
+    setSelectedPackageId(String(packageId));
+    setSnackbar({
+      open: true,
+      message: `Imported ${imported.length} day(s) from "${pkg.title || pkg.packageId || "package"}". Click Save All to persist.`,
+      severity: "info",
     });
   };
 
@@ -1414,8 +1604,14 @@ const VehicleQuotationPage = () => {
     reference: vehicle.vehicleQuotationId || "N/A",
     date: new Date().toLocaleDateString(),
     pricing: {
-      total: finalTotal,
+      baseTotal: totalCost,
       discount: discountAmount,
+      subtotal: amountAfterDiscount,
+      gstPercent: gstPercentage,
+      gstAmount,
+      additionalServicesTotal: dbServicesTotal,
+      grandTotal: finalTotal,
+      total: finalTotal,
       gst: `${gstPercentage}%`,
     },
     policies: {
@@ -1859,11 +2055,82 @@ const VehicleQuotationPage = () => {
                           justifyContent="space-between"
                           alignItems="center"
                           mb={2}
+                          flexWrap="wrap"
+                          gap={1}
                         >
                           <Typography variant="h6">
                             Itinerary Details
                           </Typography>
-                          <Box display="flex" gap={1}>
+                          <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+                            <FormControl
+                              size="small"
+                              sx={{ minWidth: 320 }}
+                              disabled={packagesLoading}
+                            >
+                              <InputLabel
+                                id="vehicle-package-itinerary-label"
+                                shrink
+                              >
+                                Import from package
+                              </InputLabel>
+                              <Select
+                                labelId="vehicle-package-itinerary-label"
+                                label="Import from package"
+                                value={selectedPackageId}
+                                onChange={(e) => {
+                                  const pkgId = e.target.value;
+                                  setSelectedPackageId(pkgId);
+                                  handleImportPackageItinerary(pkgId);
+                                }}
+                                displayEmpty
+                                notched
+                                renderValue={(selected) => {
+                                  if (!selected) {
+                                    return (
+                                      <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                        component="span"
+                                        sx={{ fontStyle: "italic" }}
+                                      >
+                                        {packagesLoading
+                                          ? "Loading packages…"
+                                          : matchingTourPackages.length === 0
+                                            ? `No packages (${tripNights || "?"}N, ${tripDestination || "any destination"})`
+                                            : "Select package to import itinerary"}
+                                      </Typography>
+                                    );
+                                  }
+                                  const pkg = matchingTourPackages.find(
+                                    (p) => String(p._id) === String(selected),
+                                  );
+                                  if (!pkg) return "Package selected";
+                                  const nights = getPackageTotalNights(pkg);
+                                  const label =
+                                    pkg.title ||
+                                    pkg.packageId ||
+                                    pkg.sector ||
+                                    "Package";
+                                  return `${label}${nights > 0 ? ` (${nights}N)` : ""}${pkg.sector ? ` — ${pkg.sector}` : ""}`;
+                                }}
+                              >
+                                {matchingTourPackages.map((pkg) => {
+                                  const nights = getPackageTotalNights(pkg);
+                                  const label =
+                                    pkg.title ||
+                                    pkg.packageId ||
+                                    pkg.sector ||
+                                    "Package";
+                                  return (
+                                    <MenuItem key={pkg._id} value={String(pkg._id)}>
+                                      {label}
+                                      {nights > 0 ? ` (${nights}N)` : ""}
+                                      {pkg.sector ? ` — ${pkg.sector}` : ""}
+                                    </MenuItem>
+                                  );
+                                })}
+                              </Select>
+                            </FormControl>
                             <Button
                               variant="outlined"
                               size="small"
@@ -2334,7 +2601,7 @@ const VehicleQuotationPage = () => {
         onClose={() => setOpenTransactionDialog(false)}
         loading={paymentHistoryLoading}
         rows={paymentHistory}
-        quotationRef={id}
+        quotationRef={apiEntityId || id}
       />
 
       <VendorManagementDialog
