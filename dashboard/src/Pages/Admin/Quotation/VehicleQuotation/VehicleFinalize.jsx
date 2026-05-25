@@ -1654,7 +1654,7 @@ const VehicleQuotationPage = () => {
     },
     footer: footer,
     days: localItinerary.map((item, index) => ({
-      title: item.title,
+      title: item.title ? (/^Day\s*\d+/i.test(item.title.trim()) ? item.title : `Day ${index + 1} - ${item.title}`) : `Day ${index + 1}`,
       description: item.description,
       date: "",
       dayDate: "",
@@ -2172,7 +2172,7 @@ const VehicleQuotationPage = () => {
                                   variant="subtitle1"
                                   fontWeight="bold"
                                 >
-                                  {item.title}
+                                  {item.title ? (/^Day\s*\d+/i.test(item.title.trim()) ? item.title : `Day ${index + 1} - ${item.title}`) : `Day ${index + 1}`}
                                 </Typography>
                                 <IconButton
                                   size="small"
