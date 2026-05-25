@@ -761,7 +761,7 @@ const VehicleQuotationPDFDialog = ({
             }}
           >
             <strong style={{ fontSize: "16px" }}>
-              📍 {day.title || `Day ${globalIndex + 1}`}
+              📍 {day.title ? (/^Day\s*\d+/i.test(day.title.trim()) ? day.title : `Day ${globalIndex + 1} - ${day.title}`) : `Day ${globalIndex + 1}`}
             </strong>
             {(day.date || day.dayDate) && (
               <span
