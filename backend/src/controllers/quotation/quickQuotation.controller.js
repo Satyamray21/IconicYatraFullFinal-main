@@ -145,6 +145,7 @@ export const createQuickQuotation = async (req, res) => {
       noOfRooms,
       noOfMattress,
       roomType,
+      noOfVehicles,
       transportationCost,
       hotelTotalCost,
       standardCost,
@@ -205,6 +206,7 @@ export const createQuickQuotation = async (req, res) => {
       infants: infants ?? 0,
       noOfRooms: noOfRooms ?? 0,
       noOfMattress: noOfMattress ?? 0,
+      noOfVehicles: noOfVehicles ?? 0,
       roomType: roomType || "",
       message,
 
