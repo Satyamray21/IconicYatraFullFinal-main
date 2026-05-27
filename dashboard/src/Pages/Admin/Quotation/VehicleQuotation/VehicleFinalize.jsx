@@ -1595,6 +1595,8 @@ const VehicleQuotationPage = () => {
       rooms: "N/A",
       mealPlan: "N/A",
       hotelType: basicsDetails.vehicleType || "N/A",
+      vehiclesSameOrDifferent: basicsDetails.vehiclesSameOrDifferent || "Same",
+      multipleVehicles: q?.vehicle?.multipleVehicles || [],
       destination: tourDetails.tourDestination || "N/A",
       itinerary:
         "This is only tentative schedule for sightseeing and travel. The actual sequence might change depending on the local conditions.",
@@ -2220,67 +2222,87 @@ const VehicleQuotationPage = () => {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        <TableRow>
-                          <TableCell>
-                            <DirectionsCar
-                              sx={{ mr: 1, color: "primary.main" }}
-                            />
-                            {basicsDetails.vehicleType || "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            <CalendarToday sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.pickupDate
-                              ? new Date(
-                                pickupDropDetails.pickupDate,
-                              ).toLocaleDateString()
-                              : "N/A"}
-                            <br />
-                            <AccessTime sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.pickupTime
-                              ? new Date(
-                                pickupDropDetails.pickupTime,
-                              ).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                              : "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            <CalendarToday sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.dropDate
-                              ? new Date(
-                                pickupDropDetails.dropDate,
-                              ).toLocaleDateString()
-                              : "N/A"}
-                            <br />
-                            <AccessTime sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.dropTime
-                              ? new Date(
-                                pickupDropDetails.dropTime,
-                              ).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                              : "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            {formatCurrency(totalCost)}
-                            <IconButton
-                              size="small"
-                              onClick={() =>
-                                handleEditOpen(
-                                  "costDetails.totalCost",
-                                  String(
-                                    costDetails.totalCost || totalCost || "",
-                                  ),
-                                  "Total Cost",
-                                )
-                              }
-                            >
-                              <Edit fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
+                        {basicsDetails.vehiclesSameOrDifferent === "Different" && Array.isArray(q?.vehicle?.multipleVehicles) ? (
+                          q.vehicle.multipleVehicles.map((mv, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>
+                                <DirectionsCar sx={{ mr: 1, color: "primary.main", verticalAlign: "middle" }} />
+                                {mv.vehicleType || "N/A"} ({mv.tripType || "N/A"})
+                              </TableCell>
+                              <TableCell>
+                                {idx === 0 ? (
+                                  <>
+                                    <CalendarToday sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                    {pickupDropDetails.pickupDate
+                                      ? new Date(pickupDropDetails.pickupDate).toLocaleDateString()
+                                      : "N/A"}
+                                    <br />
+                                    <AccessTime sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                    {pickupDropDetails.pickupTime
+                                      ? new Date(pickupDropDetails.pickupTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                      : "N/A"}
+                                  </>
+                                ) : <Typography variant="caption" color="textSecondary">Same as above</Typography>}
+                              </TableCell>
+                              <TableCell>
+                                {idx === 0 ? (
+                                  <>
+                                    <CalendarToday sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                    {pickupDropDetails.dropDate
+                                      ? new Date(pickupDropDetails.dropDate).toLocaleDateString()
+                                      : "N/A"}
+                                    <br />
+                                    <AccessTime sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                    {pickupDropDetails.dropTime
+                                      ? new Date(pickupDropDetails.dropTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                      : "N/A"}
+                                  </>
+                                ) : <Typography variant="caption" color="textSecondary">Same as above</Typography>}
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrency(mv.totalCost)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell>
+                              <DirectionsCar sx={{ mr: 1, color: "primary.main", verticalAlign: "middle" }} />
+                              {basicsDetails.vehicleType || "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              <CalendarToday sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              {pickupDropDetails.pickupDate
+                                ? new Date(pickupDropDetails.pickupDate).toLocaleDateString()
+                                : "N/A"}
+                              <br />
+                              <AccessTime sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              {pickupDropDetails.pickupTime
+                                ? new Date(pickupDropDetails.pickupTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                : "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              <CalendarToday sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              {pickupDropDetails.dropDate
+                                ? new Date(pickupDropDetails.dropDate).toLocaleDateString()
+                                : "N/A"}
+                              <br />
+                              <AccessTime sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              {pickupDropDetails.dropTime
+                                ? new Date(pickupDropDetails.dropTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                : "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              {formatCurrency(totalCost)}
+                              <IconButton
+                                size="small"
+                                onClick={() => handleEditOpen("costDetails.totalCost", String(costDetails.totalCost || totalCost || ""), "Total Cost")}
+                              >
+                                <Edit fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        )}
                         <TableRow sx={{ backgroundColor: "grey.50" }}>
                           <TableCell>Discount</TableCell>
                           <TableCell colSpan={2} />

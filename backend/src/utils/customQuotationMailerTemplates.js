@@ -278,7 +278,7 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
   if (!hasBanks && !paymentLinkHtml) return "";
   return `
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">NET BANKING PAYMENT DETAILS:</p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
         <div style="text-align:center;">
         ${(bankDetails || [])
@@ -321,7 +321,7 @@ const bankTextSection = (bankDetails = []) => {
 
     // ✅ FIXED (HTML as string)
     `<p>
-            <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
+            <span style="color:#003366; font-weight:bold;">NOTE:</span>
             <span style="color:#000; font-weight:bold;">
                 All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
                 For more details, contact your Tour Expert.
@@ -386,13 +386,13 @@ export const buildCustomQuotationNormalEmail = (
   const paymentLink = safe(options?.companyPaymentLink, "");
 
   return `
-    <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
+    <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
 
-        <p style="color:red; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, "Dear Sir/Ma'am,")}
         </p>
 
-        <p style="color:red; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 18px;">
     ${safe(customText.opening, `GREETING FROM ${companyName.toUpperCase()}!!!`)}
 </p>
  <p>${safe(
@@ -406,7 +406,7 @@ export const buildCustomQuotationNormalEmail = (
     </a>
     <p>
 This is referenced in our discussion regarding your forthcoming Tour to the 
-<span style="color:#d32f2f; font-weight:bold;">
+<span style="color:#003366; font-weight:bold;">
     ${td.quotationTitle}
 </span>. It is my pleasure to have this opportunity to serve you. We are always here to assist you. The brief itinerary of your tour would like to as follows: please have a look...
 </p>
@@ -415,14 +415,14 @@ This is referenced in our discussion regarding your forthcoming Tour to the
        
 
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 16px;">
     ##PACKAGE COST FOR ALL PERSON = INR ${INR.format(totals.total)} As of now
 </p>
 
 <p style="color:#000; font-weight:bold;">
     SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only..
 </p>
-        <p style="color:#d32f2f; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">
         DETAILS OF TOUR PACKAGE:
         </p>
         
@@ -462,10 +462,10 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         <br/>
 
        
-       <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
+       <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">HOTEL NAMES/SIMILAR</p>
         <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p><br/>
 
-        <p style="color:#d32f2f; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">
     DAY WISE ITINERARY
 </p>
 
@@ -476,25 +476,25 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 
         <br/>
         
-        <p style="color:#d32f2f; font-weight:bold;" ><b>INCLUSIONS:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;" >INCLUSIONS:</p>
         <p>${policyLines(inclusionWithAdditional).replace(/\n/g, "<br/>")}</p>
 
         <br/>
 
-        <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">EXCLUSIONS:</p>
         <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
 
         <br/>
-         <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+         <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">TERMS & CONDITIONS:</p>
         ${termsAndConditionsLine(termsandCondition)}
 <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">CANCELLATION POLICY:</p>
         ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
         
 
         <br/>
 
-        <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT POLICY:</p>
         <p>${policyLines(paymentPolicyLinesForEmail(paymentCombined)).replace(/\n/g, "<br/>")}</p>
 
         <br/>
@@ -502,9 +502,9 @@ This is referenced in our discussion regarding your forthcoming Tour to the
        
 
 
-        ${bankHtmlSection(bankDetails, paymentLink)}
+        ${bankHtmlSection(bankDetails, paymentLink).replace(/#d32f2f/g, "#003366")}
         <p>
-    <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
+    <span style="color:#003366; font-weight:bold;">NOTE:</span>
     <span style="color:#000; font-weight:bold;">
         All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
         For more details, contact your Tour Expert.
@@ -534,13 +534,13 @@ export const buildCustomQuotationPdfPreviewEmail = (
   const companyWebsite = safe(options?.companyWebsite);
 
   return `
-    <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
+    <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
 
-        <p style="color:red; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, "Dear Sir/Ma'am,")}
         </p>
 
-        <p style="color:red; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 18px;">
     ${safe(customText.opening, `GREETING FROM ${companyName.toUpperCase()}!!!`)}
 </p>
  <p>${safe(
@@ -554,12 +554,12 @@ export const buildCustomQuotationPdfPreviewEmail = (
     </a>
     <p>
 This is referenced in our discussion regarding your forthcoming Tour to the 
-<span style="color:#d32f2f; font-weight:bold;">
+<span style="color:#003366; font-weight:bold;">
     ${td.quotationTitle}
 </span>. It is my pleasure to have this opportunity to serve you. We are always here to assist you. The brief itinerary of your tour would like to as follows: please have a look...
 </p>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 16px;">
     ##PACKAGE COST FOR ALL PERSON = INR ${INR.format(totals.total)} As of now
 </p>
 
@@ -647,22 +647,22 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
   let hotelSectionHtml = "";
   if (confirmedHotels && confirmedHotels.length > 0) {
     hotelSectionHtml = `
-      <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">HOTEL NAMES</p>
       <p><b>${confirmedHotels.map((h, i) => `${i + 1}. ${safe(h.hotelName)} in ${safe(h.city)} (${h.nights || 1} Night)`).join("<br/>")}</b></p>
     `;
   } else {
     hotelSectionHtml = `
-      <p style="color:#d32f2f; font-weight:bold;"><b>HOTEL NAMES/SIMILAR</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">HOTEL NAMES/SIMILAR</p>
       <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p>
     `;
   }
 
   return `
-    <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
-        <p style="color:red; font-weight:bold;">
+    <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, `Dear ${safe(quotation?.clientDetails?.clientName, "Guest")},`)}
         </p>
-        <p style="color:red; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 18px;">
             ${safe(customText.opening, `BOOKING CONFIRMATION FROM ${companyName.toUpperCase()}!!!`)}
         </p>
         <p>${safe(
@@ -673,8 +673,9 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         
        
         <p style="color:#000; font-weight:bold;"> ${td.quotationTitle}</p>
-        <p style="color:#d32f2f; font-weight:bold;">DETAILS OF TOUR PACKAGE:</p>
-         <p style="color:#d32f2f; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">DETAILS OF TOUR PACKAGE:</p>
+        <br/>
+         <p style="color:#003366; font-weight:bold; font-size: 16px;">
             BOOKING ID: ${safe(customText.bookingId, quotation?.bookingId || quotation?.quickQuotationId || quotation?.quotationId)}
         </p>
         
@@ -685,47 +686,47 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         )}${toNum(rooms.numberOfMattress) > 0 ? ` + ${toNum(rooms.numberOfMattress)} Extra Mattress(es)` : ""}</p>
         <p><b>Transportation:</b> ${safe(vehicle?.basicsDetails?.vehicleType, "As per itinerary")}</p>
         <p><b>Tour Duration:</b> ${duration.nights} Nights ${duration.days} Days</p>
-        <p><b>Arrival Date:</b> ${fmtDate(td.arrivalDate)} ${pd.pickupTime ? `, Time: ${pd.pickupTime}` : ""}</p>
-        <p><b>Departure Date:</b> ${fmtDate(td.departureDate)} ${pd.dropTime ? `, Time: ${pd.dropTime}` : ""}</p>
+        <p><b>Arrival Date:</b> ${fmtDate(td.arrivalDate)} ${(pd.pickupTime && pd.pickupTime !== "05:30" && pd.pickupTime !== "05:30 AM") ? `, Time: ${pd.pickupTime}` : ""}</p>
+        <p><b>Departure Date:</b> ${fmtDate(td.departureDate)} ${(pd.dropTime && pd.dropTime !== "05:30" && pd.dropTime !== "05:30 AM") ? `, Time: ${pd.dropTime}` : ""}</p>
         <p><b>Pick Up Point:</b> ${safe(pd.pickupLocation, "As per itinerary")}</p>
         <p><b>Drop Point:</b> ${safe(pd.dropLocation, "As per itinerary")}</p>
         <p><b>Meal Plan:</b> ${safe(qd.mealPlan, "CP Plan")}</p>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">PAYMENT STATUS:</p>
-        <p><b>Package Cost (excluding GST %%):</b> INR ${INR.format(beforeTax)}</p>
-        <p><b>Goods & Services Tax(5%) on Package Cost:  (${taxPercent}%):</b> INR ${INR.format(taxAmount)}</p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT STATUS:</p>
+        <p><b>Package Cost (excluding GST):</b> INR ${INR.format(beforeTax)}</p>
+        <p><b>Goods & Services Tax (${taxPercent}%) on Package Cost:</b> INR ${INR.format(taxAmount)}</p>
         <p><b>Package Cost (including 5% GST):</b> INR ${INR.format(total)}</p>
         <p><b>Payment received:</b> INR ${INR.format(receivedAmount)}${customText.receivedDate ? ` (paid on ${customText.receivedDate})` : ""}</p>
         <p><b>The remaining payment for the tour package:</b> INR ${INR.format(dueAmount)}</p>
         <p><b>Next Payable Amount:</b> INR ${INR.format(nextPayableAmount)}</p>
         ${paymentDueDate ? `<p><b>Payment Due Date:</b> ${paymentDueDate}</p>` : ""}
-        <p style="color:#d32f2f; font-weight:bold;">Please clear your all dues as per the payment policy.</p>
+        <p style="color:#003366; font-weight:bold;">Please clear your all dues as per the payment policy.</p>
         <p style="color:#000; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>
         <br/>
         ${hotelSectionHtml}
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">DAY WISE ITINERARY</p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">DAY WISE ITINERARY</p>
         <div>${itineraryLines(td?.itinerary)}</div>
         <br/>
         
-        <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">INCLUSIONS:</p>
         <p>${policyLines(inclusionWithAdditional).replace(/\n/g, "<br/>")}</p>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">EXCLUSIONS:</p>
         <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">TERMS & CONDITIONS:</p>
         ${termsAndConditionsLine(termsandCondition)}
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">CANCELLATION POLICY:</p>
         ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
        
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT POLICY:</p>
         <p>${policyLines(paymentPolicyLinesForEmail(paymentCombined)).replace(/\n/g, "<br/>")}</p>
-        ${bankHtmlSection(bankDetails, paymentLink)}
+        ${bankHtmlSection(bankDetails, paymentLink).replace(/#d32f2f/g, "#003366")}
         <p>
-            <span style="color:#d32f2f; font-weight:bold;">NOTE:</span>
+            <span style="color:#003366; font-weight:bold;">NOTE:</span>
             <span style="color:#000; font-weight:bold;">
                 All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
                 For more details, contact your Tour Expert.

@@ -29,9 +29,19 @@ import { getAllLeads, getLeadOptions, addLeadOption } from "../../../../features
 // Validation Schema
 const validationSchema = Yup.object({
   clientName: Yup.string().required("Client Name is required"),
-  vehicleType: Yup.string().required("Vehicle Type is required"),
-  tripType: Yup.string().required("Trip Type is required"),
   totalCost: Yup.number().typeError("Must be a number").required("Total Costing is required"),
+  vehiclesSameOrDifferent: Yup.string().required(),
+  noOfVehicles: Yup.number().required().min(1, "At least 1 vehicle"),
+  vehicleType: Yup.string().when("vehiclesSameOrDifferent", {
+    is: "Same",
+    then: (schema) => schema.required("Vehicle Type is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  tripType: Yup.string().when("vehiclesSameOrDifferent", {
+    is: "Same",
+    then: (schema) => schema.required("Trip Type is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
 });
 
 const tripTypes = ["One Way", "Round Trip"];
@@ -74,6 +84,9 @@ const VehicleQuotationStep1 = () => {
   const formik = useFormik({
     initialValues: {
       clientName: "",
+      vehiclesSameOrDifferent: "Same",
+      noOfVehicles: 1,
+      multipleVehicles: [],
       vehicleType: "",
       tripType: "",
       noOfDays: "",
@@ -98,12 +111,18 @@ const VehicleQuotationStep1 = () => {
 
   }, [dispatch]);
 
-  const recalculateTotal = (days, rate) => {
+  const recalculateTotal = (days, rate, vehiclesCount) => {
     const d = parseFloat(days);
     const r = parseFloat(rate);
+    const v = parseInt(vehiclesCount) || 1;
     if (!isNaN(d) && !isNaN(r) && d > 0) {
-      formik.setFieldValue("totalCost", String(d * r));
+      formik.setFieldValue("totalCost", String(d * r * v));
     }
+  };
+
+  const recalculateMultipleTotal = (vehicles) => {
+    const total = vehicles.reduce((sum, v) => sum + (parseFloat(v.totalCost) || 0), 0);
+    formik.setFieldValue("totalCost", String(total));
   };
 
   const handleClientChange = (event) => {
@@ -148,22 +167,106 @@ const VehicleQuotationStep1 = () => {
         "dropLocation",
         tourDetails?.pickupDrop?.departureLocation || ""
       );
+      
+      const vehiclesCount = Number(tourDetails?.pickupDrop?.noOfVehicles) || 1;
+      formik.setFieldValue("noOfVehicles", vehiclesCount);
 
       // Trigger auto-calc if rate is already present
-      if (formik.values.perDayCost) {
-        recalculateTotal(days, formik.values.perDayCost);
+      if (formik.values.vehiclesSameOrDifferent === "Same") {
+        if (formik.values.perDayCost) {
+          recalculateTotal(days, formik.values.perDayCost, vehiclesCount);
+        }
+      } else {
+        const currentVehicles = [...formik.values.multipleVehicles];
+        // Ensure array is size of vehiclesCount
+        if (vehiclesCount > currentVehicles.length) {
+          for (let i = currentVehicles.length; i < vehiclesCount; i++) {
+            currentVehicles.push({ vehicleType: "", tripType: "", noOfDays: days || "", perDayCost: "", totalCost: "" });
+          }
+        } else {
+          currentVehicles.splice(vehiclesCount);
+        }
+
+        const calcVehicles = currentVehicles.map(v => {
+          v.noOfDays = days;
+          const d = parseFloat(v.noOfDays);
+          const r = parseFloat(v.perDayCost);
+          if (!isNaN(d) && !isNaN(r)) {
+            v.totalCost = String(d * r);
+          }
+          return v;
+        });
+        formik.setFieldValue("multipleVehicles", calcVehicles);
+        recalculateMultipleTotal(calcVehicles);
       }
     }
   };
 
+  const handleVehiclesTypeChange = (e) => {
+    const type = e.target.value;
+    formik.setFieldValue("vehiclesSameOrDifferent", type);
+    
+    if (type === "Different") {
+      const count = parseInt(formik.values.noOfVehicles) || 1;
+      const currentVehicles = [...formik.values.multipleVehicles];
+      if (count > currentVehicles.length) {
+        for (let i = currentVehicles.length; i < count; i++) {
+          currentVehicles.push({ vehicleType: "", tripType: "", noOfDays: formik.values.noOfDays || "", perDayCost: "", totalCost: "" });
+        }
+      } else {
+        currentVehicles.splice(count);
+      }
+      formik.setFieldValue("multipleVehicles", currentVehicles);
+      recalculateMultipleTotal(currentVehicles);
+    } else {
+      recalculateTotal(formik.values.noOfDays, formik.values.perDayCost, formik.values.noOfVehicles);
+    }
+  };
+
+  const handleNoOfVehiclesChange = (e) => {
+    const count = parseInt(e.target.value) || 1;
+    formik.setFieldValue("noOfVehicles", count);
+
+    if (formik.values.vehiclesSameOrDifferent === "Same") {
+      recalculateTotal(formik.values.noOfDays, formik.values.perDayCost, count);
+    } else {
+      const currentVehicles = [...formik.values.multipleVehicles];
+      if (count > currentVehicles.length) {
+        for (let i = currentVehicles.length; i < count; i++) {
+          currentVehicles.push({ vehicleType: "", tripType: "", noOfDays: formik.values.noOfDays || "", perDayCost: "", totalCost: "" });
+        }
+      } else {
+        currentVehicles.splice(count);
+      }
+      formik.setFieldValue("multipleVehicles", currentVehicles);
+      recalculateMultipleTotal(currentVehicles);
+    }
+  };
+
+  const handleMultipleVehicleChange = (index, field, value) => {
+    const updatedVehicles = [...formik.values.multipleVehicles];
+    updatedVehicles[index][field] = value;
+
+    if (field === "noOfDays" || field === "perDayCost") {
+      const d = parseFloat(updatedVehicles[index].noOfDays);
+      const r = parseFloat(updatedVehicles[index].perDayCost);
+      if (!isNaN(d) && !isNaN(r)) {
+        updatedVehicles[index].totalCost = String(d * r);
+      }
+    }
+    
+    formik.setFieldValue("multipleVehicles", updatedVehicles);
+    recalculateMultipleTotal(updatedVehicles);
+  };
+
   const handleNoOfDaysChange = (e) => {
     formik.handleChange(e);
-    recalculateTotal(e.target.value, formik.values.perDayCost);
+    recalculateTotal(e.target.value, formik.values.perDayCost, formik.values.noOfVehicles);
   };
 
   const handlePerDayCostChange = (e) => {
     formik.handleChange(e);
-    recalculateTotal(formik.values.noOfDays, e.target.value);
+    recalculateTotal(formik.values.noOfDays, e.target.value, formik.values.noOfVehicles);
   };
 
   const handleVehicleChange = (event) => {
@@ -235,18 +338,47 @@ const VehicleQuotationStep1 = () => {
                   <TextField
                     fullWidth
                     select
-                    label="Vehicle Type"
-                    name="vehicleType"
-                    value={formik.values.vehicleType}
-                    onChange={handleVehicleChange}
-                    error={formik.touched.vehicleType && Boolean(formik.errors.vehicleType)}
-                    helperText={formik.touched.vehicleType && formik.errors.vehicleType}
+                    label="Vehicles: Same or Different"
+                    name="vehiclesSameOrDifferent"
+                    value={formik.values.vehiclesSameOrDifferent}
+                    onChange={handleVehiclesTypeChange}
                   >
-                    {optionsLoading ? (
-                      <MenuItem disabled>
-                        <CircularProgress size={20} />
-                      </MenuItem>
-                    ) : error ? (
+                    <MenuItem value="Same">Same</MenuItem>
+                    <MenuItem value="Different">Different</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField
+                    fullWidth
+                    label="No Of Vehicles"
+                    name="noOfVehicles"
+                    type="number"
+                    inputProps={{ min: 1 }}
+                    value={formik.values.noOfVehicles}
+                    onChange={handleNoOfVehiclesChange}
+                    error={formik.touched.noOfVehicles && Boolean(formik.errors.noOfVehicles)}
+                    helperText={formik.touched.noOfVehicles && formik.errors.noOfVehicles}
+                  />
+                </Grid>
+                
+                {formik.values.vehiclesSameOrDifferent === "Same" && (
+                  <>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        fullWidth
+                        select
+                        label="Vehicle Type"
+                        name="vehicleType"
+                        value={formik.values.vehicleType}
+                        onChange={handleVehicleChange}
+                        error={formik.touched.vehicleType && Boolean(formik.errors.vehicleType)}
+                        helperText={formik.touched.vehicleType && formik.errors.vehicleType}
+                      >
+                        {optionsLoading ? (
+                          <MenuItem disabled>
+                            <CircularProgress size={20} />
+                          </MenuItem>
+                        ) : error ? (
                       <MenuItem disabled>Error Loading</MenuItem>
                     ) : (
                       options.filter((opt) => opt.fieldName === "vehicleType")
@@ -256,48 +388,120 @@ const VehicleQuotationStep1 = () => {
                           </MenuItem>
                         ))
                     )}
-                    <MenuItem value="addNew">+ Add New</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                  <TextField
-                    fullWidth
-                    select
-                    label="Trip Type"
-                    name="tripType"
-                    value={formik.values.tripType}
-                    onChange={formik.handleChange}
-                  >
-                    {tripTypes.map((type, idx) => (
-                      <MenuItem key={idx} value={type}>
-                        {type}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                  <TextField
-                    fullWidth
-                    label="No Of Days"
-                    name="noOfDays"
-                    type="number"
-                    inputProps={{ min: 1 }}
-                    value={formik.values.noOfDays}
-                    onChange={handleNoOfDaysChange}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                  <TextField
-                    fullWidth
-                    label="Per Day Cost (₹)"
-                    name="perDayCost"
-                    type="number"
-                    inputProps={{ min: 0 }}
-                    value={formik.values.perDayCost}
-                    onChange={handlePerDayCostChange}
-                  />
-                </Grid>
+                        <MenuItem value="addNew">+ Add New</MenuItem>
+                      </TextField>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        fullWidth
+                        select
+                        label="Trip Type"
+                        name="tripType"
+                        value={formik.values.tripType}
+                        onChange={formik.handleChange}
+                        error={formik.touched.tripType && Boolean(formik.errors.tripType)}
+                        helperText={formik.touched.tripType && formik.errors.tripType}
+                      >
+                        {tripTypes.map((type, idx) => (
+                          <MenuItem key={idx} value={type}>
+                            {type}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        fullWidth
+                        label="No Of Days"
+                        name="noOfDays"
+                        type="number"
+                        inputProps={{ min: 1 }}
+                        value={formik.values.noOfDays}
+                        onChange={handleNoOfDaysChange}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        fullWidth
+                        label="Per Day Cost (₹)"
+                        name="perDayCost"
+                        type="number"
+                        inputProps={{ min: 0 }}
+                        value={formik.values.perDayCost}
+                        onChange={handlePerDayCostChange}
+                      />
+                    </Grid>
+                  </>
+                )}
               </Grid>
+
+              {formik.values.vehiclesSameOrDifferent === "Different" && (
+                <Box mt={3}>
+                  <Typography variant="subtitle2" fontWeight="bold">
+                    Vehicle Details (Different)
+                  </Typography>
+                  {formik.values.multipleVehicles.map((vehicle, index) => (
+                    <Grid container spacing={2} mt={1} key={index} sx={{ p: 2, border: '1px solid #ddd', borderRadius: 1, mb: 2 }}>
+                      <Grid size={{ xs: 12, sm: 3 }}>
+                        <TextField
+                          fullWidth
+                          select
+                          label={`Vehicle ${index + 1} Type`}
+                          value={vehicle.vehicleType}
+                          onChange={(e) => handleMultipleVehicleChange(index, "vehicleType", e.target.value)}
+                        >
+                          {options.filter((opt) => opt.fieldName === "vehicleType").map((type, idx) => (
+                            <MenuItem key={idx} value={type.value}>{type.value}</MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 2 }}>
+                        <TextField
+                          fullWidth
+                          select
+                          label="Trip Type"
+                          value={vehicle.tripType}
+                          onChange={(e) => handleMultipleVehicleChange(index, "tripType", e.target.value)}
+                        >
+                          {tripTypes.map((type, idx) => (
+                            <MenuItem key={idx} value={type}>{type}</MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 2 }}>
+                        <TextField
+                          fullWidth
+                          label="No Of Days"
+                          type="number"
+                          inputProps={{ min: 1 }}
+                          value={vehicle.noOfDays}
+                          onChange={(e) => handleMultipleVehicleChange(index, "noOfDays", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 2 }}>
+                        <TextField
+                          fullWidth
+                          label="Per Day Cost (₹)"
+                          type="number"
+                          inputProps={{ min: 0 }}
+                          value={vehicle.perDayCost}
+                          onChange={(e) => handleMultipleVehicleChange(index, "perDayCost", e.target.value)}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 3 }}>
+                        <TextField
+                          fullWidth
+                          label="Total Cost (₹)"
+                          type="number"
+                          inputProps={{ min: 0 }}
+                          value={vehicle.totalCost}
+                          onChange={(e) => handleMultipleVehicleChange(index, "totalCost", e.target.value)}
+                        />
+                      </Grid>
+                    </Grid>
+                  ))}
+                </Box>
+              )}
             </Box>
 
             {/* Cost Details */}

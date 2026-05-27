@@ -3,29 +3,40 @@ import { policySchema } from "../../common/policy.js";
 
 const vehicleSchema = mongoose.Schema({
     basicsDetails: {
+        vehiclesSameOrDifferent: {
+            type: String,
+            enum: ['Same', 'Different'],
+            default: 'Same'
+        },
         clientName: {
             type: String,
             required: true,
         },
         vehicleType: {
             type: String,
-            required: true,
         },
         tripType: {
             type: String,
             enum: ['One Way', 'Round Trip'],
-            required: true
         },
         noOfDays: {
             type: String,
-            required: true
         },
         perDayCost: {
             type: String,
-            required: true
+        },
+        noOfVehicles: {
+            type: String,
+            default: "1"
         }
-
     },
+    multipleVehicles: [{
+        vehicleType: String,
+        tripType: String,
+        noOfDays: String,
+        perDayCost: String,
+        totalCost: String
+    }],
     costDetails: {
         totalCost: {
             type: String,

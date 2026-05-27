@@ -162,9 +162,15 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
       setFieldValue("destinationCountry", selectedPkg.destinationCountry || "");
 
       // ⭐ ⭐ FETCH TRANSPORTATION FROM PACKAGE ⭐ ⭐
+      let transportName = selectedPkg.transportation || selectedPkg.transportMode || "";
+      if (clientDetails?.vehiclesSameOrDifferent === "Different" && Array.isArray(clientDetails?.multipleVehicles)) {
+        const customNames = clientDetails.multipleVehicles.map(v => v.vehicleType).filter(Boolean).join(" + ");
+        if (customNames) transportName = customNames;
+      }
+
       setFieldValue(
         "transportation",
-        selectedPkg.transportation || selectedPkg.transportMode || "",
+        transportName,
       );
 
       // Dates / Pax / Rooms from client lead details
@@ -189,10 +195,14 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
       const standardCost = Number(selectedPkg.finalStandardCost) || 0;
       const deluxeCost = Number(selectedPkg.finalDeluxeCost) || 0;
       const superiorCost = Number(selectedPkg.finalSuperiorCost) || 0;
-      const transportationCost =
+      let transportationCost =
         Number(selectedPkg.transportationTotalCost) ||
         (Number(selectedPkg.transportationCostPerDay) || 0) *
         (Number(selectedPkg.transportationDays) || 0);
+
+      if (clientDetails?.vehiclesSameOrDifferent === "Different" && Array.isArray(clientDetails?.multipleVehicles)) {
+        transportationCost = clientDetails.multipleVehicles.reduce((sum, v) => sum + (Number(v.totalCost) || 0), 0);
+      }
       const hotelCost = Number(selectedPkg.hotelTotalCost) || 0;
       const totalCost = Number(selectedPkg.totalCost) || standardCost || 0;
 
@@ -360,8 +370,12 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
         arrivalCity: "",
         departureCity: "",
         destinationCountry: "",
-        transportation: "",
-        transportationCost: "",
+        transportation: clientDetails?.vehiclesSameOrDifferent === "Different" && Array.isArray(clientDetails?.multipleVehicles)
+          ? clientDetails.multipleVehicles.map(v => v.vehicleType).filter(Boolean).join(" + ")
+          : "",
+        transportationCost: clientDetails?.vehiclesSameOrDifferent === "Different" && Array.isArray(clientDetails?.multipleVehicles) 
+          ? clientDetails.multipleVehicles.reduce((sum, v) => sum + (Number(v.totalCost) || 0), 0)
+          : "",
         hotelTotalCost: "",
         standardCost: "",
         deluxeCost: "",

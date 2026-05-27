@@ -26,6 +26,17 @@ const quickQuotationSchema = new mongoose.Schema(
         noOfRooms: { type: Number, default: 0 },
         noOfMattress: { type: Number, default: 0 },
         roomType: { type: String, default: "" },
+        noOfVehicles: { type: Number, default: 0 },
+        vehiclesSameOrDifferent: { type: String, enum: ["Same", "Different"], default: "Same" },
+        multipleVehicles: [
+            {
+                vehicleType: { type: String, default: "" },
+                tripType: { type: String, default: "" },
+                noOfDays: { type: Number, default: 0 },
+                perDayCost: { type: Number, default: 0 },
+                totalCost: { type: Number, default: 0 }
+            }
+        ],
 
         message: { type: String },
 

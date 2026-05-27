@@ -81,7 +81,8 @@ const generateVehicleQuotationId = async () => {
 export const createVehicle = asyncHandler(async (req, res) => {
   console.log("Req", req.body);
   const {
-    basicsDetails: { clientName, vehicleType, tripType, noOfDays, perDayCost },
+    basicsDetails: { vehiclesSameOrDifferent, clientName, vehicleType, tripType, noOfDays, perDayCost, noOfVehicles },
+    multipleVehicles,
     costDetails: { totalCost, discount, gstOn, applyGst },
     pickupDropDetails: {
       pickupDate,
@@ -97,10 +98,8 @@ export const createVehicle = asyncHandler(async (req, res) => {
   // Required field validation
   if (
     !clientName ||
-    !vehicleType ||
-    !tripType ||
-    !noOfDays ||
-    !perDayCost ||
+    (vehiclesSameOrDifferent === "Same" && (!vehicleType || !tripType || !noOfDays || !perDayCost)) ||
+    (vehiclesSameOrDifferent === "Different" && (!multipleVehicles || multipleVehicles.length === 0)) ||
     !totalCost ||
     !pickupDate ||
     !pickupTime ||
@@ -118,12 +117,15 @@ export const createVehicle = asyncHandler(async (req, res) => {
 
   const newVehicle = await Vehicle.create({
     basicsDetails: {
+      vehiclesSameOrDifferent,
       clientName,
-      vehicleType,
-      tripType,
-      noOfDays,
-      perDayCost,
+      vehicleType: vehicleType || "",
+      tripType: tripType || "One Way",
+      noOfDays: noOfDays || "1",
+      perDayCost: perDayCost || "0",
+      noOfVehicles: noOfVehicles || "1",
     },
+    multipleVehicles: multipleVehicles || [],
     costDetails: {
       totalCost,
     },
@@ -262,6 +264,9 @@ export const updateVehicle = asyncHandler(async (req, res) => {
   const { vehicleQuotationId } = req.params;
 
   const {
+    vehiclesSameOrDifferent,
+    noOfVehicles,
+    multipleVehicles,
     clientName,
     vehicleType,
     tripType,
@@ -284,12 +289,15 @@ export const updateVehicle = asyncHandler(async (req, res) => {
     { vehicleQuotationId },
     {
       basicsDetails: {
+        vehiclesSameOrDifferent,
+        noOfVehicles,
         clientName,
         vehicleType,
         tripType,
         noOfDays,
         perDayCost,
       },
+      multipleVehicles,
       costDetails: {
         totalCost,
       },

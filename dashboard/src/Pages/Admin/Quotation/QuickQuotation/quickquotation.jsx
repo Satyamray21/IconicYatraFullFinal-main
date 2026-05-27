@@ -128,6 +128,8 @@ const QuickQuotationForm = () => {
         deluxeCost: Number(finalData.packageDetails?.deluxeCost) || 0,
         superiorCost: Number(finalData.packageDetails?.superiorCost) || 0,
         mealPlan: finalData.packageDetails?.mealPlan || "",
+        vehiclesSameOrDifferent: finalData.clientDetails?.vehiclesSameOrDifferent || "Same",
+        multipleVehicles: Array.isArray(finalData.clientDetails?.multipleVehicles) ? finalData.clientDetails.multipleVehicles : [],
 
         // Package Snapshot (unchanged)
         packageSnapshot: {

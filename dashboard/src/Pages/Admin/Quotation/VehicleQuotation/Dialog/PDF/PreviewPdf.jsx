@@ -291,6 +291,8 @@ const VehicleQuotationPDFDialog = ({
   const pickupDeparture = getValue(quotationData, "pickup.departure");
   const hotelGuests = getValue(quotationData, "hotel.guests");
   const hotelType = getValue(quotationData, "hotel.hotelType");
+  const vehiclesSameOrDifferent = getValue(quotationData, "hotel.vehiclesSameOrDifferent", "Same");
+  const multipleVehicles = getValue(quotationData, "hotel.multipleVehicles", []);
   const hotelDestination = getValue(quotationData, "hotel.destination");
   const hotelItinerary = getValue(quotationData, "hotel.itinerary");
   const quotationTitle = getValue(
@@ -1396,11 +1398,19 @@ const VehicleQuotationPDFDialog = ({
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 4 }}>
                   <Typography variant="body2" color="textSecondary">
-                    Vehicle Type
+                    {vehiclesSameOrDifferent === "Different" ? "Vehicles List" : "Vehicle Type"}
                   </Typography>
-                  <Typography variant="body1" fontWeight="bold">
-                    {hotelType || "N/A"}
-                  </Typography>
+                  {vehiclesSameOrDifferent === "Different" && Array.isArray(multipleVehicles) && multipleVehicles.length > 0 ? (
+                    multipleVehicles.map((mv, idx) => (
+                      <Typography key={idx} variant="body1" fontWeight="bold">
+                        {mv.vehicleType || "N/A"} ({mv.tripType || "N/A"})
+                      </Typography>
+                    ))
+                  ) : (
+                    <Typography variant="body1" fontWeight="bold">
+                      {hotelType || "N/A"}
+                    </Typography>
+                  )}
                 </Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
                   <Typography variant="body2" color="textSecondary">

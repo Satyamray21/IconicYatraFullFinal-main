@@ -154,7 +154,7 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
   if (!hasBanks && !paymentLinkHtml) return "";
   return `
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">NET BANKING PAYMENT DETAILS:</p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
         ${(bankDetails || [])
           .map(
@@ -233,11 +233,11 @@ export function buildVehicleQuotationPdfPreviewEmail(vehicleData, customText = {
   const paymentLink = customText?.paymentLink || "";
 
   return `
-    <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
-        <p style="color:red; font-weight:bold;">
+    <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, "Dear Sir/Ma'am,")}
         </p>
-        <p style="color:red; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 18px;">
             ${safe(customText.opening, `GREETING FROM ${companyName.toUpperCase()}!!!`)}
         </p>
         <p>${safe(
@@ -252,34 +252,34 @@ export function buildVehicleQuotationPdfPreviewEmail(vehicleData, customText = {
         </p>
         <p>
             This is referenced in our discussion regarding your forthcoming Vehicle Tour to the
-            <span style="color:#d32f2f; font-weight:bold;"> ${safe(
+            <span style="color:#003366; font-weight:bold;"> ${safe(
               basics?.clientName,
               "Guest",
             )}</span>.
         </p>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">
+        <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ##PACKAGE COST FOR ALL PERSON = INR ${INR.format(totals.total)} As of now
         </p>
         <p style="color:#000; font-weight:bold;">
             SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only..
         </p>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">INCLUSIONS:</p>
         <p>${policyLines(inclusionWithAdditional).replace(/\n/g, "<br/>")}</p>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">EXCLUSIONS:</p>
         <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">TERMS & CONDITIONS:</p>
         ${termsAndConditionsLine(termsValue)}
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">CANCELLATION POLICY:</p>
         ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT POLICY:</p>
         <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
-        ${bankHtmlSection(bankDetails, paymentLink)}
+        ${bankHtmlSection(bankDetails, paymentLink).replace(/#d32f2f/g, "#003366")}
         <p>${safe(customText.signature, `Warm Regards<br/><b>${companyName}</b>`)}</p>
     </div>
   `;
@@ -340,31 +340,46 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
       ? toNum(customText.nextPayableAmount)
       : dueAmount;
 
+  const vehiclesHtml = basics?.vehiclesSameOrDifferent === "Different" && Array.isArray(vehicle.multipleVehicles) && vehicle.multipleVehicles.length > 0
+    ? vehicle.multipleVehicles.map((mv, i) => `
+        <div style="margin-bottom: 8px; padding: 10px; border: 1px solid #ccc; border-left: 4px solid #003366; border-radius: 4px; background-color: #f9f9f9;">
+          <p style="margin: 4px 0;"><b>Vehicle ${i + 1}:</b> ${safe(mv?.vehicleType, "-")}</p>
+          <p style="margin: 4px 0;"><b>Trip Type:</b> ${safe(mv?.tripType, "-")}</p>
+          <p style="margin: 4px 0;"><b>No. of Days:</b> ${safe(mv?.noOfDays, "-")}</p>
+        </div>
+      `).join("")
+    : `
+      <p><b>Vehicle:</b> ${safe(basics?.vehicleType, "As per itinerary")}</p>
+      <p><b>Trip Type:</b> ${safe(basics?.tripType, "-")}</p>
+      <p><b>No. of Days:</b> ${safe(basics?.noOfDays, "-")}</p>
+    `;
+
   return `
-    <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
-      <p style="color:red; font-weight:bold;">
+    <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+      <p style="color:#003366; font-weight:bold; font-size: 16px;">
         ${safe(customText.greeting, `Dear ${safe(basics?.clientName, "Guest")},`)}
       </p>
-      <p style="color:red; font-weight:bold;">
+      <p style="color:#003366; font-weight:bold; font-size: 18px;">
         ${safe(customText.opening, `BOOKING CONFIRMATION FROM ${companyName.toUpperCase()}!!!`)}
       </p>
       <p>${safe(
         customText.thankYou,
         `Thank you for choosing ${companyName}. Your booking has been confirmed.`,
       )}</p>
-      <p style="color:#d32f2f; font-weight:bold;">BOOKING ID: ${safe(
+      <p style="color:#003366; font-weight:bold; font-size: 16px;">BOOKING ID: ${safe(
         customText.bookingId,
         vehicle?.bookingId || vehicle?.vehicleQuotationId,
       )}</p>
       <p><b>Client:</b> ${safe(basics?.clientName, "Guest")}</p>
-      <p><b>Vehicle:</b> ${safe(basics?.vehicleType, "As per itinerary")}</p>
-      <p><b>Trip Type:</b> ${safe(basics?.tripType, "-")}</p>
-      <p><b>No. of Days:</b> ${safe(basics?.noOfDays, "-")}</p>
-      <p><b>No. of Pax:</b> ${summarizeGuests(lead)}</p>
-      <p><b>Arrival Date:</b> ${safe(tourPickupDrop?.arrivalCity)} ${safe(pickupDrop?.pickupLocation)} (${fmtDate(pickupDrop?.pickupDate)}) ${pickupDrop?.pickupTime ? `, Time: ${fmtTime(pickupDrop.pickupTime)}` : ""}</p>
-      <p><b>Departure Date:</b> ${safe(tourPickupDrop?.departureCity)} ${safe(pickupDrop?.dropLocation)} (${fmtDate(pickupDrop?.dropDate)}) ${pickupDrop?.dropTime ? `, Time: ${fmtTime(pickupDrop.dropTime)}` : ""}</p>
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;">PAYMENT STATUS:</p>
+      ${vehiclesHtml}
+      <br/>
+      <p><b>No. of Pax:</b> ${summarizeGuests(lead)}</p>
+      <p><b>Arrival Date:</b> ${safe(tourPickupDrop?.arrivalCity)} ${safe(pickupDrop?.pickupLocation)} (${fmtDate(pickupDrop?.pickupDate)}) ${(pickupDrop?.pickupTime && fmtTime(pickupDrop.pickupTime).toLowerCase() !== "05:30 am") ? `, Time: ${fmtTime(pickupDrop.pickupTime)}` : ""}</p>
+      <p><b>Departure Date:</b> ${safe(tourPickupDrop?.departureCity)} ${safe(pickupDrop?.dropLocation)} (${fmtDate(pickupDrop?.dropDate)}) ${(pickupDrop?.dropTime && fmtTime(pickupDrop.dropTime).toLowerCase() !== "05:30 am") ? `, Time: ${fmtTime(pickupDrop.dropTime)}` : ""}</p>
+      <br/>
+      <br/>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT STATUS:</p>
       <p><b>Package Cost (excluding GST):</b> INR ${INR.format(totals.beforeTax)}</p>
       <p><b>GST (${totals.taxPercent}%):</b> INR ${INR.format(totals.taxAmount)}</p>
       <p><b>Package Cost (including GST):</b> INR ${INR.format(totals.total)}</p>
@@ -377,21 +392,21 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
           : ""
       }
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">INCLUSIONS:</p>
       <p>${policyLines(inclusionWithAdditional).replace(/\n/g, "<br/>")}</p>
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">EXCLUSIONS:</p>
       <p>${policyLines(exclusionCombined).replace(/\n/g, "<br/>")}</p>
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">TERMS & CONDITIONS:</p>
       ${termsAndConditionsLine(termsValue)}
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">CANCELLATION POLICY:</p>
       ${cancellationPolicyUrlLine(cancellationPolicyUrl)}
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT POLICY:</p>
       <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
-      ${bankHtmlSection(bankDetails, paymentLink)}
+      ${bankHtmlSection(bankDetails, paymentLink).replace(/#d32f2f/g, "#003366")}
       <p>${safe(customText.signature, `Warm Regards<br/><b>${companyName}</b>`)}</p>
     </div>
   `;
