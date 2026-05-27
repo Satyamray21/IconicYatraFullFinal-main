@@ -819,18 +819,18 @@ export const previewQuickQuotationMail = asyncHandler(async (req, res) => {
   const bookingBody = buildCustomQuotationBookingEmail(shaped, bookingPayload);
 
   const shortRef = `QT-${mongoId.slice(-6)}`;
-  const guestName = quotation.customerName || "Guest";
+  const pkgTitle = quotation?.packageSnapshot?.displayTitle || quotation?.packageSnapshot?.title || quotation?.packageSnapshot?.packageName || "Quick Quotation";
 
   return res.status(200).json(
     new ApiResponse(
       200,
       {
         normal: {
-          subject: `Quotation ${shortRef} - ${guestName}`,
+          subject: `Quotation - ${pkgTitle}`,
           body: normalBody,
         },
         booking: {
-          subject: `Booking Confirmation ${shortRef} - ${guestName}`,
+          subject: `Booking Confirmation - ${pkgTitle}`,
           body: bookingBody,
         },
       },
@@ -903,12 +903,12 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
         : String(bodyHtml || "").trim() || generatedBody;
 
   const shortRef = `QT-${mongoId.slice(-6)}`;
-  const guestName = quotation.customerName || "Guest";
+  const pkgTitle = quotation?.packageSnapshot?.displayTitle || quotation?.packageSnapshot?.title || quotation?.packageSnapshot?.packageName || "Quick Quotation";
   const finalSubject =
     subject ||
     (isBookingMail
-      ? `Booking Confirmation ${shortRef} - ${guestName}`
-      : `Quotation ${shortRef} - ${guestName}`);
+      ? `Booking Confirmation - ${pkgTitle}`
+      : `Quotation - ${pkgTitle}`);
 
   const auth = await resolveMailAuth(senderAccount, selectedCompany);
   if (!auth.user || !auth.pass) {
@@ -1452,7 +1452,7 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
       from: `"${options.companyName}" <${auth.user}>`,
       to: toEmail || quotation.email,
       cc: cc && cc.length ? cc : undefined,
-      subject: subject || (mailType === "booking" ? `Booking Confirmation QT-${mongoId.slice(-6)} - ${quotation.customerName || "Guest"}` : `Hotel Confirmation Voucher - ${quotation.quickQuotationId}`),
+      subject: subject || (mailType === "booking" ? `Booking Confirmation - ${quotation?.packageSnapshot?.displayTitle || quotation?.packageSnapshot?.title || "Quick Quotation"}` : `Hotel Confirmation Voucher`),
       html: htmlBody,
       attachments: [
         {
