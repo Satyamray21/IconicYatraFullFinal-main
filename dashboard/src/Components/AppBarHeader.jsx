@@ -37,6 +37,8 @@ import {
   Lock,
   Logout,
   Edit,
+  NotificationsActive,
+  Delete as DeleteIcon
 } from "@mui/icons-material";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
@@ -183,6 +185,46 @@ const DashboardHeader = () => {
       return () => clearInterval(interval);
     }
   }, [fetchNotifications, user]);
+
+  const [redisNotifications, setRedisNotifications] = useState([]);
+  const [redisNotificationMenuAnchor, setRedisNotificationMenuAnchor] = useState(null);
+
+  const fetchRedisNotifications = useCallback(async () => {
+    try {
+      const { data } = await axios.get("/redis-notifications");
+      setRedisNotifications(data?.data || []);
+    } catch (e) {
+      console.error("Failed to fetch redis notifications", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchRedisNotifications();
+      const interval = setInterval(fetchRedisNotifications, 30000); // 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [fetchRedisNotifications, user]);
+
+  const handleClearAllRedis = async () => {
+    try {
+      await axios.delete("/redis-notifications");
+      fetchRedisNotifications();
+      setRedisNotificationMenuAnchor(null);
+    } catch (e) {
+      console.error("Failed to clear redis notifications", e);
+    }
+  };
+
+  const handleDeleteRedisNotification = async (index, event) => {
+    event.stopPropagation();
+    try {
+      await axios.delete(`/redis-notifications/${index}`);
+      fetchRedisNotifications();
+    } catch (e) {
+      console.error("Failed to delete redis notification", e);
+    }
+  };
 
   const handleMarkAllRead = async () => {
     try {
@@ -337,11 +379,79 @@ const DashboardHeader = () => {
             Payment Summary
           </Button>
 
-          <IconButton onClick={(e) => setNotificationMenuAnchor(e.currentTarget)}>
-            <Badge badgeContent={unreadCount} color="error">
-              <Notifications />
-            </Badge>
-          </IconButton>
+          <Tooltip title="Arrival Notifications">
+            <IconButton onClick={(e) => setRedisNotificationMenuAnchor(e.currentTarget)} color="warning">
+              <Badge badgeContent={redisNotifications.length} color="error">
+                <NotificationsActive />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+
+          <Menu
+            anchorEl={redisNotificationMenuAnchor}
+            open={Boolean(redisNotificationMenuAnchor)}
+            onClose={() => setRedisNotificationMenuAnchor(null)}
+            PaperProps={{
+              sx: { width: 350, maxHeight: 400, borderRadius: 2 },
+            }}
+          >
+            <Box
+              p={2}
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+            >
+              <Typography variant="subtitle1" fontWeight="bold">
+                Arrival Notifications
+              </Typography>
+              {redisNotifications.length > 0 && (
+                <Button size="small" color="error" onClick={handleClearAllRedis}>
+                  Clear All
+                </Button>
+              )}
+            </Box>
+            <Divider />
+            {redisNotifications.length === 0 ? (
+              <MenuItem disabled>
+                <Typography variant="body2">No arrival notifications</Typography>
+              </MenuItem>
+            ) : (
+              redisNotifications.map((notif, index) => (
+                <MenuItem
+                  key={index}
+                  sx={{
+                    whiteSpace: "normal",
+                    borderBottom: "1px solid #eee",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    cursor: "default"
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mb: 0.5 }}>
+                    <Typography variant="body2" fontWeight="bold">{notif.type}</Typography>
+                    <IconButton size="small" onClick={(e) => handleDeleteRedisNotification(index, e)}>
+                      <DeleteIcon fontSize="small" color="error" />
+                    </IconButton>
+                  </Box>
+                  <Typography variant="body2">
+                    {notif.message}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {new Date(notif.createdAt).toLocaleString()}
+                  </Typography>
+                </MenuItem>
+              ))
+            )}
+          </Menu>
+
+          <Tooltip title="System Notifications">
+            <IconButton onClick={(e) => setNotificationMenuAnchor(e.currentTarget)}>
+              <Badge badgeContent={unreadCount} color="error">
+                <Notifications />
+              </Badge>
+            </IconButton>
+          </Tooltip>
 
           <Menu
             anchorEl={notificationMenuAnchor}
