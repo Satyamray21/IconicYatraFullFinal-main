@@ -1163,6 +1163,7 @@ function transformQuickApiToDisplay(apiData, company) {
 
         return dt ? `Departure: ${point} (${dt})` : `Departure: ${point}`;
       })(),
+      vehicleType: apiData.transportation || apiData?.packageSnapshot?.transportMode || "",
     },
     quotationTitle: pkg.displayTitle || pkg.title || "",
     destinationSummary: destLine,
@@ -3110,6 +3111,15 @@ const QuickFinalize = () => {
       field: "pickup",
       nestedKey: "departure",
     },
+    ...(quotation.pickup.vehicleType
+      ? [
+          {
+            icon: <RouteIcon sx={{ fontSize: 16, mr: 0.5, color: "info.main" }} />,
+            text: `Vehicle Type: ${quotation.pickup.vehicleType}`,
+            editable: false,
+          },
+        ]
+      : []),
     {
       icon: <Group sx={{ fontSize: 16, mr: 0.5 }} />,
       text: `Guests: ${quotation.hotel.guests}`,

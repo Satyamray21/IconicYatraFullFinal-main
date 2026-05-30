@@ -321,6 +321,7 @@ const QuotationPDFDialog = ({
   const hotelType = getValue(quotationData, "hotel.hotelType");
   const hotelDestination = getValue(quotationData, "hotel.destination");
   const hotelItinerary = getValue(quotationData, "hotel.itinerary");
+  const vehicleType = getValue(quotationData, "pickup.vehicleType") || getRawValue(quotationData, "packageSnapshot.transportMode");
 
   const quotationTitle = getValue(
     quotationData,
@@ -1276,6 +1277,11 @@ const QuotationPDFDialog = ({
           ) : (
             <div style={{ fontSize: "14px", color: "#999" }}>
               Departure not specified
+            </div>
+          )}
+          {vehicleType && vehicleType !== "N/A" && (
+            <div style={{ fontSize: "14px", marginTop: "8px" }}>
+              🚘 Vehicle Type: {vehicleType}
             </div>
           )}
         </div>
