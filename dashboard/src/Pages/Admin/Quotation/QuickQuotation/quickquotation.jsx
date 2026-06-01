@@ -105,6 +105,8 @@ const QuickQuotationForm = () => {
         // *** FIXED: transportation root पर भेज रहे हैं ***
         transportation: finalData.packageDetails?.transportation || "",
         totalCost: Number(finalData.packageDetails?.totalCost) || 0,
+        perPersonAdultCost: Number(finalData.packageDetails?.perPersonAdultCost) || 0,
+        perPersonChildCost: Number(finalData.packageDetails?.perPersonChildCost) || 0,
         pickupPoint: finalData.packageDetails?.pickupPoint || "",
         dropPoint: finalData.packageDetails?.dropPoint || "",
         arrivalDate: finalData.packageDetails?.arrivalDate || "",

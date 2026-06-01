@@ -61,6 +61,16 @@ const quickQuotationSchema = new mongoose.Schema(
             default: 0
         },
 
+        perPersonAdultCost: {
+            type: Number,
+            default: 0
+        },
+
+        perPersonChildCost: {
+            type: Number,
+            default: 0
+        },
+
         currency: {
             type: String,
             default: "INR"

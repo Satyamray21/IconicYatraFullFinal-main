@@ -389,6 +389,32 @@ const QuotationPDFDialog = ({
   const deluxeTotal = toNumber(totalCostRow?.deluxe);
   const superiorTotal = toNumber(totalCostRow?.superior);
 
+  const parseTotalGuests = (guestsStr, qData) => {
+    if (qData) {
+      const a = Number(qData.adults) || 0;
+      const c = Number(qData.children) || 0;
+      const k = Number(qData.kids) || 0;
+      const i = Number(qData.infants) || 0;
+      const sum = a + c + k + i;
+      if (sum > 0) return sum;
+    }
+
+    if (!guestsStr || guestsStr === "N/A") return 1;
+    if (typeof guestsStr === "number") return guestsStr > 0 ? guestsStr : 1;
+    
+    const str = String(guestsStr).trim();
+    const guestMatch = str.match(/^(\d+)\s*Guests?/i);
+    if (guestMatch) {
+      return parseInt(guestMatch[1], 10) || 1;
+    }
+    
+    const matches = str.match(/\d+/g);
+    if (!matches) return 1;
+    const total = matches.reduce((sum, num) => sum + parseInt(num, 10), 0);
+    return total > 0 ? total : 1;
+  };
+  const totalGuestsCount = parseTotalGuests(hotelGuests, quotationData);
+
   const logoUrl =
     selectedCompany?.logo ||
     getValue(quotationData, "logo") ||
@@ -1535,44 +1561,82 @@ const QuotationPDFDialog = ({
               {visiblePackageColumns > 1 ? (
                 <>
                   {showStandardCol && standardTotal > 0 && (
-                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                      <td style={{ padding: "12px" }}>
-                        Package Cost (Standard)
-                      </td>
-                      <td style={{ padding: "12px", textAlign: "right" }}>
-                        {formatCurrency(standardTotal)}
-                      </td>
-                    </tr>
+                    <>
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Cost (Standard)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(standardTotal / totalGuestsCount)}
+                        </td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Package Cost (Standard)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(standardTotal)}
+                        </td>
+                      </tr>
+                    </>
                   )}
                   {showDeluxeCol && deluxeTotal > 0 && (
-                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                      <td style={{ padding: "12px" }}>
-                        Package Cost (Deluxe)
-                      </td>
-                      <td style={{ padding: "12px", textAlign: "right" }}>
-                        {formatCurrency(deluxeTotal)}
-                      </td>
-                    </tr>
+                    <>
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Cost (Deluxe)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(deluxeTotal / totalGuestsCount)}
+                        </td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Package Cost (Deluxe)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(deluxeTotal)}
+                        </td>
+                      </tr>
+                    </>
                   )}
                   {showSuperiorCol && superiorTotal > 0 && (
-                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                      <td style={{ padding: "12px" }}>
-                        Package Cost (Superior)
-                      </td>
-                      <td style={{ padding: "12px", textAlign: "right" }}>
-                        {formatCurrency(superiorTotal)}
-                      </td>
-                    </tr>
+                    <>
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Cost (Superior)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(superiorTotal / totalGuestsCount)}
+                        </td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Package Cost (Superior)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(superiorTotal)}
+                        </td>
+                      </tr>
+                    </>
                   )}
                 </>
               ) : (
                 effectiveTotal > 0 && (
-                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>Package Cost</td>
-                    <td style={{ padding: "12px", textAlign: "right" }}>
-                      {formatCurrency(effectiveTotal)}
-                    </td>
-                  </tr>
+                  <>
+                    <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>Per Person Cost</td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(effectiveTotal / totalGuestsCount)}
+                      </td>
+                    </tr>
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>Package Cost</td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(effectiveTotal)}
+                      </td>
+                    </tr>
+                  </>
                 )
               )}
               {visiblePackageColumns <= 1 && (
