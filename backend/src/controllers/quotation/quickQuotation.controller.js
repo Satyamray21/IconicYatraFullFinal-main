@@ -135,8 +135,10 @@ export const createQuickQuotation = async (req, res) => {
       kids,
       infants,
       message,
-      totalCost,
       transportation,
+      totalCost,
+      perPersonAdultCost,
+      perPersonChildCost,
       pickupPoint,
       dropPoint,
       arrivalDate,
@@ -215,6 +217,8 @@ export const createQuickQuotation = async (req, res) => {
 
       transportation: transportation || pkg.transportation || "",
       totalCost: totalCost || 0,
+      perPersonAdultCost: perPersonAdultCost || 0,
+      perPersonChildCost: perPersonChildCost || 0,
 
       packageSnapshot,
       policy: pkg.policy,

@@ -381,6 +381,8 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
         deluxeCost: "",
         superiorCost: "",
         totalCost: "", // NEW: Added total cost field
+        perPersonAdultCost: "",
+        perPersonChildCost: "",
       }}
       validate={(values) => {
         const errors = {};
@@ -419,6 +421,8 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
             deluxeCost: Number(values.deluxeCost) || 0,
             superiorCost: Number(values.superiorCost) || 0,
             totalCost: Number(values.totalCost) || 0,
+            perPersonAdultCost: Number(values.perPersonAdultCost) || 0,
+            perPersonChildCost: Number(values.perPersonChildCost) || 0,
           },
         });
         setSubmitting(false);
@@ -1322,6 +1326,58 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
                   />
                 </Grid> */}
               </Grid>
+            </Grid>
+          </Grid>
+
+          {/* Total Cost, Per Person Cost, and Include Child Toggle */}
+          <Grid container spacing={2} sx={{ mt: 2 }}>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Per Person Adult Cost"
+                name="perPersonAdultCost"
+                value={values.perPersonAdultCost}
+                onChange={(e) => {
+                  handleChange(e);
+                  const newAdultCost = Number(e.target.value) || 0;
+                  const childCost = Number(values.perPersonChildCost) || 0;
+                  const adults = Number(clientDetails?.adults) || 1;
+                  const children = Number(clientDetails?.children) || 0;
+                  setFieldValue("totalCost", ((newAdultCost * adults) + (childCost * children)).toFixed(2));
+                }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 4 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Per Person Child Cost"
+                name="perPersonChildCost"
+                value={values.perPersonChildCost}
+                onChange={(e) => {
+                  handleChange(e);
+                  const adultCost = Number(values.perPersonAdultCost) || 0;
+                  const newChildCost = Number(e.target.value) || 0;
+                  const adults = Number(clientDetails?.adults) || 1;
+                  const children = Number(clientDetails?.children) || 0;
+                  setFieldValue("totalCost", ((adultCost * adults) + (newChildCost * children)).toFixed(2));
+                }}
+              />
+            </Grid>
+            
+            <Grid size={{ xs: 12, md: 4 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Total Cost"
+                name="totalCost"
+                value={values.totalCost}
+                onChange={handleChange}
+                error={touched.totalCost && Boolean(errors.totalCost)}
+                helperText={touched.totalCost && errors.totalCost}
+              />
             </Grid>
           </Grid>
 
