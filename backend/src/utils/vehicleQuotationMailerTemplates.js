@@ -173,6 +173,21 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
           .join("")}
     `;
 };
+const itineraryLines = (itinerary = []) =>
+  (itinerary || [])
+    .map(
+      (d, i) => `
+                <div style="margin-bottom:12px;">
+                    <div style="color:#000; font-weight:bold;">
+                        Day ${i + 1}: ${safe(d?.title || d?.dayTitle, "")}
+                    </div>
+                    <div style="color:#000;">
+                        ${safe(d?.description || d?.dayNote, "")}
+                    </div>
+                </div>
+            `,
+    )
+    .join("");
 
 const vehicleTotals = (vehicle = {}) => {
   const totalCost = toNum(vehicle?.costDetails?.totalCost);
@@ -400,6 +415,15 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
           : ""
       }
       <br/>
+      ${
+        vehicle?.itinerary && vehicle.itinerary.length > 0
+          ? `
+            <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">DAY WISE ITINERARY</p>
+            <div>${itineraryLines(vehicle.itinerary)}</div>
+            <br/>
+          `
+          : ""
+      }
       <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">INCLUSIONS:</p>
       <p>${policyLines(inclusionWithAdditional).replace(/\n/g, "<br/>")}</p>
       <br/>
@@ -415,6 +439,14 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
       <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT POLICY:</p>
       <p>${policyLines(paymentCombined).replace(/\n/g, "<br/>")}</p>
       ${bankHtmlSection(bankDetails, paymentLink).replace(/#d32f2f/g, "#003366")}
+      <p>
+          <span style="color:#003366; font-weight:bold;">NOTE:</span>
+          <span style="color:#000; font-weight:bold;">
+              All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
+              For more details, contact your Tour Expert.
+          </span>
+      </p>
+      <br/>
       <p>${safe(customText.signature, `Warm Regards<br/><b>${companyName}</b>`)}</p>
     </div>
   `;
