@@ -81,22 +81,61 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "../../../../utils/axios";
 import logo from "../../../../assets/Logo/logoiconic.jpg";
 
+/** Flatten policy data (array, JSON string, newline text) into display lines. */
+function flattenPolicyLines(value) {
+  const lines = [];
+  const pushLine = (line) => {
+    const s = String(line ?? "")
+      .replace(/<[^>]*>/g, "")
+      .trim();
+    if (s) lines.push(s);
+  };
+
+  const ingest = (item) => {
+    if (item == null) return;
+    if (Array.isArray(item)) {
+      item.forEach(ingest);
+      return;
+    }
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (!trimmed) return;
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(ingest);
+            return;
+          }
+        } catch {
+          // treat as plain text
+        }
+      }
+      if (trimmed.includes("\n")) {
+        trimmed.split(/\r?\n/).forEach((part) => pushLine(part));
+        return;
+      }
+      pushLine(trimmed);
+      return;
+    }
+    pushLine(item);
+  };
+
+  ingest(value);
+  return lines;
+}
+
+const resolveVehiclePolicyLines = (...sources) => {
+  for (const source of sources) {
+    const lines = flattenPolicyLines(source);
+    if (lines.length > 0) return lines;
+  }
+  return [];
+};
+
 // Helper function to normalize policy for editor
 const normalizePolicyForEditor = (value) => {
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "";
-    const merged = value.join("\n").trim();
-    if (!merged) return "";
-    return merged;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return "";
-    return trimmed.replace(/<[^>]*>/g, "");
-  }
-
-  return "";
+  return flattenPolicyLines(value).join("\n");
 };
 
 // Helper function to normalize policy state from source
@@ -119,28 +158,14 @@ const normalizePolicyState = (source = {}) => {
   };
 };
 
-// Helper to convert lines to policy array
+// Helper to convert lines to policy array (handles JSON-in-one-string from legacy saves)
 function linesToPolicyArray(v) {
-  if (Array.isArray(v)) return v.map(String);
-  if (typeof v === "string") {
-    return v
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  return [String(v)];
+  return flattenPolicyLines(v);
 }
 
 // Convert any value to array of non-empty strings (mirrors backend toPolicyArray)
 function toPolicyArray(value) {
-  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
-  if (typeof value === "string") {
-    return value
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean);
-  }
-  return [];
+  return flattenPolicyLines(value);
 }
 
 // Maps UI field paths to Mongo $set keys
@@ -654,14 +679,7 @@ const VehicleQuotationPage = () => {
   const handleEditSave = async () => {
     let newValue = editDialog.value;
 
-    if (editDialog.field === "policies.inclusions") {
-      try {
-        const parsed = JSON.parse(editDialog.value);
-        newValue = Array.isArray(parsed) ? parsed : [String(parsed)];
-      } catch {
-        newValue = linesToPolicyArray(editDialog.value);
-      }
-    } else if (editDialog.field.startsWith("policies.")) {
+    if (editDialog.field.startsWith("policies.")) {
       newValue = linesToPolicyArray(editDialog.value);
     }
 
@@ -1504,14 +1522,12 @@ const VehicleQuotationPage = () => {
       title: "Inclusion Policy",
       icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
       content: [
-        ...(Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
-          ? vehicle.inclusions
-          : Array.isArray(vehicle.policies?.inclusionPolicy) &&
-            vehicle.policies.inclusionPolicy.length > 0
-            ? vehicle.policies.inclusionPolicy
-            : linesToPolicyArray(policyInputs.inclusionPolicy).length > 0
-              ? linesToPolicyArray(policyInputs.inclusionPolicy)
-              : defaultPolicies.inclusions),
+        ...resolveVehiclePolicyLines(
+          vehicle.inclusions,
+          vehicle.policies?.inclusionPolicy,
+          policyInputs.inclusionPolicy,
+          defaultPolicies.inclusions,
+        ),
         ...(Array.isArray(vehicle.additionalServices)
           ? vehicle.additionalServices
             .filter((s) => s.included === "yes")
@@ -1525,14 +1541,12 @@ const VehicleQuotationPage = () => {
       title: "Exclusion Policy",
       icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
       content: [
-        ...(Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
-          ? vehicle.exclusions
-          : Array.isArray(vehicle.policies?.exclusionPolicy) &&
-            vehicle.policies.exclusionPolicy.length > 0
-            ? vehicle.policies.exclusionPolicy
-            : linesToPolicyArray(policyInputs.exclusionPolicy).length > 0
-              ? linesToPolicyArray(policyInputs.exclusionPolicy)
-              : defaultPolicies.exclusions),
+        ...resolveVehiclePolicyLines(
+          vehicle.exclusions,
+          vehicle.policies?.exclusionPolicy,
+          policyInputs.exclusionPolicy,
+          defaultPolicies.exclusions,
+        ),
         ...(Array.isArray(vehicle.additionalServices)
           ? vehicle.additionalServices
             .filter((s) => s.included === "no")
@@ -1673,12 +1687,12 @@ const VehicleQuotationPage = () => {
     },
     policies: {
       inclusions: [
-        ...(Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
-          ? vehicle.inclusions
-          : Array.isArray(vehicle.policies?.inclusionPolicy) &&
-            vehicle.policies.inclusionPolicy.length > 0
-            ? vehicle.policies.inclusionPolicy
-            : defaultPolicies.inclusions),
+        ...resolveVehiclePolicyLines(
+          vehicle.inclusions,
+          vehicle.policies?.inclusionPolicy,
+          policyInputs.inclusionPolicy,
+          defaultPolicies.inclusions,
+        ),
         ...(Array.isArray(vehicle.additionalServices)
           ? vehicle.additionalServices
             .filter((s) => s.included === "yes")
@@ -1686,12 +1700,12 @@ const VehicleQuotationPage = () => {
           : []),
       ],
       exclusions: [
-        ...(Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
-          ? vehicle.exclusions
-          : Array.isArray(vehicle.policies?.exclusionPolicy) &&
-            vehicle.policies.exclusionPolicy.length > 0
-            ? vehicle.policies.exclusionPolicy
-            : defaultPolicies.exclusions),
+        ...resolveVehiclePolicyLines(
+          vehicle.exclusions,
+          vehicle.policies?.exclusionPolicy,
+          policyInputs.exclusionPolicy,
+          defaultPolicies.exclusions,
+        ),
         ...(Array.isArray(vehicle.additionalServices)
           ? vehicle.additionalServices
             .filter((s) => s.included === "no")
