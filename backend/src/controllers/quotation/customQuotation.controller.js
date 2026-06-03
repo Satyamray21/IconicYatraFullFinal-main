@@ -1174,6 +1174,15 @@ export const saveConfirmedHotels = async (req, res) => {
     quotation.confirmedHotels = confirmedHotels;
     await quotation.save();
 
+    // Clear cache
+    if (quotation.quotationId) {
+      await clearPattern(`customQuotation:${quotation.quotationId}`);
+    }
+    await clearPattern("customQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
+    await clearPattern('dashboard:stats:*');
+
     res.status(200).json(new ApiResponse(200, quotation, "Confirmed hotels saved successfully"));
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1183,7 +1192,7 @@ export const saveConfirmedHotels = async (req, res) => {
 export const sendHotelConfirmationMail = async (req, res) => {
   try {
     const { id } = req.params;
-    const { toEmail, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
+    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
 
     const quotation = await CustomQuotation.findById(id).lean();
     if (!quotation) {
@@ -1229,7 +1238,28 @@ export const sendHotelConfirmationMail = async (req, res) => {
       mealPlan: qd?.mealPlan || quotation?.mealPlan
     };
 
-    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    if (nextPayableAmount !== undefined) options.nextPayableAmount = nextPayableAmount;
+    if (paymentDueDate !== undefined) options.dueDate = paymentDueDate;
+
+    let htmlBody = bodyHtml;
+    if (!htmlBody) {
+      if (mailType === "booking") {
+        const companyMeta = await loadEmailMeta(company);
+        const bookingPayload = await mergeBookingEmailPayload(
+          quotation,
+          companyMeta,
+          {
+            nextPayableAmount,
+            dueDate: paymentDueDate,
+            ...customText,
+          }
+        );
+        htmlBody = buildCustomQuotationBookingEmail(quotation, bookingPayload);
+      } else {
+        htmlBody = buildHotelConfirmationEmail(quotation, options);
+      }
+    }
+
     const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
     
     const auth = await resolveMailAuth(senderAccount, company);
@@ -1239,24 +1269,12 @@ export const sendHotelConfirmationMail = async (req, res) => {
       auth: { user: auth.user, pass: auth.pass },
     });
 
-    const guestName = quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
-
     const mailOptions = {
       from: `"${options.companyName}" <${auth.user}>`,
       to: toEmail || quotation.clientDetails?.email,
-      subject: `Hotel Confirmation Voucher - ${quotation.quotationId}`,
-      html: `
-        <p>Dear ${guestName},</p>
-        <p>Please find attached the <b>Hotel Confirmation Voucher</b> for your upcoming trip.</p>
-        <p>Thank you for choosing ${options.companyName}.</p>
-        <br/>
-        ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
-        <br/>
-        ${options.signature ? options.signature : `
-        <p>Best Regards,</p>
-        <p><b>${options.companyName}</b></p>
-        `}
-      `,
+      cc: cc && cc.length ? cc : undefined,
+      subject: subject || (mailType === "booking" ? `Booking Confirmation ${quotation.quotationId} - ${quotation?.clientDetails?.clientName || "Guest"}` : `Hotel Confirmation Voucher - ${quotation.quotationId}`),
+      html: htmlBody,
       attachments: [
         {
           filename: `Hotel_Confirmation_${quotation.quotationId}.pdf`,
@@ -1295,7 +1313,7 @@ export const sendHotelConfirmationMail = async (req, res) => {
 export const previewHotelConfirmation = async (req, res) => {
   try {
     const { id } = req.params;
-    const { customText } = req.body;
+    const { customText, mailType, nextPayableAmount, paymentDueDate } = req.body;
 
     const quotation = await CustomQuotation.findById(id).lean();
     if (!quotation) {
@@ -1337,7 +1355,26 @@ export const previewHotelConfirmation = async (req, res) => {
       mealPlan: qd?.mealPlan || quotation?.mealPlan
     };
 
-    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    if (nextPayableAmount !== undefined) options.nextPayableAmount = nextPayableAmount;
+    if (paymentDueDate !== undefined) options.dueDate = paymentDueDate;
+
+    let htmlBody;
+    if (mailType === "booking") {
+      const companyMeta = await loadEmailMeta(company);
+      const bookingPayload = await mergeBookingEmailPayload(
+        quotation,
+        companyMeta,
+        {
+          nextPayableAmount,
+          dueDate: paymentDueDate,
+          ...customText,
+        }
+      );
+      htmlBody = buildCustomQuotationBookingEmail(quotation, bookingPayload);
+    } else {
+      htmlBody = buildHotelConfirmationEmail(quotation, options);
+    }
+
     res.status(200).json(new ApiResponse(200, { html: htmlBody }, "Preview generated"));
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1371,3 +1408,65 @@ export const getQuotationList = asyncHandler(async (req, res) => {
 
   return res.status(200).json(new ApiResponse(200, formattedQuotations, "Quotation list fetched successfully"));
 });
+
+export const downloadHotelConfirmationPdf = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let quotation;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      quotation = await CustomQuotation.findById(id).lean();
+    } else {
+      quotation = await CustomQuotation.findOne({ quotationId: id }).lean();
+    }
+
+    if (!quotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    const company = await resolveCompanyForEmail({ 
+      companyId: req.query.companyId || req.user?.companyId, 
+      companyName: req.query.companyName || "Iconic Travel" 
+    });
+
+    if (!company) {
+      return res.status(404).json({ message: "Company settings not found" });
+    }
+
+    const meta = await loadBookingPaymentDefaults(quotation);
+    const td = quotation?.tourDetails || {};
+    const qd = td?.quotationDetails || {};
+    const destinations = qd?.destinations || [];
+
+    const adults = Number(quotation?.clientDetails?.adults || qd?.adults) || 0;
+    const children = Number(quotation?.clientDetails?.children || qd?.children) || 0;
+    const kids = Number(quotation?.clientDetails?.kids || qd?.kids) || 0;
+
+    const options = {
+      ...meta,
+      ...company,
+      guestsLine: `${adults} Adults, ${children + kids} Child`,
+      roomsLine: `${qd?.rooms?.numberOfRooms || 1} ${qd?.rooms?.sharingType || "Double sharing"}`,
+      packageType: quotation?.finalizedPackage || "Family Tour Package",
+      duration: {
+        nights: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0),
+        days: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0) + 1
+      },
+      startDate: td?.arrivalDate,
+      endDate: td?.departureDate,
+      packageTitle: td?.quotationTitle,
+      destinationSummary: td?.destinationSummary,
+      stayLocations: quotation?.pickupDrop || [],
+      pickupPoint: td?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint,
+      dropPoint: td?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint,
+      mealPlan: qd?.mealPlan || quotation?.mealPlan
+    };
+
+    const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=Hotel_Confirmation_${quotation.quotationId || "Voucher"}.pdf`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

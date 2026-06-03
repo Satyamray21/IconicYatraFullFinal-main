@@ -10,6 +10,7 @@ import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
 import EmailAccount from "../../models/emailAccount.model.js";
 import ReceivedVoucher from "../../models/payment.model.js";
+import Bank from "../../models/bankDetails.js";
 import {
   buildVehicleQuotationBookingEmail,
   buildVehicleQuotationPdfPreviewEmail,
@@ -51,6 +52,16 @@ const DEFAULT_PAYMENT_POLICY = [
 // Default Terms and Conditions URL
 const DEFAULT_TERMS_AND_CONDITIONS = "https://www.iconicyatra.com/terms-conditions";
 
+/** Resolve vehicle by business id (IY_VQ_xxx) or Mongo _id from URL params. */
+const resolveVehicleQuery = (idOrRef) => {
+  const raw = String(idOrRef || "").trim();
+  if (!raw) return null;
+  if (/^[a-f\d]{24}$/i.test(raw)) {
+    return { $or: [{ _id: raw }, { vehicleQuotationId: raw }] };
+  }
+  return { vehicleQuotationId: raw };
+};
+
 const generateVehicleQuotationId = async () => {
   const lastVehicle = await Vehicle.findOne({})
     .sort({ createdAt: -1 })
@@ -71,7 +82,8 @@ const generateVehicleQuotationId = async () => {
 export const createVehicle = asyncHandler(async (req, res) => {
   console.log("Req", req.body);
   const {
-    basicsDetails: { clientName, vehicleType, tripType, noOfDays, perDayCost },
+    basicsDetails: { vehiclesSameOrDifferent, clientName, vehicleType, tripType, noOfDays, perDayCost, noOfVehicles },
+    multipleVehicles,
     costDetails: { totalCost, discount, gstOn, applyGst },
     pickupDropDetails: {
       pickupDate,
@@ -87,10 +99,8 @@ export const createVehicle = asyncHandler(async (req, res) => {
   // Required field validation
   if (
     !clientName ||
-    !vehicleType ||
-    !tripType ||
-    !noOfDays ||
-    !perDayCost ||
+    (vehiclesSameOrDifferent === "Same" && (!vehicleType || !tripType || !noOfDays || !perDayCost)) ||
+    (vehiclesSameOrDifferent === "Different" && (!multipleVehicles || multipleVehicles.length === 0)) ||
     !totalCost ||
     !pickupDate ||
     !pickupTime ||
@@ -108,12 +118,15 @@ export const createVehicle = asyncHandler(async (req, res) => {
 
   const newVehicle = await Vehicle.create({
     basicsDetails: {
+      vehiclesSameOrDifferent,
       clientName,
-      vehicleType,
-      tripType,
-      noOfDays,
-      perDayCost,
+      vehicleType: vehicleType || "",
+      tripType: tripType || "One Way",
+      noOfDays: noOfDays || "1",
+      perDayCost: perDayCost || "0",
+      noOfVehicles: noOfVehicles || "1",
     },
+    multipleVehicles: multipleVehicles || [],
     costDetails: {
       totalCost,
     },
@@ -252,6 +265,9 @@ export const updateVehicle = asyncHandler(async (req, res) => {
   const { vehicleQuotationId } = req.params;
 
   const {
+    vehiclesSameOrDifferent,
+    noOfVehicles,
+    multipleVehicles,
     clientName,
     vehicleType,
     tripType,
@@ -274,12 +290,15 @@ export const updateVehicle = asyncHandler(async (req, res) => {
     { vehicleQuotationId },
     {
       basicsDetails: {
+        vehiclesSameOrDifferent,
+        noOfVehicles,
         clientName,
         vehicleType,
         tripType,
         noOfDays,
         perDayCost,
       },
+      multipleVehicles,
       costDetails: {
         totalCost,
       },
@@ -440,19 +459,33 @@ export const viewItinerary = asyncHandler(async (req, res) => {
 /** Partial update by business vehicleQuotationId — used from finalize / admin UI */
 export const updateVehicleQuotationByQuotationId = asyncHandler(
   async (req, res) => {
-    const { vehicleQuotationId } = req.params;
+    const { vehicleQuotationId: idParam } = req.params;
+    const query = resolveVehicleQuery(idParam);
+    if (!query) {
+      throw new ApiError(400, "Vehicle quotation id is required");
+    }
 
     const updatedVehicle = await Vehicle.findOneAndUpdate(
-      { vehicleQuotationId },
+      query,
       { $set: req.body },
       { new: true, runValidators: true },
     );
+
+    if (!updatedVehicle) {
+      throw new ApiError(404, "Vehicle quotation not found");
+    }
+
+    const refKey = updatedVehicle.vehicleQuotationId || idParam;
+    await clearPattern(`vehicleQuotation:${refKey}`);
+    await clearPattern(`vehicleQuotation:${idParam}`);
+    await clearPattern("vehicleQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("dashboard:stats:*");
 
     const lead = await Lead.findOne({
       "personalDetails.fullName": updatedVehicle.basicsDetails.clientName,
     });
 
-    await clearPattern('dashboard:stats:*');
     return res
       .status(200)
       .json(
@@ -588,6 +621,30 @@ const sumReceivedFromClient = (vouchers = []) => {
   return total;
 };
 
+const pickHttp = (v) => {
+  const s = typeof v === "string" ? v.trim() : "";
+  return /^https?:\/\//i.test(s) ? s : "";
+};
+
+/** Net banking + payment link for vehicle emails (same source as quick/custom quotation). */
+const loadEmailMetaVehicle = async (company) => {
+  const accountHolder = company?.companyName;
+  const bankDetails = accountHolder
+    ? await Bank.find({
+        accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
+      }).lean()
+    : [];
+
+  return {
+    companyName: company?.companyName || "Iconic Travel",
+    companyWebsite: company?.companyWebsite || "",
+    termsAndConditions: company?.termsConditions || "",
+    cancellationPolicyUrl: pickHttp(company?.cancellationPolicy),
+    paymentLink: pickHttp(company?.paymentLink),
+    bankDetails,
+  };
+};
+
 export const previewVehicleQuotationMail = asyncHandler(async (req, res) => {
   const { vehicleQuotationId } = req.params;
   const companyId = req.query.companyId;
@@ -603,16 +660,7 @@ export const previewVehicleQuotationMail = asyncHandler(async (req, res) => {
     companyId,
     companyName,
   });
-  const companyMeta = {
-    companyName: selectedCompany?.companyName || "Iconic Travel",
-    companyWebsite: selectedCompany?.companyWebsite || "",
-    termsAndConditions: selectedCompany?.termsConditions || "",
-    cancellationPolicyUrl: selectedCompany?.cancellationPolicy || "",
-    paymentLink: selectedCompany?.paymentLink || "",
-    bankDetails: Array.isArray(selectedCompany?.bankDetails)
-      ? selectedCompany.bankDetails
-      : [],
-  };
+  const companyMeta = await loadEmailMetaVehicle(selectedCompany);
 
   const quotationData = { vehicle, lead };
   const vouchers = await ReceivedVoucher.find({
@@ -661,6 +709,7 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
     customText = {},
     pdfAttachment,
     previewPdfMode = false,
+    receiptPdf,
   } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -683,28 +732,25 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
       "Sender email credentials are not configured for selected account",
     );
   }
-  const companyMeta = {
-    companyName: selectedCompany?.companyName || "Iconic Travel",
-    companyWebsite: selectedCompany?.companyWebsite || "",
-    termsAndConditions: selectedCompany?.termsConditions || "",
-    cancellationPolicyUrl: selectedCompany?.cancellationPolicy || "",
-    paymentLink: selectedCompany?.paymentLink || "",
-    bankDetails: Array.isArray(selectedCompany?.bankDetails)
-      ? selectedCompany.bankDetails
-      : [],
-  };
+  const companyMeta = await loadEmailMetaVehicle(selectedCompany);
   const quotationData = { vehicle, lead };
   const vouchers = await ReceivedVoucher.find({
-    quotationRef: vehicleQuotationId,
+    quotationRef: { $in: [vehicleQuotationId, String(vehicle._id)] },
   }).lean();
   const receivedAmount = sumReceivedFromClient(vouchers);
 
   const isBookingMail = type === "booking";
+  const bookingCustom = isBookingMail ? (customText?.booking || {}) : (customText?.normal || {});
+
   const companyMetaWithCustom = {
     ...companyMeta,
     receivedAmount,
     signature: customText?.signature,
-    ...(isBookingMail ? (customText?.booking || {}) : (customText?.normal || {})),
+    ...bookingCustom,
+    bankDetails: (Array.isArray(bookingCustom.bankDetails) && bookingCustom.bankDetails.length > 0)
+      ? bookingCustom.bankDetails
+      : companyMeta.bankDetails,
+    paymentLink: bookingCustom.paymentLink || companyMeta.paymentLink,
   };
 
   const generatedBody = isBookingMail
@@ -753,6 +799,29 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
 
   const isBooking = String(type || "").trim().toLowerCase() === "booking";
 
+  const providedReceiptAttachment =
+    receiptPdf &&
+      typeof receiptPdf === "object" &&
+      String(receiptPdf.contentBase64 || "").trim()
+      ? {
+        filename: String(receiptPdf.filename || "Payment_Receipt.pdf").trim(),
+        content: Buffer.from(
+          String(receiptPdf.contentBase64).trim(),
+          "base64",
+        ),
+        contentType:
+          String(receiptPdf.mimeType || "").trim() || "application/pdf",
+      }
+      : null;
+
+  const finalAttachments = [];
+  if (providedPdfAttachment && !isBooking) {
+    finalAttachments.push(providedPdfAttachment);
+  }
+  if (providedReceiptAttachment && isBooking) {
+    finalAttachments.push(providedReceiptAttachment);
+  }
+
   await transporter.sendMail({
     from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
     to,
@@ -761,7 +830,7 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
     subject: finalSubject,
     html: body,
     text: body.replace(/<[^>]*>/g, ""),
-    attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
+    attachments: finalAttachments,
   });
 
   return res.status(200).json(

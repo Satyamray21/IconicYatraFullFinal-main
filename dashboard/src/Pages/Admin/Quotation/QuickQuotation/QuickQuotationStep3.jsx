@@ -14,6 +14,10 @@ import {
   DialogContent,
   DialogActions,
   Alert,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  FormControl,
 } from "@mui/material";
 import { Add, Delete } from "@mui/icons-material";
 import { Formik, Form, FieldArray } from "formik";
@@ -162,9 +166,15 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
       setFieldValue("destinationCountry", selectedPkg.destinationCountry || "");
 
       // ⭐ ⭐ FETCH TRANSPORTATION FROM PACKAGE ⭐ ⭐
+      let transportName = selectedPkg.transportation || selectedPkg.transportMode || "";
+      if (clientDetails?.vehiclesSameOrDifferent === "Different" && Array.isArray(clientDetails?.multipleVehicles)) {
+        const customNames = clientDetails.multipleVehicles.map(v => v.vehicleType).filter(Boolean).join(" + ");
+        if (customNames) transportName = customNames;
+      }
+
       setFieldValue(
         "transportation",
-        selectedPkg.transportation || selectedPkg.transportMode || "",
+        transportName,
       );
 
       // Dates / Pax / Rooms from client lead details
@@ -189,10 +199,14 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
       const standardCost = Number(selectedPkg.finalStandardCost) || 0;
       const deluxeCost = Number(selectedPkg.finalDeluxeCost) || 0;
       const superiorCost = Number(selectedPkg.finalSuperiorCost) || 0;
-      const transportationCost =
+      let transportationCost =
         Number(selectedPkg.transportationTotalCost) ||
         (Number(selectedPkg.transportationCostPerDay) || 0) *
         (Number(selectedPkg.transportationDays) || 0);
+
+      if (clientDetails?.vehiclesSameOrDifferent === "Different" && Array.isArray(clientDetails?.multipleVehicles)) {
+        transportationCost = clientDetails.multipleVehicles.reduce((sum, v) => sum + (Number(v.totalCost) || 0), 0);
+      }
       const hotelCost = Number(selectedPkg.hotelTotalCost) || 0;
       const totalCost = Number(selectedPkg.totalCost) || standardCost || 0;
 
@@ -360,13 +374,30 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
         arrivalCity: "",
         departureCity: "",
         destinationCountry: "",
-        transportation: "",
-        transportationCost: "",
+        transportation: clientDetails?.vehiclesSameOrDifferent === "Different" && Array.isArray(clientDetails?.multipleVehicles)
+          ? clientDetails.multipleVehicles.map(v => v.vehicleType).filter(Boolean).join(" + ")
+          : "",
+        transportationCost: clientDetails?.vehiclesSameOrDifferent === "Different" && Array.isArray(clientDetails?.multipleVehicles) 
+          ? clientDetails.multipleVehicles.reduce((sum, v) => sum + (Number(v.totalCost) || 0), 0)
+          : "",
         hotelTotalCost: "",
         standardCost: "",
         deluxeCost: "",
         superiorCost: "",
         totalCost: "", // NEW: Added total cost field
+        calculationMethod: "package",
+        perPersonAdultCost: "",
+        perPersonChildCost: "",
+        perPersonMattressCost: "",
+        standardAdultCost: "",
+        standardChildCost: "",
+        standardMattressCost: "",
+        deluxeAdultCost: "",
+        deluxeChildCost: "",
+        deluxeMattressCost: "",
+        superiorAdultCost: "",
+        superiorChildCost: "",
+        superiorMattressCost: "",
       }}
       validate={(values) => {
         const errors = {};
@@ -405,6 +436,10 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
             deluxeCost: Number(values.deluxeCost) || 0,
             superiorCost: Number(values.superiorCost) || 0,
             totalCost: Number(values.totalCost) || 0,
+            calculationMethod: values.calculationMethod || "package",
+            perPersonAdultCost: Number(values.perPersonAdultCost) || 0,
+            perPersonChildCost: Number(values.perPersonChildCost) || 0,
+            perPersonMattressCost: Number(values.perPersonMattressCost) || 0,
           },
         });
         setSubmitting(false);
@@ -1232,83 +1267,322 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
                       inputProps: { min: 0, step: 0.01 },
                     }}
                   />
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Hotel Total Cost (₹)"
-                    name="hotelTotalCost"
-                    value={values.hotelTotalCost}
-                    onChange={handleChange}
-                    InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
-                      inputProps: { min: 0, step: 0.01 },
-                    }}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Standard Total Cost (₹)"
-                    name="standardCost"
-                    value={values.standardCost}
-                    onChange={handleChange}
-                    InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
-                      inputProps: { min: 0, step: 0.01 },
-                    }}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Deluxe Total Cost (₹)"
-                    name="deluxeCost"
-                    value={values.deluxeCost}
-                    onChange={handleChange}
-                    InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
-                      inputProps: { min: 0, step: 0.01 },
-                    }}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Superior Total Cost (₹)"
-                    name="superiorCost"
-                    value={values.superiorCost}
-                    onChange={handleChange}
-                    InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
-                      inputProps: { min: 0, step: 0.01 },
-                    }}
-                  />
-                </Grid>
-                {/* NEW: Total Cost Field */}
-                {/* <Grid size={{ xs: 12, md: 6 }}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Total Cost (₹)"
-                    name="totalCost"
-                    value={values.totalCost}
-                    onChange={handleChange}
-                    placeholder="Enter total package cost"
-                    InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
-                      inputProps: { min: 0, step: 0.01 },
-                    }}
-                    error={touched.totalCost && Boolean(errors.totalCost)}
-                    helperText={touched.totalCost && errors.totalCost}
-                  />
-                </Grid> */}
               </Grid>
             </Grid>
+          </Grid>
+
+          {/* Cost Calculation Method Selector */}
+          <Box sx={{ mt: 3, p: 2, border: "1px solid #e0e0e0", borderRadius: 2 }}>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>
+              Cost Calculation Method
+            </Typography>
+            <FormControl component="fieldset">
+              <RadioGroup
+                row
+                name="calculationMethod"
+                value={values.calculationMethod}
+                onChange={handleChange}
+              >
+                <FormControlLabel
+                  value="package"
+                  control={<Radio />}
+                  label="Package Tier / Flat Cost"
+                />
+                <FormControlLabel
+                  value="perPerson"
+                  control={<Radio />}
+                  label="Calculate Per Person Cost"
+                />
+              </RadioGroup>
+            </FormControl>
+          </Box>
+
+          {/* Package Tier Fields */}
+          {values.calculationMethod === "package" && (
+            <Grid container spacing={2} sx={{ mt: 2 }}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Hotel Total Cost (₹)"
+                  name="hotelTotalCost"
+                  value={values.hotelTotalCost}
+                  onChange={handleChange}
+                  InputProps={{
+                    startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
+                    inputProps: { min: 0, step: 0.01 },
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Standard Total Cost (₹)"
+                  name="standardCost"
+                  value={values.standardCost}
+                  onChange={handleChange}
+                  InputProps={{
+                    startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
+                    inputProps: { min: 0, step: 0.01 },
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Deluxe Total Cost (₹)"
+                  name="deluxeCost"
+                  value={values.deluxeCost}
+                  onChange={handleChange}
+                  InputProps={{
+                    startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
+                    inputProps: { min: 0, step: 0.01 },
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Superior Total Cost (₹)"
+                  name="superiorCost"
+                  value={values.superiorCost}
+                  onChange={handleChange}
+                  InputProps={{
+                    startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
+                    inputProps: { min: 0, step: 0.01 },
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Total Cost (Overrides Tiers)"
+                  name="totalCost"
+                  value={values.totalCost}
+                  onChange={handleChange}
+                  InputProps={{
+                    startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>,
+                    inputProps: { min: 0, step: 0.01 },
+                  }}
+                  error={touched.totalCost && Boolean(errors.totalCost)}
+                  helperText={touched.totalCost && errors.totalCost}
+                />
+              </Grid>
+            </Grid>
+          )}
+
+          {/* Per Person Calculation Fields (Multi-Tier) */}
+          {values.calculationMethod === "perPerson" && (() => {
+            const calcTotal = (adult, child, mattress) => {
+              const a = Number(clientDetails?.adults) || 1;
+              const c = Number(clientDetails?.children) || 0;
+              const m = Number(values.noOfMattress) || 0;
+              const tot = (Number(adult || 0) * a) + (Number(child || 0) * c) + (Number(mattress || 0) * m);
+              return tot > 0 ? tot.toFixed(2) : "";
+            };
+
+            return (
+              <Box sx={{ mt: 4, p: 3, bgcolor: "#f8fbff", borderRadius: 2, border: "1px solid #e0eaf5" }}>
+                <Typography variant="h6" fontWeight={600} mb={3} color="primary">
+                  Per-Person Pricing Matrix
+                </Typography>
+
+                {/* STANDARD TIER */}
+                <Typography variant="subtitle2" fontWeight={600} mb={1} color="textSecondary">
+                  Standard Tier
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Adult Cost (Standard)"
+                      name="standardAdultCost"
+                      value={values.standardAdultCost}
+                      onChange={(e) => {
+                        handleChange(e);
+                        const adultCost = Number(e.target.value) || 0;
+                        const childCost = Number(values.standardChildCost) || 0;
+                        const mattressCost = Number(values.standardMattressCost) || 0;
+                        const adults = Number(clientDetails?.adults) || 1;
+                        const children = Number(clientDetails?.children) || 0;
+                        const mattresses = Number(values.noOfMattress) || 0;
+                        setFieldValue("totalCost", ((adultCost * adults) + (childCost * children) + (mattressCost * mattresses)).toFixed(2));
+                      }}
+                      sx={{ bgcolor: "#fff" }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Child Cost (Standard)"
+                      name="standardChildCost"
+                      value={values.standardChildCost}
+                      onChange={(e) => {
+                        handleChange(e);
+                        const adultCost = Number(values.standardAdultCost) || 0;
+                        const childCost = Number(e.target.value) || 0;
+                        const mattressCost = Number(values.standardMattressCost) || 0;
+                        const adults = Number(clientDetails?.adults) || 1;
+                        const children = Number(clientDetails?.children) || 0;
+                        const mattresses = Number(values.noOfMattress) || 0;
+                        setFieldValue("totalCost", ((adultCost * adults) + (childCost * children) + (mattressCost * mattresses)).toFixed(2));
+                      }}
+                      sx={{ bgcolor: "#fff" }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Mattress Cost (Standard)"
+                      name="standardMattressCost"
+                      value={values.standardMattressCost}
+                      onChange={(e) => {
+                        handleChange(e);
+                        const adultCost = Number(values.standardAdultCost) || 0;
+                        const childCost = Number(values.standardChildCost) || 0;
+                        const mattressCost = Number(e.target.value) || 0;
+                        const adults = Number(clientDetails?.adults) || 1;
+                        const children = Number(clientDetails?.children) || 0;
+                        const mattresses = Number(values.noOfMattress) || 0;
+                        setFieldValue("totalCost", ((adultCost * adults) + (childCost * children) + (mattressCost * mattresses)).toFixed(2));
+                      }}
+                      sx={{ bgcolor: "#fff" }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="text"
+                      label="Calculated Total (Standard)"
+                      value={values.totalCost || ""}
+                      InputProps={{
+                        startAdornment: <Typography sx={{ mr: 1, color: "text.secondary" }}>₹</Typography>,
+                        readOnly: true,
+                      }}
+                      sx={{ bgcolor: "#f0f4f8" }}
+                    />
+                  </Grid>
+                </Grid>
+
+                <Box sx={{ borderBottom: "1px dashed #cbd5e1", my: 3 }} />
+
+                {/* DELUXE TIER */}
+                <Typography variant="subtitle2" fontWeight={600} mb={1} color="textSecondary">
+                  Deluxe Tier
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Adult Cost (Deluxe)"
+                      name="deluxeAdultCost"
+                      value={values.deluxeAdultCost}
+                      onChange={handleChange}
+                      sx={{ bgcolor: "#fff" }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Child Cost (Deluxe)"
+                      name="deluxeChildCost"
+                      value={values.deluxeChildCost}
+                      onChange={handleChange}
+                      sx={{ bgcolor: "#fff" }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Mattress Cost (Deluxe)"
+                      name="deluxeMattressCost"
+                      value={values.deluxeMattressCost}
+                      onChange={handleChange}
+                      sx={{ bgcolor: "#fff" }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="text"
+                      label="Calculated Total (Deluxe)"
+                      value={calcTotal(values.deluxeAdultCost, values.deluxeChildCost, values.deluxeMattressCost)}
+                      InputProps={{
+                        startAdornment: <Typography sx={{ mr: 1, color: "text.secondary" }}>₹</Typography>,
+                        readOnly: true,
+                      }}
+                      sx={{ bgcolor: "#f0f4f8" }}
+                    />
+                  </Grid>
+                </Grid>
+
+                <Box sx={{ borderBottom: "1px dashed #cbd5e1", my: 3 }} />
+
+                {/* SUPERIOR TIER */}
+                <Typography variant="subtitle2" fontWeight={600} mb={1} color="textSecondary">
+                  Superior Tier
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Adult Cost (Superior)"
+                      name="superiorAdultCost"
+                      value={values.superiorAdultCost}
+                      onChange={handleChange}
+                      sx={{ bgcolor: "#fff" }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Child Cost (Superior)"
+                      name="superiorChildCost"
+                      value={values.superiorChildCost}
+                      onChange={handleChange}
+                      sx={{ bgcolor: "#fff" }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Mattress Cost (Superior)"
+                      name="superiorMattressCost"
+                      value={values.superiorMattressCost}
+                      onChange={handleChange}
+                      sx={{ bgcolor: "#fff" }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <TextField
+                      fullWidth
+                      type="text"
+                      label="Calculated Total (Superior)"
+                      value={calcTotal(values.superiorAdultCost, values.superiorChildCost, values.superiorMattressCost)}
+                      InputProps={{
+                        startAdornment: <Typography sx={{ mr: 1, color: "text.secondary" }}>₹</Typography>,
+                        readOnly: true,
+                      }}
+                      sx={{ bgcolor: "#f0f4f8" }}
+                    />
+                  </Grid>
+                </Grid>
+              </Box>
+            );
+          })()}
           </Grid>
 
           {/* Buttons */}

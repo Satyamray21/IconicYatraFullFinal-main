@@ -33,7 +33,7 @@ const PaymentsCard = () => {
   const dispatch = useDispatch();
   const [search, setSearch] = React.useState("");
   const [voucherType, setVoucherType] = React.useState("Receive Voucher"); // 'Receive Voucher' or 'Payment Voucher'
-  const ITEMS_PER_PAGE = 10;
+  const ITEMS_PER_PAGE = 100;
   const [page, setPage] = React.useState(1);
   const { list: payments = [], companyTotals = [] } = useSelector(
     (state) => state.payment,

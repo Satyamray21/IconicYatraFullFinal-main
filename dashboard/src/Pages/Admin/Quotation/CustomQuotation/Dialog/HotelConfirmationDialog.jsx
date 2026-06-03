@@ -36,14 +36,20 @@ import {
     Hotel as HotelIcon,
     CalendarMonth as CalendarIcon,
     Undo as UndoIcon,
+    ArrowUpward as ArrowUpwardIcon,
+    ArrowDownward as ArrowDownwardIcon,
 } from "@mui/icons-material";
 import { Autocomplete } from "@mui/material";
 import axios from "../../../../../utils/axios";
 import InvoiceView from "../../../../../Components/InvoiceView";
 import html2pdf from "html2pdf.js";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "dayjs";
 
-const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quotationRef }) => {
-    const [hotels, setHotels] = useState([]);
+const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quotationRef, onSaveSuccess }) => {
+        const [hotels, setHotels] = useState([]);
     const [hotelsMap, setHotelsMap] = useState({}); // { city: [hotels] }
     const [loading, setLoading] = useState(false);
     const [fetchingHotels, setFetchingHotels] = useState(false);
@@ -63,6 +69,43 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     const [splitFirstNights, setSplitFirstNights] = useState(1);
     const [hotelsHistory, setHotelsHistory] = useState([]);
     const receiptHiddenRef = React.useRef();
+    const prevOpenRef = React.useRef(false);
+
+    // Rich Booking Email states
+    const [mailType, setMailType] = useState("booking"); // "hotel" or "booking"
+    const [ccEmail, setCcEmail] = useState("");
+    const [recipientName, setRecipientName] = useState("");
+    const [salutation, setSalutation] = useState("");
+    const [subject, setSubject] = useState("");
+    const [greetLine, setGreetLine] = useState("");
+    const [nextPayableAmount, setNextPayableAmount] = useState("");
+    const [paymentDueDate, setPaymentDueDate] = useState(null);
+    const [emailBody, setEmailBody] = useState("");
+
+    const appendToMessage = (snippet) => {
+        const current = emailBody || "";
+        const separator = current && !current.endsWith("\n") ? "\n" : "";
+        setEmailBody(`${current}${separator}${snippet}`);
+    };
+
+    const addPaymentReminderBlock = () => {
+        const amount = String(nextPayableAmount || "").trim() || "2400";
+        const dueDate = paymentDueDate
+            ? dayjs(paymentDueDate).format("DD/MM/YYYY")
+            : "DD/MM/YYYY";
+        appendToMessage(
+            `<p style="color:#d32f2f; font-weight:bold;"><b>Next Payable Amount:</b> INR ${amount}</p>`
+        );
+        appendToMessage(
+            `<p><b>Payment Due Date:</b> ${dueDate}</p>`
+        );
+        appendToMessage(
+            `<p style="color:#d32f2f; font-weight:bold;">Please clear your all dues as per the payment policy.</p>`
+        );
+        appendToMessage(
+            `<p style="color:#2e7d32; font-weight:bold;">Kindly pay the next amount as per due date to avoid penalty or fine (10% on remaining amount).</p>`
+        );
+    };
 
     const saveToHistory = (currentHotels = hotels) => {
         setHotelsHistory((prev) => [...prev, JSON.parse(JSON.stringify(currentHotels))]);
@@ -206,6 +249,38 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         setSnackbar({ open: true, message: "Dates synchronized successfully!", severity: "success" });
     };
 
+    const handleMoveHotel = (index, direction) => {
+        saveToHistory();
+        const nextHotels = [...hotels];
+        const targetIndex = direction === "up" ? index - 1 : index + 1;
+        
+        // Swap elements
+        const temp = nextHotels[index];
+        nextHotels[index] = nextHotels[targetIndex];
+        nextHotels[targetIndex] = temp;
+
+        // Auto-recalculate dates for the new sequence if arrival date exists
+        const arrivalDateStr = quotation?.tourDetails?.arrivalDate || quotation?.arrivalDate || quotation?.packageSnapshot?.quotationDetails?.arrivalDate;
+        if (arrivalDateStr && !isNaN(new Date(arrivalDateStr).getTime())) {
+            let currentDate = new Date(arrivalDateStr);
+            const recalculated = nextHotels.map((h) => {
+                const checkIn = new Date(currentDate);
+                currentDate.setDate(currentDate.getDate() + Number(h.nights || 1));
+                const checkOut = new Date(currentDate);
+
+                return {
+                    ...h,
+                    checkInDate: checkIn.toISOString().split('T')[0],
+                    checkOutDate: checkOut.toISOString().split('T')[0]
+                };
+            });
+            setHotels(recalculated);
+        } else {
+            setHotels(nextHotels);
+        }
+        setSnackbar({ open: true, message: `Stay moved ${direction}! Dates auto-synchronized.`, severity: "success" });
+    };
+
     const handleSplitClick = (hotel) => {
         const nights = Number(hotel.nights || 1);
         if (nights <= 1) {
@@ -277,9 +352,70 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         setSnackbar({ open: true, message: `Stay split successfully: ${firstNights} Nights and ${secondNights} Nights!`, severity: "success" });
     };
 
+    const fetchEmailPreview = async () => {
+        if (!open || !quotation) return;
+        try {
+            if (mailType === "hotel") {
+                const endpoint = type === "quick"
+                    ? `/quickQT/${quotation._id}/email/hotel-confirmation/preview`
+                    : `/customQT/${quotation._id}/email/hotel-confirmation/preview`;
+                const res = await axios.post(endpoint, {
+                    companyId: selectedCompanyId,
+                    senderAccount: senderAccount,
+                    customText: {
+                        additionalNote: customMessage,
+                        signature: signatureHtml,
+                        nextPayableAmount: nextPayableAmount,
+                        paymentDueDate: paymentDueDate ? dayjs(paymentDueDate).format("DD/MM/YYYY") : ""
+                    },
+                    nextPayableAmount: nextPayableAmount,
+                    paymentDueDate: paymentDueDate ? dayjs(paymentDueDate).format("DD/MM/YYYY") : ""
+                });
+                if (res.data?.data?.html) {
+                    setEmailBody(res.data.data.html);
+                }
+            } else if (mailType === "booking") {
+                const endpoint = type === "quick"
+                    ? `/quickQT/${quotation._id}/email/preview`
+                    : `/customQT/${quotation.quotationId || quotation._id}/email/preview`;
+                const res = await axios.post(endpoint, {
+                    companyId: selectedCompanyId,
+                    senderAccount: senderAccount,
+                    customText: {
+                        signature: signatureHtml,
+                        booking: {
+                            nextPayableAmount: nextPayableAmount,
+                            dueDate: paymentDueDate ? dayjs(paymentDueDate).format("DD/MM/YYYY") : "",
+                            signature: signatureHtml,
+                        }
+                    }
+                });
+                if (res.data?.data?.booking?.body) {
+                    setEmailBody(res.data.data.booking.body);
+                    if (res.data.data.booking.subject) {
+                        setSubject(res.data.data.booking.subject);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Failed to fetch email preview:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (open && quotation && selectedCompanyId && senderAccount) {
+            fetchEmailPreview();
+        }
+    }, [open, mailType, selectedCompanyId, senderAccount, signatureHtml]);
+
     useEffect(() => {
         if (open && quotation) {
-            setRecipientEmail(quotation.email || quotation.clientDetails?.email || "");
+            if (!prevOpenRef.current) {
+                setRecipientEmail(quotation.email || quotation.clientDetails?.email || "");
+                setRecipientName(quotation.clientDetails?.clientName || quotation.customerName || "");
+                const qId = quotation.quotationId || quotation.quickQuotationId || quotation._id;
+                setSubject(`Hotel Confirmation Voucher - ${qId || ""}`);
+            }
             
             if (quotation.confirmedHotels && quotation.confirmedHotels.length > 0) {
                 setHotels(quotation.confirmedHotels.map((h, i) => ({
@@ -336,6 +472,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
 
                 setHotels(initialHotels);
             }
+            prevOpenRef.current = open;
+        } else {
+            prevOpenRef.current = false;
         }
     }, [open, quotation]);
 
@@ -460,6 +599,9 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             await axios.post(endpoint, { confirmedHotels: hotels });
 
             setSnackbar({ open: true, message: "Hotel details saved successfully", severity: "success" });
+            if (onSaveSuccess) {
+                onSaveSuccess();
+            }
         } catch (error) {
             setSnackbar({ open: true, message: error.response?.data?.message || "Failed to save", severity: "error" });
         } finally {
@@ -472,27 +614,36 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         try {
             let receiptPdfAttachment = null;
 
-            if (selectedReceiptId) {
-                const element = document.getElementById("hidden-receipt-container");
+            if (selectedReceiptId && mailType === "booking") {
+                // Wait 2500ms for async InvoiceView data to fully load
+                await new Promise((resolve) => setTimeout(resolve, 2500));
+                const element = document.getElementById("hotel-dialog-hidden-receipt-container");
                 if (element) {
-                    const opt = {
-                        margin: 0.3,
-                        filename: `Receipt_${selectedReceiptId}.pdf`,
-                        image: { type: "jpeg", quality: 0.98 },
-                        html2canvas: { scale: 2, useCORS: true, logging: false },
-                        jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
-                    };
-                    
-                    const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob');
-                    const reader = new FileReader();
-                    receiptPdfAttachment = await new Promise((resolve) => {
-                        reader.onloadend = () => resolve({
-                            filename: `Payment_Receipt.pdf`,
-                            contentBase64: reader.result.split(',')[1],
-                            mimeType: "application/pdf"
-                        });
-                        reader.readAsDataURL(pdfBlob);
-                    });
+                    try {
+                        const opt = {
+                            margin: 0.2,
+                            filename: `Receipt_${selectedReceiptId}.pdf`,
+                            image: { type: "jpeg", quality: 0.98 },
+                            html2canvas: { scale: 1.5, useCORS: true, logging: false },
+                            jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+                        };
+                        const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+                        if (pdfBlob && pdfBlob.size >= 100) {
+                            const reader = new FileReader();
+                            receiptPdfAttachment = await new Promise((resolve, reject) => {
+                                reader.onloadend = () =>
+                                    resolve({
+                                        filename: "Payment_Receipt.pdf",
+                                        contentBase64: reader.result.split(",")[1],
+                                        mimeType: "application/pdf",
+                                    });
+                                reader.onerror = reject;
+                                reader.readAsDataURL(pdfBlob);
+                            });
+                        }
+                    } catch (captureErr) {
+                        console.error("Failed to capture receipt PDF:", captureErr);
+                    }
                 }
             }
 
@@ -502,11 +653,22 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
 
             await axios.post(endpoint, {
                 toEmail: recipientEmail,
+                cc: ccEmail || undefined,
+                subject: subject,
+                bodyHtml: emailBody,
+                mailType: mailType,
                 companyId: selectedCompanyId,
                 senderAccount: senderAccount,
                 receiptPdf: receiptPdfAttachment,
-                paymentVoucherId: selectedReceiptId,
-                customText: { additionalNote: customMessage, signature: signatureHtml }
+                paymentVoucherId: mailType === "booking" ? selectedReceiptId : undefined,
+                nextPayableAmount: nextPayableAmount,
+                paymentDueDate: paymentDueDate ? dayjs(paymentDueDate).format("DD/MM/YYYY") : "",
+                customText: { 
+                    additionalNote: customMessage, 
+                    signature: signatureHtml,
+                    nextPayableAmount: nextPayableAmount,
+                    paymentDueDate: paymentDueDate ? dayjs(paymentDueDate).format("DD/MM/YYYY") : "",
+                }
             });
 
             setSnackbar({ open: true, message: "Hotel confirmation mail sent!", severity: "success" });
@@ -519,7 +681,8 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
             <DialogTitle sx={{ 
                 fontWeight: "bold", 
                 display: "flex", 
@@ -601,7 +764,20 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                     </Typography>
 
                     <Grid container spacing={2}>
-                        <Grid size={{ xs: 12, md: 6 }}>
+                        <Grid size={{ xs: 12, md: 4 }}>
+                            <TextField
+                                select
+                                fullWidth
+                                size="small"
+                                label="Mail Type"
+                                value={mailType}
+                                onChange={(e) => setMailType(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            >
+                                <MenuItem value="booking">Booking Confirmation</MenuItem>
+                            </TextField>
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 4 }}>
                             <TextField
                                 select
                                 fullWidth
@@ -618,7 +794,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                 ))}
                             </TextField>
                         </Grid>
-                        <Grid size={{ xs: 12, md: 6 }}>
+                        <Grid size={{ xs: 12, md: 4 }}>
                             <TextField
                                 select
                                 fullWidth
@@ -664,11 +840,12 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                 )}
                             </TextField>
                         </Grid>
+
                         <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                                 size="small"
                                 fullWidth
-                                label="Recipient Email"
+                                label="Recipient Email (To)"
                                 placeholder="Enter recipient email"
                                 value={recipientEmail}
                                 onChange={(e) => setRecipientEmail(e.target.value)}
@@ -679,12 +856,57 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                             <TextField
                                 size="small"
                                 fullWidth
-                                label="Additional Notes"
-                                multiline
-                                rows={1}
-                                placeholder="Add a special message..."
-                                value={customMessage}
-                                onChange={(e) => setCustomMessage(e.target.value)}
+                                label="CC Email"
+                                placeholder="Enter CC email"
+                                value={ccEmail}
+                                onChange={(e) => setCcEmail(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            />
+                        </Grid>
+
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label="Recipient Name"
+                                placeholder="Enter recipient name"
+                                value={recipientName}
+                                onChange={(e) => setRecipientName(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label="Salutation"
+                                placeholder="Enter salutation (e.g. Mr., Ms.)"
+                                value={salutation}
+                                onChange={(e) => setSalutation(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            />
+                        </Grid>
+
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label="Subject"
+                                placeholder="Enter email subject"
+                                value={subject}
+                                onChange={(e) => setSubject(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            />
+                        </Grid>
+
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label="Greet Line"
+                                placeholder="Enter greet line"
+                                value={greetLine}
+                                onChange={(e) => setGreetLine(e.target.value)}
                                 sx={{ bgcolor: "#fff" }}
                             />
                         </Grid>
@@ -709,16 +931,130 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                 ))}
                             </TextField>
                         </Grid>
-                        {signatureHtml && (
-                            <Grid size={{ xs: 12 }}>
-                                <Typography variant="subtitle2" sx={{ color: "#1a237e", fontWeight: "bold", mb: 1 }}>
-                                    Signature Preview
-                                </Typography>
-                                <Paper variant="outlined" sx={{ p: 2, bgcolor: "#fff" }}>
-                                    <Box dangerouslySetInnerHTML={{ __html: signatureHtml }} />
-                                </Paper>
-                            </Grid>
+
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label="Additional Notes"
+                                multiline
+                                rows={1}
+                                placeholder="Add a special message..."
+                                value={customMessage}
+                                onChange={(e) => setCustomMessage(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            />
+                        </Grid>
+
+                        {mailType === "booking" && (
+                            <>
+                                <Grid size={{ xs: 12, md: 3 }}>
+                                    <TextField
+                                        size="small"
+                                        fullWidth
+                                        label="Next Payable Amount (INR)"
+                                        value={nextPayableAmount}
+                                        onChange={(e) => setNextPayableAmount(e.target.value)}
+                                        sx={{ bgcolor: "#fff" }}
+                                    />
+                                </Grid>
+                                <Grid size={{ xs: 12, md: 3 }}>
+                                    <DatePicker
+                                        label="Payment Due Date"
+                                        value={paymentDueDate}
+                                        onChange={(newDate) => setPaymentDueDate(newDate)}
+                                        slotProps={{
+                                            textField: {
+                                                fullWidth: true,
+                                                size: "small",
+                                                sx: { bgcolor: "#fff" }
+                                            },
+                                        }}
+                                    />
+                                </Grid>
+                            </>
                         )}
+
+                        <Grid size={{ xs: 12 }}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                                <Typography variant="subtitle2" sx={{ color: "#1a237e", fontWeight: "bold" }}>
+                                    Email Body (Editable HTML)
+                                </Typography>
+                                <Button 
+                                    size="small" 
+                                    variant="outlined" 
+                                    color="info" 
+                                    onClick={fetchEmailPreview}
+                                    sx={{ textTransform: "none", fontWeight: "bold", py: 0.25 }}
+                                >
+                                    Reset/Load Default Template
+                                </Button>
+                            </Box>
+                            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => appendToMessage('<h3 style="color:#d32f2f; font-weight:bold;">YOUR HEADING</h3>')}
+                                    sx={{ textTransform: "none", py: 0.25 }}
+                                >
+                                    Add Red Heading
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => appendToMessage("<p>Write your line here...</p>")}
+                                    sx={{ textTransform: "none", py: 0.25 }}
+                                >
+                                    Add Line
+                                </Button>
+                                {mailType === "booking" && (
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={addPaymentReminderBlock}
+                                        sx={{ textTransform: "none", py: 0.25 }}
+                                    >
+                                        Add Payment Reminder Block
+                                    </Button>
+                                )}
+                            </Box>
+                            <TextField
+                                fullWidth
+                                label="Message HTML"
+                                multiline
+                                minRows={8}
+                                value={emailBody}
+                                onChange={(e) => setEmailBody(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            />
+                        </Grid>
+
+                        <Grid size={{ xs: 12 }}>
+                            <Typography variant="subtitle2" sx={{ color: "#1a237e", fontWeight: "bold", mb: 1 }}>
+                                Live Preview
+                            </Typography>
+                            <Paper variant="outlined" sx={{ p: 2, maxHeight: 300, overflow: "auto", bgcolor: "#fff" }}>
+                                <Box
+                                    sx={{ "& p": { m: 0, mb: 1 } }}
+                                    dangerouslySetInnerHTML={{ __html: emailBody || "<p style='color: #666;'>No preview available</p>" }}
+                                />
+                            </Paper>
+                        </Grid>
+
+                        <Grid size={{ xs: 12 }}>
+                            <Typography variant="subtitle2" sx={{ color: "#1a237e", fontWeight: "bold", mb: 1 }}>
+                                Generated Signature (HTML)
+                            </Typography>
+                            <TextField
+                                multiline
+                                minRows={3}
+                                fullWidth
+                                size="small"
+                                value={signatureHtml}
+                                onChange={(e) => setSignatureHtml(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            />
+                        </Grid>
                     </Grid>
                 </Box>
 
@@ -771,6 +1107,40 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                             </Box>
                             
                             <Box display="flex" gap={1.25}>
+                                {index > 0 && (
+                                    <Tooltip title="Move this stay up">
+                                        <IconButton
+                                            size="small"
+                                            color="primary"
+                                            onClick={() => handleMoveHotel(index, "up")}
+                                            sx={{ 
+                                                border: "1px solid #1e3c72", 
+                                                color: "#1e3c72",
+                                                borderRadius: 1.5,
+                                                '&:hover': { bgcolor: "rgba(30, 60, 114, 0.04)" }
+                                            }}
+                                        >
+                                            <ArrowUpwardIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                )}
+                                {index < hotels.length - 1 && (
+                                    <Tooltip title="Move this stay down">
+                                        <IconButton
+                                            size="small"
+                                            color="primary"
+                                            onClick={() => handleMoveHotel(index, "down")}
+                                            sx={{ 
+                                                border: "1px solid #1e3c72", 
+                                                color: "#1e3c72",
+                                                borderRadius: 1.5,
+                                                '&:hover': { bgcolor: "rgba(30, 60, 114, 0.04)" }
+                                            }}
+                                        >
+                                            <ArrowDownwardIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                )}
                                 {Number(hotel.nights || 1) > 1 && (
                                     <Tooltip title={`Split this ${hotel.nights}-night stay into two separate hotel bookings`}>
                                         <Button
@@ -996,15 +1366,6 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 </Alert>
             </Snackbar>
 
-            {/* Hidden container for PDF generation */}
-            <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
-                {selectedReceiptId && (
-                    <div id="hidden-receipt-container">
-                        <InvoiceView id={selectedReceiptId} hideButtons={true} />
-                    </div>
-                )}
-            </Box>
-
             {/* Split Stay Dialog */}
             <Dialog 
                 open={splitDialogOpen} 
@@ -1088,7 +1449,17 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 </DialogActions>
             </Dialog>
         </Dialog>
-    );
+
+        {/* Hidden container for PDF generation */}
+        <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+            {selectedReceiptId && (
+                <div id="hotel-dialog-hidden-receipt-container">
+                    <InvoiceView id={selectedReceiptId} hideButtons={true} />
+                </div>
+            )}
+        </Box>
+    </LocalizationProvider>
+);
 };
 
 export default HotelConfirmationDialog;

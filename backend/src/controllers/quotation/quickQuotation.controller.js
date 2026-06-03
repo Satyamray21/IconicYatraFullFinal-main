@@ -135,8 +135,21 @@ export const createQuickQuotation = async (req, res) => {
       kids,
       infants,
       message,
-      totalCost,
       transportation,
+      totalCost,
+      calculationMethod,
+      perPersonAdultCost,
+      perPersonChildCost,
+      perPersonMattressCost,
+      standardAdultCost,
+      standardChildCost,
+      standardMattressCost,
+      deluxeAdultCost,
+      deluxeChildCost,
+      deluxeMattressCost,
+      superiorAdultCost,
+      superiorChildCost,
+      superiorMattressCost,
       pickupPoint,
       dropPoint,
       arrivalDate,
@@ -145,6 +158,7 @@ export const createQuickQuotation = async (req, res) => {
       noOfRooms,
       noOfMattress,
       roomType,
+      noOfVehicles,
       transportationCost,
       hotelTotalCost,
       standardCost,
@@ -205,6 +219,7 @@ export const createQuickQuotation = async (req, res) => {
       infants: infants ?? 0,
       noOfRooms: noOfRooms ?? 0,
       noOfMattress: noOfMattress ?? 0,
+      noOfVehicles: noOfVehicles ?? 0,
       roomType: roomType || "",
       message,
 
@@ -213,6 +228,22 @@ export const createQuickQuotation = async (req, res) => {
 
       transportation: transportation || pkg.transportation || "",
       totalCost: totalCost || 0,
+      calculationMethod: calculationMethod || "package",
+      perPersonAdultCost: perPersonAdultCost || 0,
+      perPersonChildCost: perPersonChildCost || 0,
+      perPersonMattressCost: perPersonMattressCost || 0,
+
+      standardAdultCost: standardAdultCost || 0,
+      standardChildCost: standardChildCost || 0,
+      standardMattressCost: standardMattressCost || 0,
+
+      deluxeAdultCost: deluxeAdultCost || 0,
+      deluxeChildCost: deluxeChildCost || 0,
+      deluxeMattressCost: deluxeMattressCost || 0,
+
+      superiorAdultCost: superiorAdultCost || 0,
+      superiorChildCost: superiorChildCost || 0,
+      superiorMattressCost: superiorMattressCost || 0,
 
       packageSnapshot,
       policy: pkg.policy,
@@ -817,18 +848,18 @@ export const previewQuickQuotationMail = asyncHandler(async (req, res) => {
   const bookingBody = buildCustomQuotationBookingEmail(shaped, bookingPayload);
 
   const shortRef = `QT-${mongoId.slice(-6)}`;
-  const guestName = quotation.customerName || "Guest";
+  const pkgTitle = quotation?.packageSnapshot?.displayTitle || quotation?.packageSnapshot?.title || quotation?.packageSnapshot?.packageName || "Quick Quotation";
 
   return res.status(200).json(
     new ApiResponse(
       200,
       {
         normal: {
-          subject: `Quotation ${shortRef} - ${guestName}`,
+          subject: `Quotation - ${pkgTitle}`,
           body: normalBody,
         },
         booking: {
-          subject: `Booking Confirmation ${shortRef} - ${guestName}`,
+          subject: `Booking Confirmation - ${pkgTitle}`,
           body: bookingBody,
         },
       },
@@ -901,12 +932,12 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
         : String(bodyHtml || "").trim() || generatedBody;
 
   const shortRef = `QT-${mongoId.slice(-6)}`;
-  const guestName = quotation.customerName || "Guest";
+  const pkgTitle = quotation?.packageSnapshot?.displayTitle || quotation?.packageSnapshot?.title || quotation?.packageSnapshot?.packageName || "Quick Quotation";
   const finalSubject =
     subject ||
     (isBookingMail
-      ? `Booking Confirmation ${shortRef} - ${guestName}`
-      : `Quotation ${shortRef} - ${guestName}`);
+      ? `Booking Confirmation - ${pkgTitle}`
+      : `Quotation - ${pkgTitle}`);
 
   const auth = await resolveMailAuth(senderAccount, selectedCompany);
   if (!auth.user || !auth.pass) {
@@ -1350,6 +1381,15 @@ export const saveQuickConfirmedHotels = async (req, res) => {
     quotation.confirmedHotels = confirmedHotels;
     await quotation.save();
 
+    // Clear cache
+    if (mongoId) {
+      await clearPattern(`quickQuotation:${mongoId}`);
+    }
+    await clearPattern("quickQuotations:all");
+    await clearPattern("quotations:search:*");
+    await clearPattern("quotations:stats");
+    await clearPattern('dashboard:stats:*');
+
     res.status(200).json({ success: true, message: "Confirmed hotels saved successfully", data: quotation });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1359,7 +1399,7 @@ export const saveQuickConfirmedHotels = async (req, res) => {
 export const sendQuickHotelConfirmationMail = async (req, res) => {
   try {
     const mongoId = await resolveQuickQuotationMongoId(req.params.id);
-    const { toEmail, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
+    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
 
     const quotation = await QuickQuotation.findById(mongoId).lean();
     if (!quotation) {
@@ -1376,9 +1416,9 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
     }
 
     const meta = await loadEmailMetaQuick(company);
-    const td = quotation?.tourDetails || {};
-    const qd = td?.quotationDetails || {};
     const pkg = adaptQuickQuotationForCustomMailer(quotation);
+    const td = pkg?.tourDetails || {};
+    const qd = td?.quotationDetails || {};
     const destinations = qd?.destinations || pkg?.destinationNights || [];
     
     const adults = Number(quotation?.adults || qd?.adults) || 0;
@@ -1406,7 +1446,30 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
       mealPlan: qd?.mealPlan || quotation?.mealPlan
     };
 
-    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    if (nextPayableAmount !== undefined) options.nextPayableAmount = nextPayableAmount;
+    if (paymentDueDate !== undefined) options.dueDate = paymentDueDate;
+
+    let htmlBody = bodyHtml;
+    if (!htmlBody) {
+      if (mailType === "booking") {
+        const shaped = adaptQuickQuotationForCustomMailer(quotation);
+        const metaInfo = await loadEmailMetaQuick(company);
+        const bookingPayload = await mergeQuickBookingEmailPayload(
+          shaped,
+          metaInfo,
+          {
+            nextPayableAmount,
+            dueDate: paymentDueDate,
+            ...customText,
+          },
+          mongoId
+        );
+        htmlBody = buildCustomQuotationBookingEmail(shaped, bookingPayload);
+      } else {
+        htmlBody = buildHotelConfirmationEmail(quotation, options);
+      }
+    }
+
     const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
     const auth = await resolveMailAuth(senderAccount, company);
     const transporter = nodemailer.createTransport({
@@ -1414,24 +1477,12 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
       auth: { user: auth.user, pass: auth.pass },
     });
 
-    const guestName = quotation?.customerName || "Guest";
-
     const mailOptions = {
       from: `"${options.companyName}" <${auth.user}>`,
       to: toEmail || quotation.email,
-      subject: `Hotel Confirmation Voucher - ${quotation.quickQuotationId}`,
-      html: `
-        <p>Dear ${guestName},</p>
-        <p>Please find attached the <b>Hotel Confirmation Voucher</b> for your upcoming trip.</p>
-        <p>Thank you for choosing ${options.companyName}.</p>
-        <br/>
-        ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
-        <br/>
-        ${options.signature ? options.signature : `
-        <p>Best Regards,</p>
-        <p><b>${options.companyName}</b></p>
-        `}
-      `,
+      cc: cc && cc.length ? cc : undefined,
+      subject: subject || (mailType === "booking" ? `Booking Confirmation - ${quotation?.packageSnapshot?.displayTitle || quotation?.packageSnapshot?.title || "Quick Quotation"}` : `Hotel Confirmation Voucher`),
+      html: htmlBody,
       attachments: [
         {
           filename: `Hotel_Confirmation_${quotation.quickQuotationId}.pdf`,
@@ -1470,7 +1521,7 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
 export const previewQuickHotelConfirmation = async (req, res) => {
   try {
     const mongoId = await resolveQuickQuotationMongoId(req.params.id);
-    const { customText } = req.body;
+    const { customText, mailType, nextPayableAmount, paymentDueDate } = req.body;
 
     const quotation = await QuickQuotation.findById(mongoId).lean();
     if (!quotation) {
@@ -1483,9 +1534,9 @@ export const previewQuickHotelConfirmation = async (req, res) => {
     });
 
     const meta = await loadEmailMetaQuick(company);
-    const td = quotation?.tourDetails || {};
-    const qd = td?.quotationDetails || {};
     const pkg = adaptQuickQuotationForCustomMailer(quotation);
+    const td = pkg?.tourDetails || {};
+    const qd = td?.quotationDetails || {};
     const destinations = qd?.destinations || pkg?.destinationNights || [];
     
     const adults = Number(quotation?.adults || qd?.adults) || 0;
@@ -1513,8 +1564,87 @@ export const previewQuickHotelConfirmation = async (req, res) => {
       mealPlan: qd?.mealPlan || quotation?.mealPlan
     };
 
-    const htmlBody = buildHotelConfirmationEmail(quotation, options);
+    if (nextPayableAmount !== undefined) options.nextPayableAmount = nextPayableAmount;
+    if (paymentDueDate !== undefined) options.dueDate = paymentDueDate;
+
+    let htmlBody;
+    if (mailType === "booking") {
+      const shaped = adaptQuickQuotationForCustomMailer(quotation);
+      const metaInfo = await loadEmailMetaQuick(company);
+      const bookingPayload = await mergeQuickBookingEmailPayload(
+        shaped,
+        metaInfo,
+        {
+          nextPayableAmount,
+          dueDate: paymentDueDate,
+          ...customText,
+        },
+        mongoId
+      );
+      htmlBody = buildCustomQuotationBookingEmail(shaped, bookingPayload);
+    } else {
+      htmlBody = buildHotelConfirmationEmail(quotation, options);
+    }
+
     res.status(200).json({ success: true, data: { html: htmlBody } });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const downloadQuickHotelConfirmationPdf = async (req, res) => {
+  try {
+    const mongoId = await resolveQuickQuotationMongoId(req.params.id);
+
+    const quotation = await QuickQuotation.findById(mongoId).lean();
+    if (!quotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    const company = await resolveCompanyForEmail({ 
+      companyId: req.query.companyId || req.user?.companyId, 
+      companyName: req.query.companyName || "Iconic Travel" 
+    });
+
+    if (!company) {
+      return res.status(404).json({ message: "Company settings not found" });
+    }
+
+    const meta = await loadEmailMetaQuick(company);
+    const pkg = adaptQuickQuotationForCustomMailer(quotation);
+    const td = pkg?.tourDetails || {};
+    const qd = td?.quotationDetails || {};
+    const destinations = qd?.destinations || pkg?.destinationNights || [];
+
+    const adults = Number(quotation?.adults || qd?.adults) || 0;
+    const children = Number(quotation?.children || qd?.children) || 0;
+    const kids = Number(quotation?.kids || qd?.kids) || 0;
+
+    const options = {
+      ...meta,
+      ...company,
+      guestsLine: `${adults} Adults, ${children + kids} Child`,
+      roomsLine: `${qd?.rooms?.numberOfRooms || 1} ${qd?.rooms?.sharingType || "Double sharing"}`,
+      packageType: quotation?.finalizedPackage || "Family Tour Package",
+      duration: {
+        nights: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0),
+        days: destinations.reduce((sum, d) => sum + (Number(d?.nights) || 0), 0) + 1
+      },
+      startDate: quotation?.packageSnapshot?.quotationDetails?.arrivalDate,
+      endDate: quotation?.packageSnapshot?.quotationDetails?.departureDate,
+      packageTitle: quotation?.packageSnapshot?.title,
+      destinationSummary: quotation?.packageSnapshot?.destinationSummary,
+      stayLocations: quotation?.packageSnapshot?.stayLocations || [],
+      pickupPoint: td?.vehicleDetails?.pickupDropDetails?.pickupLocation || quotation?.pickupPoint,
+      dropPoint: td?.vehicleDetails?.pickupDropDetails?.dropLocation || quotation?.dropPoint,
+      mealPlan: qd?.mealPlan || quotation?.mealPlan
+    };
+
+    const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=Hotel_Confirmation_${quotation.quotationId || "Voucher"}.pdf`);
+    res.send(pdfBuffer);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

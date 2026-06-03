@@ -68,32 +68,74 @@ import AddServiceDialog from "./Dialog/AddServiceDialog";
 import VehicleQuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 import TransactionHistoryDialog from "./Dialog/TransactionHistoryDialog";
 import VendorManagementDialog from "./Dialog/VendorManagementDialog";
+import InvoiceView from "../../../../Components/InvoiceView";
+import html2pdf from "html2pdf.js";
 import {
   getVehicleQuotationById,
   addItinerary,
   editItinerary,
 } from "../../../../features/quotation/vehicleQuotationSlice";
+import { fetchPackages } from "../../../../features/package/packageSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../../../../utils/axios";
 import logo from "../../../../assets/Logo/logoiconic.jpg";
 
+/** Flatten policy data (array, JSON string, newline text) into display lines. */
+function flattenPolicyLines(value) {
+  const lines = [];
+  const pushLine = (line) => {
+    const s = String(line ?? "")
+      .replace(/<[^>]*>/g, "")
+      .trim();
+    if (s) lines.push(s);
+  };
+
+  const ingest = (item) => {
+    if (item == null) return;
+    if (Array.isArray(item)) {
+      item.forEach(ingest);
+      return;
+    }
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (!trimmed) return;
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(ingest);
+            return;
+          }
+        } catch {
+          // treat as plain text
+        }
+      }
+      if (trimmed.includes("\n")) {
+        trimmed.split(/\r?\n/).forEach((part) => pushLine(part));
+        return;
+      }
+      pushLine(trimmed);
+      return;
+    }
+    pushLine(item);
+  };
+
+  ingest(value);
+  return lines;
+}
+
+const resolveVehiclePolicyLines = (...sources) => {
+  for (const source of sources) {
+    const lines = flattenPolicyLines(source);
+    if (lines.length > 0) return lines;
+  }
+  return [];
+};
+
 // Helper function to normalize policy for editor
 const normalizePolicyForEditor = (value) => {
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "";
-    const merged = value.join("\n").trim();
-    if (!merged) return "";
-    return merged;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return "";
-    return trimmed.replace(/<[^>]*>/g, "");
-  }
-
-  return "";
+  return flattenPolicyLines(value).join("\n");
 };
 
 // Helper function to normalize policy state from source
@@ -116,28 +158,14 @@ const normalizePolicyState = (source = {}) => {
   };
 };
 
-// Helper to convert lines to policy array
+// Helper to convert lines to policy array (handles JSON-in-one-string from legacy saves)
 function linesToPolicyArray(v) {
-  if (Array.isArray(v)) return v.map(String);
-  if (typeof v === "string") {
-    return v
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  return [String(v)];
+  return flattenPolicyLines(v);
 }
 
 // Convert any value to array of non-empty strings (mirrors backend toPolicyArray)
 function toPolicyArray(value) {
-  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
-  if (typeof value === "string") {
-    return value
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean);
-  }
-  return [];
+  return flattenPolicyLines(value);
 }
 
 // Maps UI field paths to Mongo $set keys
@@ -169,6 +197,53 @@ function buildMongoSetFromDisplayField(field, value) {
     default:
       return null;
   }
+}
+
+/** Total nights from package (stayLocations / destinationNights / days length). */
+function getPackageTotalNights(pkg) {
+  if (!pkg) return 0;
+  if (Array.isArray(pkg.stayLocations) && pkg.stayLocations.length > 0) {
+    return pkg.stayLocations.reduce(
+      (sum, loc) => sum + (Number(loc?.nights) || 0),
+      0,
+    );
+  }
+  if (Array.isArray(pkg.destinationNights) && pkg.destinationNights.length > 0) {
+    return pkg.destinationNights.reduce(
+      (sum, dest) => sum + (Number(dest?.nights) || 0),
+      0,
+    );
+  }
+  return Array.isArray(pkg.days) ? pkg.days.length : 0;
+}
+
+function packageMatchesDestination(pkg, destination) {
+  if (!destination) return true;
+  const dest = String(destination).trim().toLowerCase();
+  if (!dest) return true;
+  if (String(pkg?.sector || "").trim().toLowerCase() === dest) return true;
+  if (
+    pkg?.stayLocations?.some(
+      (loc) => String(loc?.city || "").trim().toLowerCase() === dest,
+    )
+  ) {
+    return true;
+  }
+  if (
+    pkg?.destinationNights?.some(
+      (d) => String(d?.destination || "").trim().toLowerCase() === dest,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Exact nights match — 5 nights on quotation shows only 5-night packages. */
+function packageMatchesTripNights(pkg, targetNights) {
+  const nights = Number(targetNights) || 0;
+  if (!nights) return true;
+  return getPackageTotalNights(pkg) === nights;
 }
 
 // Resolves $set payload including nested pickup (arrival / departure) edits
@@ -204,7 +279,12 @@ const VehicleQuotationPage = () => {
     message: "",
     severity: "success",
   });
+  const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
   const [localItinerary, setLocalItinerary] = useState([]);
+  const [selectedPackageId, setSelectedPackageId] = useState("");
+  const { items: tourPackages = [], loading: packagesLoading } = useSelector(
+    (state) => state.packages,
+  );
 
   // Policy states for editing
   const [policyInputs, setPolicyInputs] = useState({
@@ -233,12 +313,25 @@ const VehicleQuotationPage = () => {
   );
   const { data: company, status } = useSelector((state) => state.companyUI);
 
+  /** Mongo _id preferred for payments (matches QuotationSelector in Payments form). */
   const apiEntityId = React.useMemo(() => {
-    if (q?.vehicle?.vehicleQuotationId) return String(q.vehicle.vehicleQuotationId);
     if (q?.vehicle?._id) return String(q.vehicle._id);
     if (id && /^[a-f\d]{24}$/i.test(String(id))) return String(id);
+    if (q?.vehicle?.vehicleQuotationId) return String(q.vehicle.vehicleQuotationId);
     return id;
-  }, [q?.vehicle?.vehicleQuotationId, q?.vehicle?._id, id]);
+  }, [q?.vehicle?._id, q?.vehicle?.vehicleQuotationId, id]);
+
+  /** All ids that may appear on payment vouchers for this quotation. */
+  const paymentQuotationRefs = React.useMemo(() => {
+    const refs = [
+      q?.vehicle?._id,
+      q?.vehicle?.vehicleQuotationId,
+      id,
+    ]
+      .filter(Boolean)
+      .map((r) => String(r));
+    return [...new Set(refs)];
+  }, [q?.vehicle?._id, q?.vehicle?.vehicleQuotationId, id]);
   // Initialize local itinerary from API data
   useEffect(() => {
     if (q?.vehicle?.itinerary) {
@@ -331,20 +424,49 @@ const VehicleQuotationPage = () => {
     }
   }, [dispatch, id]);
 
-  const loadPaymentHistory = async () => {
-    if (!apiEntityId) return;
+  useEffect(() => {
+    if (!q?.vehicle) return;
+    setPolicyInputs(normalizePolicyState(q.vehicle));
+  }, [q?.vehicle]);
+
+  useEffect(() => {
+    dispatch(fetchPackages({ page: 1, limit: 100 }));
+  }, [dispatch]);
+
+  const loadPaymentHistory = React.useCallback(async () => {
+    if (!paymentQuotationRefs.length) return;
     setPaymentHistoryLoading(true);
     try {
-      const res = await axios.get(
-        `/payment/by-quotation/${encodeURIComponent(apiEntityId)}`,
+      const lists = await Promise.all(
+        paymentQuotationRefs.map((ref) =>
+          axios
+            .get(`/payment/by-quotation/${encodeURIComponent(ref)}`)
+            .then((res) => res.data?.data || [])
+            .catch(() => []),
+        ),
       );
-      setPaymentHistory(res.data?.data || []);
-    } catch (e) {
+      const seen = new Set();
+      const merged = [];
+      for (const list of lists) {
+        for (const row of list) {
+          const key = row?._id ? String(row._id) : `${row?.invoiceId}-${row?.date}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          merged.push(row);
+        }
+      }
+      merged.sort((a, b) => {
+        const da = new Date(a?.date || a?.createdAt || 0).getTime();
+        const db = new Date(b?.date || b?.createdAt || 0).getTime();
+        return db - da;
+      });
+      setPaymentHistory(merged);
+    } catch {
       setPaymentHistory([]);
     } finally {
       setPaymentHistoryLoading(false);
     }
-  };
+  }, [paymentQuotationRefs]);
 
   const loadMailCompanies = async () => {
     try {
@@ -414,7 +536,21 @@ const VehicleQuotationPage = () => {
     loadPaymentHistory();
     loadMailCompanies();
     fetchEmailAccounts();
-  }, [apiEntityId]);
+  }, [loadPaymentHistory]);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    const refresh = () => loadPaymentHistory();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [id, loadPaymentHistory]);
 
   const actions = [
     "Finalize",
@@ -486,11 +622,12 @@ const VehicleQuotationPage = () => {
 
   const handlePaymentOpen = () => {
     const clientName = q?.vehicle?.basicsDetails?.clientName?.trim() || "";
+    const paymentRef = apiEntityId || id;
     try {
       sessionStorage.setItem(
         "paymentFormPartyPrefill",
         JSON.stringify({
-          quotationRef: id,
+          quotationRef: paymentRef,
           partyName: clientName,
         }),
       );
@@ -499,7 +636,7 @@ const VehicleQuotationPage = () => {
     }
     const party = encodeURIComponent(clientName);
     navigate(
-      `/payments-form?quotationRef=${encodeURIComponent(id)}&party=${party}`,
+      `/payments-form?quotationRef=${encodeURIComponent(paymentRef)}&party=${party}`,
     );
   };
   const handlePaymentClose = () => setOpenPaymentDialog(false);
@@ -542,20 +679,14 @@ const VehicleQuotationPage = () => {
   const handleEditSave = async () => {
     let newValue = editDialog.value;
 
-    if (editDialog.field === "policies.inclusions") {
-      try {
-        const parsed = JSON.parse(editDialog.value);
-        newValue = Array.isArray(parsed) ? parsed : [String(parsed)];
-      } catch {
-        newValue = linesToPolicyArray(editDialog.value);
-      }
-    } else if (editDialog.field.startsWith("policies.")) {
+    if (editDialog.field.startsWith("policies.")) {
       newValue = linesToPolicyArray(editDialog.value);
     }
 
-    // Update local policyInputs state
+    // Update local policyInputs state (keep editor fields as newline text)
     if (editDialog.field.startsWith("policies.")) {
       const policyKey = editDialog.field.split(".")[1];
+      const editorValue = normalizePolicyForEditor(newValue);
       setPolicyInputs((prev) => ({
         ...prev,
         [policyKey === "inclusions"
@@ -564,7 +695,7 @@ const VehicleQuotationPage = () => {
             ? "exclusionPolicy"
             : policyKey === "terms"
               ? "termsAndConditions"
-              : policyKey]: newValue,
+              : policyKey]: editorValue,
       }));
     }
 
@@ -886,7 +1017,8 @@ const VehicleQuotationPage = () => {
       }
       const selectedCompany =
         mailCompanies.find((c) => c?._id === values?.companyId) || null;
-      await axios.post(`/vehicleQT/${encodeURIComponent(id)}/email/send`, {
+
+      const payload = {
         to: String(values?.to || "").trim(),
         cc: String(values?.cc || "").trim() || undefined,
         type: isBookingMail ? "booking" : "normal",
@@ -917,7 +1049,52 @@ const VehicleQuotationPage = () => {
         ...(!isBookingMail && pdfAttachmentForMail?.contentBase64
           ? { pdfAttachment: pdfAttachmentForMail }
           : {}),
-      });
+      };
+
+      // Handle Payment Receipt Attachment
+      if (values.selectedReceiptId && isBookingMail) {
+        console.log("Starting receipt capture for ID:", values.selectedReceiptId);
+        // Wait for InvoiceView to render and fetch data
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        
+        const element = document.getElementById("hidden-receipt-container");
+        if (element) {
+          try {
+            const opt = {
+              margin: 0.2,
+              filename: `Receipt_${values.selectedReceiptId}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 1.5, useCORS: true, logging: true },
+              jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+            };
+
+            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+            
+            if (pdfBlob && pdfBlob.size >= 100) {
+              // Convert Blob to Base64
+              const reader = new FileReader();
+              const receiptAttachment = await new Promise((resolve, reject) => {
+                reader.onloadend = () =>
+                  resolve({
+                    filename: "Payment_Receipt.pdf",
+                    contentBase64: reader.result.split(",")[1],
+                    mimeType: "application/pdf",
+                  });
+                reader.onerror = reject;
+                reader.readAsDataURL(pdfBlob);
+              });
+
+              payload.receiptPdf = receiptAttachment;
+              payload.paymentVoucherId = values.selectedReceiptId;
+              console.log("Receipt captured and added to payload");
+            }
+          } catch (captureErr) {
+            console.error("Failed to capture receipt PDF:", captureErr);
+          }
+        }
+      }
+
+      await axios.post(`/vehicleQT/${encodeURIComponent(id)}/email/send`, payload);
       setSnackbar({
         open: true,
         message: "Email sent successfully",
@@ -1037,21 +1214,25 @@ const VehicleQuotationPage = () => {
   };
 
   const handleBulkSaveItinerary = async () => {
-    if (!id) return;
+    const saveId = q?.vehicle?.vehicleQuotationId || id;
+    if (!saveId || localItinerary.length === 0) return;
 
     try {
-      // Simplify itinerary payload to avoid validation issues
       const cleanedItinerary = localItinerary.map((item) => ({
-        title: item.title,
-        description: item.description,
+        title: String(item.title || "").trim(),
+        description: String(item.description || "").trim(),
       }));
 
-      await axios.patch(`/vehicleQT/${encodeURIComponent(id)}`, {
-        itinerary: cleanedItinerary,
-      });
+      const res = await axios.patch(
+        `/vehicleQT/${encodeURIComponent(saveId)}`,
+        { itinerary: cleanedItinerary },
+      );
 
-      // Refresh the data
-      await dispatch(getVehicleQuotationById(id));
+      const savedItinerary =
+        res.data?.data?.vehicle?.itinerary || cleanedItinerary;
+      setLocalItinerary(savedItinerary);
+
+      await dispatch(getVehicleQuotationById(saveId));
 
       setSnackbar({
         open: true,
@@ -1075,6 +1256,88 @@ const VehicleQuotationPage = () => {
       title: "",
       description: "",
       id: null,
+    });
+  };
+
+  const tripDestination = React.useMemo(() => {
+    const lead = q?.lead || {};
+    const vehicleData = q?.vehicle || {};
+    return (
+      lead?.tourDetails?.tourDestination ||
+      vehicleData?.destinationSummary ||
+      lead?.location?.state ||
+      ""
+    );
+  }, [q]);
+
+  /** Lead stores nights; vehicle noOfDays is typically nights + 1. */
+  const tripNights = React.useMemo(() => {
+    const fromLead = parseInt(
+      q?.lead?.tourDetails?.accommodation?.noOfNights,
+      10,
+    );
+    if (fromLead > 0) return fromLead;
+    const vehicleDays = parseInt(q?.vehicle?.basicsDetails?.noOfDays, 10) || 0;
+    return vehicleDays > 1 ? vehicleDays - 1 : vehicleDays;
+  }, [q]);
+
+  const matchingTourPackages = React.useMemo(() => {
+    if (!Array.isArray(tourPackages) || tourPackages.length === 0) return [];
+    return tourPackages.filter(
+      (pkg) =>
+        packageMatchesDestination(pkg, tripDestination) &&
+        packageMatchesTripNights(pkg, tripNights),
+    );
+  }, [tourPackages, tripDestination, tripNights]);
+
+  const handleImportPackageItinerary = async (packageId) => {
+    if (!packageId) return;
+    let pkg = tourPackages.find((p) => String(p._id) === String(packageId));
+    try {
+      if (!pkg?.days?.length) {
+        const res = await axios.get(`/packages/${encodeURIComponent(packageId)}`);
+        pkg =
+          res.data?.package ||
+          res.data?.data?.package ||
+          res.data?.data ||
+          res.data;
+      }
+    } catch {
+      setSnackbar({
+        open: true,
+        message: "Failed to load package details",
+        severity: "error",
+      });
+      return;
+    }
+    if (!pkg) {
+      setSnackbar({
+        open: true,
+        message: "Package not found",
+        severity: "error",
+      });
+      return;
+    }
+    const days = Array.isArray(pkg.days) ? pkg.days : [];
+    if (days.length === 0) {
+      setSnackbar({
+        open: true,
+        message: "This package has no itinerary days",
+        severity: "warning",
+      });
+      return;
+    }
+    const imported = days.map((day, index) => ({
+      _id: `temp_${Date.now()}_${index}`,
+      title: day.title?.trim() || `Day ${index + 1}`,
+      description: (day.notes || day.aboutCity || "").trim(),
+    }));
+    setLocalItinerary(imported);
+    setSelectedPackageId(String(packageId));
+    setSnackbar({
+      open: true,
+      message: `Imported ${imported.length} day(s) from "${pkg.title || pkg.packageId || "package"}". Click Save All to persist.`,
+      severity: "info",
     });
   };
 
@@ -1259,14 +1522,12 @@ const VehicleQuotationPage = () => {
       title: "Inclusion Policy",
       icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
       content: [
-        ...(Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
-          ? vehicle.inclusions
-          : Array.isArray(vehicle.policies?.inclusionPolicy) &&
-            vehicle.policies.inclusionPolicy.length > 0
-            ? vehicle.policies.inclusionPolicy
-            : linesToPolicyArray(policyInputs.inclusionPolicy).length > 0
-              ? linesToPolicyArray(policyInputs.inclusionPolicy)
-              : defaultPolicies.inclusions),
+        ...resolveVehiclePolicyLines(
+          vehicle.inclusions,
+          vehicle.policies?.inclusionPolicy,
+          policyInputs.inclusionPolicy,
+          defaultPolicies.inclusions,
+        ),
         ...(Array.isArray(vehicle.additionalServices)
           ? vehicle.additionalServices
             .filter((s) => s.included === "yes")
@@ -1280,14 +1541,12 @@ const VehicleQuotationPage = () => {
       title: "Exclusion Policy",
       icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
       content: [
-        ...(Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
-          ? vehicle.exclusions
-          : Array.isArray(vehicle.policies?.exclusionPolicy) &&
-            vehicle.policies.exclusionPolicy.length > 0
-            ? vehicle.policies.exclusionPolicy
-            : linesToPolicyArray(policyInputs.exclusionPolicy).length > 0
-              ? linesToPolicyArray(policyInputs.exclusionPolicy)
-              : defaultPolicies.exclusions),
+        ...resolveVehiclePolicyLines(
+          vehicle.exclusions,
+          vehicle.policies?.exclusionPolicy,
+          policyInputs.exclusionPolicy,
+          defaultPolicies.exclusions,
+        ),
         ...(Array.isArray(vehicle.additionalServices)
           ? vehicle.additionalServices
             .filter((s) => s.included === "no")
@@ -1405,6 +1664,8 @@ const VehicleQuotationPage = () => {
       rooms: "N/A",
       mealPlan: "N/A",
       hotelType: basicsDetails.vehicleType || "N/A",
+      vehiclesSameOrDifferent: basicsDetails.vehiclesSameOrDifferent || "Same",
+      multipleVehicles: q?.vehicle?.multipleVehicles || [],
       destination: tourDetails.tourDestination || "N/A",
       itinerary:
         "This is only tentative schedule for sightseeing and travel. The actual sequence might change depending on the local conditions.",
@@ -1414,18 +1675,24 @@ const VehicleQuotationPage = () => {
     reference: vehicle.vehicleQuotationId || "N/A",
     date: new Date().toLocaleDateString(),
     pricing: {
-      total: finalTotal,
+      baseTotal: totalCost,
       discount: discountAmount,
+      subtotal: amountAfterDiscount,
+      gstPercent: gstPercentage,
+      gstAmount,
+      additionalServicesTotal: dbServicesTotal,
+      grandTotal: finalTotal,
+      total: finalTotal,
       gst: `${gstPercentage}%`,
     },
     policies: {
       inclusions: [
-        ...(Array.isArray(vehicle.inclusions) && vehicle.inclusions.length > 0
-          ? vehicle.inclusions
-          : Array.isArray(vehicle.policies?.inclusionPolicy) &&
-            vehicle.policies.inclusionPolicy.length > 0
-            ? vehicle.policies.inclusionPolicy
-            : defaultPolicies.inclusions),
+        ...resolveVehiclePolicyLines(
+          vehicle.inclusions,
+          vehicle.policies?.inclusionPolicy,
+          policyInputs.inclusionPolicy,
+          defaultPolicies.inclusions,
+        ),
         ...(Array.isArray(vehicle.additionalServices)
           ? vehicle.additionalServices
             .filter((s) => s.included === "yes")
@@ -1433,12 +1700,12 @@ const VehicleQuotationPage = () => {
           : []),
       ],
       exclusions: [
-        ...(Array.isArray(vehicle.exclusions) && vehicle.exclusions.length > 0
-          ? vehicle.exclusions
-          : Array.isArray(vehicle.policies?.exclusionPolicy) &&
-            vehicle.policies.exclusionPolicy.length > 0
-            ? vehicle.policies.exclusionPolicy
-            : defaultPolicies.exclusions),
+        ...resolveVehiclePolicyLines(
+          vehicle.exclusions,
+          vehicle.policies?.exclusionPolicy,
+          policyInputs.exclusionPolicy,
+          defaultPolicies.exclusions,
+        ),
         ...(Array.isArray(vehicle.additionalServices)
           ? vehicle.additionalServices
             .filter((s) => s.included === "no")
@@ -1458,7 +1725,7 @@ const VehicleQuotationPage = () => {
     },
     footer: footer,
     days: localItinerary.map((item, index) => ({
-      title: item.title,
+      title: item.title ? (/^Day\s*\d+/i.test(item.title.trim()) ? item.title : `Day ${index + 1} - ${item.title}`) : `Day ${index + 1}`,
       description: item.description,
       date: "",
       dayDate: "",
@@ -1859,11 +2126,82 @@ const VehicleQuotationPage = () => {
                           justifyContent="space-between"
                           alignItems="center"
                           mb={2}
+                          flexWrap="wrap"
+                          gap={1}
                         >
                           <Typography variant="h6">
                             Itinerary Details
                           </Typography>
-                          <Box display="flex" gap={1}>
+                          <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+                            <FormControl
+                              size="small"
+                              sx={{ minWidth: 320 }}
+                              disabled={packagesLoading}
+                            >
+                              <InputLabel
+                                id="vehicle-package-itinerary-label"
+                                shrink
+                              >
+                                Import from package
+                              </InputLabel>
+                              <Select
+                                labelId="vehicle-package-itinerary-label"
+                                label="Import from package"
+                                value={selectedPackageId}
+                                onChange={(e) => {
+                                  const pkgId = e.target.value;
+                                  setSelectedPackageId(pkgId);
+                                  handleImportPackageItinerary(pkgId);
+                                }}
+                                displayEmpty
+                                notched
+                                renderValue={(selected) => {
+                                  if (!selected) {
+                                    return (
+                                      <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                        component="span"
+                                        sx={{ fontStyle: "italic" }}
+                                      >
+                                        {packagesLoading
+                                          ? "Loading packages…"
+                                          : matchingTourPackages.length === 0
+                                            ? `No packages (${tripNights || "?"}N, ${tripDestination || "any destination"})`
+                                            : "Select package to import itinerary"}
+                                      </Typography>
+                                    );
+                                  }
+                                  const pkg = matchingTourPackages.find(
+                                    (p) => String(p._id) === String(selected),
+                                  );
+                                  if (!pkg) return "Package selected";
+                                  const nights = getPackageTotalNights(pkg);
+                                  const label =
+                                    pkg.title ||
+                                    pkg.packageId ||
+                                    pkg.sector ||
+                                    "Package";
+                                  return `${label}${nights > 0 ? ` (${nights}N)` : ""}${pkg.sector ? ` — ${pkg.sector}` : ""}`;
+                                }}
+                              >
+                                {matchingTourPackages.map((pkg) => {
+                                  const nights = getPackageTotalNights(pkg);
+                                  const label =
+                                    pkg.title ||
+                                    pkg.packageId ||
+                                    pkg.sector ||
+                                    "Package";
+                                  return (
+                                    <MenuItem key={pkg._id} value={String(pkg._id)}>
+                                      {label}
+                                      {nights > 0 ? ` (${nights}N)` : ""}
+                                      {pkg.sector ? ` — ${pkg.sector}` : ""}
+                                    </MenuItem>
+                                  );
+                                })}
+                              </Select>
+                            </FormControl>
                             <Button
                               variant="outlined"
                               size="small"
@@ -1905,7 +2243,7 @@ const VehicleQuotationPage = () => {
                                   variant="subtitle1"
                                   fontWeight="bold"
                                 >
-                                  {item.title}
+                                  {item.title ? (/^Day\s*\d+/i.test(item.title.trim()) ? item.title : `Day ${index + 1} - ${item.title}`) : `Day ${index + 1}`}
                                 </Typography>
                                 <IconButton
                                   size="small"
@@ -1953,67 +2291,87 @@ const VehicleQuotationPage = () => {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        <TableRow>
-                          <TableCell>
-                            <DirectionsCar
-                              sx={{ mr: 1, color: "primary.main" }}
-                            />
-                            {basicsDetails.vehicleType || "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            <CalendarToday sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.pickupDate
-                              ? new Date(
-                                pickupDropDetails.pickupDate,
-                              ).toLocaleDateString()
-                              : "N/A"}
-                            <br />
-                            <AccessTime sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.pickupTime
-                              ? new Date(
-                                pickupDropDetails.pickupTime,
-                              ).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                              : "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            <CalendarToday sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.dropDate
-                              ? new Date(
-                                pickupDropDetails.dropDate,
-                              ).toLocaleDateString()
-                              : "N/A"}
-                            <br />
-                            <AccessTime sx={{ fontSize: 16, mr: 0.5 }} />
-                            {pickupDropDetails.dropTime
-                              ? new Date(
-                                pickupDropDetails.dropTime,
-                              ).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                              : "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            {formatCurrency(totalCost)}
-                            <IconButton
-                              size="small"
-                              onClick={() =>
-                                handleEditOpen(
-                                  "costDetails.totalCost",
-                                  String(
-                                    costDetails.totalCost || totalCost || "",
-                                  ),
-                                  "Total Cost",
-                                )
-                              }
-                            >
-                              <Edit fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
+                        {basicsDetails.vehiclesSameOrDifferent === "Different" && Array.isArray(q?.vehicle?.multipleVehicles) ? (
+                          q.vehicle.multipleVehicles.map((mv, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>
+                                <DirectionsCar sx={{ mr: 1, color: "primary.main", verticalAlign: "middle" }} />
+                                {mv.vehicleType || "N/A"} ({mv.tripType || "N/A"})
+                              </TableCell>
+                              <TableCell>
+                                {idx === 0 ? (
+                                  <>
+                                    <CalendarToday sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                    {pickupDropDetails.pickupDate
+                                      ? new Date(pickupDropDetails.pickupDate).toLocaleDateString()
+                                      : "N/A"}
+                                    <br />
+                                    <AccessTime sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                    {pickupDropDetails.pickupTime
+                                      ? new Date(pickupDropDetails.pickupTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                      : "N/A"}
+                                  </>
+                                ) : <Typography variant="caption" color="textSecondary">Same as above</Typography>}
+                              </TableCell>
+                              <TableCell>
+                                {idx === 0 ? (
+                                  <>
+                                    <CalendarToday sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                    {pickupDropDetails.dropDate
+                                      ? new Date(pickupDropDetails.dropDate).toLocaleDateString()
+                                      : "N/A"}
+                                    <br />
+                                    <AccessTime sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                    {pickupDropDetails.dropTime
+                                      ? new Date(pickupDropDetails.dropTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                      : "N/A"}
+                                  </>
+                                ) : <Typography variant="caption" color="textSecondary">Same as above</Typography>}
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrency(mv.totalCost)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell>
+                              <DirectionsCar sx={{ mr: 1, color: "primary.main", verticalAlign: "middle" }} />
+                              {basicsDetails.vehicleType || "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              <CalendarToday sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              {pickupDropDetails.pickupDate
+                                ? new Date(pickupDropDetails.pickupDate).toLocaleDateString()
+                                : "N/A"}
+                              <br />
+                              <AccessTime sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              {pickupDropDetails.pickupTime
+                                ? new Date(pickupDropDetails.pickupTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                : "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              <CalendarToday sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              {pickupDropDetails.dropDate
+                                ? new Date(pickupDropDetails.dropDate).toLocaleDateString()
+                                : "N/A"}
+                              <br />
+                              <AccessTime sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                              {pickupDropDetails.dropTime
+                                ? new Date(pickupDropDetails.dropTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                : "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              {formatCurrency(totalCost)}
+                              <IconButton
+                                size="small"
+                                onClick={() => handleEditOpen("costDetails.totalCost", String(costDetails.totalCost || totalCost || ""), "Total Cost")}
+                              >
+                                <Edit fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        )}
                         <TableRow sx={{ backgroundColor: "grey.50" }}>
                           <TableCell>Discount</TableCell>
                           <TableCell colSpan={2} />
@@ -2110,9 +2468,7 @@ const VehicleQuotationPage = () => {
                               onClick={() =>
                                 handleEditOpen(
                                   p.field,
-                                  p.isArray
-                                    ? JSON.stringify(p.content)
-                                    : p.content,
+                                  normalizePolicyForEditor(p.content),
                                   p.title,
                                 )
                               }
@@ -2327,14 +2683,24 @@ const VehicleQuotationPage = () => {
         companyOptions={mailCompanies}
         emailAccountOptions={emailAccounts}
         hasPdfAttachment={!!pdfAttachmentForMail}
+        receiptOptions={paymentHistory.filter(v => v?.drCr === "Cr" || v?.paymentType === "Receive Voucher" || v?.particulars?.toLowerCase().includes("receive"))}
+        onReceiptChange={(receiptId) => setSelectedReceiptIdForPdf(receiptId)}
       />
+
+      <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+        <div id="hidden-receipt-container">
+           {selectedReceiptIdForPdf && (
+              <InvoiceView id={selectedReceiptIdForPdf} hideButtons={true} />
+           )}
+        </div>
+      </Box>
 
       <TransactionHistoryDialog
         open={openTransactionDialog}
         onClose={() => setOpenTransactionDialog(false)}
         loading={paymentHistoryLoading}
         rows={paymentHistory}
-        quotationRef={id}
+        quotationRef={apiEntityId || id}
       />
 
       <VendorManagementDialog

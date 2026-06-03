@@ -26,6 +26,17 @@ const quickQuotationSchema = new mongoose.Schema(
         noOfRooms: { type: Number, default: 0 },
         noOfMattress: { type: Number, default: 0 },
         roomType: { type: String, default: "" },
+        noOfVehicles: { type: Number, default: 0 },
+        vehiclesSameOrDifferent: { type: String, enum: ["Same", "Different"], default: "Same" },
+        multipleVehicles: [
+            {
+                vehicleType: { type: String, default: "" },
+                tripType: { type: String, default: "" },
+                noOfDays: { type: Number, default: 0 },
+                perDayCost: { type: Number, default: 0 },
+                totalCost: { type: Number, default: 0 }
+            }
+        ],
 
         message: { type: String },
 
@@ -48,6 +59,39 @@ const quickQuotationSchema = new mongoose.Schema(
         totalCost: {
             type: Number,
             default: 0
+        },
+
+        perPersonAdultCost: {
+            type: Number,
+            default: 0
+        },
+
+        perPersonChildCost: {
+            type: Number,
+            default: 0
+        },
+
+        perPersonMattressCost: {
+            type: Number,
+            default: 0
+        },
+
+        standardAdultCost: { type: Number, default: 0 },
+        standardChildCost: { type: Number, default: 0 },
+        standardMattressCost: { type: Number, default: 0 },
+
+        deluxeAdultCost: { type: Number, default: 0 },
+        deluxeChildCost: { type: Number, default: 0 },
+        deluxeMattressCost: { type: Number, default: 0 },
+
+        superiorAdultCost: { type: Number, default: 0 },
+        superiorChildCost: { type: Number, default: 0 },
+        superiorMattressCost: { type: Number, default: 0 },
+
+        calculationMethod: {
+            type: String,
+            enum: ["package", "perPerson"],
+            default: "package"
         },
 
         currency: {

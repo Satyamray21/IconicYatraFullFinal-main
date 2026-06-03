@@ -291,6 +291,8 @@ const VehicleQuotationPDFDialog = ({
   const pickupDeparture = getValue(quotationData, "pickup.departure");
   const hotelGuests = getValue(quotationData, "hotel.guests");
   const hotelType = getValue(quotationData, "hotel.hotelType");
+  const vehiclesSameOrDifferent = getValue(quotationData, "hotel.vehiclesSameOrDifferent", "Same");
+  const multipleVehicles = getValue(quotationData, "hotel.multipleVehicles", []);
   const hotelDestination = getValue(quotationData, "hotel.destination");
   const hotelItinerary = getValue(quotationData, "hotel.itinerary");
   const quotationTitle = getValue(
@@ -302,8 +304,16 @@ const VehicleQuotationPDFDialog = ({
   const reference = getValue(quotationData, "reference");
   const date = getValue(quotationData, "date");
   const pricingTotal = getRawValue(quotationData, "pricing.total");
+  const pricingGrandTotal = getRawValue(quotationData, "pricing.grandTotal");
+  const pricingBaseTotal = getRawValue(quotationData, "pricing.baseTotal");
+  const pricingSubtotal = getRawValue(quotationData, "pricing.subtotal");
   const pricingDiscount = getRawValue(quotationData, "pricing.discount");
   const pricingGst = getRawValue(quotationData, "pricing.gst");
+  const pricingGstAmount = getRawValue(quotationData, "pricing.gstAmount");
+  const pricingAdditionalServices = getRawValue(
+    quotationData,
+    "pricing.additionalServicesTotal",
+  );
   const footerCompany =
     selectedCompany?.companyName ||
     getValue(quotationData, "footer.company", "Iconic Yatra");
@@ -371,21 +381,43 @@ const VehicleQuotationPDFDialog = ({
   const finalTermsConditions =
     termsConditions || globalPolicyDefaults.termsAndConditions;
 
-  // Calculate totals - extract numeric values properly
-  const totalAmount = extractNumericValue(pricingTotal);
+  // Use explicit breakdown from VehicleFinalize when available (avoids double GST).
+  const hasExplicitPricing =
+    pricingBaseTotal != null ||
+    pricingSubtotal != null ||
+    pricingGstAmount != null ||
+    pricingGrandTotal != null;
+
   const discountAmount = extractNumericValue(pricingDiscount);
-
-  // Calculate amount after discount
-  const amountAfterDiscount = totalAmount - discountAmount;
-
-  // Get GST percentage (default to 5%)
   const gstPercentage = extractGstPercentage(pricingGst);
 
-  // Calculate GST amount as percentage of the amount after discount
-  const gstAmount = (amountAfterDiscount * gstPercentage) / 100;
+  let baseAmount;
+  let amountAfterDiscount;
+  let gstAmount;
+  let additionalServicesTotal;
+  let finalTotal;
+
+  if (hasExplicitPricing) {
+    baseAmount = extractNumericValue(pricingBaseTotal);
+    amountAfterDiscount =
+      extractNumericValue(pricingSubtotal) ||
+      Math.max(0, baseAmount - discountAmount);
+    gstAmount =
+      extractNumericValue(pricingGstAmount) ||
+      (amountAfterDiscount * gstPercentage) / 100;
+    additionalServicesTotal = extractNumericValue(pricingAdditionalServices);
+    finalTotal =
+      extractNumericValue(pricingGrandTotal ?? pricingTotal) ||
+      amountAfterDiscount + gstAmount + additionalServicesTotal;
+  } else {
+    baseAmount = extractNumericValue(pricingTotal);
+    amountAfterDiscount = baseAmount - discountAmount;
+    gstAmount = (amountAfterDiscount * gstPercentage) / 100;
+    additionalServicesTotal = 0;
+    finalTotal = amountAfterDiscount + gstAmount;
+  }
 
   const receivedAmount = extractNumericValue(footerReceived);
-  const finalTotal = amountAfterDiscount + gstAmount;
   const balanceAmount = finalTotal - receivedAmount;
 
   // Get company website URL for Terms & Conditions link
@@ -731,7 +763,7 @@ const VehicleQuotationPDFDialog = ({
             }}
           >
             <strong style={{ fontSize: "16px" }}>
-              📍 {day.title || `Day ${globalIndex + 1}`}
+              📍 {day.title ? (/^Day\s*\d+/i.test(day.title.trim()) ? day.title : `Day ${globalIndex + 1} - ${day.title}`) : `Day ${globalIndex + 1}`}
             </strong>
             {(day.date || day.dayDate) && (
               <span
@@ -805,7 +837,7 @@ const VehicleQuotationPDFDialog = ({
           <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
             <td style={{ padding: "12px" }}>Total Package Cost</td>
             <td style={{ padding: "12px", textAlign: "right" }}>
-              {formatCurrency(totalAmount)}
+              {formatCurrency(baseAmount)}
             </td>
           </tr>
           {discountAmount > 0 && (
@@ -827,13 +859,42 @@ const VehicleQuotationPDFDialog = ({
               </td>
             </tr>
           )}
-
+          {(discountAmount > 0 || hasExplicitPricing) && (
+            <tr
+              style={{
+                borderBottom: "1px solid #e0e0e0",
+                background: "#e8f5e9",
+              }}
+            >
+              <td style={{ padding: "12px", fontWeight: "600" }}>
+                Subtotal (After Discount)
+              </td>
+              <td
+                style={{
+                  padding: "12px",
+                  textAlign: "right",
+                  fontWeight: "600",
+                  color: "#2e7d32",
+                }}
+              >
+                {formatCurrency(amountAfterDiscount)}
+              </td>
+            </tr>
+          )}
           <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
             <td style={{ padding: "12px" }}>GST @ {gstPercentage}%</td>
             <td style={{ padding: "12px", textAlign: "right" }}>
               {formatCurrency(gstAmount)}
             </td>
           </tr>
+          {additionalServicesTotal > 0 && (
+            <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+              <td style={{ padding: "12px" }}>Additional Services</td>
+              <td style={{ padding: "12px", textAlign: "right" }}>
+                {formatCurrency(additionalServicesTotal)}
+              </td>
+            </tr>
+          )}
           <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
             <td style={{ padding: "14px", fontSize: "16px" }}>Grand Total</td>
             <td
@@ -1337,11 +1398,19 @@ const VehicleQuotationPDFDialog = ({
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 4 }}>
                   <Typography variant="body2" color="textSecondary">
-                    Vehicle Type
+                    {vehiclesSameOrDifferent === "Different" ? "Vehicles List" : "Vehicle Type"}
                   </Typography>
-                  <Typography variant="body1" fontWeight="bold">
-                    {hotelType || "N/A"}
-                  </Typography>
+                  {vehiclesSameOrDifferent === "Different" && Array.isArray(multipleVehicles) && multipleVehicles.length > 0 ? (
+                    multipleVehicles.map((mv, idx) => (
+                      <Typography key={idx} variant="body1" fontWeight="bold">
+                        {mv.vehicleType || "N/A"} ({mv.tripType || "N/A"})
+                      </Typography>
+                    ))
+                  ) : (
+                    <Typography variant="body1" fontWeight="bold">
+                      {hotelType || "N/A"}
+                    </Typography>
+                  )}
                 </Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
                   <Typography variant="body2" color="textSecondary">

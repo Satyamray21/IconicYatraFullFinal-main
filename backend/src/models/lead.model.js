@@ -128,6 +128,7 @@ const leadSchema = new mongoose.Schema({
       departureDate: Date,
       departureCity: String,
       departureLocation: String,
+      noOfVehicles: { type: Number, default: 0 },
     },
     accommodation: {
       hotelType: [String],

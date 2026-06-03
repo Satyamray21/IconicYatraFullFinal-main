@@ -42,7 +42,7 @@ const PackageDashboard = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
 
   const [paginationModel, setPaginationModel] = useState({
-    pageSize: 10,
+    pageSize: 100,
     page: 0
   });
 

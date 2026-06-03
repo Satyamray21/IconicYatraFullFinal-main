@@ -136,20 +136,32 @@ const HotelQuotationStep1 = ({ onNext, onBack, initialData }) => {
     error,
   } = useSelector((state) => state.leads);
 
+  const activeLeadList = leadList.filter((lead) => {
+    if (lead.status === "Cancelled") return false;
+    const departure = lead.tourDetails?.pickupDrop?.departureDate || lead.tourDetails?.departureDate || lead.tourDetails?.travelDate;
+    if (departure) {
+      const depDate = new Date(departure);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (!isNaN(depDate) && depDate < today) return false;
+    }
+    return true;
+  });
+
   useEffect(() => {
     dispatch(getAllLeads());
   }, [dispatch]);
 
   // Extract all unique values from leads for dropdown options
   const clientOptions = [
-    ...new Set(leadList?.map((lead) => lead.personalDetails?.fullName) || []),
+    ...new Set(activeLeadList.map((lead) => lead.personalDetails?.fullName) || []),
   ].filter(Boolean);
 
   const tourTypeOptions = [
-    ...new Set(leadList?.map((lead) => lead.tourDetails?.tourType) || []),
+    ...new Set(activeLeadList.map((lead) => lead.tourDetails?.tourType) || []),
   ].filter(Boolean);
 
-  const selectedLead = leadList.find(
+  const selectedLead = activeLeadList.find(
     (lead) => lead.personalDetails?.fullName === formik.values.clientName
   );
 
@@ -166,7 +178,7 @@ const HotelQuotationStep1 = ({ onNext, onBack, initialData }) => {
     // Extract all unique services from all leads
     services: [
       ...new Set(
-        leadList?.flatMap(
+        activeLeadList.flatMap(
           (lead) => lead.tourDetails?.servicesRequired || []
         )
       ),
@@ -174,19 +186,19 @@ const HotelQuotationStep1 = ({ onNext, onBack, initialData }) => {
     // Extract cities from location data in leads
     cities: [
       ...new Set(
-        leadList
-          ?.map((lead) => lead.location?.city)
+        activeLeadList
+          .map((lead) => lead.location?.city)
           .filter(Boolean)
       ),
     ],
     // Extract locations from pickup/drop data
     locations: [
       ...new Set([
-        ...leadList
-          ?.map((lead) => lead.tourDetails?.pickupDrop?.arrivalLocation)
+        ...activeLeadList
+          .map((lead) => lead.tourDetails?.pickupDrop?.arrivalLocation)
           .filter(Boolean),
-        ...leadList
-          ?.map((lead) => lead.tourDetails?.pickupDrop?.departureLocation)
+        ...activeLeadList
+          .map((lead) => lead.tourDetails?.pickupDrop?.departureLocation)
           .filter(Boolean),
         "Airport",
         "Railway Station",
@@ -195,22 +207,22 @@ const HotelQuotationStep1 = ({ onNext, onBack, initialData }) => {
     ],
     hotelTypes: [
       ...new Set(
-        leadList?.flatMap(
+        activeLeadList.flatMap(
           (lead) => lead.tourDetails?.accommodation?.hotelType || []
         )
       ),
     ],
     mealPlans: [
       ...new Set(
-        leadList
-          ?.map((lead) => lead.tourDetails?.accommodation?.mealPlan)
+        activeLeadList
+          .map((lead) => lead.tourDetails?.accommodation?.mealPlan)
           .filter(Boolean)
       ),
     ],
     sharingTypes: [
       ...new Set(
-        leadList
-          ?.map((lead) => lead.tourDetails?.accommodation?.sharingType)
+        activeLeadList
+          .map((lead) => lead.tourDetails?.accommodation?.sharingType)
           .filter(Boolean)
       ),
     ],
@@ -230,11 +242,11 @@ const HotelQuotationStep1 = ({ onNext, onBack, initialData }) => {
         selectedLead.tourDetails?.tourDestination || selectedLead.location?.state || ""
       );
     }
-  }, [formik.values.clientName, leadList]);
+  }, [formik.values.clientName, activeLeadList]);
 
   useEffect(() => {
     if (formik.values.clientName && formik.values.tourType) {
-      const lead = leadList.find(
+      const lead = activeLeadList.find(
         (l) =>
           l.personalDetails?.fullName === formik.values.clientName &&
           l.tourDetails?.tourType === formik.values.tourType
@@ -324,7 +336,7 @@ const HotelQuotationStep1 = ({ onNext, onBack, initialData }) => {
         );
       }
     }
-  }, [formik.values.clientName, formik.values.tourType, leadList]);
+  }, [formik.values.clientName, formik.values.tourType, activeLeadList]);
 
   const handleAddService = () => {
     if (newService && !servicesList.includes(newService)) {
