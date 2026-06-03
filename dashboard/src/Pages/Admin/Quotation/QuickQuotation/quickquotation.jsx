@@ -89,24 +89,62 @@ const QuickQuotationForm = () => {
     try {
       console.log("Final Data for API:", finalData);
 
+      let calculatedStandard = Number(finalData.packageDetails?.standardCost) || 0;
+      let calculatedDeluxe = Number(finalData.packageDetails?.deluxeCost) || 0;
+      let calculatedSuperior = Number(finalData.packageDetails?.superiorCost) || 0;
+      let calculatedTotal = Number(finalData.packageDetails?.totalCost) || 0;
+
+      if (finalData.packageDetails?.calculationMethod === "perPerson") {
+        const adults = Number(finalData.clientDetails?.adults) || 1;
+        const children = Number(finalData.clientDetails?.children) || 0;
+        const mattresses = Number(finalData.packageDetails?.noOfMattress) || 0;
+        const pd = finalData.packageDetails;
+
+        const calc = (a, c, m) => (Number(a || 0) * adults) + (Number(c || 0) * children) + (Number(m || 0) * mattresses);
+
+        const s = calc(pd.standardAdultCost, pd.standardChildCost, pd.standardMattressCost);
+        const d = calc(pd.deluxeAdultCost, pd.deluxeChildCost, pd.deluxeMattressCost);
+        const sup = calc(pd.superiorAdultCost, pd.superiorChildCost, pd.superiorMattressCost);
+
+        calculatedStandard = s;
+        calculatedDeluxe = d;
+        calculatedSuperior = sup;
+        
+        calculatedTotal = s > 0 ? s : (d > 0 ? d : sup);
+      }
+
       const apiData = {
-        customerName: finalData.clientDetails?.customerName?.trim() || "",
-        email: finalData.clientDetails?.email?.trim() || "",
-        phone: finalData.clientDetails?.phone?.trim() || "",
-        clientLocation: finalData.clientDetails?.clientLocation?.trim() || "",
-        adults: parseInt(finalData.clientDetails?.adults) || 0,
-        children: parseInt(finalData.clientDetails?.children) || 0,
-        kids: parseInt(finalData.clientDetails?.kids) || 0,
-        infants: parseInt(finalData.clientDetails?.infants) || 0,
-        message: finalData.clientDetails?.message?.trim() || "",
-
+        customerName: finalData.clientDetails?.customerName || "",
+        email: finalData.clientDetails?.email || "",
+        phone: finalData.clientDetails?.phone || "",
+        clientLocation: finalData.clientDetails?.clientLocation || "",
         packageId: finalData.packageDetails?.selectedPackage || "",
-
-        // *** FIXED: transportation root पर भेज रहे हैं ***
+        adults: Number(finalData.clientDetails?.adults) || 0,
+        children: Number(finalData.clientDetails?.children) || 0,
+        kids: Number(finalData.clientDetails?.kids) || 0,
+        infants: Number(finalData.clientDetails?.infants) || 0,
+        noOfRooms: Number(finalData.packageDetails?.noOfRooms) || 0,
+        noOfMattress: Number(finalData.packageDetails?.noOfMattress) || 0,
+        roomType: finalData.packageDetails?.roomType || "",
+        noOfVehicles: Number(finalData.packageDetails?.noOfVehicles) || 0,
+        vehiclesSameOrDifferent:
+          finalData.packageDetails?.vehiclesSameOrDifferent || "",
+        message: finalData.clientDetails?.message || "",
         transportation: finalData.packageDetails?.transportation || "",
         totalCost: Number(finalData.packageDetails?.totalCost) || 0,
+        calculationMethod: finalData.packageDetails?.calculationMethod || "package",
         perPersonAdultCost: Number(finalData.packageDetails?.perPersonAdultCost) || 0,
         perPersonChildCost: Number(finalData.packageDetails?.perPersonChildCost) || 0,
+        perPersonMattressCost: Number(finalData.packageDetails?.perPersonMattressCost) || 0,
+        standardAdultCost: Number(finalData.packageDetails?.standardAdultCost) || 0,
+        standardChildCost: Number(finalData.packageDetails?.standardChildCost) || 0,
+        standardMattressCost: Number(finalData.packageDetails?.standardMattressCost) || 0,
+        deluxeAdultCost: Number(finalData.packageDetails?.deluxeAdultCost) || 0,
+        deluxeChildCost: Number(finalData.packageDetails?.deluxeChildCost) || 0,
+        deluxeMattressCost: Number(finalData.packageDetails?.deluxeMattressCost) || 0,
+        superiorAdultCost: Number(finalData.packageDetails?.superiorAdultCost) || 0,
+        superiorChildCost: Number(finalData.packageDetails?.superiorChildCost) || 0,
+        superiorMattressCost: Number(finalData.packageDetails?.superiorMattressCost) || 0,
         pickupPoint: finalData.packageDetails?.pickupPoint || "",
         dropPoint: finalData.packageDetails?.dropPoint || "",
         arrivalDate: finalData.packageDetails?.arrivalDate || "",
@@ -120,17 +158,13 @@ const QuickQuotationForm = () => {
           finalData.clientDetails?.dropTime ||
           "",
         numberOfPax: Number(finalData.packageDetails?.numberOfPax) || 0,
-        noOfRooms: Number(finalData.packageDetails?.noOfRooms) || 0,
-        noOfMattress: Number(finalData.packageDetails?.noOfMattress) || 0,
-        roomType: finalData.packageDetails?.roomType || "",
         transportationCost:
           Number(finalData.packageDetails?.transportationCost) || 0,
         hotelTotalCost: Number(finalData.packageDetails?.hotelTotalCost) || 0,
-        standardCost: Number(finalData.packageDetails?.standardCost) || 0,
-        deluxeCost: Number(finalData.packageDetails?.deluxeCost) || 0,
-        superiorCost: Number(finalData.packageDetails?.superiorCost) || 0,
+        standardCost: calculatedStandard,
+        deluxeCost: calculatedDeluxe,
+        superiorCost: calculatedSuperior,
         mealPlan: finalData.packageDetails?.mealPlan || "",
-        vehiclesSameOrDifferent: finalData.clientDetails?.vehiclesSameOrDifferent || "Same",
         multipleVehicles: Array.isArray(finalData.clientDetails?.multipleVehicles) ? finalData.clientDetails.multipleVehicles : [],
 
         // Package Snapshot (unchanged)
@@ -178,10 +212,23 @@ const QuickQuotationForm = () => {
           transportationCost:
             Number(finalData.packageDetails?.transportationCost) || 0,
           hotelTotalCost: Number(finalData.packageDetails?.hotelTotalCost) || 0,
-          standardCost: Number(finalData.packageDetails?.standardCost) || 0,
-          deluxeCost: Number(finalData.packageDetails?.deluxeCost) || 0,
-          superiorCost: Number(finalData.packageDetails?.superiorCost) || 0,
-          totalCost: Number(finalData.packageDetails?.totalCost) || 0,
+          standardCost: calculatedStandard,
+          deluxeCost: calculatedDeluxe,
+          superiorCost: calculatedSuperior,
+          totalCost: calculatedTotal,
+          calculationMethod: finalData.packageDetails?.calculationMethod || "package",
+          perPersonAdultCost: Number(finalData.packageDetails?.perPersonAdultCost) || 0,
+          perPersonChildCost: Number(finalData.packageDetails?.perPersonChildCost) || 0,
+          perPersonMattressCost: Number(finalData.packageDetails?.perPersonMattressCost) || 0,
+          standardAdultCost: Number(finalData.packageDetails?.standardAdultCost) || 0,
+          standardChildCost: Number(finalData.packageDetails?.standardChildCost) || 0,
+          standardMattressCost: Number(finalData.packageDetails?.standardMattressCost) || 0,
+          deluxeAdultCost: Number(finalData.packageDetails?.deluxeAdultCost) || 0,
+          deluxeChildCost: Number(finalData.packageDetails?.deluxeChildCost) || 0,
+          deluxeMattressCost: Number(finalData.packageDetails?.deluxeMattressCost) || 0,
+          superiorAdultCost: Number(finalData.packageDetails?.superiorAdultCost) || 0,
+          superiorChildCost: Number(finalData.packageDetails?.superiorChildCost) || 0,
+          superiorMattressCost: Number(finalData.packageDetails?.superiorMattressCost) || 0,
         },
 
         policy: {

@@ -71,6 +71,29 @@ const quickQuotationSchema = new mongoose.Schema(
             default: 0
         },
 
+        perPersonMattressCost: {
+            type: Number,
+            default: 0
+        },
+
+        standardAdultCost: { type: Number, default: 0 },
+        standardChildCost: { type: Number, default: 0 },
+        standardMattressCost: { type: Number, default: 0 },
+
+        deluxeAdultCost: { type: Number, default: 0 },
+        deluxeChildCost: { type: Number, default: 0 },
+        deluxeMattressCost: { type: Number, default: 0 },
+
+        superiorAdultCost: { type: Number, default: 0 },
+        superiorChildCost: { type: Number, default: 0 },
+        superiorMattressCost: { type: Number, default: 0 },
+
+        calculationMethod: {
+            type: String,
+            enum: ["package", "perPerson"],
+            default: "package"
+        },
+
         currency: {
             type: String,
             default: "INR"
