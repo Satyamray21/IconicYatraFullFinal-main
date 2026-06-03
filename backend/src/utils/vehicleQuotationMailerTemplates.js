@@ -197,10 +197,10 @@ export function buildVehicleQuotationPdfPreviewEmail(vehicleData, customText = {
   const policies = vehicle?.policies || {};
   const inclusionFromPolicies = toPolicyArray(policies?.inclusionPolicy);
   const inclusionFromVehicle = Array.isArray(vehicle?.inclusions) ? vehicle.inclusions.map(String).filter(Boolean) : [];
-  const baseInclusions = inclusionFromPolicies.length > 0
-    ? inclusionFromPolicies
-    : inclusionFromVehicle.length > 0
+  const baseInclusions = inclusionFromVehicle.length > 0
     ? inclusionFromVehicle
+    : inclusionFromPolicies.length > 0
+    ? inclusionFromPolicies
     : DEFAULT_INCLUSIONS;
   const inclusionWithAdditional = [
     ...baseInclusions,
@@ -208,10 +208,10 @@ export function buildVehicleQuotationPdfPreviewEmail(vehicleData, customText = {
   ];
   const exclusionFromPolicies = toPolicyArray(policies?.exclusionPolicy);
   const exclusionFromVehicle = Array.isArray(vehicle?.exclusions) ? vehicle.exclusions.map(String).filter(Boolean) : [];
-  const baseExclusions = exclusionFromPolicies.length > 0
-    ? exclusionFromPolicies
-    : exclusionFromVehicle.length > 0
+  const baseExclusions = exclusionFromVehicle.length > 0
     ? exclusionFromVehicle
+    : exclusionFromPolicies.length > 0
+    ? exclusionFromPolicies
     : DEFAULT_EXCLUSIONS;
   const exclusionCombined = [
     ...baseExclusions,
@@ -296,10 +296,10 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
   const policies = vehicle?.policies || {};
   const inclusionFromPolicies2 = toPolicyArray(policies?.inclusionPolicy);
   const inclusionFromVehicle2 = Array.isArray(vehicle?.inclusions) ? vehicle.inclusions.map(String).filter(Boolean) : [];
-  const baseInclusions2 = inclusionFromPolicies2.length > 0
-    ? inclusionFromPolicies2
-    : inclusionFromVehicle2.length > 0
+  const baseInclusions2 = inclusionFromVehicle2.length > 0
     ? inclusionFromVehicle2
+    : inclusionFromPolicies2.length > 0
+    ? inclusionFromPolicies2
     : DEFAULT_INCLUSIONS;
   const inclusionWithAdditional = [
     ...baseInclusions2,
@@ -307,10 +307,10 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
   ];
   const exclusionFromPolicies2 = toPolicyArray(policies?.exclusionPolicy);
   const exclusionFromVehicle2 = Array.isArray(vehicle?.exclusions) ? vehicle.exclusions.map(String).filter(Boolean) : [];
-  const baseExclusions2 = exclusionFromPolicies2.length > 0
-    ? exclusionFromPolicies2
-    : exclusionFromVehicle2.length > 0
+  const baseExclusions2 = exclusionFromVehicle2.length > 0
     ? exclusionFromVehicle2
+    : exclusionFromPolicies2.length > 0
+    ? exclusionFromPolicies2
     : DEFAULT_EXCLUSIONS;
   const exclusionCombined = [
     ...baseExclusions2,
