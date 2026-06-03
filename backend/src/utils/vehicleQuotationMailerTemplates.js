@@ -375,8 +375,16 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
       ${vehiclesHtml}
       <br/>
       <p><b>No. of Pax:</b> ${summarizeGuests(lead)}</p>
-      <p><b>Arrival Date:</b> ${safe(tourPickupDrop?.arrivalCity)} ${safe(pickupDrop?.pickupLocation)} (${fmtDate(pickupDrop?.pickupDate)}) ${(pickupDrop?.pickupTime && fmtTime(pickupDrop.pickupTime).toLowerCase() !== "05:30 am") ? `, Time: ${fmtTime(pickupDrop.pickupTime)}` : ""}</p>
-      <p><b>Departure Date:</b> ${safe(tourPickupDrop?.departureCity)} ${safe(pickupDrop?.dropLocation)} (${fmtDate(pickupDrop?.dropDate)}) ${(pickupDrop?.dropTime && fmtTime(pickupDrop.dropTime).toLowerCase() !== "05:30 am") ? `, Time: ${fmtTime(pickupDrop.dropTime)}` : ""}</p>
+      <p><b>Arrival Date:</b> ${
+        pickupDrop?.pickupArrivalNote
+          ? safe(pickupDrop.pickupArrivalNote.replace(/^(Arrival|Arrival Date):\s*/i, ""))
+          : `${safe(tourPickupDrop?.arrivalCity)} ${safe(pickupDrop?.pickupLocation)} (${fmtDate(pickupDrop?.pickupDate)}) ${(pickupDrop?.pickupTime && fmtTime(pickupDrop.pickupTime).toLowerCase() !== "05:30 am") ? `, Time: ${fmtTime(pickupDrop.pickupTime)}` : ""}`
+      }</p>
+      <p><b>Departure Date:</b> ${
+        pickupDrop?.pickupDepartureNote
+          ? safe(pickupDrop.pickupDepartureNote.replace(/^(Departure|Departure Date):\s*/i, ""))
+          : `${safe(tourPickupDrop?.departureCity)} ${safe(pickupDrop?.dropLocation)} (${fmtDate(pickupDrop?.dropDate)}) ${(pickupDrop?.dropTime && fmtTime(pickupDrop.dropTime).toLowerCase() !== "05:30 am") ? `, Time: ${fmtTime(pickupDrop.dropTime)}` : ""}`
+      }</p>
       <br/>
       <br/>
       <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT STATUS:</p>
