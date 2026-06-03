@@ -621,6 +621,30 @@ const sumReceivedFromClient = (vouchers = []) => {
   return total;
 };
 
+const pickHttp = (v) => {
+  const s = typeof v === "string" ? v.trim() : "";
+  return /^https?:\/\//i.test(s) ? s : "";
+};
+
+/** Net banking + payment link for vehicle emails (same source as quick/custom quotation). */
+const loadEmailMetaVehicle = async (company) => {
+  const accountHolder = company?.companyName;
+  const bankDetails = accountHolder
+    ? await Bank.find({
+        accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
+      }).lean()
+    : [];
+
+  return {
+    companyName: company?.companyName || "Iconic Travel",
+    companyWebsite: company?.companyWebsite || "",
+    termsAndConditions: company?.termsConditions || "",
+    cancellationPolicyUrl: pickHttp(company?.cancellationPolicy),
+    paymentLink: pickHttp(company?.paymentLink),
+    bankDetails,
+  };
+};
+
 export const previewVehicleQuotationMail = asyncHandler(async (req, res) => {
   const { vehicleQuotationId } = req.params;
   const companyId = req.query.companyId;
@@ -636,16 +660,7 @@ export const previewVehicleQuotationMail = asyncHandler(async (req, res) => {
     companyId,
     companyName,
   });
-  const companyMeta = {
-    companyName: selectedCompany?.companyName || "Iconic Travel",
-    companyWebsite: selectedCompany?.companyWebsite || "",
-    termsAndConditions: selectedCompany?.termsConditions || "",
-    cancellationPolicyUrl: selectedCompany?.cancellationPolicy || "",
-    paymentLink: selectedCompany?.paymentLink || "",
-    bankDetails: Array.isArray(selectedCompany?.bankDetails)
-      ? selectedCompany.bankDetails
-      : [],
-  };
+  const companyMeta = await loadEmailMetaVehicle(selectedCompany);
 
   const quotationData = { vehicle, lead };
   const vouchers = await ReceivedVoucher.find({
@@ -717,25 +732,7 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
       "Sender email credentials are not configured for selected account",
     );
   }
-  const accountHolder = selectedCompany?.companyName;
-  const queriedBankDetails = accountHolder
-    ? await Bank.find({
-        accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
-      }).lean()
-    : [];
-
-  const companyMeta = {
-    companyName: selectedCompany?.companyName || "Iconic Travel",
-    companyWebsite: selectedCompany?.companyWebsite || "",
-    termsAndConditions: selectedCompany?.termsConditions || "",
-    cancellationPolicyUrl: selectedCompany?.cancellationPolicy || "",
-    paymentLink: selectedCompany?.paymentLink || "",
-    bankDetails: queriedBankDetails.length > 0
-      ? queriedBankDetails
-      : Array.isArray(selectedCompany?.bankDetails)
-        ? selectedCompany.bankDetails
-        : [],
-  };
+  const companyMeta = await loadEmailMetaVehicle(selectedCompany);
   const quotationData = { vehicle, lead };
   const vouchers = await ReceivedVoucher.find({
     quotationRef: { $in: [vehicleQuotationId, String(vehicle._id)] },
