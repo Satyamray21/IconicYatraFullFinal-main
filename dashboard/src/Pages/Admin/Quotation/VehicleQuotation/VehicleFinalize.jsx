@@ -68,6 +68,8 @@ import AddServiceDialog from "./Dialog/AddServiceDialog";
 import VehicleQuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
 import TransactionHistoryDialog from "./Dialog/TransactionHistoryDialog";
 import VendorManagementDialog from "./Dialog/VendorManagementDialog";
+import InvoiceView from "../../../../Components/InvoiceView";
+import html2pdf from "html2pdf.js";
 import {
   getVehicleQuotationById,
   addItinerary,
@@ -252,6 +254,7 @@ const VehicleQuotationPage = () => {
     message: "",
     severity: "success",
   });
+  const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
   const [localItinerary, setLocalItinerary] = useState([]);
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const { items: tourPackages = [], loading: packagesLoading } = useSelector(
@@ -990,7 +993,8 @@ const VehicleQuotationPage = () => {
       }
       const selectedCompany =
         mailCompanies.find((c) => c?._id === values?.companyId) || null;
-      await axios.post(`/vehicleQT/${encodeURIComponent(id)}/email/send`, {
+
+      const payload = {
         to: String(values?.to || "").trim(),
         cc: String(values?.cc || "").trim() || undefined,
         type: isBookingMail ? "booking" : "normal",
@@ -1021,7 +1025,52 @@ const VehicleQuotationPage = () => {
         ...(!isBookingMail && pdfAttachmentForMail?.contentBase64
           ? { pdfAttachment: pdfAttachmentForMail }
           : {}),
-      });
+      };
+
+      // Handle Payment Receipt Attachment
+      if (values.selectedReceiptId && isBookingMail) {
+        console.log("Starting receipt capture for ID:", values.selectedReceiptId);
+        // Wait for InvoiceView to render and fetch data
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        
+        const element = document.getElementById("hidden-receipt-container");
+        if (element) {
+          try {
+            const opt = {
+              margin: 0.2,
+              filename: `Receipt_${values.selectedReceiptId}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 1.5, useCORS: true, logging: true },
+              jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+            };
+
+            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+            
+            if (pdfBlob && pdfBlob.size >= 100) {
+              // Convert Blob to Base64
+              const reader = new FileReader();
+              const receiptAttachment = await new Promise((resolve, reject) => {
+                reader.onloadend = () =>
+                  resolve({
+                    filename: "Payment_Receipt.pdf",
+                    contentBase64: reader.result.split(",")[1],
+                    mimeType: "application/pdf",
+                  });
+                reader.onerror = reject;
+                reader.readAsDataURL(pdfBlob);
+              });
+
+              payload.receiptPdf = receiptAttachment;
+              payload.paymentVoucherId = values.selectedReceiptId;
+              console.log("Receipt captured and added to payload");
+            }
+          } catch (captureErr) {
+            console.error("Failed to capture receipt PDF:", captureErr);
+          }
+        }
+      }
+
+      await axios.post(`/vehicleQT/${encodeURIComponent(id)}/email/send`, payload);
       setSnackbar({
         open: true,
         message: "Email sent successfully",
@@ -2616,7 +2665,17 @@ const VehicleQuotationPage = () => {
         companyOptions={mailCompanies}
         emailAccountOptions={emailAccounts}
         hasPdfAttachment={!!pdfAttachmentForMail}
+        receiptOptions={paymentHistory.filter(v => v?.drCr === "Cr" || v?.paymentType === "Receive Voucher" || v?.particulars?.toLowerCase().includes("receive"))}
+        onReceiptChange={(receiptId) => setSelectedReceiptIdForPdf(receiptId)}
       />
+
+      <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+        <div id="hidden-receipt-container">
+           {selectedReceiptIdForPdf && (
+              <InvoiceView id={selectedReceiptIdForPdf} hideButtons={true} />
+           )}
+        </div>
+      </Box>
 
       <TransactionHistoryDialog
         open={openTransactionDialog}
