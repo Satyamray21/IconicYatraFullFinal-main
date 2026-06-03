@@ -14,6 +14,7 @@ import {
     saveQuickConfirmedHotels,
     sendQuickHotelConfirmationMail,
     previewQuickHotelConfirmation,
+    downloadQuickHotelConfirmationPdf,
 } from "../../controllers/quotation/quickQuotation.controller.js";
 import { upload } from "../../middleware/imageMulter.middleware.js";
 import { requirePermission } from "../../middleware/staffPermission.middleware.js";
@@ -40,6 +41,7 @@ router.get("/:id", requirePermission("canAccessQuotations"), getQuickQuotationBy
 
 router.patch("/:id/finalize", requirePermission("canEditQuotation"), finalizeQuickQuotation);
 router.post("/:id/save-confirmed-hotels", requirePermission("canEditQuotation"), saveQuickConfirmedHotels);
+router.get("/:id/hotel-confirmation/download", requirePermission("canAccessQuotations"), downloadQuickHotelConfirmationPdf);
 router.post("/:id/email/hotel-confirmation", requirePermission("canEditQuotation"), sendQuickHotelConfirmationMail);
 router.post("/:id/email/hotel-confirmation/preview", requirePermission("canEditQuotation"), previewQuickHotelConfirmation);
 router.post("/:id/email/preview", requirePermission("canEditQuotation"), previewQuickQuotationMail);

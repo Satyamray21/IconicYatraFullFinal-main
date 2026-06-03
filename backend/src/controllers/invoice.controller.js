@@ -242,6 +242,17 @@ export const renumberCompanyAdvancedReceipts = async (req, res) => {
                         new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime() ||
                         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
                 );
+                
+                // Pass 1: Set temporary invoiceNo to avoid E11000 duplicate key errors
+                for (let i = 0; i < invoices.length; i++) {
+                    const row = invoices[i];
+                    await Invoice.updateOne(
+                        { _id: row._id },
+                        { $set: { invoiceNo: `TEMP-${row._id}` } }
+                    );
+                }
+
+                // Pass 2: Set final sequenced invoiceNo
                 for (let i = 0; i < invoices.length; i++) {
                     const row = invoices[i];
                     const serialNum = i + 1;

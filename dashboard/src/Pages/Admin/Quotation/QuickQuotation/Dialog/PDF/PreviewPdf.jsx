@@ -25,6 +25,8 @@ import {
   Select,
   MenuItem,
   Link,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
 import {
   Download,
@@ -63,6 +65,7 @@ const QuotationPDFDialog = ({
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [emailContentMode, setEmailContentMode] = useState("short");
+  const [showPerPersonBreakdown, setShowPerPersonBreakdown] = useState(true);
   const [globalPolicyDefaults, setGlobalPolicyDefaults] = useState({
     inclusions: [],
     exclusions: [],
@@ -321,6 +324,7 @@ const QuotationPDFDialog = ({
   const hotelType = getValue(quotationData, "hotel.hotelType");
   const hotelDestination = getValue(quotationData, "hotel.destination");
   const hotelItinerary = getValue(quotationData, "hotel.itinerary");
+  const vehicleType = getValue(quotationData, "pickup.vehicleType") || getRawValue(quotationData, "packageSnapshot.transportMode");
 
   const quotationTitle = getValue(
     quotationData,
@@ -387,6 +391,40 @@ const QuotationPDFDialog = ({
   const standardTotal = toNumber(totalCostRow?.standard);
   const deluxeTotal = toNumber(totalCostRow?.deluxe);
   const superiorTotal = toNumber(totalCostRow?.superior);
+
+  const perPersonAdultCost = toNumber(getValue(quotationData, "perPersonAdultCost"));
+  const perPersonChildCost = toNumber(getValue(quotationData, "perPersonChildCost"));
+  const perPersonMattressCost = toNumber(getValue(quotationData, "perPersonMattressCost"));
+  const standardAdultCost = toNumber(getValue(quotationData, "standardAdultCost")) || toNumber(getValue(quotationData, "packageSnapshot.standardAdultCost"));
+  const standardChildCost = toNumber(getValue(quotationData, "standardChildCost")) || toNumber(getValue(quotationData, "packageSnapshot.standardChildCost"));
+  const standardMattressCost = toNumber(getValue(quotationData, "standardMattressCost")) || toNumber(getValue(quotationData, "packageSnapshot.standardMattressCost"));
+  const rootCalc = getValue(quotationData, "calculationMethod", "package");
+  const snapCalc = getValue(quotationData, "packageSnapshot.calculationMethod", "package");
+  const calculationMethod = rootCalc === "perPerson" || snapCalc === "perPerson" ? "perPerson" : "package";
+
+  const parseTotalGuests = (guestsStr, qData) => {
+    if (qData) {
+      const a = Number(qData.adults) || 0;
+      const c = Number(qData.children) || 0;
+      const sum = a + c;
+      if (sum > 0) return sum;
+    }
+
+    if (!guestsStr || guestsStr === "N/A") return 1;
+    if (typeof guestsStr === "number") return guestsStr > 0 ? guestsStr : 1;
+    
+    const str = String(guestsStr).trim();
+    const guestMatch = str.match(/^(\d+)\s*Guests?/i);
+    if (guestMatch) {
+      return parseInt(guestMatch[1], 10) || 1;
+    }
+    
+    const matches = str.match(/\d+/g);
+    if (!matches) return 1;
+    const total = matches.reduce((sum, num) => sum + parseInt(num, 10), 0);
+    return total > 0 ? total : 1;
+  };
+  const totalGuestsCount = parseTotalGuests(hotelGuests, quotationData);
 
   const logoUrl =
     selectedCompany?.logo ||
@@ -1278,6 +1316,11 @@ const QuotationPDFDialog = ({
               Departure not specified
             </div>
           )}
+          {vehicleType && vehicleType !== "N/A" && (
+            <div style={{ fontSize: "14px", marginTop: "8px" }}>
+              🚘 Vehicle Type: {vehicleType}
+            </div>
+          )}
         </div>
         <div
           style={{
@@ -1526,50 +1569,114 @@ const QuotationPDFDialog = ({
               </tr>
             </thead>
             <tbody>
-              {visiblePackageColumns > 1 ? (
+              {visiblePackageColumns > 1 || deluxeTotal > 0 || superiorTotal > 0 ? (
                 <>
                   {showStandardCol && standardTotal > 0 && (
-                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                      <td style={{ padding: "12px" }}>
-                        Package Cost (Standard)
-                      </td>
-                      <td style={{ padding: "12px", textAlign: "right" }}>
-                        {formatCurrency(standardTotal)}
-                      </td>
-                    </tr>
+                    <>
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Cost (Standard)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(standardTotal / totalGuestsCount)}
+                        </td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Package Cost (Standard)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(standardTotal)}
+                        </td>
+                      </tr>
+                    </>
                   )}
                   {showDeluxeCol && deluxeTotal > 0 && (
-                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                      <td style={{ padding: "12px" }}>
-                        Package Cost (Deluxe)
-                      </td>
-                      <td style={{ padding: "12px", textAlign: "right" }}>
-                        {formatCurrency(deluxeTotal)}
-                      </td>
-                    </tr>
+                    <>
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Cost (Deluxe)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(deluxeTotal / totalGuestsCount)}
+                        </td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Package Cost (Deluxe)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(deluxeTotal)}
+                        </td>
+                      </tr>
+                    </>
                   )}
                   {showSuperiorCol && superiorTotal > 0 && (
-                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                      <td style={{ padding: "12px" }}>
-                        Package Cost (Superior)
-                      </td>
-                      <td style={{ padding: "12px", textAlign: "right" }}>
-                        {formatCurrency(superiorTotal)}
-                      </td>
-                    </tr>
+                    <>
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Cost (Superior)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(superiorTotal / totalGuestsCount)}
+                        </td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          Package Cost (Superior)
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(superiorTotal)}
+                        </td>
+                      </tr>
+                    </>
                   )}
                 </>
               ) : (
                 effectiveTotal > 0 && (
-                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>Package Cost</td>
-                    <td style={{ padding: "12px", textAlign: "right" }}>
-                      {formatCurrency(effectiveTotal)}
-                    </td>
-                  </tr>
+                  <>
+                    {showPerPersonBreakdown && (perPersonAdultCost > 0 || standardAdultCost > 0) && (
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>Per Person Adult Cost</td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(perPersonAdultCost || standardAdultCost)}
+                        </td>
+                      </tr>
+                    )}
+                    {showPerPersonBreakdown && (perPersonChildCost > 0 || standardChildCost > 0) && (
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>Per Person Child Cost</td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(perPersonChildCost || standardChildCost)}
+                        </td>
+                      </tr>
+                    )}
+                    {showPerPersonBreakdown && (perPersonMattressCost > 0 || standardMattressCost > 0) && (
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>Per Person Mattress Cost</td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(perPersonMattressCost || standardMattressCost)}
+                        </td>
+                      </tr>
+                    )}
+                    {(!showPerPersonBreakdown || (!perPersonAdultCost && !perPersonChildCost && !perPersonMattressCost)) && (
+                      <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>Per Person Cost</td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(effectiveTotal / totalGuestsCount)}
+                        </td>
+                      </tr>
+                    )}
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>Package Cost</td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(effectiveTotal)}
+                      </td>
+                    </tr>
+                  </>
                 )
               )}
-              {visiblePackageColumns <= 1 && (
+              {(visiblePackageColumns <= 1 || calculationMethod === "perPerson" || perPersonAdultCost > 0) && (
                 <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
                   <td style={{ padding: "14px", fontSize: "16px" }}>
                     Grand Total
@@ -2025,6 +2132,21 @@ const QuotationPDFDialog = ({
                 ))}
               </Select>
             </FormControl>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showPerPersonBreakdown}
+                  onChange={(e) => setShowPerPersonBreakdown(e.target.checked)}
+                  size="small"
+                />
+              }
+              label={
+                <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                  Breakdown
+                </Typography>
+              }
+              sx={{ mr: 1 }}
+            />
             <Button
               onClick={handlePrint}
               startIcon={<Print />}

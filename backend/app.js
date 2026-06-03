@@ -174,6 +174,9 @@ app.use("/api/v1/notifications", notificationRouter);
 
 import emailAccountRouter from "./src/routers/emailAccount.routes.js";
 app.use("/api/v1/email-accounts", emailAccountRouter);
+
+import redisNotificationRouter from "./src/routes/redisNotification.routes.js";
+app.use("/api/v1/redis-notifications", redisNotificationRouter);
 // ==========================================
 // ✅ Fix: Load JSON without import
 const swaggerDocument = JSON.parse(

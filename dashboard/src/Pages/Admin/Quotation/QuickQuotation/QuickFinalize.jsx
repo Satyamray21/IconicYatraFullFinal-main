@@ -1163,6 +1163,7 @@ function transformQuickApiToDisplay(apiData, company) {
 
         return dt ? `Departure: ${point} (${dt})` : `Departure: ${point}`;
       })(),
+      vehicleType: apiData.transportation || apiData?.packageSnapshot?.transportMode || "",
     },
     quotationTitle: pkg.displayTitle || pkg.title || "",
     destinationSummary: destLine,
@@ -1285,6 +1286,38 @@ const QuickFinalize = () => {
     severity: "success",
   });
   const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
+  const [downloadingHotelPdf, setDownloadingHotelPdf] = useState(false);
+
+  const handleDownloadHotelConfirmation = async () => {
+    if (!id) return;
+    setDownloadingHotelPdf(true);
+    try {
+      const response = await axios.get(`/quickQT/${id}/hotel-confirmation/download`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Hotel_Confirmation_${quotation?.reference || "Voucher"}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setSnackbar({
+        open: true,
+        message: "Hotel confirmation PDF downloaded successfully!",
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Failed to download hotel confirmation PDF:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to download hotel confirmation PDF. Please try again.",
+        severity: "error",
+      });
+    } finally {
+      setDownloadingHotelPdf(false);
+    }
+  };
   const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState(null);
   const [openReceiptPreview, setOpenReceiptPreview] = useState(false);
   const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
@@ -1421,32 +1454,70 @@ const QuickFinalize = () => {
 
   /** Keep PDF preview aligned with the itinerary editor (`days` may update before `quotation` is refreshed). */
   const quotationForPdf = useMemo(() => {
-    const payable = effectiveQuickPayableTotal(currentQuotation, services);
+    let payableStandard = effectiveQuickPayableTotal(currentQuotation, services);
+    let payableDeluxe = null;
+    let payableSuperior = null;
+
+    const rootCalc = currentQuotation?.calculationMethod || currentQuotation?.packageSnapshot?.calculationMethod || "package";
+
+    if (rootCalc === "perPerson") {
+      const qd = currentQuotation?.packageSnapshot || {};
+      const adults = Number(currentQuotation?.adults) || 1;
+      const children = Number(currentQuotation?.children) || 0;
+      const mattresses = Number(currentQuotation?.noOfMattress) || 0;
+      
+      const calcTier = (adultCost, childCost, mattressCost) => {
+        if (!adultCost && !childCost) return null;
+        return (Number(adultCost || 0) * adults) + (Number(childCost || 0) * children) + (Number(mattressCost || 0) * mattresses);
+      };
+
+      const addOn = sumBillableAdditionalServices(services);
+      const sTotal = calcTier(qd.standardAdultCost || qd.perPersonAdultCost, qd.standardChildCost || qd.perPersonChildCost, qd.standardMattressCost || qd.perPersonMattressCost);
+      const dTotal = calcTier(qd.deluxeAdultCost, qd.deluxeChildCost, qd.deluxeMattressCost);
+      const supTotal = calcTier(qd.superiorAdultCost, qd.superiorChildCost, qd.superiorMattressCost);
+
+      if (sTotal > 0) payableStandard = sTotal + addOn;
+      if (dTotal > 0) payableDeluxe = dTotal + addOn;
+      if (supTotal > 0) payableSuperior = supTotal + addOn;
+    } else {
+      const qd = currentQuotation?.packageSnapshot?.quotationDetails || {};
+      const addOn = sumBillableAdditionalServices(services);
+      if (qd.deluxeCost > 0) payableDeluxe = Number(qd.deluxeCost) + addOn;
+      if (qd.superiorCost > 0) payableSuperior = Number(qd.superiorCost) + addOn;
+    }
+
     const base = {
       ...quotation,
       days,
       additionalServices: serializeAdditionalServicesForApi(services),
     };
-    if (!Number.isFinite(payable) || payable <= 0) return base;
+    if (!Number.isFinite(payableStandard) || payableStandard <= 0) return base;
     const hpd = [...(base.hotelPricingData || [])];
-    const idx = hpd.findIndex((r) => {
+    const indicesToUpdate = hpd.reduce((acc, r, i) => {
       const label = String(r?.destination || "").toLowerCase();
-      return (
+      if (
         label.includes("total quotation cost") ||
-        label.includes("total package cost")
-      );
-    });
-    if (idx !== -1) {
+        label.includes("total package cost") ||
+        label.includes("final package totals")
+      ) {
+        acc.push(i);
+      }
+      return acc;
+    }, []);
+
+    indicesToUpdate.forEach((idx) => {
       hpd[idx] = {
         ...hpd[idx],
-        standard: `₹ ${Math.round(payable).toLocaleString("en-IN")}`,
+        standard: `₹ ${Math.round(payableStandard).toLocaleString("en-IN")}`,
+        ...(payableDeluxe ? { deluxe: `₹ ${Math.round(payableDeluxe).toLocaleString("en-IN")}` } : {}),
+        ...(payableSuperior ? { superior: `₹ ${Math.round(payableSuperior).toLocaleString("en-IN")}` } : {}),
       };
-    }
+    });
     return {
       ...base,
       pricing: {
         ...base.pricing,
-        total: `₹ ${Math.round(payable).toLocaleString("en-IN")}`,
+        total: `₹ ${Math.round(payableStandard).toLocaleString("en-IN")}`,
       },
       hotelPricingData: hpd,
     };
@@ -1860,26 +1931,58 @@ const QuickFinalize = () => {
       currentQuotation?.packageSnapshot || currentQuotation?.packageId || {};
     const title = pkg.packageName || pkg.title || "Package";
     const qd = currentQuotation?.packageSnapshot?.quotationDetails || {};
-    const std = Number(qd.standardCost ?? pkg.standardCost ?? 0) || 0;
-    const del = Number(qd.deluxeCost ?? pkg.deluxeCost ?? 0) || 0;
-    const sup = Number(qd.superiorCost ?? pkg.superiorCost ?? 0) || 0;
+    
     const localSvc = sumBillableAdditionalServices(services);
     const apiSvc = sumBillableAdditionalServices(qd.additionalServices || []);
     const hasLocal = Array.isArray(services) && services.length > 0;
     const addOns = hasLocal ? localSvc : apiSvc;
+
     const fmt = (n) =>
       n > 0 ? `₹ ${Math.round(n).toLocaleString("en-IN")}` : "—";
+      
     const tierPayable = (tierBase) => {
       if (!tierBase || tierBase <= 0) return 0;
-      // standard/deluxe/superior costs in quick quotation are already final tier totals.
-      // Add only extra billable services (included = "no"), do not add transport again.
       return tierBase + addOns;
     };
-    return [
+
+    // If manual per-person breakdown is used, calculate totals dynamically
+    if (
+      currentQuotation?.calculationMethod === "perPerson" || 
+      currentQuotation?.perPersonAdultCost > 0 ||
+      currentQuotation?.perPersonChildCost > 0 ||
+      currentQuotation?.perPersonMattressCost > 0
+    ) {
+      const adults = Number(currentQuotation?.adults) || 1;
+      const children = Number(currentQuotation?.children) || 0;
+      const mattresses = Number(currentQuotation?.noOfMattress) || 0;
+      
+      const calcTier = (adultCost, childCost, mattressCost) => {
+        return (Number(adultCost || 0) * adults) + (Number(childCost || 0) * children) + (Number(mattressCost || 0) * mattresses);
+      };
+
+      const sTotal = calcTier(currentQuotation.standardAdultCost || currentQuotation.perPersonAdultCost, currentQuotation.standardChildCost || currentQuotation.perPersonChildCost, currentQuotation.standardMattressCost || currentQuotation.perPersonMattressCost);
+      const dTotal = calcTier(currentQuotation.deluxeAdultCost, currentQuotation.deluxeChildCost, currentQuotation.deluxeMattressCost);
+      const supTotal = calcTier(currentQuotation.superiorAdultCost, currentQuotation.superiorChildCost, currentQuotation.superiorMattressCost);
+
+      const opts = [];
+      if (sTotal > 0) opts.push({ label: "Standard", hotel: String(title), cost: fmt(tierPayable(sTotal)) });
+      if (dTotal > 0) opts.push({ label: "Deluxe", hotel: String(title), cost: fmt(tierPayable(dTotal)) });
+      if (supTotal > 0) opts.push({ label: "Superior", hotel: String(title), cost: fmt(tierPayable(supTotal)) });
+
+      if (opts.length > 0) return opts;
+    }
+
+    const std = Number(qd.standardCost ?? pkg.standardCost ?? 0) || 0;
+    const del = Number(qd.deluxeCost ?? pkg.deluxeCost ?? 0) || 0;
+    const sup = Number(qd.superiorCost ?? pkg.superiorCost ?? 0) || 0;
+
+    const opts = [
       { label: "Standard", hotel: String(title), cost: fmt(tierPayable(std)) },
       { label: "Deluxe", hotel: String(title), cost: fmt(tierPayable(del)) },
       { label: "Superior", hotel: String(title), cost: fmt(tierPayable(sup)) },
     ];
+
+    return opts;
   }, [currentQuotation, services]);
 
   const generateInvoiceData = () => {
@@ -3078,6 +3181,15 @@ const QuickFinalize = () => {
       field: "pickup",
       nestedKey: "departure",
     },
+    ...(quotation.pickup.vehicleType
+      ? [
+          {
+            icon: <RouteIcon sx={{ fontSize: 16, mr: 0.5, color: "info.main" }} />,
+            text: `Vehicle Type: ${quotation.pickup.vehicleType}`,
+            editable: false,
+          },
+        ]
+      : []),
     {
       icon: <Group sx={{ fontSize: 16, mr: 0.5 }} />,
       text: `Guests: ${quotation.hotel.guests}`,
@@ -3201,11 +3313,32 @@ const QuickFinalize = () => {
                     {infoMap[activeInfo]}
                   </Typography>
                 )}
+
+                {/* Display Per Person Costs if available */}
+                {quotation?.perPersonAdultCost > 0 && (
+                  <Typography variant="body2" mt={2}>
+                    <strong>Adult Cost (PP):</strong> ₹
+                    {quotation.perPersonAdultCost.toLocaleString("en-IN")}
+                  </Typography>
+                )}
+                {quotation?.perPersonChildCost > 0 && (
+                  <Typography variant="body2">
+                    <strong>Child Cost (PP):</strong> ₹
+                    {quotation.perPersonChildCost.toLocaleString("en-IN")}
+                  </Typography>
+                )}
+                {quotation?.perPersonMattressCost > 0 && (
+                  <Typography variant="body2">
+                    <strong>Mattress Cost (PP):</strong> ₹
+                    {quotation.perPersonMattressCost.toLocaleString("en-IN")}
+                  </Typography>
+                )}
+
                 <Typography
                   variant="subtitle1"
                   fontWeight="bold"
                   color="warning.main"
-                  mt={8}
+                  mt={4}
                   textAlign="center"
                 >
                   Margin & Taxes (B2C)
@@ -3513,6 +3646,17 @@ const QuickFinalize = () => {
                       onClick={() => setOpenHotelConfirmation(true)}
                     >
                       Hotel Confirmation
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<Download />}
+                      sx={{ ml: 1 }}
+                      onClick={handleDownloadHotelConfirmation}
+                      disabled={downloadingHotelPdf}
+                    >
+                      {downloadingHotelPdf ? "Downloading..." : "Download Voucher"}
                     </Button>
                   </Box>
 
@@ -4481,6 +4625,7 @@ const QuickFinalize = () => {
         quotation={currentQuotation}
         quotationRef={apiEntityId}
         type="quick"
+        onSaveSuccess={refreshQuotationFromApi}
       />
 
       <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>

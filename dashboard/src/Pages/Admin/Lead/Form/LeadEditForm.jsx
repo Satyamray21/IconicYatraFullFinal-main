@@ -246,6 +246,7 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
     noOfRooms: "",
     noOfMattress: "0",
     noOfNights: "",
+    noOfVehicles: "0",
     requirementNote: "",
   };
 
@@ -299,6 +300,7 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
       noOfRooms: tourDetails?.accommodation?.noOfRooms?.toString() || "",
       noOfMattress: tourDetails?.accommodation?.noOfMattress?.toString() || "0",
       noOfNights: tourDetails?.accommodation?.noOfNights?.toString() || "",
+      noOfVehicles: tourDetails?.pickupDrop?.noOfVehicles?.toString() || "0",
       requirementNote: tourDetails?.accommodation?.requirementNote || "",
     };
   };
@@ -392,6 +394,7 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
             departureDate: values.departureDate ? values.departureDate.toISOString() : null,
             departureCity: values.departureCity,
             departureLocation: values.departureLocation,
+            noOfVehicles: parseInt(values.noOfVehicles) || 0,
           },
           accommodation: {
             hotelType: values.hotelType ? [values.hotelType] : [],
@@ -1866,6 +1869,10 @@ const Step2Content = ({
               >
                 {renderDropdownOptions("departureLocation")}
               </TextField>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 4 }}>
+              {renderNumberField("noOfVehicles", "No of Vehicles")}
             </Grid>
 
             <Grid size={{xs:12, md:4}}>

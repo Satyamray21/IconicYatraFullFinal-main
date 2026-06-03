@@ -6,8 +6,23 @@ import {
   Button,
   MenuItem,
   CircularProgress,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton
 } from "@mui/material";
-import { Formik, Form } from "formik";
+import { Formik, Form, FieldArray } from "formik";
+import { Add, Delete } from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
 import { getAllLeads } from "../../../../features/leads/leadSlice";
 
@@ -21,6 +36,18 @@ const formatPickupDropLine = (city, location) => {
 const StepClientDetails = ({ onNext }) => {
   const dispatch = useDispatch();
   const { list: leads, status } = useSelector((state) => state.leads);
+
+  const activeLeads = leads ? leads.filter((lead) => {
+    if (lead.status === "Cancelled") return false;
+    const departure = lead.tourDetails?.pickupDrop?.departureDate || lead.tourDetails?.departureDate || lead.tourDetails?.travelDate;
+    if (departure) {
+      const depDate = new Date(departure);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (!isNaN(depDate) && depDate < today) return false;
+    }
+    return true;
+  }) : [];
 
   useEffect(() => {
     // Fetch all leads when component mounts
@@ -50,6 +77,11 @@ const StepClientDetails = ({ onNext }) => {
         roomType: "",
         noOfRooms: 1,
         noOfMattress: "",
+        noOfVehicles: 0,
+        vehiclesSameOrDifferent: "Same",
+        multipleVehicles: [
+          { vehicleType: "", tripType: "Round Trip", noOfDays: "", perDayCost: "", totalCost: "" }
+        ],
       }}
       validate={(values) => {
         const errors = {};
@@ -105,7 +137,7 @@ const StepClientDetails = ({ onNext }) => {
                   setFieldValue("customerName", selectedName);
 
                   // Find selected client details
-                  const selectedClient = leads.find(
+                  const selectedClient = activeLeads.find(
                     (lead) => lead.personalDetails?.fullName === selectedName,
                   );
 
@@ -213,6 +245,10 @@ const StepClientDetails = ({ onNext }) => {
                       Number(selectedClient.tourDetails?.accommodation?.noOfMattress) || 0,
                     );
                     setFieldValue(
+                      "noOfVehicles",
+                      Number(selectedClient.tourDetails?.pickupDrop?.noOfVehicles) || 0,
+                    );
+                    setFieldValue(
                       "roomType",
                       selectedClient.tourDetails?.accommodation?.sharingType || "",
                     );
@@ -226,8 +262,8 @@ const StepClientDetails = ({ onNext }) => {
                     <CircularProgress size={20} />
                     Loading clients...
                   </MenuItem>
-                ) : leads && leads.length > 0 ? (
-                  leads.map((lead) => (
+                ) : activeLeads && activeLeads.length > 0 ? (
+                  activeLeads.map((lead) => (
                     <MenuItem
                       key={lead._id}
                       value={lead.personalDetails?.fullName}
@@ -359,6 +395,201 @@ const StepClientDetails = ({ onNext }) => {
                 inputProps={{ min: 0 }}
               />
             </Grid>
+
+            {/* Number of Vehicles */}
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Number of Vehicles"
+                name="noOfVehicles"
+                value={values.noOfVehicles}
+                onChange={handleChange}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+
+            {/* Vehicles Same or Different Options */}
+            {values.noOfVehicles > 1 && (
+              <Grid size={{ xs: 12 }}>
+                <FormControl component="fieldset">
+                  <FormLabel component="legend">Are all vehicles same or different?</FormLabel>
+                  <RadioGroup
+                    row
+                    name="vehiclesSameOrDifferent"
+                    value={values.vehiclesSameOrDifferent}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFieldValue("vehiclesSameOrDifferent", val);
+                      if (val === "Different") {
+                        const vehiclesCount = Number(values.noOfVehicles) || 0;
+                        const currentList = values.multipleVehicles || [];
+                        const newList = [...currentList];
+                        while (newList.length < vehiclesCount) {
+                          newList.push({
+                            vehicleType: "",
+                            tripType: "Round Trip",
+                            noOfDays: "",
+                            perDayCost: "",
+                            totalCost: "",
+                          });
+                        }
+                        setFieldValue("multipleVehicles", newList.slice(0, vehiclesCount));
+                      }
+                    }}
+                  >
+                    <FormControlLabel value="Same" control={<Radio />} label="Same" />
+                    <FormControlLabel value="Different" control={<Radio />} label="Different" />
+                  </RadioGroup>
+                </FormControl>
+              </Grid>
+            )}
+
+            {/* Dynamic Vehicles Table */}
+            {values.noOfVehicles > 1 && values.vehiclesSameOrDifferent === "Different" && (
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="h6" gutterBottom>
+                  Enter Details for Multiple Vehicles
+                </Typography>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>#</TableCell>
+                        <TableCell>Vehicle Type</TableCell>
+                        <TableCell>Trip Type</TableCell>
+                        <TableCell>No. of Days</TableCell>
+                        <TableCell>Per Day Cost</TableCell>
+                        <TableCell>Total Cost</TableCell>
+                        <TableCell>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      <FieldArray name="multipleVehicles">
+                        {({ remove, push }) => (
+                          <>
+                            {values.multipleVehicles && values.multipleVehicles.length > 0 ? (
+                              values.multipleVehicles.map((vehicle, index) => (
+                                <TableRow key={index}>
+                                  <TableCell>{index + 1}</TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      fullWidth
+                                      size="small"
+                                      name={`multipleVehicles.${index}.vehicleType`}
+                                      value={vehicle.vehicleType}
+                                      onChange={handleChange}
+                                      placeholder="e.g. Innova"
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      select
+                                      fullWidth
+                                      size="small"
+                                      name={`multipleVehicles.${index}.tripType`}
+                                      value={vehicle.tripType}
+                                      onChange={handleChange}
+                                    >
+                                      <MenuItem value="Round Trip">Round Trip</MenuItem>
+                                      <MenuItem value="One Way">One Way</MenuItem>
+                                      <MenuItem value="Local">Local</MenuItem>
+                                    </TextField>
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      fullWidth
+                                      size="small"
+                                      type="number"
+                                      name={`multipleVehicles.${index}.noOfDays`}
+                                      value={vehicle.noOfDays}
+                                      onChange={(e) => {
+                                        handleChange(e);
+                                        const days = Number(e.target.value) || 0;
+                                        const cost = Number(vehicle.perDayCost) || 0;
+                                        setFieldValue(
+                                          `multipleVehicles.${index}.totalCost`,
+                                          days * cost
+                                        );
+                                      }}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      fullWidth
+                                      size="small"
+                                      type="number"
+                                      name={`multipleVehicles.${index}.perDayCost`}
+                                      value={vehicle.perDayCost}
+                                      onChange={(e) => {
+                                        handleChange(e);
+                                        const cost = Number(e.target.value) || 0;
+                                        const days = Number(vehicle.noOfDays) || 0;
+                                        setFieldValue(
+                                          `multipleVehicles.${index}.totalCost`,
+                                          days * cost
+                                        );
+                                      }}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      fullWidth
+                                      size="small"
+                                      type="number"
+                                      InputProps={{
+                                        readOnly: true,
+                                      }}
+                                      name={`multipleVehicles.${index}.totalCost`}
+                                      value={vehicle.totalCost}
+                                      onChange={handleChange}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <IconButton
+                                      color="error"
+                                      onClick={() => remove(index)}
+                                    >
+                                      <Delete />
+                                    </IconButton>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            ) : (
+                              <TableRow>
+                                <TableCell colSpan={7} align="center">
+                                  No vehicles added
+                                </TableCell>
+                              </TableRow>
+                            )}
+                            <TableRow>
+                              <TableCell colSpan={7} align="left">
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  startIcon={<Add />}
+                                  onClick={() =>
+                                    push({
+                                      vehicleType: "",
+                                      tripType: "Round Trip",
+                                      noOfDays: "",
+                                      perDayCost: "",
+                                      totalCost: "",
+                                    })
+                                  }
+                                >
+                                  Add Vehicle
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          </>
+                        )}
+                      </FieldArray>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Grid>
+            )}
 
             {/* Tour Type */}
             <Grid size={{ xs: 12, md: 6 }}>

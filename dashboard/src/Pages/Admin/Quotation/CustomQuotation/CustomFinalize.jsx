@@ -571,7 +571,38 @@ const CustomFinalize = () => {
     const [bannerUploading, setBannerUploading] = useState(false);
     const { id } = useParams(); // business quotationId e.g. ICYR_CQ_0001
     const navigate = useNavigate();
-    // ========== EDIT 1: Add this with your other state declarations ==========
+    const [downloadingHotelPdf, setDownloadingHotelPdf] = useState(false);
+
+    const handleDownloadHotelConfirmation = async () => {
+        if (!id) return;
+        setDownloadingHotelPdf(true);
+        try {
+            const response = await axios.get(`/customQT/${id}/hotel-confirmation/download`, {
+                responseType: 'blob'
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Hotel_Confirmation_${selectedQuotation?.quotationId || "Voucher"}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setSnackbar({
+                open: true,
+                message: "Hotel confirmation PDF downloaded successfully!",
+                severity: "success"
+            });
+        } catch (error) {
+            console.error("Failed to download hotel confirmation PDF:", error);
+            setSnackbar({
+                open: true,
+                message: "Failed to download hotel confirmation PDF. Please try again.",
+                severity: "error"
+            });
+        } finally {
+            setDownloadingHotelPdf(false);
+        }
+    };
 
 
  // Add dependencies if needed (e.g., initialData)
@@ -765,36 +796,36 @@ useEffect(() => {
 
 
     // Fetch quotation data from actual API
-    useEffect(() => {
-        const fetchQuotationData = async () => {
-            try {
-                if (id) {
-                    // Dispatch the thunk to fetch quotation by ID
-                    const result = await dispatch(getCustomQuotationById(id)).unwrap();
+    const fetchQuotationData = async () => {
+        try {
+            if (id) {
+                // Dispatch the thunk to fetch quotation by ID
+                const result = await dispatch(getCustomQuotationById(id)).unwrap();
 
-                    // Transform the API response to component format
-                    const transformedData = transformApiData(result);
-                    if (transformedData) {
-                        setQuotation(transformedData);
-                        setDays(transformedData.days);
-                    }
-                } else {
-                    setSnackbar({
-                        open: true,
-                        message: "No quotation ID provided",
-                        severity: "error"
-                    });
+                // Transform the API response to component format
+                const transformedData = transformApiData(result);
+                if (transformedData) {
+                    setQuotation(transformedData);
+                    setDays(transformedData.days);
                 }
-            } catch (error) {
-                console.error("Error fetching quotation data:", error);
+            } else {
                 setSnackbar({
                     open: true,
-                    message: error || "Failed to load quotation data",
+                    message: "No quotation ID provided",
                     severity: "error"
                 });
             }
-        };
+        } catch (error) {
+            console.error("Error fetching quotation data:", error);
+            setSnackbar({
+                open: true,
+                message: error || "Failed to load quotation data",
+                severity: "error"
+            });
+        }
+    };
 
+    useEffect(() => {
         fetchQuotationData();
     }, [dispatch, id]);
 
@@ -2954,6 +2985,17 @@ useEffect(() => {
                                         >
                                             Hotel Confirmation
                                         </Button>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="primary"
+                                            startIcon={<Download />}
+                                            sx={{ ml: 1 }}
+                                            onClick={handleDownloadHotelConfirmation}
+                                            disabled={downloadingHotelPdf}
+                                        >
+                                            {downloadingHotelPdf ? "Downloading..." : "Download Voucher"}
+                                        </Button>
                                     </Box>
 
                                     {finalizedVendors.length ? (
@@ -3841,6 +3883,7 @@ useEffect(() => {
                 quotation={selectedQuotation}
                 quotationRef={id}
                 type="custom"
+                onSaveSuccess={fetchQuotationData}
             />
         </Box>
     );

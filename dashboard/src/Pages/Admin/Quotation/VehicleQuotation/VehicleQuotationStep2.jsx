@@ -54,12 +54,15 @@ const VehicleQuotationStep2 = ({ step1Data, onBack }) => {
       // Combine step1 + step2 data
       const finalData = {
         basicsDetails: {
+          vehiclesSameOrDifferent: step1Data.vehiclesSameOrDifferent,
+          noOfVehicles: step1Data.noOfVehicles,
           clientName: step1Data.clientName,
           vehicleType: step1Data.vehicleType,
           tripType: step1Data.tripType,
           noOfDays: step1Data.noOfDays,
           perDayCost: step1Data.perDayCost,
         },
+        multipleVehicles: step1Data.multipleVehicles,
         costDetails: {
           totalCost: step1Data.totalCost,
           discount: values.discount,
@@ -286,19 +289,36 @@ const VehicleQuotationStep2 = ({ step1Data, onBack }) => {
               <Typography>{step1Data.clientName}</Typography>
 
               <Typography>
-                <strong>Vehicle Type</strong>
+                <strong>No of Vehicles</strong>
               </Typography>
-              <Typography>{step1Data.vehicleType}</Typography>
+              <Typography>{step1Data.noOfVehicles} ({step1Data.vehiclesSameOrDifferent})</Typography>
 
-              <Typography>
-                <strong>Trip Type</strong>
-              </Typography>
-              <Typography>{step1Data.tripType}</Typography>
+              {step1Data.vehiclesSameOrDifferent === "Same" && (
+                <>
+                  <Typography>
+                    <strong>Vehicle Type</strong>
+                  </Typography>
+                  <Typography>{step1Data.vehicleType}</Typography>
 
-              <Typography>
-                <strong>No of Days</strong>
-              </Typography>
-              <Typography>{step1Data.noOfDays}</Typography>
+                  <Typography>
+                    <strong>Trip Type</strong>
+                  </Typography>
+                  <Typography>{step1Data.tripType}</Typography>
+
+                  <Typography>
+                    <strong>No of Days</strong>
+                  </Typography>
+                  <Typography>{step1Data.noOfDays}</Typography>
+                </>
+              )}
+              {step1Data.vehiclesSameOrDifferent === "Different" && (
+                <>
+                  <Typography>
+                    <strong>Multiple Vehicles Selected</strong>
+                  </Typography>
+                  <Typography>{step1Data.multipleVehicles?.length} types selected</Typography>
+                </>
+              )}
             </Grid>
 
             <Grid size={{ xs: 6 }}>
