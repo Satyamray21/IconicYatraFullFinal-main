@@ -156,10 +156,11 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
         <br/>
         <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
+        <div style="text-align:center;">
         ${(bankDetails || [])
           .map(
             (b, i) => `
-                    <div style="margin-bottom:8px;">
+                    <div style="margin-bottom:12px;">
                         <b>${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
                           b?.branchName,
                           "Branch",
@@ -171,6 +172,7 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
                 `,
           )
           .join("")}
+        </div>
     `;
 };
 const itineraryLines = (itinerary = []) =>

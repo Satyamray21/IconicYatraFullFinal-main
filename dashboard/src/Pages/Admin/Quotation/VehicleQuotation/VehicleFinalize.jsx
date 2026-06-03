@@ -400,6 +400,11 @@ const VehicleQuotationPage = () => {
   }, [dispatch, id]);
 
   useEffect(() => {
+    if (!q?.vehicle) return;
+    setPolicyInputs(normalizePolicyState(q.vehicle));
+  }, [q?.vehicle]);
+
+  useEffect(() => {
     dispatch(fetchPackages({ page: 1, limit: 100 }));
   }, [dispatch]);
 
@@ -660,9 +665,10 @@ const VehicleQuotationPage = () => {
       newValue = linesToPolicyArray(editDialog.value);
     }
 
-    // Update local policyInputs state
+    // Update local policyInputs state (keep editor fields as newline text)
     if (editDialog.field.startsWith("policies.")) {
       const policyKey = editDialog.field.split(".")[1];
+      const editorValue = normalizePolicyForEditor(newValue);
       setPolicyInputs((prev) => ({
         ...prev,
         [policyKey === "inclusions"
@@ -671,7 +677,7 @@ const VehicleQuotationPage = () => {
             ? "exclusionPolicy"
             : policyKey === "terms"
               ? "termsAndConditions"
-              : policyKey]: newValue,
+              : policyKey]: editorValue,
       }));
     }
 
@@ -2448,9 +2454,7 @@ const VehicleQuotationPage = () => {
                               onClick={() =>
                                 handleEditOpen(
                                   p.field,
-                                  p.isArray
-                                    ? JSON.stringify(p.content)
-                                    : p.content,
+                                  normalizePolicyForEditor(p.content),
                                   p.title,
                                 )
                               }
