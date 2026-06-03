@@ -10,6 +10,7 @@ import nodemailer from "nodemailer";
 import Company from "../../models/company.model.js";
 import EmailAccount from "../../models/emailAccount.model.js";
 import ReceivedVoucher from "../../models/payment.model.js";
+import Bank from "../../models/bankDetails.js";
 import {
   buildVehicleQuotationBookingEmail,
   buildVehicleQuotationPdfPreviewEmail,
@@ -716,15 +717,24 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
       "Sender email credentials are not configured for selected account",
     );
   }
+  const accountHolder = selectedCompany?.companyName;
+  const queriedBankDetails = accountHolder
+    ? await Bank.find({
+        accountHolderName: { $regex: `^${accountHolder}$`, $options: "i" },
+      }).lean()
+    : [];
+
   const companyMeta = {
     companyName: selectedCompany?.companyName || "Iconic Travel",
     companyWebsite: selectedCompany?.companyWebsite || "",
     termsAndConditions: selectedCompany?.termsConditions || "",
     cancellationPolicyUrl: selectedCompany?.cancellationPolicy || "",
     paymentLink: selectedCompany?.paymentLink || "",
-    bankDetails: Array.isArray(selectedCompany?.bankDetails)
-      ? selectedCompany.bankDetails
-      : [],
+    bankDetails: queriedBankDetails.length > 0
+      ? queriedBankDetails
+      : Array.isArray(selectedCompany?.bankDetails)
+        ? selectedCompany.bankDetails
+        : [],
   };
   const quotationData = { vehicle, lead };
   const vouchers = await ReceivedVoucher.find({
@@ -733,11 +743,17 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
   const receivedAmount = sumReceivedFromClient(vouchers);
 
   const isBookingMail = type === "booking";
+  const bookingCustom = isBookingMail ? (customText?.booking || {}) : (customText?.normal || {});
+
   const companyMetaWithCustom = {
     ...companyMeta,
     receivedAmount,
     signature: customText?.signature,
-    ...(isBookingMail ? (customText?.booking || {}) : (customText?.normal || {})),
+    ...bookingCustom,
+    bankDetails: (Array.isArray(bookingCustom.bankDetails) && bookingCustom.bankDetails.length > 0)
+      ? bookingCustom.bankDetails
+      : companyMeta.bankDetails,
+    paymentLink: bookingCustom.paymentLink || companyMeta.paymentLink,
   };
 
   const generatedBody = isBookingMail
