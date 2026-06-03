@@ -693,6 +693,7 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
     customText = {},
     pdfAttachment,
     previewPdfMode = false,
+    receiptPdf,
   } = req.body || {};
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -727,7 +728,7 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
   };
   const quotationData = { vehicle, lead };
   const vouchers = await ReceivedVoucher.find({
-    quotationRef: vehicleQuotationId,
+    quotationRef: { $in: [vehicleQuotationId, String(vehicle._id)] },
   }).lean();
   const receivedAmount = sumReceivedFromClient(vouchers);
 
@@ -785,6 +786,29 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
 
   const isBooking = String(type || "").trim().toLowerCase() === "booking";
 
+  const providedReceiptAttachment =
+    receiptPdf &&
+      typeof receiptPdf === "object" &&
+      String(receiptPdf.contentBase64 || "").trim()
+      ? {
+        filename: String(receiptPdf.filename || "Payment_Receipt.pdf").trim(),
+        content: Buffer.from(
+          String(receiptPdf.contentBase64).trim(),
+          "base64",
+        ),
+        contentType:
+          String(receiptPdf.mimeType || "").trim() || "application/pdf",
+      }
+      : null;
+
+  const finalAttachments = [];
+  if (providedPdfAttachment && !isBooking) {
+    finalAttachments.push(providedPdfAttachment);
+  }
+  if (providedReceiptAttachment && isBooking) {
+    finalAttachments.push(providedReceiptAttachment);
+  }
+
   await transporter.sendMail({
     from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
     to,
@@ -793,7 +817,7 @@ export const sendVehicleQuotationMail = asyncHandler(async (req, res) => {
     subject: finalSubject,
     html: body,
     text: body.replace(/<[^>]*>/g, ""),
-    attachments: (providedPdfAttachment && !isBooking) ? [providedPdfAttachment] : [],
+    attachments: finalAttachments,
   });
 
   return res.status(200).json(
