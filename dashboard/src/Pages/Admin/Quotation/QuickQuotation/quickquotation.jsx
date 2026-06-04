@@ -171,10 +171,18 @@ const QuickQuotationForm = () => {
         packageSnapshot: {
           clientLocation: finalData.clientDetails?.clientLocation?.trim() || "",
           tourType: finalData.packageDetails?.tourType || "",
-          destinations: Array.isArray(finalData.packageDetails?.destinations)
-            ? finalData.packageDetails.destinations.filter(
-                (dest) => dest && dest.trim() !== "",
-              )
+          destinations: Array.isArray(finalData.packageDetails?.destinationNights)
+            ? finalData.packageDetails.destinationNights.filter(
+                (dn) => dn && dn.destination && dn.destination.trim() !== "",
+              ).map(dn => dn.destination.trim())
+            : [],
+          destinationNights: Array.isArray(finalData.packageDetails?.destinationNights)
+            ? finalData.packageDetails.destinationNights.filter(
+                (dn) => dn && dn.destination && dn.destination.trim() !== "",
+              ).map(dn => ({
+                  destination: dn.destination.trim(),
+                  nights: Number(dn.nights) || 0
+              }))
             : [],
           days: parseInt(finalData.packageDetails?.days) || 0,
           nights: parseInt(finalData.packageDetails?.nights) || 0,
