@@ -781,13 +781,13 @@ const VehicleQuotationPage = () => {
       }
     }
 
-    if (selectedBank) {
+    if (bank) {
       setAccountType("company");
-      setAccountName(selectedBank.accountHolderName || "Iconic Yatra");
-      setAccountNumber(selectedBank.accountNumber || "");
-      setIfscCode(selectedBank.ifscCode || "");
-      setBankName(selectedBank.bankName || "");
-      setBranchName(selectedBank.branchName || "");
+      setAccountName(bank.accountHolderName || "Iconic Yatra");
+      setAccountNumber(bank.accountNumber || "");
+      setIfscCode(bank.ifscCode || "");
+      setBankName(bank.bankName || "");
+      setBranchName(bank.branchName || "");
     }
 
     setIsFinalized(true);
@@ -1809,9 +1809,7 @@ const VehicleQuotationPage = () => {
         )}
       </Box>
 
-      {isFinalized &&
-        Array.isArray(vehicle?.finalizedVendorsWithAmounts) &&
-        vehicle.finalizedVendorsWithAmounts.length > 0 && (
+      {isFinalized && (
           <Card
             sx={{ mb: 2, borderLeft: "4px solid", borderColor: "success.main" }}
           >
@@ -1839,12 +1837,18 @@ const VehicleQuotationPage = () => {
                   Edit Vendors
                 </Button>
               </Box>
-              {vehicle.finalizedVendorsWithAmounts.map((v, idx) => (
-                <Typography key={v?._id || idx} variant="body2">
-                  {v?.vendorName || "Vendor"} ({v?.vendorType || "Other"}) -{" "}
-                  {formatCurrency(v?.amount || 0)}
+              {(!vehicle.finalizedVendorsWithAmounts || vehicle.finalizedVendorsWithAmounts.length === 0) ? (
+                <Typography variant="body2" color="text.secondary">
+                  No vendors added yet. Click 'Edit Vendors' to add one.
                 </Typography>
-              ))}
+              ) : (
+                vehicle.finalizedVendorsWithAmounts.map((v, idx) => (
+                  <Typography key={v?._id || idx} variant="body2">
+                    {v?.vendorName || "Vendor"} ({v?.vendorType || "Other"}) -{" "}
+                    {formatCurrency(v?.amount || 0)}
+                  </Typography>
+                ))
+              )}
             </CardContent>
           </Card>
         )}

@@ -16,9 +16,23 @@ import Hotel from '../models/hotel.model.js';
 import { Reminder } from '../models/Reminder.model.js';
 import { startOfMonth, endOfMonth, subMonths, format, startOfDay, endOfDay } from 'date-fns';
 
-import { getCache, setCache } from '../utils/cache.js';
+import { getCache, setCache, clearPattern } from '../utils/cache.js';
 
 export const getDashboardStats = asyncHandler(async (req, res) => {
+  try {
+    const now = new Date();
+    const updateResult = await Lead.updateMany(
+      { status: "Active", "tourDetails.pickupDrop.departureDate": { $lt: now } },
+      { $set: { status: "Not Converted" } }
+    );
+    if (updateResult.modifiedCount > 0) {
+      await clearPattern('leads:*');
+      await clearPattern('dashboard:stats:*');
+    }
+  } catch(e) {
+    console.error("Auto-convert failed", e);
+  }
+
   const { activityDate, activityType, activityPage = 1, reminderPage = 1 } = req.query;
   const cacheKey = `dashboard:stats:${activityDate || 'all'}:${activityType || 'all'}:ap${activityPage}:rp${reminderPage}`;
 
@@ -60,6 +74,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     active: 0,
     confirmed: 0,
     cancelled: 0,
+    notConverted: 0,
     trend: leadTrendValue >= 0 ? "up" : "down",
     trendValue: `${leadTrendValue >= 0 ? "+" : ""}${leadTrendValue}%`
   };
@@ -70,6 +85,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     if (status === 'active') formattedLeadStats.active = stat.count;
     else if (status === 'confirmed') formattedLeadStats.confirmed = stat.count;
     else if (status === 'cancelled') formattedLeadStats.cancelled = stat.count;
+    else if (status === 'not converted') formattedLeadStats.notConverted = stat.count;
   });
 
   // 2. Quotation Stats & Trend

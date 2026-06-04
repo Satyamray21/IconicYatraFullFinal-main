@@ -1,4 +1,5 @@
 import QuickQuotation from "../../models/quotation/quickQuotation.model.js";
+import { Lead } from "../../models/lead.model.js";
 import Package from "../../models/package.model.js";
 import Company from "../../models/company.model.js";
 import EmailAccount from "../../models/emailAccount.model.js";
@@ -1083,6 +1084,22 @@ export const finalizeQuickQuotation = asyncHandler(async (req, res) => {
     );
   }
   await quotation.save();
+
+  if (quotation.customerName) {
+    const lead = await Lead.findOne({ "personalDetails.fullName": quotation.customerName }).sort({ createdAt: -1 });
+    if (lead && lead.status !== 'Confirmed') {
+      lead.status = 'Confirmed';
+      await lead.save();
+      await clearPattern('leads:*');
+      await clearPattern(`leads:id:${lead.leadId}`);
+    }
+  }
+
+  await clearPattern(`quickQuotation:${mongoId}`);
+  await clearPattern("quickQuotations:all");
+  await clearPattern("quotations:search:*");
+  await clearPattern("quotations:stats");
+  await clearPattern('dashboard:stats:*');
 
   return res
     .status(200)
