@@ -733,17 +733,7 @@ const LeadEditForm = ({ leadId, onSave, onCancel }) => {
   }
 
   return (
-    <Box sx={{ 
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      bgcolor: 'background.paper',
-      zIndex: 1300,
-      overflow: 'auto',
-      p: 3
-    }}>
+    <Box sx={{ p: 3 }}>
       <Box component="form" onSubmit={formik.handleSubmit}>
         <Typography variant="h5" gutterBottom>
           Edit Lead - {viewedLead?.leadId || 'Loading...'}
