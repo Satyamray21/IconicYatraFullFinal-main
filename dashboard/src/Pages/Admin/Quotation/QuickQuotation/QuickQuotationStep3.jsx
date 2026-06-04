@@ -277,8 +277,33 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
   };
 
   // Get package options for Autocomplete
-  const getPackageOptions = () => {
-    return filteredPackages.map((pkg) => ({
+  const getPackageOptions = (arrivalDate, departureDate) => {
+    let targetNights = null;
+    if (arrivalDate && departureDate) {
+      const arr = new Date(arrivalDate);
+      const dep = new Date(departureDate);
+      if (!isNaN(arr) && !isNaN(dep) && dep >= arr) {
+        const diffTime = Math.abs(dep - arr);
+        targetNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    let finalPackages = filteredPackages;
+
+    if (targetNights !== null && targetNights > 0) {
+      finalPackages = finalPackages.filter((pkg) => {
+        const pkgNights = pkg.stayLocations?.reduce(
+          (sum, loc) => sum + (Number(loc.nights) || 0),
+          0,
+        ) || pkg.destinationNights?.reduce(
+          (sum, loc) => sum + (Number(loc.nights) || 0),
+          0,
+        ) || 0;
+        return pkgNights === targetNights;
+      });
+    }
+
+    return finalPackages.map((pkg) => ({
       label: pkg.title || pkg.sector || `Package ${pkg.packageId || pkg._id}`,
       value: pkg._id,
       fieldName: "package",
@@ -508,10 +533,10 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
             <Grid size={{ xs: 12, md: 6 }}>
               <Autocomplete
                 fullWidth
-                options={getPackageOptions()}
+                options={getPackageOptions(values.arrivalDate, values.departureDate)}
                 getOptionLabel={(option) => option.label || ""}
                 value={
-                  getPackageOptions().find(
+                  getPackageOptions(values.arrivalDate, values.departureDate).find(
                     (opt) =>
                       opt.value === values.selectedPackage ||
                       opt.label === values.selectedPackage,
