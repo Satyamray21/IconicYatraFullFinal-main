@@ -1,4 +1,5 @@
 import { fullQuotation } from "../../models/quotation/fullQuotation.model.js";
+import { Lead } from "../../models/lead.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
@@ -308,6 +309,16 @@ export const finalizeQuotation = asyncHandler(async (req, res) => {
     }
 
     await quotation.save();
+
+    if (quotation.clientDetails?.clientName) {
+        const lead = await Lead.findOne({ "personalDetails.fullName": quotation.clientDetails.clientName }).sort({ createdAt: -1 });
+        if (lead && lead.status !== 'Confirmed') {
+            lead.status = 'Confirmed';
+            await lead.save();
+            await clearPattern('leads:*');
+            await clearPattern(`leads:id:${lead.leadId}`);
+        }
+    }
 
     await logActivity({
         action: "UPDATE",

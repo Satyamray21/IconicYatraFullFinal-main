@@ -108,7 +108,7 @@ const leadSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Active', 'Cancelled', 'Confirmed'],
+    enum: ['Active', 'Cancelled', 'Confirmed', 'Not Converted'],
     default: 'Active',
   },
   tourDetails: {

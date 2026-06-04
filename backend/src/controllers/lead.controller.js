@@ -251,6 +251,20 @@ export const createLead = asyncHandler(async (req, res) => {
 
 // view Lead
 export const viewAllLeads = asyncHandler(async (req, res) => {
+  try {
+    const now = new Date();
+    const updateResult = await Lead.updateMany(
+      { status: "Active", "tourDetails.pickupDrop.departureDate": { $lt: now } },
+      { $set: { status: "Not Converted" } }
+    );
+    if (updateResult.modifiedCount > 0) {
+      await clearPattern('leads:*');
+      await clearPattern('dashboard:stats:*');
+    }
+  } catch(e) {
+    console.error("Auto-convert failed", e);
+  }
+
   const cacheKey = 'leads:all';
   const cachedLeads = await getCache(cacheKey);
   if (cachedLeads) {
@@ -417,6 +431,7 @@ export const viewAllLeadsReports = asyncHandler(async (req, res) => {
         Active: 0,
         Confirmed: 0,
         Cancelled: 0,
+        "Not Converted": 0,
       };
 
       result.forEach((item) => {
