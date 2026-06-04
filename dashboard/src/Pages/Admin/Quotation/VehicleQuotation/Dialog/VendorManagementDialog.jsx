@@ -24,6 +24,8 @@ import {
 } from "@mui/material";
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from "@mui/icons-material";
 import axios from "../../../../../utils/axios";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchAllAssociates } from "../../../../../features/associate/associateSlice";
 
 const VendorManagementDialog = ({
   open,
@@ -41,6 +43,25 @@ const VendorManagementDialog = ({
     amount: "",
     remarks: "",
   });
+
+  const dispatch = useDispatch();
+  const { list: associateList = [] } = useSelector((state) => state.associate);
+
+  useEffect(() => {
+    if (open) {
+      dispatch(fetchAllAssociates());
+    }
+  }, [open, dispatch]);
+
+  const getFilteredVendors = (selectedType) => {
+    return associateList.filter((a) => {
+      const type = a?.personalDetails?.associateType;
+      if (!type) return false;
+      if (selectedType === "Vehicle") return type === "Vehicle Vendor";
+      if (selectedType === "Hotel") return type === "Hotel Vendor";
+      return type.includes("Vendor");
+    });
+  };
 
   const getVendorRowId = (vendor) =>
     String(vendor?._id || vendor?.id || vendor?.tempId || "");
@@ -138,23 +159,31 @@ const VendorManagementDialog = ({
             Add New Vendor
           </Typography>
           <Box sx={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr auto", gap: 2, alignItems: "center" }}>
-            <TextField
-              size="small"
-              label="Vendor Name"
-              value={newVendor.vendorName}
-              onChange={(e) => setNewVendor({ ...newVendor, vendorName: e.target.value })}
-            />
-
             <FormControl size="small">
               <InputLabel>Type</InputLabel>
               <Select
                 value={newVendor.vendorType}
                 label="Type"
-                onChange={(e) => setNewVendor({ ...newVendor, vendorType: e.target.value })}
+                onChange={(e) => setNewVendor({ ...newVendor, vendorType: e.target.value, vendorName: "" })}
               >
                 <MenuItem value="Vehicle">Vehicle</MenuItem>
                 <MenuItem value="Hotel">Hotel</MenuItem>
                 <MenuItem value="Other">Other</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl size="small">
+              <InputLabel>Vendor Name</InputLabel>
+              <Select
+                value={newVendor.vendorName}
+                label="Vendor Name"
+                onChange={(e) => setNewVendor({ ...newVendor, vendorName: e.target.value })}
+              >
+                {getFilteredVendors(newVendor.vendorType).map((v) => (
+                  <MenuItem key={v._id} value={v.personalDetails.fullName}>
+                    {v.personalDetails.fullName} ({v.personalDetails.associateType})
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
 
@@ -208,12 +237,20 @@ const VendorManagementDialog = ({
                   <TableRow key={getVendorRowId(vendor)} hover>
                     <TableCell>
                       {editingId === getVendorRowId(vendor) ? (
-                        <TextField
-                          size="small"
-                          value={editData.vendorName || ""}
-                          onChange={(e) => setEditData({ ...editData, vendorName: e.target.value })}
-                          fullWidth
-                        />
+                        <FormControl size="small" fullWidth>
+                          <Select
+                            value={editData.vendorName || ""}
+                            onChange={(e) => setEditData({ ...editData, vendorName: e.target.value })}
+                            displayEmpty
+                          >
+                            <MenuItem value="" disabled>Select Vendor</MenuItem>
+                            {getFilteredVendors(editData.vendorType || vendor.vendorType).map((v) => (
+                              <MenuItem key={v._id} value={v.personalDetails.fullName}>
+                                {v.personalDetails.fullName} ({v.personalDetails.associateType})
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
                       ) : (
                         vendor.vendorName
                       )}
@@ -224,7 +261,7 @@ const VendorManagementDialog = ({
                         <FormControl size="small" fullWidth>
                           <Select
                             value={editData.vendorType || ""}
-                            onChange={(e) => setEditData({ ...editData, vendorType: e.target.value })}
+                            onChange={(e) => setEditData({ ...editData, vendorType: e.target.value, vendorName: "" })}
                           >
                             <MenuItem value="Vehicle">Vehicle</MenuItem>
                             <MenuItem value="Hotel">Hotel</MenuItem>
