@@ -82,7 +82,8 @@ dayjs.extend(relativeTime);
 const LEAD_PIE_COLORS = {
   Active: "#3B82F6",    // Vibrant Blue
   Confirmed: "#10B981", // Emerald Green
-  Cancelled: "#EF4444"  // Bright Red
+  Cancelled: "#EF4444", // Bright Red
+  "Not Converted": "#F59E0B" // Amber/Orange
 };
 
 // General colors for other potential pie charts
@@ -342,6 +343,7 @@ const Dashboard = () => {
       { name: "Active", value: stats.leads.active },
       { name: "Confirmed", value: stats.leads.confirmed },
       { name: "Cancelled", value: stats.leads.cancelled },
+      { name: "Not Converted", value: stats.leads.notConverted || 0 },
     ]
     : [], [stats?.leads]);
 
@@ -351,6 +353,7 @@ const Dashboard = () => {
       case 'Active': return LEAD_PIE_COLORS.Active;
       case 'Confirmed': return LEAD_PIE_COLORS.Confirmed;
       case 'Cancelled': return LEAD_PIE_COLORS.Cancelled;
+      case 'Not Converted': return LEAD_PIE_COLORS['Not Converted'];
       default: return '#1976d2';
     }
   }, []);

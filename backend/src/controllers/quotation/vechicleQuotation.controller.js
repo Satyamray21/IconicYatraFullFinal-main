@@ -538,6 +538,16 @@ export const finalizeVehicleQuotation = asyncHandler(async (req, res) => {
 
   await vehicle.save();
 
+  if (vehicle.basicsDetails?.clientName) {
+    const lead = await Lead.findOne({ "personalDetails.fullName": vehicle.basicsDetails.clientName }).sort({ createdAt: -1 });
+    if (lead && lead.status !== 'Confirmed') {
+      lead.status = 'Confirmed';
+      await lead.save();
+      await clearPattern('leads:*');
+      await clearPattern(`leads:id:${lead.leadId}`);
+    }
+  }
+
   await clearPattern(`vehicleQuotation:${vehicleQuotationId}`);
   await clearPattern("vehicleQuotations:all");
   await clearPattern("quotations:search:*");

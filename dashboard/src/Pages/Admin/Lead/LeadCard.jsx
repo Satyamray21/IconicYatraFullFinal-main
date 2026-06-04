@@ -208,7 +208,7 @@ const LeadCard = () => {
     }
 
     // Validate status before sending to backend
-    const validStatuses = ["Active", "Cancelled", "Confirmed"];
+    const validStatuses = ["Active", "Cancelled", "Confirmed", "Not Converted"];
     if (!validStatuses.includes(newStatus)) {
       setSnackbar({
         open: true,
@@ -319,6 +319,9 @@ const LeadCard = () => {
               <MenuItem onClick={() => handleStatusChange(rowId, "Cancelled")}>
                 Cancelled
               </MenuItem>
+              <MenuItem onClick={() => handleStatusChange(rowId, "Not Converted")}>
+                Not Converted
+              </MenuItem>
             </Menu>
           </Box>
         );
@@ -350,6 +353,9 @@ const LeadCard = () => {
                   </Typography>
                   <Typography variant="body2">
                     Cancelled: {item.Cancelled}
+                  </Typography>
+                  <Typography variant="body2">
+                    Not Converted: {item["Not Converted"] || 0}
                   </Typography>
                 </CardContent>
               </Card>
