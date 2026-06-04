@@ -3,6 +3,7 @@ import {
     Dialog,
     DialogTitle,
     DialogContent,
+    DialogActions,
     RadioGroup,
     FormControlLabel,
     Radio,
@@ -25,16 +26,13 @@ import {
     TableRow,
     Paper,
     IconButton,
+    FormControl,
+    InputLabel
 } from "@mui/material";
-import { useFormik } from "formik";
-import * as Yup from "yup";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 
-
-import BankDetailsDialog from "./BankDetailsDialog"; // Update the import path as per your project structure
-import AddBankDialog from "./AddBankDialog"; // Update the import path as per your project structure
 import AssociateDetailForm from "../../../Associates/Form/AssociatesForm";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllAssociates } from "../../../../../features/associate/associateSlice";
@@ -52,17 +50,16 @@ const HotelVendorDialog = ({
     );
     const [vendorType, setVendorType] = useState("single");
     const [addVendorDialogOpen, setAddVendorDialogOpen] = useState(false);
-    const [bankDetailsDialogOpen, setBankDetailsDialogOpen] = useState(false);
-    const [addBankDialogOpen, setAddBankDialogOpen] = useState(false);
-    const [vendors, setVendors] = useState([]);
-    const [vehicleVendors, setVehicleVendors] = useState([]);
-    const [vehicleVendorName, setVehicleVendorName] = useState("");
-    const [vehicleAmount, setVehicleAmount] = useState("");
-
-    const { data: company } = useSelector((state) => state.companyUI);
-
-    // Vendor amounts tracking
     const [finalizedVendorsWithAmounts, setFinalizedVendorsWithAmounts] = useState([]);
+    
+    // New unified vendor input state
+    const [newVendor, setNewVendor] = useState({
+        vendorName: "",
+        vendorType: "Hotel",
+        amount: "",
+        remarks: ""
+    });
+
     const [editingVendorId, setEditingVendorId] = useState(null);
     const [editForm, setEditForm] = useState({ vendorName: "", amount: "", remarks: "", vendorType: "" });
 
@@ -82,32 +79,6 @@ const HotelVendorDialog = ({
         );
     }, [open, initialVendorDetails, initialFinalizedVendorsWithAmounts]);
 
-    // Bank Details Dialog States
-    const [accountType, setAccountType] = useState("company");
-    const [accountName, setAccountName] = useState("");
-    
-    const accountOptions = useMemo(() => {
-        if (!company?.bankDetails) return [];
-        return company.bankDetails.map(b => ({
-            value: b.accountNumber,
-            label: `${b.bankName} - ${b.accountHolderName}`,
-            bankName: b.bankName,
-            accountHolderName: b.accountHolderName,
-            ifscCode: b.ifscCode,
-            branchName: b.branchName
-        }));
-    }, [company]);
-
-    // Add Bank Dialog States
-    const [newBankDetails, setNewBankDetails] = useState({
-        bankName: "",
-        branchName: "",
-        accountHolderName: "",
-        accountNumber: "",
-        ifscCode: "",
-        openingBalance: "",
-    });
-
     useEffect(() => {
         if (open) dispatch(fetchAllAssociates());
     }, [dispatch, open]);
@@ -119,83 +90,21 @@ const HotelVendorDialog = ({
         return [];
     }, [associateList]);
 
-    useEffect(() => {
-        if (!normalizeAssociates.length) return;
-
-        const hotelVendorNames = normalizeAssociates
-            .filter(
-                (a) => a?.personalDetails?.associateType === "Hotel Vendor"
-            )
-            .map((a) => a?.personalDetails?.fullName)
-            .filter(Boolean);
-
-        const vehicleVendorNames = normalizeAssociates
-            .filter(
-                (a) => a?.personalDetails?.associateType === "Vehicle Vendor"
-            )
-            .map((a) => a?.personalDetails?.fullName)
-            .filter(Boolean);
-
-        setVendors((prev) => {
-            const merged = [...hotelVendorNames, ...prev];
-            return Array.from(new Set(merged));
+    const getFilteredVendors = (selectedType) => {
+        return normalizeAssociates.filter((a) => {
+            const type = a?.personalDetails?.associateType;
+            if (!type) return false;
+            if (selectedType === "Vehicle") return type === "Vehicle Vendor";
+            if (selectedType === "Hotel") return type === "Hotel Vendor";
+            return type.includes("Vendor");
         });
-
-        setVehicleVendors((prev) => {
-            const merged = [...vehicleVendorNames, ...prev];
-            return Array.from(new Set(merged));
-        });
-    }, [normalizeAssociates]);
-
-    const formik = useFormik({
-        initialValues: {
-            vendorType: "single",
-            vendorName: "",
-            amount: "",
-            showAll: false,
-            same: false,
-        },
-        validationSchema: Yup.object({
-            vendorType: Yup.string().required("Required"),
-            vendorName: Yup.string().when("vendorType", {
-                is: "single",
-                then: (schema) => schema.required("Vendor name is required"),
-            }),
-        }),
-        onSubmit: (values) => {
-            console.log("Hotel Vendor Form Data:", values);
-            setBankDetailsDialogOpen(true);
-        },
-    });
+    };
 
     const handleVendorTypeChange = (e) => {
-        const value = e.target.value;
-        setVendorType(value);
-        formik.setFieldValue("vendorType", value);
+        setVendorType(e.target.value);
     };
 
-    const handleAddVendor = (newVendorName) => {
-        if (newVendorName && !vendors.includes(newVendorName)) {
-            const updatedVendors = [...vendors, newVendorName];
-            setVendors(updatedVendors);
-            formik.setFieldValue("vendorName", newVendorName);
-        }
-        setAddVendorDialogOpen(false);
-    };
-
-    const handleAddVehicleVendor = (newVendorName) => {
-        if (newVendorName && !vehicleVendors.includes(newVendorName)) {
-            const updatedVendors = [...vehicleVendors, newVendorName];
-            setVehicleVendors(updatedVendors);
-            setVehicleVendorName(newVendorName);
-        }
-        setAddVendorDialogOpen(false);
-    };
-
-    const handleBankDetailsConfirm = () => {
-        console.log("Bank Details confirmed");
-        console.log("Account Type:", accountType);
-        console.log("Account Name:", accountName);
+    const handlePrimaryConfirm = () => {
         onConfirm?.({
             vendorType,
             hotelVendorName: finalizedVendorsWithAmounts
@@ -206,58 +115,31 @@ const HotelVendorDialog = ({
                 .filter((v) => String(v.vendorType).toLowerCase() === "vehicle")
                 .map((v) => v.vendorName)
                 .join(", "),
-            accountType,
-            accountName,
-            finalizedVendorsWithAmounts, // Pass vendor amounts
+            finalizedVendorsWithAmounts,
         });
-        setBankDetailsDialogOpen(false);
-        // You can add additional logic here for what happens after bank details confirmation
     };
 
-    // Handle adding vendor with amount
     const handleAddVendorWithAmount = () => {
-        if (formik.values.vendorName && formik.values.amount) {
-            const newVendor = {
+        if (newVendor.vendorName && newVendor.amount) {
+            const vendor = {
                 id: Date.now(),
-                vendorName: formik.values.vendorName,
-                vendorType: "Hotel",
-                amount: Number(formik.values.amount),
-                remarks: "",
+                vendorName: newVendor.vendorName,
+                vendorType: newVendor.vendorType,
+                amount: Number(newVendor.amount),
+                remarks: newVendor.remarks,
             };
             setFinalizedVendorsWithAmounts((prev) => {
-                const otherRows = prev.filter((v) => v.vendorType !== "Hotel");
                 if (vendorType === "single") {
-                    return [...otherRows, newVendor];
+                    // For single, allow only one of each type
+                    const otherRows = prev.filter((v) => v.vendorType !== vendor.vendorType);
+                    return [...otherRows, vendor];
                 }
-                return [...prev, newVendor];
+                return [...prev, vendor];
             });
-            formik.setFieldValue("vendorName", "");
-            formik.setFieldValue("amount", "");
+            setNewVendor({ ...newVendor, vendorName: "", amount: "", remarks: "" });
         }
     };
 
-    const handleAddVehicleVendorWithAmount = () => {
-        if (vehicleVendorName && vehicleAmount) {
-            const newVendor = {
-                id: Date.now(),
-                vendorName: vehicleVendorName,
-                vendorType: "Vehicle",
-                amount: Number(vehicleAmount),
-                remarks: "",
-            };
-            setFinalizedVendorsWithAmounts((prev) => {
-                const otherRows = prev.filter((v) => v.vendorType !== "Vehicle");
-                if (vendorType === "single") {
-                    return [...otherRows, newVendor];
-                }
-                return [...prev, newVendor];
-            });
-            setVehicleVendorName("");
-            setVehicleAmount("");
-        }
-    };
-
-    // Handle editing vendor
     const handleEditVendor = (vendor) => {
         setEditingVendorId(vendor.id);
         setEditForm({
@@ -268,7 +150,6 @@ const HotelVendorDialog = ({
         });
     };
 
-    // Handle saving edited vendor
     const handleSaveEditedVendor = () => {
         setFinalizedVendorsWithAmounts(
             finalizedVendorsWithAmounts.map((v) =>
@@ -276,6 +157,7 @@ const HotelVendorDialog = ({
                     ? {
                         ...v,
                         vendorName: editForm.vendorName,
+                        vendorType: editForm.vendorType,
                         amount: Number(editForm.amount),
                         remarks: editForm.remarks,
                     }
@@ -286,7 +168,6 @@ const HotelVendorDialog = ({
         setEditForm({ vendorName: "", amount: "", remarks: "", vendorType: "" });
     };
 
-    // Handle deleting vendor
     const handleDeleteVendor = (vendorId) => {
         setFinalizedVendorsWithAmounts(
             finalizedVendorsWithAmounts.filter((v) => v.id !== vendorId)
@@ -298,107 +179,16 @@ const HotelVendorDialog = ({
         setEditForm({ vendorName: "", amount: "", remarks: "", vendorType: "" });
     };
 
-    const handlePrimaryConfirm = () => {
-        if (finalizedVendorsWithAmounts.length > 0) {
-            setBankDetailsDialogOpen(true);
-            return;
-        }
-        formik.handleSubmit();
-    };
-
-    const handleBankDetailsCancel = () => {
-        setBankDetailsDialogOpen(false);
-    };
-
-    const handleAddBankOpen = () => {
-        // Open the Add Bank dialog
-        setAddBankDialogOpen(true);
-    };
-
-    const handleNewBankChange = (field, value) => {
-        setNewBankDetails(prev => ({
-            ...prev,
-            [field]: value
-        }));
-    };
-
-    const handleAddBank = () => {
-        setAddBankDialogOpen(false);
-    };
-
-    const handleAddBankCancel = () => {
-        // Reset the form and close the dialog
-        setNewBankDetails({
-            bankName: "",
-            branchName: "",
-            accountHolderName: "",
-            accountNumber: "",
-            ifscCode: "",
-            openingBalance: "",
-        });
-        setAddBankDialogOpen(false);
-    };
-
-    const renderVendorSelect = (name, value, onChange) => (
-        <Select
-            name={name}
-            value={value}
-            onChange={onChange}
-            fullWidth
-            displayEmpty
-        >
-            {/* <MenuItem value="">Hotel Vendor Name</MenuItem> */}
-            {associatesLoading && <MenuItem disabled>Loading vendors...</MenuItem>}
-            {vendors.map((vendor) => (
-                <MenuItem key={vendor} value={vendor}>
-                    {vendor}
-                </MenuItem>
-            ))}
-            <MenuItem onClick={() => setAddVendorDialogOpen(true)}>
-                <ListItemIcon>
-                    <AddIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Add New Vendor</ListItemText>
-            </MenuItem>
-        </Select>
-    );
-
-    const renderVehicleVendorSelect = () => (
-        <Select
-            name="vehicleVendorName"
-            value={vehicleVendorName}
-            onChange={(e) => setVehicleVendorName(e.target.value)}
-            fullWidth
-            displayEmpty
-        >
-            {/* <MenuItem value="">Vehicle Vendor</MenuItem> */}
-            {associatesLoading && <MenuItem disabled>Loading vendors...</MenuItem>}
-            {vehicleVendors.map((vendor) => (
-                <MenuItem key={vendor} value={vendor}>
-                    {vendor}
-                </MenuItem>
-            ))}
-            <MenuItem onClick={() => setAddVendorDialogOpen(true)}>
-                <ListItemIcon>
-                    <AddIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Add New Vendor</ListItemText>
-            </MenuItem>
-        </Select>
-    );
-
     return (
         <>
-            {/* Hotel Vendor Dialog */}
-            <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
                 <DialogTitle sx={{ fontWeight: "bold", color: "#1976d2" }}>
-                    Select Hotel Vendor
+                    Manage Vendors
                 </DialogTitle>
-                <DialogContent>
-                    {/* Vendor Type */}
-                    <Box sx={{ mb: 2 }}>
+                <DialogContent dividers>
+                    <Box sx={{ mb: 3 }}>
                         <FormLabel sx={{ fontWeight: "bold", color: "#34495e" }}>
-                            *Vendor Type
+                            *Assignment Mode
                         </FormLabel>
                         <RadioGroup
                             row
@@ -409,407 +199,233 @@ const HotelVendorDialog = ({
                             <FormControlLabel
                                 value="single"
                                 control={<Radio />}
-                                label="Single Vendor"
+                                label="Single Vendor (Per Type)"
                             />
                             <FormControlLabel
                                 value="multiple"
                                 control={<Radio />}
-                                label="Multiple Vendor"
+                                label="Multiple Vendors"
                             />
                         </RadioGroup>
                     </Box>
 
-                    <Divider sx={{ mb: 2 }} />
-
-                    {/* Conditional Rendering */}
-                    {vendorType === "single" ? (
-                        <>
-                            <Typography
-                                variant="body1"
-                                sx={{ fontWeight: 600, color: "#e74c3c", mb: 1 }}
-                            >
-                                *Hotel Vendor
-                            </Typography>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-                                {renderVendorSelect(
-                                    "vendorName",
-                                    formik.values.vendorName,
-                                    formik.handleChange
-                                )}
-                                <TextField
-                                    name="amount"
-                                    label="Amount (₹)"
-                                    value={formik.values.amount}
-                                    onChange={formik.handleChange}
-                                    type="number"
-                                    sx={{ width: "200px" }}
-                                />
-                                <Button
-                                    variant="contained"
-                                    size="small"
-                                    onClick={handleAddVendorWithAmount}
-                                    disabled={
-                                        vendorType === "single" &&
-                                        finalizedVendorsWithAmounts.some((v) => v.vendorType === "Hotel")
-                                    }
-                                    sx={{ background: "#4caf50" }}
+                    <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+                        <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#1976d2" }}>
+                            Add New Vendor
+                        </Typography>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1.5fr 2fr 1fr 1fr auto", gap: 2, alignItems: "center" }}>
+                            <FormControl size="small">
+                                <InputLabel>Type</InputLabel>
+                                <Select
+                                    value={newVendor.vendorType}
+                                    label="Type"
+                                    onChange={(e) => setNewVendor({ ...newVendor, vendorType: e.target.value, vendorName: "" })}
                                 >
-                                    Add
-                                </Button>
-                            </Box>
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        name="showAll"
-                                        checked={formik.values.showAll}
-                                        onChange={formik.handleChange}
-                                    />
-                                }
-                                label="Show All"
+                                    <MenuItem value="Hotel">Hotel</MenuItem>
+                                    <MenuItem value="Vehicle">Vehicle</MenuItem>
+                                    <MenuItem value="Other">Other</MenuItem>
+                                </Select>
+                            </FormControl>
+
+                            <FormControl size="small">
+                                <InputLabel>Vendor Name</InputLabel>
+                                <Select
+                                    value={newVendor.vendorName}
+                                    label="Vendor Name"
+                                    onChange={(e) => {
+                                        if (e.target.value === "ADD_NEW") {
+                                            setAddVendorDialogOpen(true);
+                                        } else {
+                                            setNewVendor({ ...newVendor, vendorName: e.target.value });
+                                        }
+                                    }}
+                                >
+                                    {getFilteredVendors(newVendor.vendorType).map((v) => (
+                                        <MenuItem key={v._id || v.id} value={v.personalDetails?.fullName}>
+                                            {v.personalDetails?.fullName} ({v.personalDetails?.associateType})
+                                        </MenuItem>
+                                    ))}
+                                    <MenuItem value="ADD_NEW">
+                                        <ListItemIcon>
+                                            <AddIcon fontSize="small" />
+                                        </ListItemIcon>
+                                        <ListItemText>Add New Vendor</ListItemText>
+                                    </MenuItem>
+                                </Select>
+                            </FormControl>
+
+                            <TextField
+                                size="small"
+                                type="number"
+                                label="Amount (₹)"
+                                value={newVendor.amount}
+                                onChange={(e) => setNewVendor({ ...newVendor, amount: e.target.value })}
                             />
 
-                            {/* Vendors with Amounts Table */}
-                            {finalizedVendorsWithAmounts.length > 0 && (
-                                <Box sx={{ mt: 3 }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>
-                                        Finalized Vendors:
-                                    </Typography>
-                                    <TableContainer component={Paper}>
-                                        <Table size="small">
-                                            <TableHead>
-                                                <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
-                                                    <TableCell sx={{ fontWeight: "bold" }}>Vendor Name</TableCell>
-                                                    <TableCell sx={{ fontWeight: "bold" }}>Type</TableCell>
-                                                    <TableCell align="right" sx={{ fontWeight: "bold" }}>Amount (₹)</TableCell>
-                                                    <TableCell sx={{ fontWeight: "bold" }}>Remarks</TableCell>
-                                                    <TableCell align="center" sx={{ fontWeight: "bold" }}>Actions</TableCell>
-                                                </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {finalizedVendorsWithAmounts.map((vendor) =>
-                                                    editingVendorId === vendor.id ? (
-                                                        <TableRow key={vendor.id}>
-                                                            <TableCell>
-                                                                <TextField
-                                                                    size="small"
-                                                                    value={editForm.vendorName}
-                                                                    onChange={(e) =>
-                                                                        setEditForm({ ...editForm, vendorName: e.target.value })
-                                                                    }
-                                                                    fullWidth
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell align="right">
-                                                                <TextField
-                                                                    size="small"
-                                                                    type="number"
-                                                                    value={editForm.amount}
-                                                                    onChange={(e) =>
-                                                                        setEditForm({ ...editForm, amount: e.target.value })
-                                                                    }
-                                                                    sx={{ width: "100px" }}
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <TextField
-                                                                    size="small"
-                                                                    value={editForm.remarks}
-                                                                    onChange={(e) =>
-                                                                        setEditForm({ ...editForm, remarks: e.target.value })
-                                                                    }
-                                                                    fullWidth
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell align="center">
-                                                                <Button
-                                                                    size="small"
-                                                                    variant="contained"
-                                                                    color="success"
-                                                                    onClick={handleSaveEditedVendor}
-                                                                    sx={{ mr: 1 }}
-                                                                >
-                                                                    Save
-                                                                </Button>
-                                                                <Button
-                                                                    size="small"
-                                                                    variant="contained"
-                                                                    color="error"
-                                                                    onClick={handleCancelEdit}
-                                                                >
-                                                                    Cancel
-                                                                </Button>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ) : (
-                                                        <TableRow key={vendor.id}>
-                                                            <TableCell>{vendor.vendorName}</TableCell>
-                                                            <TableCell>{vendor.vendorType}</TableCell>
-                                                            <TableCell align="right">
-                                                                ₹ {Number(vendor.amount).toLocaleString("en-IN")}
-                                                            </TableCell>
-                                                            <TableCell>{vendor.remarks}</TableCell>
-                                                            <TableCell align="center">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleEditVendor(vendor)}
-                                                                    color="primary"
-                                                                >
-                                                                    <EditIcon fontSize="small" />
-                                                                </IconButton>
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleDeleteVendor(vendor.id)}
-                                                                    color="error"
-                                                                >
-                                                                    <DeleteIcon fontSize="small" />
-                                                                </IconButton>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    )
-                                                )}
-                                            </TableBody>
-                                        </Table>
-                                    </TableContainer>
-                                </Box>
-                            )}
-                        </>
-                    ) : (
-                        <>
-                            <Typography
-                                variant="body1"
-                                sx={{ color: "#f39c12", fontWeight: "bold", mb: 1 }}
-                            >
-                                Multiple Hotel Vendors
-                            </Typography>
-                            <Typography
-                                variant="body2"
-                                sx={{ color: "#e74c3c", mb: 2, fontWeight: "bold" }}
-                            >
-                                Add vendors with their respective amounts
-                            </Typography>
-                            <Box
-                                sx={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                    gap: 1,
-                                    mb: 2,
-                                }}
-                            >
-                                {renderVendorSelect(
-                                    "vendorName",
-                                    formik.values.vendorName,
-                                    formik.handleChange
-                                )}
-                                <TextField
-                                    name="amount"
-                                    label="Amount (₹)"
-                                    value={formik.values.amount}
-                                    onChange={formik.handleChange}
-                                    type="number"
-                                    sx={{ width: "150px" }}
-                                />
-                                <Button
-                                    variant="contained"
-                                    size="small"
-                                    onClick={handleAddVendorWithAmount}
-                                    disabled={
-                                        vendorType === "single" &&
-                                        finalizedVendorsWithAmounts.some((v) => v.vendorType === "Hotel")
-                                    }
-                                    sx={{ background: "#4caf50", height: "56px" }}
-                                >
-                                    <AddIcon /> Add
-                                </Button>
-                            </Box>
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        name="showAll"
-                                        checked={formik.values.showAll}
-                                        onChange={formik.handleChange}
-                                    />
-                                }
-                                label="Show All"
-                                sx={{ mb: 2 }}
+                            <TextField
+                                size="small"
+                                label="Remarks"
+                                value={newVendor.remarks}
+                                onChange={(e) => setNewVendor({ ...newVendor, remarks: e.target.value })}
                             />
 
-                            {/* Vendors with Amounts Table */}
-                            {finalizedVendorsWithAmounts.length > 0 && (
-                                <Box sx={{ mt: 2 }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>
-                                        Added Vendors:
-                                    </Typography>
-                                    <TableContainer component={Paper}>
-                                        <Table size="small">
-                                            <TableHead>
-                                                <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
-                                                    <TableCell sx={{ fontWeight: "bold" }}>Vendor Name</TableCell>
-                                                    <TableCell sx={{ fontWeight: "bold" }}>Type</TableCell>
-                                                    <TableCell align="right" sx={{ fontWeight: "bold" }}>Amount (₹)</TableCell>
-                                                    <TableCell sx={{ fontWeight: "bold" }}>Remarks</TableCell>
-                                                    <TableCell align="center" sx={{ fontWeight: "bold" }}>Actions</TableCell>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={handleAddVendorWithAmount}
+                                disabled={!newVendor.vendorName || !newVendor.amount}
+                                startIcon={<AddIcon />}
+                                sx={{ height: '40px' }}
+                            >
+                                Add
+                            </Button>
+                        </Box>
+                    </Paper>
+
+                    {finalizedVendorsWithAmounts.length > 0 && (
+                        <Box sx={{ mt: 3 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>
+                                Added Vendors:
+                            </Typography>
+                            <TableContainer component={Paper} variant="outlined">
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
+                                            <TableCell sx={{ fontWeight: "bold" }}>Vendor Name</TableCell>
+                                            <TableCell sx={{ fontWeight: "bold" }}>Type</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: "bold" }}>Amount (₹)</TableCell>
+                                            <TableCell sx={{ fontWeight: "bold" }}>Remarks</TableCell>
+                                            <TableCell align="center" sx={{ fontWeight: "bold" }}>Actions</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {finalizedVendorsWithAmounts.map((vendor) =>
+                                            editingVendorId === vendor.id ? (
+                                                <TableRow key={vendor.id}>
+                                                    <TableCell>
+                                                        <FormControl size="small" fullWidth>
+                                                            <Select
+                                                                value={editForm.vendorName || ""}
+                                                                onChange={(e) => setEditForm({ ...editForm, vendorName: e.target.value })}
+                                                                displayEmpty
+                                                            >
+                                                                <MenuItem value="" disabled>Select Vendor</MenuItem>
+                                                                {getFilteredVendors(editForm.vendorType || vendor.vendorType).map((v) => (
+                                                                    <MenuItem key={v._id || v.id} value={v.personalDetails?.fullName}>
+                                                                        {v.personalDetails?.fullName}
+                                                                    </MenuItem>
+                                                                ))}
+                                                            </Select>
+                                                        </FormControl>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <FormControl size="small" fullWidth>
+                                                            <Select
+                                                                value={editForm.vendorType || ""}
+                                                                onChange={(e) => setEditForm({ ...editForm, vendorType: e.target.value, vendorName: "" })}
+                                                            >
+                                                                <MenuItem value="Hotel">Hotel</MenuItem>
+                                                                <MenuItem value="Vehicle">Vehicle</MenuItem>
+                                                                <MenuItem value="Other">Other</MenuItem>
+                                                            </Select>
+                                                        </FormControl>
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        <TextField
+                                                            size="small"
+                                                            type="number"
+                                                            value={editForm.amount}
+                                                            onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                                                            sx={{ width: "100px" }}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <TextField
+                                                            size="small"
+                                                            value={editForm.remarks}
+                                                            onChange={(e) => setEditForm({ ...editForm, remarks: e.target.value })}
+                                                            fullWidth
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        <Button
+                                                            size="small"
+                                                            variant="contained"
+                                                            color="success"
+                                                            onClick={handleSaveEditedVendor}
+                                                            sx={{ mr: 1 }}
+                                                        >
+                                                            Save
+                                                        </Button>
+                                                        <Button
+                                                            size="small"
+                                                            variant="contained"
+                                                            color="error"
+                                                            onClick={handleCancelEdit}
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    </TableCell>
                                                 </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {finalizedVendorsWithAmounts.map((vendor) =>
-                                                    editingVendorId === vendor.id ? (
-                                                        <TableRow key={vendor.id}>
-                                                            <TableCell>
-                                                                <TextField
-                                                                    size="small"
-                                                                    value={editForm.vendorName}
-                                                                    onChange={(e) =>
-                                                                        setEditForm({ ...editForm, vendorName: e.target.value })
-                                                                    }
-                                                                    fullWidth
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell align="right">
-                                                                <TextField
-                                                                    size="small"
-                                                                    type="number"
-                                                                    value={editForm.amount}
-                                                                    onChange={(e) =>
-                                                                        setEditForm({ ...editForm, amount: e.target.value })
-                                                                    }
-                                                                    sx={{ width: "100px" }}
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <TextField
-                                                                    size="small"
-                                                                    value={editForm.remarks}
-                                                                    onChange={(e) =>
-                                                                        setEditForm({ ...editForm, remarks: e.target.value })
-                                                                    }
-                                                                    fullWidth
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell align="center">
-                                                                <Button
-                                                                    size="small"
-                                                                    variant="contained"
-                                                                    color="success"
-                                                                    onClick={handleSaveEditedVendor}
-                                                                    sx={{ mr: 1 }}
-                                                                >
-                                                                    Save
-                                                                </Button>
-                                                                <Button
-                                                                    size="small"
-                                                                    variant="contained"
-                                                                    color="error"
-                                                                    onClick={handleCancelEdit}
-                                                                >
-                                                                    Cancel
-                                                                </Button>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ) : (
-                                                        <TableRow key={vendor.id}>
-                                                            <TableCell>{vendor.vendorName}</TableCell>
-                                                            <TableCell>{vendor.vendorType}</TableCell>
-                                                            <TableCell align="right">
-                                                                ₹ {Number(vendor.amount).toLocaleString("en-IN")}
-                                                            </TableCell>
-                                                            <TableCell>{vendor.remarks}</TableCell>
-                                                            <TableCell align="center">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleEditVendor(vendor)}
-                                                                    color="primary"
-                                                                >
-                                                                    <EditIcon fontSize="small" />
-                                                                </IconButton>
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleDeleteVendor(vendor.id)}
-                                                                    color="error"
-                                                                >
-                                                                    <DeleteIcon fontSize="small" />
-                                                                </IconButton>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    )
-                                                )}
-                                            </TableBody>
-                                        </Table>
-                                    </TableContainer>
-                                    {/* Total Amount */}
-                                    <Box sx={{ mt: 2, p: 1, backgroundColor: "#fff3e0", borderRadius: 1 }}>
-                                        <Typography sx={{ fontWeight: "bold", color: "#e65100" }}>
-                                            Total Amount: ₹ {finalizedVendorsWithAmounts.reduce((sum, v) => sum + Number(v.amount), 0).toLocaleString("en-IN")}
-                                        </Typography>
-                                    </Box>
-                                </Box>
-                            )}
-                        </>
+                                            ) : (
+                                                <TableRow key={vendor.id}>
+                                                    <TableCell>{vendor.vendorName}</TableCell>
+                                                    <TableCell>
+                                                        <span style={{ 
+                                                            padding: '2px 8px', 
+                                                            borderRadius: '12px', 
+                                                            fontSize: '0.75rem',
+                                                            backgroundColor: vendor.vendorType === 'Hotel' ? '#e3f2fd' : (vendor.vendorType === 'Vehicle' ? '#e8f5e9' : '#f5f5f5'),
+                                                            color: vendor.vendorType === 'Hotel' ? '#1565c0' : (vendor.vendorType === 'Vehicle' ? '#2e7d32' : '#616161'),
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {vendor.vendorType}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        ₹ {Number(vendor.amount).toLocaleString("en-IN")}
+                                                    </TableCell>
+                                                    <TableCell>{vendor.remarks}</TableCell>
+                                                    <TableCell align="center">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleEditVendor(vendor)}
+                                                            color="primary"
+                                                        >
+                                                            <EditIcon fontSize="small" />
+                                                        </IconButton>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleDeleteVendor(vendor.id)}
+                                                            color="error"
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                            <Box sx={{ mt: 2, p: 1.5, backgroundColor: "#fff3e0", borderRadius: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                                <Typography sx={{ fontWeight: "bold", color: "#e65100" }}>
+                                    Total Amount: ₹ {finalizedVendorsWithAmounts.reduce((sum, v) => sum + Number(v.amount), 0).toLocaleString("en-IN")}
+                                </Typography>
+                            </Box>
+                        </Box>
                     )}
-
-                    <Divider sx={{ my: 2 }} />
-                    <Typography
-                        variant="body1"
-                        sx={{ fontWeight: 600, color: "#1976d2", mb: 1 }}
-                    >
-                        *Vehicle Vendor
-                    </Typography>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-                        {renderVehicleVendorSelect()}
-                        <TextField
-                            name="vehicleAmount"
-                            label="Vehicle Amount (₹)"
-                            value={vehicleAmount}
-                            onChange={(e) => setVehicleAmount(e.target.value)}
-                            type="number"
-                            sx={{ width: "200px" }}
-                        />
-                        <Button
-                            variant="contained"
-                            size="small"
-                            onClick={handleAddVehicleVendorWithAmount}
-                            disabled={
-                                vendorType === "single" &&
-                                finalizedVendorsWithAmounts.some((v) => v.vendorType === "Vehicle")
-                            }
-                            sx={{ background: "#4caf50" }}
-                        >
-                            Add
-                        </Button>
-                    </Box>
-
-                    {/* Buttons */}
-                    <Box
-                        sx={{
-                            display: "flex",
-                            justifyContent: "center",
-                            gap: 2,
-                            mt: 3,
-                        }}
-                    >
-                        <Button
-                            variant="contained"
-                            sx={{ background: "#90caf9", color: "#fff" }}
-                            disabled={
-                                finalizedVendorsWithAmounts.length === 0 &&
-                                !formik.isValid
-                            }
-                            onClick={handlePrimaryConfirm}
-                        >
-                            Confirm
-                        </Button>
-                        <Button
-                            variant="contained"
-                            sx={{ background: "#e67e22", color: "#fff" }}
-                            onClick={onClose}
-                        >
-                            Cancel
-                        </Button>
-                    </Box>
                 </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={onClose} variant="contained" sx={{ background: "#e67e22", color: "#fff" }}>
+                        Cancel
+                    </Button>
+                    <Button onClick={handlePrimaryConfirm} variant="contained" color="primary">
+                        Confirm
+                    </Button>
+                </DialogActions>
             </Dialog>
 
-            {/* Add New Vendor Form Dialog */}
             <Dialog
                 open={addVendorDialogOpen}
                 onClose={() => setAddVendorDialogOpen(false)}
@@ -818,34 +434,12 @@ const HotelVendorDialog = ({
             >
                 <AssociateDetailForm
                     onClose={() => setAddVendorDialogOpen(false)}
-                    onSuccess={(newVendor) => {
-                        handleAddVendor(newVendor.name || newVendor);
-                        handleAddVehicleVendor(newVendor.name || newVendor);
+                    onSuccess={(newV) => {
+                        // After success, it will refresh automatically due to Redux fetch
+                        setAddVendorDialogOpen(false);
                     }}
                 />
             </Dialog>
-
-            {/* Bank Details Dialog */}
-            <BankDetailsDialog
-                open={bankDetailsDialogOpen}
-                onClose={handleBankDetailsCancel}
-                accountType={accountType}
-                setAccountType={setAccountType}
-                accountName={accountName}
-                setAccountName={setAccountName}
-                accountOptions={accountOptions}
-                onAddBankOpen={handleAddBankOpen}
-                onConfirm={handleBankDetailsConfirm}
-            />
-
-            {/* Add Bank Dialog */}
-            <AddBankDialog
-                open={addBankDialogOpen}
-                onClose={handleAddBankCancel}
-                newBankDetails={newBankDetails}
-                onNewBankChange={handleNewBankChange}
-                onAddBank={handleAddBank}
-            />
         </>
     );
 };
