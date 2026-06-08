@@ -33,7 +33,7 @@ const formatPickupDropLine = (city, location) => {
   return c || l || "";
 };
 
-const StepClientDetails = ({ onNext }) => {
+const StepClientDetails = ({ onNext, convertSector, convertNights }) => {
   const dispatch = useDispatch();
   const { list: leads, status } = useSelector((state) => state.leads);
 
@@ -46,6 +46,25 @@ const StepClientDetails = ({ onNext }) => {
       today.setHours(0, 0, 0, 0);
       if (!isNaN(depDate) && depDate < today) return false;
     }
+    
+    // Sector-based filtering from "Convert to Quotation"
+    if (convertSector) {
+      const s = String(convertSector).toLowerCase().trim();
+      const dest = String(lead.tourDetails?.tourDestination || "").toLowerCase().trim();
+      const locCity = String(lead.location?.city || "").toLowerCase().trim();
+      if (!dest.includes(s) && !locCity.includes(s) && !s.includes(dest) && !s.includes(locCity)) {
+        return false;
+      }
+    }
+
+    // Nights-based filtering from "Convert to Quotation"
+    if (convertNights !== undefined && convertNights !== null && convertNights > 0) {
+      const leadNights = Number(lead.tourDetails?.accommodation?.noOfNights) || Number(lead.tourDetails?.numberOfNights) || 0;
+      if (leadNights > 0 && leadNights !== convertNights) {
+        return false; // Exclude if nights are explicitly specified in the lead and they don't match
+      }
+    }
+    
     return true;
   }) : [];
 

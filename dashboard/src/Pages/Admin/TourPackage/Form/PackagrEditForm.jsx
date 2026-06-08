@@ -2964,6 +2964,16 @@ const PackageEditView = () => {
                 fullWidth
                 sx={{ mb: 2, borderRadius: 3, backgroundColor: "#9c27b0" }}
                 startIcon={<DescriptionIcon />}
+                onClick={() => {
+                  const totalNights = pkg.destinationNights?.reduce((sum, dest) => sum + (Number(dest.nights) || 0), 0) || 0;
+                  navigate("/quickquotation", {
+                    state: {
+                      convertPackageId: pkg._id,
+                      convertSector: pkg.sector || pkg.destinationCountry,
+                      convertNights: totalNights
+                    },
+                  });
+                }}
               >
                 Convert to Quotation
               </Button>
