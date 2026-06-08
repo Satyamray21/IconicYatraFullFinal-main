@@ -103,6 +103,7 @@ export const createLead = asyncHandler(async (req, res) => {
     noOfMattress,
     noOfNights,
     requirementNote,
+    noOfVehicles = 0,
   } = req.body;
 
   // ✅ Handle addMore for single values
@@ -158,8 +159,10 @@ export const createLead = asyncHandler(async (req, res) => {
     members,
     accommodation
   );
-  accommodation.noOfRooms = autoCalculatedRooms;
-  accommodation.noOfMattress = extraMattress;
+  
+  // Prioritize the frontend's provided numbers, use auto-calculation as fallback
+  accommodation.noOfRooms = noOfRooms || autoCalculatedRooms;
+  accommodation.noOfMattress = noOfMattress !== undefined ? Number(noOfMattress) : extraMattress;
 
   // ✅ Build schema fields
   const personalDetails = {
@@ -201,6 +204,7 @@ export const createLead = asyncHandler(async (req, res) => {
       departureDate,
       departureCity: departureCityToSave,
       departureLocation: departureLocationToSave,
+      noOfVehicles: Number(noOfVehicles) || 0,
     },
     accommodation,
   };

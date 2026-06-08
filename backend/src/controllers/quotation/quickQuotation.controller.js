@@ -17,7 +17,7 @@ import {
 } from "../../utils/customQuotationMailerTemplates.js";
 import { buildHotelConfirmationPdf } from "../../utils/hotelConfirmationPdf.js";
 import { buildPaymentReceiptPdf } from "../../utils/paymentReceiptPdf.js";
-import nodemailer from "nodemailer";
+import emailQueue from "../../utils/emailQueue.js";
 import PDFDocument from "pdfkit";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
@@ -532,13 +532,13 @@ export const sendQuotationMail = async (
   company,
 ) => {
   try {
-    const transporter = nodemailer.createTransport({
+    const smtpConfig = {
       service: "gmail",
       auth: {
         user: company.email, // <-- dynamic email
         pass: company.appPassword, // <-- dynamic app password
       },
-    });
+    };
 
     const htmlContent = getQuotationEmailTemplate(
       customerName,
@@ -547,7 +547,7 @@ export const sendQuotationMail = async (
       company,
     );
 
-    await transporter.sendMail({
+    const mailOptions = {
       from: `"${company.companyName}" <${company.email}>`, // dynamic sender
       to: toEmail,
       subject: `Your Quotation for ${pkg?.title || pkg?.packageName}`,
@@ -561,7 +561,8 @@ export const sendQuotationMail = async (
             },
           ]
         : [],
-    });
+    };
+    await emailQueue.add('sendEmail', { mailOptions, smtpConfig });
 
     return { success: true };
   } catch (err) {
@@ -948,10 +949,10 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
     );
   }
 
-  const transporter = nodemailer.createTransport({
+  const smtpConfig = {
     ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
     auth: { user: auth.user, pass: auth.pass },
-  });
+  };
 
   const shouldAttachItinerary = !isBookingMail;
   const attachments = [];
@@ -1007,16 +1008,17 @@ export const sendQuickQuotationEmail = asyncHandler(async (req, res) => {
   }
 
   try {
-    await transporter.sendMail({
+    const mailOptions = {
       from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
       to,
-      cc: cc && String(cc).trim() ? cc : undefined,
+      cc: cc && cc.length ? cc : undefined,
       replyTo: selectedCompany?.email || auth.user,
       subject: finalSubject,
       html: body,
-      text: body.replace(/<[^>]*>/g, ""),
+      text: body.replace(/<[^>]*>/g, ""), // fallback
       attachments: attachments,
-    });
+    };
+    await emailQueue.add('sendEmail', { mailOptions, smtpConfig });
 
     await logActivity({
       action: "Status Changed",
@@ -1489,10 +1491,10 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
 
     const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
     const auth = await resolveMailAuth(senderAccount, company);
-    const transporter = nodemailer.createTransport({
+    const smtpConfig = {
       ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
       auth: { user: auth.user, pass: auth.pass },
-    });
+    };
 
     const mailOptions = {
       from: `"${options.companyName}" <${auth.user}>`,
@@ -1527,7 +1529,7 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
       }
     }
 
-    await transporter.sendMail(mailOptions);
+    await emailQueue.add('sendEmail', { mailOptions, smtpConfig });
 
     res.status(200).json({ success: true, message: "Hotel confirmation mail sent successfully" });
   } catch (error) {

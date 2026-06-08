@@ -1,19 +1,10 @@
 import Inquiry from "../models/Inquiry.model.js";
-import nodemailer from "nodemailer";
+import emailQueue from "../utils/emailQueue.js";
 
 export const createInquiry = async (req, res) => {
   try {
     const inquiry = new Inquiry(req.body);
     await inquiry.save();
-
-    // Nodemailer transporter
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.gmail,
-        pass: process.env.app_pass,
-      },
-    });
 
     // Attractive HTML email
     const mailOptions = {
@@ -45,7 +36,7 @@ export const createInquiry = async (req, res) => {
       `
     };
 
-    await transporter.sendMail(mailOptions);
+    await emailQueue.add('sendEmail', mailOptions);
 
     res.status(201).json({ success: true, message: "Inquiry submitted successfully!", inquiry });
   } catch (error) {

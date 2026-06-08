@@ -4,7 +4,7 @@ import { app } from "./app.js"
 
 
 import { startNotificationCron } from "./src/cron/notification.cron.js";
-
+import "./src/utils/emailQueue.js";
 app.get('/', (req, res) => {
     res.send('Welcome to the Iconic Yatra API!');
 });
