@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Box,
   Button,
@@ -29,6 +30,11 @@ const steps = [
 
 const QuickQuotationForm = () => {
   const dispatch = useDispatch();
+  const location = useLocation();
+  const convertPackageId = location.state?.convertPackageId || null;
+  const convertSector = location.state?.convertSector || null;
+  const convertNights = location.state?.convertNights || null;
+
   const { loading, error, successMessage } = useSelector(
     (state) => state.quickQuotation,
   );
@@ -313,13 +319,14 @@ const QuickQuotationForm = () => {
   const getStepContent = (step) => {
     switch (step) {
       case 0:
-        return <StepClientDetails onNext={handleNext} />;
+        return <StepClientDetails onNext={handleNext} convertSector={convertSector} convertNights={convertNights} />;
       case 1:
         return (
           <StepPackageDetails
             onNext={handleNext}
             onBack={handleBack}
             clientDetails={formData.clientDetails}
+            convertPackageId={convertPackageId}
           />
         );
       case 2:

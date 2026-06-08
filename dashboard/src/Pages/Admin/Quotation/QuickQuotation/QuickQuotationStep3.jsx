@@ -29,12 +29,15 @@ import {
   deleteLeadOption,
 } from "../../../../features/leads/leadSlice";
 
-const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
+const StepPackageDetails = ({ onNext, onBack, clientDetails = {}, convertPackageId }) => {
   const dispatch = useDispatch();
   const { items: packages, loading } = useSelector((state) => state.packages);
   const { options } = useSelector((state) => state.leads);
   const [tourType, setTourType] = useState("");
   const [filteredPackages, setFilteredPackages] = useState([]);
+  const formikRef = React.useRef(null);
+  const [hasAutoFilled, setHasAutoFilled] = useState(false);
+  
   const clientTourDetails = clientDetails?.tourDetails || {};
   const clientMembers = clientTourDetails?.members || {};
   const clientPickupDrop = clientTourDetails?.pickupDrop || {};
@@ -92,6 +95,26 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
       setTourType(initialTourType);
     }
   }, [clientTourDetails?.tourType, clientDetails?.tourType]);
+
+  // Auto-fill package if we came from "Convert to Quotation"
+  useEffect(() => {
+    if (convertPackageId && packages.length > 0 && !hasAutoFilled && formikRef.current) {
+      const setFieldValue = formikRef.current.setFieldValue;
+      const targetPkg = packages.find(p => p._id === convertPackageId);
+      
+      if (targetPkg) {
+        // First ensure tour type matches so it shows up in filtered packages
+        if (targetPkg.tourType) {
+          setTourType(targetPkg.tourType);
+          setFieldValue("tourType", targetPkg.tourType);
+        }
+        
+        // Use the existing selection handler to fill all data
+        handlePackageSelect({ target: { value: convertPackageId } }, setFieldValue);
+        setHasAutoFilled(true);
+      }
+    }
+  }, [convertPackageId, packages, hasAutoFilled, formikRef.current]);
 
   const handleTourTypeChange = (e, setFieldValue) => {
     const selectedTourType = e.target.value;
@@ -343,6 +366,7 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
 
   return (
     <Formik
+      innerRef={formikRef}
       initialValues={{
         tourType: clientTourDetails?.tourType || clientDetails?.tourType || "",
         selectedPackage: "",
