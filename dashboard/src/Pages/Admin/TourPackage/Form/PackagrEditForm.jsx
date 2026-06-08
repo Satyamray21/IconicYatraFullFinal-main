@@ -338,9 +338,11 @@ const PackageEditView = () => {
             dispatch(fetchDomesticCities(safeCurrent.sector))
               .unwrap()
               .then((cityList) => {
-                const cities = cityList.map((c) => c.name || c.city || c);
-                setAllCities(cities);
-                setLocationList(cities);
+                const apiCities = cityList.map((c) => c.name || c.city || c);
+                const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+                const combinedCities = [...new Set([...apiCities, ...customCities])];
+                setAllCities(combinedCities);
+                setLocationList(combinedCities);
               });
           } else {
             dispatch(
@@ -351,9 +353,11 @@ const PackageEditView = () => {
             )
               .unwrap()
               .then((cityList) => {
-                const cities = cityList.map((c) => c.name || c.city || c);
-                setAllCities(cities);
-                setLocationList(cities);
+                const apiCities = cityList.map((c) => c.name || c.city || c);
+                const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+                const combinedCities = [...new Set([...apiCities, ...customCities])];
+                setAllCities(combinedCities);
+                setLocationList(combinedCities);
               });
           }
         }
@@ -512,9 +516,11 @@ const PackageEditView = () => {
       dispatch(fetchDomesticCities(selectedStateName))
         .unwrap()
         .then((cityList) => {
-          const cities = cityList.map((c) => c.name || c.city || c);
-          setAllCities(cities);
-          setLocationList(cities);
+          const apiCities = cityList.map((c) => c.name || c.city || c);
+          const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+          const combinedCities = [...new Set([...apiCities, ...customCities])];
+          setAllCities(combinedCities);
+          setLocationList(combinedCities);
           setSearchText("");
         });
     } else {
@@ -526,9 +532,11 @@ const PackageEditView = () => {
       )
         .unwrap()
         .then((cityList) => {
-          const cities = cityList.map((c) => c.name || c.city || c);
-          setAllCities(cities);
-          setLocationList(cities);
+          const apiCities = cityList.map((c) => c.name || c.city || c);
+          const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+          const combinedCities = [...new Set([...apiCities, ...customCities])];
+          setAllCities(combinedCities);
+          setLocationList(combinedCities);
           setSearchText("");
         });
     }
@@ -564,23 +572,7 @@ const PackageEditView = () => {
     }
   };
 
-  // Add New Location Logic
-  const handleOpenLocationDialog = () => {
-    setNewLocation("");
-    setOpenLocationDialog(true);
-  };
-
-  const handleCloseLocationDialog = () => {
-    setOpenLocationDialog(false);
-  };
-
-  const handleAddNewLocation = () => {
-    if (!newLocation.trim()) return;
-    const locationName = newLocation.trim();
-    setAllCities((prev) => [...prev, locationName]);
-    setLocationList((prev) => [...prev, locationName]);
-    handleCloseLocationDialog();
-  };
+  // Add New Location Logic removed as we use LeadOptionsManager
 
   const handleDeleteLocation = (locationToDelete, e) => {
     e.stopPropagation();
@@ -600,6 +592,12 @@ const PackageEditView = () => {
   };
 
   const handleOptionAdd = (newValue) => {
+    if (currentField === "city") {
+      setAllCities((prev) => prev.includes(newValue) ? prev : [...prev, newValue]);
+      setLocationList((prev) => prev.includes(newValue) ? prev : [...prev, newValue]);
+      return;
+    }
+
     if (Array.isArray(pkg[currentField])) {
       if (!pkg[currentField].includes(newValue)) {
         setPkg({
@@ -1404,7 +1402,7 @@ const PackageEditView = () => {
                       startIcon={<AddIcon />}
                       size="small"
                       variant="outlined"
-                      onClick={handleOpenLocationDialog}
+                      onClick={() => handleOpenDialog("city")}
                       disabled={!pkg.sector}
                     >
                       Add Location
@@ -2911,32 +2909,7 @@ const PackageEditView = () => {
           </Grid>
         </Grid>
       </Box>
-      {/* Dialog for adding new locations */}
-      <Dialog
-        open={openLocationDialog}
-        onClose={handleCloseLocationDialog}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Add New Location</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Location Name"
-            fullWidth
-            variant="outlined"
-            value={newLocation}
-            onChange={(e) => setNewLocation(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseLocationDialog}>Cancel</Button>
-          <Button onClick={handleAddNewLocation} variant="contained">
-            Add
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Dialog for adding new locations removed */}
 
       {/* Lead Options Manager Dialog */}
       <Dialog

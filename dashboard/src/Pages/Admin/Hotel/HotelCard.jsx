@@ -183,7 +183,7 @@ const HotelCard = () => {
               <TableCell sx={{ fontWeight: "bold" }}>Mobile</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
               <TableCell sx={{ fontWeight: "bold", }}>Country</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>City</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Destination</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
               <TableCell sx={{ fontWeight: "bold", whiteSpace: "nowrap", minWidth: 140 }}>Action</TableCell>
             </TableRow>

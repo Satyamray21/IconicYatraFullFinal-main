@@ -226,6 +226,11 @@ const HotelEditForm = () => {
       // Update form field based on current field and active step
       if (currentField === "hotelType") {
         setFormData(prev => ({ ...prev, hotelType: newValue }));
+      } else if (currentField === "city") {
+        setFormData(prev => ({
+          ...prev,
+          location: { ...prev.location, city: newValue }
+        }));
       } else if (currentField === "facilities") {
         setFormData(prev => ({ ...prev, facilities: [...prev.facilities, newValue] }));
       } else if (currentField === "seasonType") {
@@ -1092,13 +1097,50 @@ const HotelEditForm = () => {
                     <Select
                       name="city"
                       value={formData.location.city}
-                      onChange={(e) => handleNestedChange(e, 'location')}
+                      onChange={(e) => {
+                        if (e.target.value === "__add_new") {
+                          handleOpenDialog("city");
+                        } else {
+                          handleNestedChange(e, 'location');
+                        }
+                      }}
                       label="City"
                       disabled={!formData.location.state}
                     >
-                      {cities.map((city) => (
-                        <MenuItem key={city.name} value={city.name}>{city.name}</MenuItem>
+                      {[
+                        ...new Set([
+                          ...(cities.map((c) => c.name) || []),
+                          ...(options
+                            ?.filter((opt) => opt.fieldName === "city")
+                            .map((opt) => opt.value) || []),
+                        ]),
+                      ].map((cityName) => (
+                        <MenuItem key={cityName} value={cityName}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                            <span>{cityName}</span>
+                            {options?.find((opt) => opt.fieldName === "city" && opt.value === cityName) && (
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const optionToDelete = options.find(
+                                    (opt) => opt.fieldName === "city" && opt.value === cityName
+                                  );
+                                  if (optionToDelete && window.confirm(`Delete "${cityName}"?`)) {
+                                    dispatch(deleteLeadOption(optionToDelete._id));
+                                  }
+                                }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </div>
+                        </MenuItem>
                       ))}
+                      <MenuItem value="__add_new">
+                        <em style={{ color: "#1976d2", fontWeight: 500 }}>+ Add New</em>
+                      </MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>

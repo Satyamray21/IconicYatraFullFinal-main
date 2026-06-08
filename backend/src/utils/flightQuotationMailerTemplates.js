@@ -97,9 +97,8 @@ const termsAndConditionsLine = (value, companyTermsUrl = "https://iconictravel.i
   if (!link) return "";
 
   return `
-    <p style="color:#d32f2f; font-weight:bold;"><b>TERMS & CONDITIONS:</b></p>
     <p style="margin-bottom:10px;">
-      <b>As per company terms and conditions - </b>
+      <b>As per company terms and conditions - </b><br/>
       <a href="${link}" target="_blank" rel="noopener noreferrer" style="color:#1976d2; font-weight:bold; word-break:break-all;">
         View Terms & Conditions
       </a>
@@ -130,12 +129,13 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
   if (!hasBanks && !paymentLinkHtml) return "";
   return `
         <br/>
-        <p style="color:#d32f2f; font-weight:bold;">NET BANKING PAYMENT DETAILS:</p>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
+        <div style="text-align:center;">
         ${(bankDetails || [])
           .map(
             (b, i) => `
-                    <div style="margin-bottom:8px;">
+                    <div style="margin-bottom:12px;">
                         <b>${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
                           b?.branchName,
                           "Branch",
@@ -147,6 +147,7 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
                 `,
           )
           .join("")}
+        </div>
     `;
 };
 
@@ -169,6 +170,7 @@ const resolveTermsValue = (policies = {}, customText = {}) => {
   if (policyTerms.length > 0) return policyTerms;
   return customText?.termsAndConditions || "";
 };
+
 export function buildFlightQuotationNormalEmail(data, customText = {}) {
   const quotation = data?.quotation || {};
   const policies = quotation?.policies || {};
@@ -181,54 +183,59 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
   const termsandCondition = resolveTermsValue(policies, customText);
 
   return `
-     <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
-
-        <p style="color:red; font-weight:bold;">
+    <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, "Dear Sir/Ma'am,")}
         </p>
-
-        <p style="color:red; font-weight:bold;">
-    ${safe(customText.opening, `GREETING FROM ${companyName.toUpperCase()}!!!`)}
-</p>
- <p>${safe(
-   customText.intro,
-   "As per discussed with you short while ago please see the below packages and let us know.",
- )}</p>
-   <p style="color:#000;">
-    <b>Official Website Visit @</b> <br/>
-    <a href="${companyWebsite}" target="_blank" style="font-weight:bold; color:#1976d2; text-decoration:none;">
-        ${companyWebsite}
-    </a>
-    </p>
-      <p><b>Quotation ID:</b> ${safe(quotation?.flightQuotationId, "-")}</p>
-      <p><b>Passenger:</b> ${safe(quotation?.personalDetails?.fullName, "Guest")}</p>
-      <p><b>Trip Type:</b> ${fmtTripType(quotation?.tripType)}</p>
-      <p><b>${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? "Base Fare" : "Total Fare"}(May vary on the time/date of booking):</b> INR ${INR.format(quotation?.gstType === "Excluded" ? (quotation?.baseFare || totals.total) : totals.total)}</p>
-      ${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? `<p><b>GST (${quotation.gstPercentage}%):</b> INR ${INR.format(quotation.gstAmount)}</p><p><b>Total Fare (Incl. GST):</b> INR ${INR.format(totals.total)}</p>` : ""}
-      <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>FLIGHT DETAILS:</b></p>
-      ${(quotation?.flightDetails || [])
-        .map(
-          (f, idx) =>
-            `<p><b>Flight ${idx + 1}:</b> ${safe(f?.from)} to ${safe(f?.to)} | ${safe(f?.preferredAirline)} ${f?.flightNo ? `(${f.flightNo})` : ""} | ${fmtDate(f?.departureDate)} ${fmtTime(f?.departureTime)}</p>`,
-        )
-        .join("")}
-      <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
-      <p>${policyLines(inclusionPolicy.length ? inclusionPolicy : ["As per confirmed inclusions."]).replace(/\n/g, "<br/>")}</p>
-      <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
-      <p>${policyLines(exclusionPolicy.length ? exclusionPolicy : ["As per company exclusion policy."]).replace(/\n/g, "<br/>")}</p>
-      <br/>
-      ${termsAndConditionsLine(termsandCondition, customText?.termsAndConditions)}
-      <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
-      ${cancellationPolicyUrlLine(customText?.cancellationPolicyUrl)}
-      <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
-      <p>${policyLines(paymentPolicy.length ? paymentPolicy : ["Payment policy as per confirmation."]).replace(/\n/g, "<br/>")}</p>
-      ${bankHtmlSection(customText?.bankDetails || [], customText?.paymentLink || "")}
-      <p>${safe(customText.signature, "").replace(/\n/g, "<br/>")}</p>
+        <p style="color:#003366; font-weight:bold; font-size: 18px;">
+            ${safe(customText.opening, `GREETING FROM ${companyName.toUpperCase()}!!!`)}
+        </p>
+        <p>${safe(
+          customText.intro,
+          "As per discussed with you short while ago please see the below packages and let us know.",
+        )}</p>
+        <p style="color:#000;">
+            <b>Official Website Visit @</b><br/>
+            <a href="${companyWebsite}" target="_blank" style="font-weight:bold; color:#1976d2; text-decoration:none;">
+                ${companyWebsite}
+            </a>
+        </p>
+        <p>
+            This is referenced in our discussion regarding your forthcoming Flight Booking for 
+            <span style="color:#003366; font-weight:bold;"> ${safe(quotation?.personalDetails?.fullName, "Guest")}</span>.
+        </p>
+        <p><b>Quotation ID:</b> ${safe(quotation?.flightQuotationId, "-")}</p>
+        <p><b>Trip Type:</b> ${fmtTripType(quotation?.tripType)}</p>
+        <br/>
+        <p style="color:#003366; font-weight:bold; font-size: 16px;">
+            ##TOTAL FARE = INR ${INR.format(quotation?.gstType === "Excluded" ? (quotation?.baseFare || totals.total) : totals.total)} (May vary on the time/date of booking)
+        </p>
+        ${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? `<p><b>GST (${quotation.gstPercentage}%):</b> INR ${INR.format(quotation.gstAmount)}</p><p><b>Total Fare (Incl. GST):</b> INR ${INR.format(totals.total)}</p>` : ""}
+        <br/>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">FLIGHT DETAILS:</p>
+        ${(quotation?.flightDetails || [])
+          .map(
+            (f, idx) =>
+              `<p><b>Flight ${idx + 1}:</b> ${safe(f?.from)} to ${safe(f?.to)} | ${safe(f?.preferredAirline)} ${f?.flightNo ? `(${f.flightNo})` : ""} | ${fmtDate(f?.departureDate)} ${fmtTime(f?.departureTime)}</p>`,
+          )
+          .join("")}
+        <br/>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">INCLUSIONS:</p>
+        <p>${policyLines(inclusionPolicy.length ? inclusionPolicy : ["As per confirmed inclusions."]).replace(/\n/g, "<br/>")}</p>
+        <br/>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">EXCLUSIONS:</p>
+        <p>${policyLines(exclusionPolicy.length ? exclusionPolicy : ["As per company exclusion policy."]).replace(/\n/g, "<br/>")}</p>
+        <br/>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">TERMS & CONDITIONS:</p>
+        ${termsAndConditionsLine(termsandCondition, customText?.termsAndConditions)}
+        <br/>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">CANCELLATION POLICY:</p>
+        ${cancellationPolicyUrlLine(customText?.cancellationPolicyUrl)}
+        <br/>
+        <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT POLICY:</p>
+        <p>${policyLines(paymentPolicy.length ? paymentPolicy : ["Payment policy as per confirmation."]).replace(/\n/g, "<br/>")}</p>
+        ${bankHtmlSection(customText?.bankDetails || [], customText?.paymentLink || "").replace(/#d32f2f/g, "#003366")}
+        <p>${safe(customText.signature, `Warm Regards<br/><b>${companyName}</b>`)}</p>
     </div>
   `;
 }
@@ -246,21 +253,29 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
   const termsandCondition = resolveTermsValue(policies, customText);
 
   return `
-    <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
-      <p style="color:red; font-weight:bold;">${safe(customText.greeting, `Dear ${safe(quotation?.personalDetails?.fullName, "Guest")},`)}</p>
-      <p style="color:red; font-weight:bold;">${safe(customText.opening, `BOOKING CONFIRMATION FROM ${companyName.toUpperCase()}!!!`)}</p>
-      <p><b>BOOKING ID:</b> ${safe(customText.bookingId, quotation?.bookingId || quotation?.flightQuotationId || "-")}</p>
-      <p><b>Passenger:</b> ${safe(quotation?.personalDetails?.fullName, "Guest")}</p>
+    <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+      <p style="color:#003366; font-weight:bold; font-size: 16px;">
+        ${safe(customText.greeting, `Dear ${safe(quotation?.personalDetails?.fullName, "Guest")},`)}
+      </p>
+      <p style="color:#003366; font-weight:bold; font-size: 18px;">
+        ${safe(customText.opening, `BOOKING CONFIRMATION FROM ${companyName.toUpperCase()}!!!`)}
+      </p>
+      <p>${safe(
+        customText.thankYou,
+        `Thank you for choosing ${companyName}. Your booking has been confirmed.`,
+      )}</p>
+      <p style="color:#003366; font-weight:bold; font-size: 16px;">BOOKING ID: ${safe(customText.bookingId, quotation?.bookingId || quotation?.flightQuotationId || "-")}</p>
+      <p><b>Client:</b> ${safe(quotation?.personalDetails?.fullName, "Guest")}</p>
       <p><b>Trip Type:</b> ${fmtTripType(quotation?.tripType)}</p>
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;">PAYMENT STATUS:</p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT STATUS:</p>
       <p><b>${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? "Base Fare" : "Package Cost"}:</b> INR ${INR.format(quotation?.gstType === "Excluded" ? (quotation?.baseFare || totals.total) : totals.total)}</p>
       ${quotation?.gstType === "Excluded" && quotation?.gstAmount > 0 ? `<p><b>GST (${quotation.gstPercentage}%):</b> INR ${INR.format(quotation.gstAmount)}</p><p><b>Total Package Cost (Incl. GST):</b> INR ${INR.format(totals.total)}</p>` : ""}
       <p><b>Payment received:</b> INR ${INR.format(receivedAmount)}</p>
       <p><b>The remaining payment:</b> INR ${INR.format(dueAmount)}</p>
       ${
         customText?.nextPayableAmount !== undefined && customText?.nextPayableAmount !== null && customText?.nextPayableAmount !== ""
-          ? `<p style="color:#d32f2f; font-weight:bold;"><b>Next Payable Amount:</b> INR ${INR.format(toNum(customText.nextPayableAmount))}</p>`
+          ? `<p><b>Next Payable Amount:</b> INR ${INR.format(toNum(customText.nextPayableAmount))}</p>`
           : ""
       }
       ${
@@ -269,7 +284,7 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
           : ""
       }
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>FLIGHT DETAILS:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">FLIGHT DETAILS:</p>
       ${(quotation?.flightDetails || [])
         .map((f, idx) => {
           const pnr = quotation?.pnrList?.[idx];
@@ -278,26 +293,35 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
           )} | ${safe(f?.preferredAirline)} ${f?.flightNo ? `(${f.flightNo})` : ""} | ${fmtDate(
             f?.departureDate,
           )} ${fmtTime(f?.departureTime)}${
-            pnr ? ` | <span style="color:#d32f2f;"><b>PNR: ${pnr}</b></span>` : ""
+            pnr ? ` | <span style="color:#003366;"><b>PNR: ${pnr}</b></span>` : ""
           }</p>`;
         })
         .join("")}
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>INCLUSIONS:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">INCLUSIONS:</p>
       <p>${policyLines(inclusionPolicy.length ? inclusionPolicy : ["As per confirmed inclusions."]).replace(/\n/g, "<br/>")}</p>
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>EXCLUSIONS:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">EXCLUSIONS:</p>
       <p>${policyLines(exclusionPolicy.length ? exclusionPolicy : ["As per company exclusion policy."]).replace(/\n/g, "<br/>")}</p>
       <br/>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">TERMS & CONDITIONS:</p>
       ${termsAndConditionsLine(termsandCondition, customText?.termsAndConditions)}
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>CANCELLATION POLICY:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">CANCELLATION POLICY:</p>
       ${cancellationPolicyUrlLine(customText?.cancellationPolicyUrl)}
       <br/>
-      <p style="color:#d32f2f; font-weight:bold;"><b>PAYMENT POLICY:</b></p>
+      <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT POLICY:</p>
       <p>${policyLines(paymentPolicy.length ? paymentPolicy : ["Payment policy as per confirmation."]).replace(/\n/g, "<br/>")}</p>
-      ${bankHtmlSection(customText?.bankDetails || [], customText?.paymentLink || "")}
-      <p>${safe(customText.signature, "").replace(/\n/g, "<br/>")}</p>
+      ${bankHtmlSection(customText?.bankDetails || [], customText?.paymentLink || "").replace(/#d32f2f/g, "#003366")}
+      <p>
+          <span style="color:#003366; font-weight:bold;">NOTE:</span>
+          <span style="color:#000; font-weight:bold;">
+              All cards are accepted here. You can now pay using Credit/Debit Cards (3% extra). 
+              For more details, contact your Tour Expert.
+          </span>
+      </p>
+      <br/>
+      <p>${safe(customText.signature, `Warm Regards<br/><b>${companyName}</b>`)}</p>
     </div>
   `;
 }
