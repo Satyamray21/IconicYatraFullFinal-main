@@ -74,11 +74,11 @@ export const createHotelStep1 = async (req, res) => {
 
             // ✅ Contact Details - PROPERLY STRUCTURE
             contactDetails: {
-                email: bodyData.email,
-                mobile: bodyData.mobile,
-                alternateContact: bodyData.alternateContact,
-                designation: bodyData.designation,
-                contactPerson: bodyData.contactPerson,
+                email: bodyData.contactDetails?.email || bodyData.email,
+                mobile: bodyData.contactDetails?.mobile || bodyData.mobile,
+                alternateContact: bodyData.contactDetails?.alternateContact || bodyData.alternateContact,
+                designation: bodyData.contactDetails?.designation || bodyData.designation,
+                contactPerson: bodyData.contactDetails?.contactPerson || bodyData.contactPerson,
             },
 
             description: bodyData.description,
@@ -87,16 +87,16 @@ export const createHotelStep1 = async (req, res) => {
 
             // ✅ Location - PROPERLY STRUCTURE
             location: {
-                country: bodyData.country || "India",
-                state: bodyData.state,
-                city: bodyData.city,
-                address: bodyData.address,
-                pincode: bodyData.pincode,
+                country: bodyData.location?.country || bodyData.country || "India",
+                state: bodyData.location?.state || bodyData.state,
+                city: bodyData.location?.city || bodyData.city,
+                address: bodyData.location?.address || bodyData.address,
+                pincode: bodyData.location?.pincode || bodyData.pincode,
             },
 
             // ✅ Social Media - PROPERLY STRUCTURE
             socialMedia: {
-                googleLink: bodyData.googleLink,
+                googleLink: bodyData.socialMedia?.googleLink || bodyData.googleLink,
             },
 
             policy: bodyData.policy,

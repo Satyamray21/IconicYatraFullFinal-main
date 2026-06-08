@@ -174,7 +174,19 @@ const HotelForm = ({ onSubmit, initialValues, isEdit = false }) => {
       try {
         const formData = new FormData();
 
+        const excludeKeys = ["country", "state", "city", "address", "pincode"];
+        
+        const locationData = {
+          country: values.country,
+          state: values.state,
+          city: values.city,
+          address: values.address,
+          pincode: values.pincode,
+        };
+        formData.append("location", JSON.stringify(locationData));
+
         Object.keys(values).forEach((key) => {
+          if (excludeKeys.includes(key)) return;
           if (key === "facilities" || key === "hotelType") {
             formData.append(key, JSON.stringify(values[key]));
           } else if (values[key] !== null && values[key] !== undefined && values[key] !== "") {
@@ -182,7 +194,7 @@ const HotelForm = ({ onSubmit, initialValues, isEdit = false }) => {
           }
         });
 
-        console.log("🔹 Sending form data with keys:", Object.keys(values));
+        console.log("🔹 Sending form data with keys:", Array.from(formData.keys()));
         const resultAction = await dispatch(createHotelStep1(formData)).unwrap();
         setHotelId(resultAction._id);
         handleNext();

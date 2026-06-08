@@ -53,7 +53,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "../../../../utils/axios";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
-import { filterHotelsByCity } from "../../../../features/hotel/hotelSlice";
+import { fetchHotels, createHotelStep1 } from "../../../../features/hotel/hotelSlice";
 
 const toHtmlParagraphs = (text = "") => {
   const normalized = String(text || "").replace(/\r\n/g, "\n");
@@ -108,7 +108,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   const { cities, countries, states, loading } = useSelector(
     (state) => state.location,
   );
-  const { filteredHotels, loading: hotelsLoading } = useSelector(
+  const { hotels, loading: hotelsLoading } = useSelector(
     (state) => state.hotel,
   );
   const { options } = useSelector((state) => state.leads);
@@ -380,16 +380,8 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   useEffect(() => {
     if (selectedCities.length > 0) {
       console.log("📍 Selected cities from Step 1:", selectedCities);
-      const firstCity = selectedCities[0];
-      if (firstCity) {
-        console.log(`🔍 Filtering hotels for primary city: ${firstCity}`);
-        dispatch(filterHotelsByCity(firstCity));
-      }
-
-      // ✅ Also filter hotels for all selected cities
-      selectedCities.forEach((city) => {
-        console.log(`🏙️ City from Step 1: ${city}`);
-      });
+      // Fetch all hotels so local filtering can work across multiple cities
+      dispatch(fetchHotels());
     } else {
       console.log("⚠️ No cities selected from Step 1");
     }
@@ -437,11 +429,8 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
         destinationNights: updatedDestinationNights,
       }));
 
-      // ✅ Filter hotels for each city
-      citiesFromStep1.forEach((city) => {
-        console.log(`🔍 Filtering hotels for city: ${city}`);
-        dispatch(filterHotelsByCity(city));
-      });
+      // ✅ We fetch all hotels initially, so local filtering works without overwriting Redux state
+      console.log("✅ Local filtering will handle destinations");
     } else {
       console.log("⚠️ No stay locations found in packageData");
     }
@@ -454,18 +443,20 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       superior: [],
     };
 
-    filteredHotels.forEach((hotel) => {
-      const category = hotel.category?.toLowerCase() || "standard";
+    if (hotels && hotels.length > 0) {
+      hotels.forEach((hotel) => {
+        const category = hotel.category?.toLowerCase() || "standard";
 
-      if (options[category]) {
-        options[category].push(hotel.hotelName);
-      } else {
-        options.standard.push(hotel.hotelName);
-      }
-    });
+        if (options[category]) {
+          options[category].push(hotel.hotelName);
+        } else {
+          options.standard.push(hotel.hotelName);
+        }
+      });
+    }
 
     return options;
-  }, [filteredHotels]);
+  }, [hotels]);
 
   const getHotelsForDestination = (destinationCity) => {
     if (!destinationCity) {
@@ -475,16 +466,16 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
     console.log(`🔍 Filtering hotels for destination: "${destinationCity}"`);
     console.log(
-      `📊 Total hotels in filteredHotels: ${filteredHotels?.length || 0}`,
+      `📊 Total hotels loaded: ${hotels?.length || 0}`,
     );
 
-    if (!filteredHotels || filteredHotels.length === 0) {
-      console.log("⚠️ No filtered hotels available");
+    if (!hotels || hotels.length === 0) {
+      console.log("⚠️ No hotels available");
       return { standard: [], deluxe: [], superior: [] };
     }
 
     // ✅ IMPROVED: Better city matching
-    const destinationHotels = filteredHotels.filter((hotel) => {
+    const destinationHotels = hotels.filter((hotel) => {
       const hotelCity = hotel.location?.city?.toLowerCase() || "";
       const hotelName = hotel.hotelName?.toLowerCase() || "";
       const searchCity = destinationCity.toLowerCase().trim();
@@ -558,16 +549,10 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     const destinationHotels = getHotelsForDestination(destinationCity);
     const baseOptions = destinationHotels[category] || [];
 
-    // ✅ Get custom added hotels for this specific category
-    const customOptions =
-      options
-        ?.filter((opt) => opt.fieldName === `hotel_${category}`)
-        .map((opt) => opt.value) || [];
-
-    const allOptions = [...new Set([...baseOptions, ...customOptions])];
+    const allOptions = [...new Set([...baseOptions])];
 
     console.log(
-      `🏩 ${category} hotels for "${destinationCity}": ${baseOptions.length} from API + ${customOptions.length} custom = ${allOptions.length} total`,
+      `🏩 ${category} hotels for "${destinationCity}": ${allOptions.length} total`,
     );
 
     // ✅ Always include Add New option
@@ -603,6 +588,59 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
         console.log(
           `➕ Adding new hotel: "${newValue}" for category "${currentHotelCategory}"`,
         );
+
+        // ✅ Extract destination from session storage
+        const destIndex = sessionStorage.getItem("currentDestIndex");
+        let destinationCity = "";
+        let destinationState = "";
+        let destinationCountry = selectedCountry || "India";
+
+        if (destIndex !== null && tourDetails.destinationNights[destIndex]) {
+          destinationCity = tourDetails.destinationNights[destIndex].destination;
+          
+          // Find matching stayLocation to get exact state and country
+          const matchedLocation = packageData?.stayLocations?.find(
+            (loc) => loc.city === destinationCity
+          );
+          
+          if (matchedLocation) {
+             destinationState = matchedLocation.state || "";
+             destinationCountry = matchedLocation.country || destinationCountry;
+          } else {
+             // Fallback: use sector state if country is India
+             destinationState = destinationCountry === "India" ? (selectedState || "") : "";
+          }
+        }
+
+        // ✅ Create real hotel entry with location object payload
+        const hotelFormData = new FormData();
+        const locationData = {
+          country: destinationCountry,
+          state: destinationState,
+          city: destinationCity,
+          address: "",
+          pincode: "",
+        };
+        hotelFormData.append("location", JSON.stringify(locationData));
+        hotelFormData.append("hotelName", newValue);
+        hotelFormData.append("category", currentHotelCategory);
+
+        try {
+          await dispatch(createHotelStep1(hotelFormData)).unwrap();
+          console.log(`✅ Real hotel created: ${newValue}`);
+          
+          if (destinationCity) {
+            dispatch(fetchHotels());
+          }
+          
+          console.log(`✅ New ${currentHotelCategory} hotel added: ${newValue}`);
+          handleCloseDialog();
+          return; // Stop here, do not add to leadOptions
+        } catch (hotelErr) {
+          console.error("❌ Failed to create real hotel:", hotelErr);
+          alert(`Failed to create hotel: ${hotelErr.message || "Unknown error"}`);
+          return;
+        }
       }
 
       console.log(
