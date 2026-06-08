@@ -48,8 +48,17 @@ export const packageTotals = (q = {}) => {
   const packageFinal = toNum(calc?.[key]?.finalTotal);
   const extras = sumBillableAdditionalServices(qd.additionalServices);
   const total = packageFinal + extras;
-  const beforeTax = toNum(calc?.[key]?.afterDiscount);
-  const taxPercent = toNum(qd?.taxes?.taxPercent);
+  
+  let taxPercent = toNum(qd?.taxes?.taxPercent) || 5;
+  if (qd?.taxes?.applyGST === false || qd?.taxes?.gstOn === "None") {
+    taxPercent = 0;
+  }
+
+  let beforeTax = total;
+  if (taxPercent > 0) {
+    const taxMultiplier = 1 + (taxPercent / 100);
+    beforeTax = total > 0 ? Math.round((total / taxMultiplier) * 100) / 100 : 0;
+  }
 
   return {
     total,
@@ -791,13 +800,17 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   };
   const policy = quick.policy || pkg.policy || {};
   const total = toNum(quick.totalCost);
-  const approxBeforeTax =
-    total > 0 ? Math.round((total / 1.05) * 100) / 100 : 0;
 
   const qdSnap =
     snap.quotationDetails && typeof snap.quotationDetails === "object"
       ? snap.quotationDetails
       : {};
+  const taxes = qdSnap.taxes || { taxPercent: 5, applyGST: true, gstOn: "Full" };
+  const taxMultiplier = 1 + (toNum(taxes.taxPercent) || 5) / 100;
+
+  const approxBeforeTax =
+    total > 0 ? Math.round((total / taxMultiplier) * 100) / 100 : 0;
+
   const additionalServicesFromSnapshot = Array.isArray(qdSnap.additionalServices)
     ? qdSnap.additionalServices
     : [];
@@ -872,7 +885,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
           : 0;
   const resolvedTierAfterDiscount =
     resolvedTierFinalTotal > 0
-      ? Math.round((resolvedTierFinalTotal / 1.05) * 100) / 100
+      ? Math.round((resolvedTierFinalTotal / taxMultiplier) * 100) / 100
       : 0;
   const normalizedCalcSnap = {
     standard: {

@@ -35,15 +35,29 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
             const snap = quotation.packageSnapshot || {};
             const qd = snap.quotationDetails || {};
             const tx = qd.taxes || {};
+            const isGstIncluded = tx.gstIncludedInFinalAmount ?? true;
+
+            const getInitCost = (tier) => {
+                const finalCost = qd[`${tier}Cost`] ?? snap[`${tier}Cost`] ?? 0;
+                if (isGstIncluded) return finalCost;
+                
+                const calc = qd.packageCalculations?.[tier];
+                if (calc && calc.afterDiscount !== undefined) {
+                    return calc.afterDiscount;
+                }
+                
+                const taxRate = tx.taxPercent || 0;
+                return finalCost / (1 + taxRate / 100);
+            };
 
             setFormData({
-                standardCost: qd.standardCost ?? snap.standardCost ?? 0,
-                deluxeCost: qd.deluxeCost ?? snap.deluxeCost ?? 0,
-                superiorCost: qd.superiorCost ?? snap.superiorCost ?? 0,
+                standardCost: getInitCost('standard'),
+                deluxeCost: getInitCost('deluxe'),
+                superiorCost: getInitCost('superior'),
                 transportationCost: qd.transportationCost ?? snap.transportationTotalCost ?? 0,
                 taxPercent: tx.taxPercent ?? 5,
                 gstOn: tx.gstOn || "Full",
-                gstIncluded: tx.gstIncludedInFinalAmount ?? true,
+                gstIncluded: isGstIncluded,
                 destinations: (snap.destinationNights || []).map(dn => ({
                     destination: dn.destination,
                     standardHotel: dn.hotels?.find(h => h.category === "standard")?.hotelName || "",
@@ -133,15 +147,24 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
                         ...(snap.quotationDetails?.packageCalculations || {}),
                         standard: { 
                             ...(snap.quotationDetails?.packageCalculations?.standard || {}),
-                            finalTotal: Math.round(standardVals.total) 
+                            finalTotal: Math.round(standardVals.total),
+                            afterDiscount: Math.round(standardVals.base),
+                            gstAmount: Math.round(standardVals.gst),
+                            gstPercentage: Number(formData.taxPercent)
                         },
                         deluxe: { 
                             ...(snap.quotationDetails?.packageCalculations?.deluxe || {}),
-                            finalTotal: Math.round(deluxeVals.total) 
+                            finalTotal: Math.round(deluxeVals.total),
+                            afterDiscount: Math.round(deluxeVals.base),
+                            gstAmount: Math.round(deluxeVals.gst),
+                            gstPercentage: Number(formData.taxPercent)
                         },
                         superior: { 
                             ...(snap.quotationDetails?.packageCalculations?.superior || {}),
-                            finalTotal: Math.round(superiorVals.total) 
+                            finalTotal: Math.round(superiorVals.total),
+                            afterDiscount: Math.round(superiorVals.base),
+                            gstAmount: Math.round(superiorVals.gst),
+                            gstPercentage: Number(formData.taxPercent)
                         },
                     }
                 }

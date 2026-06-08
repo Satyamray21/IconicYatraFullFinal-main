@@ -113,7 +113,7 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
         0
       );
       const formattedRoomsCount = String(resolvedNumberOfRooms).padStart(2, "0");
-      const defaultRoomsLine = `${formattedRoomsCount} Room(s) - ${resolvedSharingType}${resolvedNumberOfMattress > 0 ? ` + ${resolvedNumberOfMattress} Extra Mattress(es)` : ""}`;
+      const defaultRoomsLine = `${formattedRoomsCount} Room(s) (${resolvedSharingType})${resolvedNumberOfMattress > 0 ? ` + ${resolvedNumberOfMattress} Extra Mattress(es)` : ""}`;
 
       const resolvedAdults = Number(
         quotation?.adults ||
@@ -139,7 +139,7 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
         ["Guest Name -", guestName],
         ["Booking Id -", bookingId],
         ["Persons-", options.guestsLine || defaultGuestsLine],
-        ["No of Rooms-", options.roomsLine || defaultRoomsLine],
+        ["No of Rooms-", defaultRoomsLine],
         ["Package Type -", options.packageType || "Family Tour Package"],
         ["Duration-", ` ${pad(totalNights)} Nights ${pad(totalDays)} Days`],
         ["Date of Journey-", `${formatDate(options.startDate)}, Time - standard**`],
@@ -179,10 +179,10 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
         const hRowH = 15;
 
         const hotelRoomsVal = (h.noOfRooms && h.roomType) 
-          ? `${h.noOfRooms} ${h.roomType}` 
+          ? `${h.noOfRooms} Room(s) (${h.roomType})${resolvedNumberOfMattress > 0 ? ` + ${resolvedNumberOfMattress} Extra Mattress(es)` : ""}` 
           : h.noOfRooms 
-            ? `${h.noOfRooms}` 
-            : (options.roomsLine || defaultRoomsLine || "N/A");
+            ? `${h.noOfRooms} Room(s)${resolvedNumberOfMattress > 0 ? ` + ${resolvedNumberOfMattress} Extra Mattress(es)` : ""}` 
+            : (defaultRoomsLine || "N/A");
 
         const hDetails = [
           ["Address -", h.hotelAddress || "N/A"],
