@@ -50,6 +50,7 @@ import {
   uploadPackageDayImage,
   clearCurrent,
 } from "../../../../features/package/packageSlice";
+import { fetchHotels, createHotelStep1 } from "../../../../features/hotel/hotelSlice";
 import {
   fetchCountries,
   fetchStatesByCountry,
@@ -147,8 +148,12 @@ const PackageEditView = () => {
   const [newLocation, setNewLocation] = useState("");
   const [openDialog, setOpenDialog] = useState(false);
   const [currentField, setCurrentField] = useState("");
+  const [addMore, setAddMore] = useState("");
+  const [currentHotelCategory, setCurrentHotelCategory] = useState("");
+  const [hotelDialogOpen, setHotelDialogOpen] = useState(false);
 
   const { options = [] } = useSelector((state) => state.leads || {});
+  const { hotels, loading: hotelsLoading } = useSelector((state) => state.hotel || {});
   const BOX_HEIGHT = 220;
 
   useEffect(() => {
@@ -420,6 +425,17 @@ const PackageEditView = () => {
     });
   }, [pkg.stayLocations, initialized]);
 
+  // Hotel Options Manager Logic
+  const selectedCities = React.useMemo(() => {
+    return pkg.stayLocations?.map((location) => location.city) || [];
+  }, [pkg.stayLocations]);
+
+  useEffect(() => {
+    if (selectedCities.length > 0) {
+      dispatch(fetchHotels());
+    }
+  }, [selectedCities, dispatch]);
+
   // Loading state
   if (loading && !initialized) {
     return (
@@ -581,6 +597,120 @@ const PackageEditView = () => {
   };
 
   // Lead Options Manager Logic
+  // Hotel Options Manager Logic
+  const getHotelsForDestination = (destinationCity) => {
+    if (!destinationCity) return { standard: [], deluxe: [], superior: [] };
+    if (!hotels || hotels.length === 0) return { standard: [], deluxe: [], superior: [] };
+
+    const destinationHotels = hotels.filter((hotel) => {
+      const hotelCity = hotel.location?.city?.toLowerCase() || "";
+      const hotelName = hotel.hotelName?.toLowerCase() || "";
+      const searchCity = destinationCity.toLowerCase().trim();
+
+      const exactMatch = hotelCity === searchCity;
+      const partialMatch =
+        hotelCity.includes(searchCity) ||
+        searchCity.includes(hotelCity) ||
+        hotelName.includes(searchCity) ||
+        hotelCity.includes(searchCity.split(" ")[0]) ||
+        searchCity.includes(hotelCity.split(" ")[0]);
+
+      return exactMatch || partialMatch;
+    });
+
+    const organized = { standard: [], deluxe: [], superior: [] };
+    destinationHotels.forEach((hotel) => {
+      const category = hotel.category?.toLowerCase() || "standard";
+      const hotelName = hotel.hotelName?.trim();
+      if (hotelName && organized[category] && !organized[category].includes(hotelName)) {
+        organized[category].push(hotelName);
+      }
+    });
+    return organized;
+  };
+
+  const getHotelOptionsForCategory = (category, destinationCity = "") => {
+    const destinationHotels = getHotelsForDestination(destinationCity);
+    const baseOptions = destinationHotels[category] || [];
+    const allOptions = [...new Set([...baseOptions])];
+    return [...allOptions, { value: "__add_new", label: "+ Add New" }];
+  };
+
+  const renderHotelOption = (props, option, category) => {
+    if (option === "__add_new") {
+      return (
+        <li
+          {...props}
+          key="add_new"
+          style={{
+            color: "#1976d2",
+            fontWeight: 600,
+            backgroundColor: "#f0f7ff",
+            borderBottom: "2px solid #1976d2",
+          }}
+        >
+          + Add New Hotel
+        </li>
+      );
+    }
+
+    return (
+      <li {...props} key={typeof option === "object" ? option.value : option}>
+        {typeof option === "object" ? option.label : option}
+      </li>
+    );
+  };
+
+  const handleAddNewHotel = async () => {
+    if (!addMore.trim()) {
+      alert("Please enter a name");
+      return;
+    }
+
+    try {
+      const newValue = addMore.trim();
+      const destIndex = sessionStorage.getItem("currentDestIndex");
+      let destinationCity = "";
+      let destinationState = "";
+      let destinationCountry = selectedCountry || "India";
+
+      if (destIndex !== null && pkg.destinationNights[destIndex]) {
+        destinationCity = pkg.destinationNights[destIndex].destination;
+        const matchedLocation = pkg.stayLocations?.find((loc) => loc.city === destinationCity);
+        if (matchedLocation) {
+          destinationState = matchedLocation.state || "";
+          destinationCountry = matchedLocation.country || destinationCountry;
+        } else {
+          destinationState = destinationCountry === "India" ? (currentState || "") : "";
+        }
+      }
+
+      const hotelFormData = new FormData();
+      const locationData = {
+        country: destinationCountry,
+        state: destinationState,
+        city: destinationCity,
+        address: "",
+        pincode: "",
+      };
+      hotelFormData.append("location", JSON.stringify(locationData));
+      hotelFormData.append("hotelName", newValue);
+      hotelFormData.append("category", currentHotelCategory);
+
+      await dispatch(createHotelStep1(hotelFormData)).unwrap();
+      
+      if (destinationCity) {
+        dispatch(fetchHotels());
+      }
+      
+      setHotelDialogOpen(false);
+      setCurrentHotelCategory("");
+      sessionStorage.removeItem("currentDestIndex");
+    } catch (hotelErr) {
+      alert("Failed to create hotel: " + (hotelErr.message || "Unknown error"));
+    }
+  };
+
   const handleOpenDialog = (field) => {
     setCurrentField(field);
     setOpenDialog(true);
@@ -799,6 +929,15 @@ const PackageEditView = () => {
 
   // Hotel name change handler
   const handleHotelChange = (destIndex, category, hotelName) => {
+    if (hotelName === "__add_new") {
+      setCurrentHotelCategory(category);
+      setCurrentField(`hotel_${category}`);
+      setAddMore("");
+      setHotelDialogOpen(true);
+      sessionStorage.setItem("currentDestIndex", destIndex);
+      return;
+    }
+
     if (
       !pkg.destinationNights ||
       destIndex < 0 ||
@@ -2225,46 +2364,23 @@ const PackageEditView = () => {
                           {/* Standard */}
                           <TableCell>
                             <Box sx={{ mb: 1 }}>
-                              <TextField
-                                size="small"
+                               <Autocomplete
+                                options={getHotelOptionsForCategory("standard", dest.destination).map((opt) => typeof opt === "object" ? opt.value : opt)}
                                 value={hotels[0]?.hotelName || ""}
-                                onChange={(e) => {
-                                  const updated = [...pkg.destinationNights];
-                                  if (!updated[index].hotels) {
-                                    updated[index].hotels = [
-                                      {
-                                        category: "standard",
-                                        hotelName: "",
-                                        pricePerPerson: 0,
-                                      },
-                                      {
-                                        category: "deluxe",
-                                        hotelName: "",
-                                        pricePerPerson: 0,
-                                      },
-                                      {
-                                        category: "superior",
-                                        hotelName: "",
-                                        pricePerPerson: 0,
-                                      },
-                                    ];
-                                  } else {
-                                    updated[index].hotels = [
-                                      ...updated[index].hotels,
-                                    ];
-                                  }
-                                  updated[index].hotels[0] = {
-                                    ...updated[index].hotels[0],
-                                    category: "standard",
-                                    hotelName: e.target.value,
-                                  };
-                                  setPkg({
-                                    ...pkg,
-                                    destinationNights: updated,
-                                  });
+                                onChange={(e, newValue) => handleHotelChange(index, "standard", newValue)}
+                                renderInput={(params) => (
+                                  <TextField
+                                    {...params}
+                                    size="small"
+                                    placeholder="Select standard hotel"
+                                    helperText={`${getHotelsForDestination(dest.destination).standard.length} from API`}
+                                  />
+                                )}
+                                renderOption={(props, option) => {
+                                  sessionStorage.setItem("currentDestIndex", index);
+                                  return renderHotelOption(props, option, "standard");
                                 }}
-                                placeholder="Standard Hotel"
-                                fullWidth
+                                loading={hotelsLoading}
                               />
                             </Box>
                             <TextField
@@ -2321,46 +2437,23 @@ const PackageEditView = () => {
                           {/* Deluxe */}
                           <TableCell>
                             <Box sx={{ mb: 1 }}>
-                              <TextField
-                                size="small"
+                               <Autocomplete
+                                options={getHotelOptionsForCategory("deluxe", dest.destination).map((opt) => typeof opt === "object" ? opt.value : opt)}
                                 value={hotels[1]?.hotelName || ""}
-                                onChange={(e) => {
-                                  const updated = [...pkg.destinationNights];
-                                  if (!updated[index].hotels) {
-                                    updated[index].hotels = [
-                                      {
-                                        category: "standard",
-                                        hotelName: "",
-                                        pricePerPerson: 0,
-                                      },
-                                      {
-                                        category: "deluxe",
-                                        hotelName: "",
-                                        pricePerPerson: 0,
-                                      },
-                                      {
-                                        category: "superior",
-                                        hotelName: "",
-                                        pricePerPerson: 0,
-                                      },
-                                    ];
-                                  } else {
-                                    updated[index].hotels = [
-                                      ...updated[index].hotels,
-                                    ];
-                                  }
-                                  updated[index].hotels[1] = {
-                                    ...updated[index].hotels[1],
-                                    category: "deluxe",
-                                    hotelName: e.target.value,
-                                  };
-                                  setPkg({
-                                    ...pkg,
-                                    destinationNights: updated,
-                                  });
+                                onChange={(e, newValue) => handleHotelChange(index, "deluxe", newValue)}
+                                renderInput={(params) => (
+                                  <TextField
+                                    {...params}
+                                    size="small"
+                                    placeholder="Select deluxe hotel"
+                                    helperText={`${getHotelsForDestination(dest.destination).deluxe.length} from API`}
+                                  />
+                                )}
+                                renderOption={(props, option) => {
+                                  sessionStorage.setItem("currentDestIndex", index);
+                                  return renderHotelOption(props, option, "deluxe");
                                 }}
-                                placeholder="Deluxe Hotel"
-                                fullWidth
+                                loading={hotelsLoading}
                               />
                             </Box>
                             <TextField
@@ -2417,46 +2510,23 @@ const PackageEditView = () => {
                           {/* Superior */}
                           <TableCell>
                             <Box sx={{ mb: 1 }}>
-                              <TextField
-                                size="small"
+                               <Autocomplete
+                                options={getHotelOptionsForCategory("superior", dest.destination).map((opt) => typeof opt === "object" ? opt.value : opt)}
                                 value={hotels[2]?.hotelName || ""}
-                                onChange={(e) => {
-                                  const updated = [...pkg.destinationNights];
-                                  if (!updated[index].hotels) {
-                                    updated[index].hotels = [
-                                      {
-                                        category: "standard",
-                                        hotelName: "",
-                                        pricePerPerson: 0,
-                                      },
-                                      {
-                                        category: "deluxe",
-                                        hotelName: "",
-                                        pricePerPerson: 0,
-                                      },
-                                      {
-                                        category: "superior",
-                                        hotelName: "",
-                                        pricePerPerson: 0,
-                                      },
-                                    ];
-                                  } else {
-                                    updated[index].hotels = [
-                                      ...updated[index].hotels,
-                                    ];
-                                  }
-                                  updated[index].hotels[2] = {
-                                    ...updated[index].hotels[2],
-                                    category: "superior",
-                                    hotelName: e.target.value,
-                                  };
-                                  setPkg({
-                                    ...pkg,
-                                    destinationNights: updated,
-                                  });
+                                onChange={(e, newValue) => handleHotelChange(index, "superior", newValue)}
+                                renderInput={(params) => (
+                                  <TextField
+                                    {...params}
+                                    size="small"
+                                    placeholder="Select superior hotel"
+                                    helperText={`${getHotelsForDestination(dest.destination).superior.length} from API`}
+                                  />
+                                )}
+                                renderOption={(props, option) => {
+                                  sessionStorage.setItem("currentDestIndex", index);
+                                  return renderHotelOption(props, option, "superior");
                                 }}
-                                placeholder="Superior Hotel"
-                                fullWidth
+                                loading={hotelsLoading}
                               />
                             </Box>
                             <TextField
@@ -2927,6 +2997,46 @@ const PackageEditView = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Hotel Add New Dialog */}
+      <Dialog
+        open={hotelDialogOpen}
+        onClose={() => {
+          setHotelDialogOpen(false);
+          setCurrentHotelCategory("");
+          sessionStorage.removeItem("currentDestIndex");
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Add New {currentHotelCategory.charAt(0).toUpperCase() + currentHotelCategory.slice(1)} Hotel
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <TextField
+              autoFocus
+              fullWidth
+              label="Hotel Name"
+              value={addMore}
+              onChange={(e) => setAddMore(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") handleAddNewHotel();
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHotelDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleAddNewHotel}
+            variant="contained"
+            color="primary"
+          >
+            Add
+          </Button>
         </DialogActions>
       </Dialog>
     </LocalizationProvider>
