@@ -106,16 +106,28 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
 
     const selectedPkg = packages.find((pkg) => pkg._id === selectedPackageId);
     if (selectedPkg) {
-      // Destinations
+      // Destinations and Nights
       if (selectedPkg.stayLocations?.length > 0) {
-        const destinations = selectedPkg.stayLocations.map((loc) => loc.city);
-        setFieldValue("destinations", destinations);
+        const dests = selectedPkg.stayLocations.map((loc) => ({
+          destination: loc.city,
+          nights: Number(loc.nights) || 0,
+        }));
+        setFieldValue("destinationNights", dests);
+      } else if (selectedPkg.destinationNights?.length > 0) {
+        const dests = selectedPkg.destinationNights.map((loc) => ({
+          destination: loc.city || loc.destination || "",
+          nights: Number(loc.nights) || 0,
+        }));
+        setFieldValue("destinationNights", dests);
       }
 
       // Days / Nights
       const totalNights =
         selectedPkg.stayLocations?.reduce(
-          (sum, loc) => sum + (loc.nights || 0),
+          (sum, loc) => sum + (Number(loc.nights) || 0),
+          0,
+        ) || selectedPkg.destinationNights?.reduce(
+          (sum, loc) => sum + (Number(loc.nights) || 0),
           0,
         ) || 0;
       const totalDays = totalNights + 1;
@@ -265,8 +277,33 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
   };
 
   // Get package options for Autocomplete
-  const getPackageOptions = () => {
-    return filteredPackages.map((pkg) => ({
+  const getPackageOptions = (arrivalDate, departureDate) => {
+    let targetNights = null;
+    if (arrivalDate && departureDate) {
+      const arr = new Date(arrivalDate);
+      const dep = new Date(departureDate);
+      if (!isNaN(arr) && !isNaN(dep) && dep >= arr) {
+        const diffTime = Math.abs(dep - arr);
+        targetNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    let finalPackages = filteredPackages;
+
+    if (targetNights !== null && targetNights > 0) {
+      finalPackages = finalPackages.filter((pkg) => {
+        const pkgNights = pkg.stayLocations?.reduce(
+          (sum, loc) => sum + (Number(loc.nights) || 0),
+          0,
+        ) || pkg.destinationNights?.reduce(
+          (sum, loc) => sum + (Number(loc.nights) || 0),
+          0,
+        ) || 0;
+        return pkgNights === targetNights;
+      });
+    }
+
+    return finalPackages.map((pkg) => ({
       label: pkg.title || pkg.sector || `Package ${pkg.packageId || pkg._id}`,
       value: pkg._id,
       fieldName: "package",
@@ -288,7 +325,7 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
         // For lead options, just set the value and clear other fields
         setFieldValue("selectedPackage", newValue.label);
         // Clear auto-filled fields when selecting lead option
-        setFieldValue("destinations", [""]);
+        setFieldValue("destinationNights", [{ destination: "", nights: 0 }]);
         setFieldValue("days", "");
         setFieldValue("nights", "");
         setFieldValue("hotelType", "");
@@ -346,7 +383,7 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
       initialValues={{
         tourType: clientTourDetails?.tourType || clientDetails?.tourType || "",
         selectedPackage: "",
-        destinations: [""],
+        destinationNights: [{ destination: "", nights: 0 }],
         days: "",
         nights: "",
         hotelType: "",
@@ -496,10 +533,10 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
             <Grid size={{ xs: 12, md: 6 }}>
               <Autocomplete
                 fullWidth
-                options={getPackageOptions()}
+                options={getPackageOptions(values.arrivalDate, values.departureDate)}
                 getOptionLabel={(option) => option.label || ""}
                 value={
-                  getPackageOptions().find(
+                  getPackageOptions(values.arrivalDate, values.departureDate).find(
                     (opt) =>
                       opt.value === values.selectedPackage ||
                       opt.label === values.selectedPackage,
@@ -579,17 +616,17 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
               />
             </Grid>
 
-            {/* Destinations */}
+            {/* Destination Nights */}
             <Grid size={{ xs: 12 }}>
               <Typography variant="subtitle1" fontWeight={500}>
-                Destinations
+                Destinations & Nights
               </Typography>
               <FieldArray
-                name="destinations"
+                name="destinationNights"
                 render={(arrayHelpers) => (
                   <Box>
-                    {values.destinations &&
-                      values.destinations.map((destination, index) => (
+                    {values.destinationNights &&
+                      values.destinationNights.map((dn, index) => (
                         <Box
                           key={index}
                           display="flex"
@@ -600,21 +637,50 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
                           <TextField
                             fullWidth
                             label={`Destination ${index + 1}`}
-                            name={`destinations[${index}]`}
-                            value={destination}
+                            name={`destinationNights[${index}].destination`}
+                            value={dn.destination}
                             onChange={handleChange}
                             placeholder="Enter destination city"
                           />
+                          <TextField
+                            type="number"
+                            sx={{ width: 120 }}
+                            label="Nights"
+                            name={`destinationNights[${index}].nights`}
+                            value={dn.nights}
+                            onChange={(e) => {
+                                handleChange(e);
+                                // Auto-update total hotel nights
+                                setTimeout(() => {
+                                    const allDns = arrayHelpers.form.values.destinationNights;
+                                    let sum = 0;
+                                    allDns.forEach((d, i) => {
+                                        if (i === index) sum += (Number(e.target.value) || 0);
+                                        else sum += (Number(d.nights) || 0);
+                                    });
+                                    setFieldValue("nights", sum);
+                                }, 0);
+                            }}
+                            InputProps={{ inputProps: { min: 0 } }}
+                          />
                           <IconButton
                             color="error"
-                            onClick={() => arrayHelpers.remove(index)}
-                            disabled={values.destinations.length === 1}
+                            onClick={() => {
+                                arrayHelpers.remove(index);
+                                // Auto-update total hotel nights on remove
+                                setTimeout(() => {
+                                    const allDns = arrayHelpers.form.values.destinationNights;
+                                    const sum = allDns.reduce((s, d) => s + (Number(d.nights) || 0), 0);
+                                    setFieldValue("nights", sum);
+                                }, 0);
+                            }}
+                            disabled={values.destinationNights.length === 1}
                           >
                             <Delete />
                           </IconButton>
                           <IconButton
                             color="primary"
-                            onClick={() => arrayHelpers.insert(index + 1, "")}
+                            onClick={() => arrayHelpers.insert(index + 1, { destination: "", nights: 0 })}
                           >
                             <Add />
                           </IconButton>
@@ -630,7 +696,7 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
               <TextField
                 fullWidth
                 type="number"
-                label="Days"
+                label="Total Vehicle Days"
                 name="days"
                 value={values.days}
                 onChange={handleChange}
@@ -641,11 +707,14 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {} }) => {
               <TextField
                 fullWidth
                 type="number"
-                label="Nights"
+                label="Total Hotel Nights"
                 name="nights"
                 value={values.nights}
-                onChange={handleChange}
-                InputProps={{ inputProps: { min: 0 } }}
+                InputProps={{
+                  readOnly: true,
+                  style: { backgroundColor: "#f5f5f5" },
+                }}
+                helperText="Auto-calculated from destinations"
               />
             </Grid>
 
