@@ -46,6 +46,7 @@ const stats = [
 const LeadCard = () => {
   const navigate = useNavigate();
   const [anchorEls, setAnchorEls] = React.useState({});
+  const [searchTerm, setSearchTerm] = useState("");
 
   // State for delete confirmation dialog
   const [deleteDialog, setDeleteDialog] = useState({
@@ -245,21 +246,32 @@ const LeadCard = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const mappedLeads = leadList.map((lead, index) => ({
-    id: index + 1,
-    leadId: lead.leadId || "-",
-    status: lead.status || "New",
-    source: lead.officialDetail?.source || "-",
-    name: lead.personalDetails?.fullName || "-",
-    mobile: lead.personalDetails?.mobile || "-",
-    email: lead.personalDetails?.emailId || "-",
-    destination: lead.tourDetails?.tourDestination || "-",
-    arrivalDate: formatDate(lead?.tourDetails?.pickupDrop?.arrivalDate), // ✅ uses the formatter
-    priority: lead.officialDetail?.priority || "-",
-    assignTo:
-      lead.officialDetail?.assignedTo || lead.officialDetail?.assinedTo || "-",
-    originalData: lead,
-  }));
+  const mappedLeads = leadList
+    .map((lead, index) => ({
+      id: index + 1,
+      leadId: lead.leadId || "-",
+      status: lead.status || "New",
+      source: lead.officialDetail?.source || "-",
+      name: lead.personalDetails?.fullName || "-",
+      mobile: lead.personalDetails?.mobile || "-",
+      email: lead.personalDetails?.emailId || "-",
+      destination: lead.tourDetails?.tourDestination || "-",
+      arrivalDate: formatDate(lead?.tourDetails?.pickupDrop?.arrivalDate), // ✅ uses the formatter
+      priority: lead.officialDetail?.priority || "-",
+      assignTo:
+        lead.officialDetail?.assignedTo || lead.officialDetail?.assinedTo || "-",
+      originalData: lead,
+    }))
+    .filter((lead) => {
+      if (!searchTerm) return true;
+      const term = searchTerm.toLowerCase();
+      return (
+        lead.name.toLowerCase().includes(term) ||
+        lead.mobile.toLowerCase().includes(term) ||
+        lead.leadId.toLowerCase().includes(term) ||
+        lead.email.toLowerCase().includes(term)
+      );
+    });
 
   const columns = [
     { field: "id", headerName: "Sr No.", width: 60 },
@@ -385,8 +397,10 @@ const LeadCard = () => {
           <TextField
             variant="outlined"
             size="small"
-            placeholder="Search..."
+            placeholder="Search by name, mobile, id..."
             sx={{ width: { xs: "100%", sm: 300 } }}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
