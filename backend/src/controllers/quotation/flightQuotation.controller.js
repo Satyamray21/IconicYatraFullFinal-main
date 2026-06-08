@@ -6,7 +6,7 @@ import { getCache, setCache, clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
 import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 import { Lead } from "../../models/lead.model.js"
-import nodemailer from "nodemailer";
+import emailQueue from "../../utils/emailQueue.js";
 import Company from "../../models/company.model.js";
 import EmailAccount from "../../models/emailAccount.model.js";
 import ReceivedVoucher from "../../models/payment.model.js";
@@ -571,10 +571,10 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
             ? `Booking Confirmation ${flightQuotationId} - ${quotation?.personalDetails?.fullName || "Guest"}`
             : `Quotation ${flightQuotationId} - ${quotation?.personalDetails?.fullName || "Guest"}`);
 
-    const transporter = nodemailer.createTransport({
+    const smtpConfig = {
       ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
       auth: { user: auth.user, pass: auth.pass },
-    });
+    };
 
     const isBooking = String(type || "").trim().toLowerCase() === "booking";
     const attachments = [];
@@ -600,7 +600,7 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
     try {
         console.log(`Attempting to send flight ${type} email to: ${to} using account: ${auth.user}`);
         
-        await transporter.sendMail({
+        const mailOptions = {
             from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
             to,
             cc: cc && String(cc).trim() ? cc : undefined,
@@ -609,7 +609,9 @@ export const sendFlightQuotationMail = asyncHandler(async (req, res) => {
             html: body,
             text: body.replace(/<[^>]*>/g, ""),
             attachments: attachments,
-        });
+        };
+
+        await emailQueue.add('sendEmail', { mailOptions, smtpConfig });
 
         return res.status(200).json(
             new ApiResponse(

@@ -1,11 +1,11 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import axios from "axios";
+import emailQueue from "../utils/emailQueue.js";
 import { User } from "../models/user.model.js";
 import { Staff } from "../models/staff.model.js";
 import { StaffPermission } from "../models/staffPermission.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import nodemailer from "nodemailer";
 import { OTP } from "../models/otp.model.js";
 import { comparePassword } from "../utils/permission.utils.js";
 import { LoginHistory } from "../models/loginHistory.model.js";
@@ -620,14 +620,6 @@ export const sendResetCode = async (req, res) => {
 
     await OTP.create({ userId: user._id, otp: otpCode, expiresAt });
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.gmail,
-        pass: process.env.app_pass,
-      },
-    });
-
     const htmlTemplate = `
         <!DOCTYPE html>
         <html>
@@ -635,76 +627,20 @@ export const sendResetCode = async (req, res) => {
           <meta charset="UTF-8">
           <title>Iconic Yatra - Forgot Password</title>
           <style>
-            body {
-              font-family: Arial, sans-serif;
-              background-color: #f4f6f8;
-              margin: 0;
-              padding: 0;
-            }
-            .container {
-              max-width: 600px;
-              margin: auto;
-              background: #ffffff;
-              border-radius: 10px;
-              overflow: hidden;
-              box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            }
-            .header {
-              background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
-              color: white;
-              text-align: center;
-              padding: 20px;
-            }
-            .header h1 {
-              font-family: 'Brush Script MT', cursive;
-              font-size: 28px;
-              margin: 0;
-            }
-            .content {
-              padding: 20px;
-              color: #333;
-            }
-            .content h2 {
-              color: #1976d2;
-            }
-            .otp-box {
-              text-align: center;
-              font-size: 28px;
-              font-weight: bold;
-              background: #f1f9ff;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-              letter-spacing: 4px;
-              color: #0d47a1;
-            }
-            .button {
-              display: block;
-              width: fit-content;
-              background: #1976d2;
-              color: white;
-              padding: 12px 20px;
-              text-decoration: none;
-              border-radius: 6px;
-              font-weight: bold;
-              margin: auto;
-            }
-            .footer {
-              background: #f4f6f8;
-              text-align: center;
-              padding: 10px;
-              font-size: 12px;
-              color: #777;
-            }
+            body { font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: auto; background: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); }
+            .header { background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%); color: white; text-align: center; padding: 20px; }
+            .header h1 { font-size: 28px; margin: 0; }
+            .content { padding: 20px; color: #333; }
+            .content h2 { color: #1976d2; }
+            .otp-box { text-align: center; font-size: 28px; font-weight: bold; background: #f1f9ff; padding: 15px; border-radius: 8px; margin: 20px 0; letter-spacing: 4px; color: #0d47a1; }
+            .button { display: block; width: fit-content; background: #1976d2; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: auto; }
+            .footer { background: #f4f6f8; text-align: center; padding: 10px; font-size: 12px; color: #777; }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="header">
-              <h1>Iconic Yatra</h1>
-              <p>Your Travel Companion</p>
-            </div>
-
+            <div class="header"><h1>Iconic Yatra</h1><p>Your Travel Companion</p></div>
             <div class="content">
               <h2>Password Reset Request</h2>
               <p>Hello ${user.fullName},</p>
@@ -715,15 +651,11 @@ export const sendResetCode = async (req, res) => {
               <p>If you did not request this, please ignore this email.</p>
               <a href="https://iconicyatra.com/login" class="button">Login to Iconic Yatra</a>
             </div>
-
-            <div class="footer">
-              © 2025 Iconic Yatra. All Rights Reserved.<br>
-              Designed with ❤️ for travel lovers.
-            </div>
+            <div class="footer">© 2025 Iconic Yatra. All Rights Reserved.</div>
           </div>
         </body>
         </html>
-        `;
+    `;
 
     const mailOptions = {
       from: `"Iconic Yatra" <${process.env.gmail}>`,
@@ -732,7 +664,7 @@ export const sendResetCode = async (req, res) => {
       html: htmlTemplate,
     };
 
-    await transporter.sendMail(mailOptions);
+    await emailQueue.add('sendEmail', mailOptions);
 
     res.json({ success: true, message: "OTP sent to email" });
   } catch (error) {

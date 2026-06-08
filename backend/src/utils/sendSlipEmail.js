@@ -1,13 +1,5 @@
-import nodemailer from "nodemailer";
+import emailQueue from "./emailQueue.js";
 import path from "path";
-
-const transporter = nodemailer.createTransport({
-    service: "Gmail",
-    auth: {
-        user: process.env.gmail,
-        pass: process.env.app_pass,
-    },
-});
 
 export const sendSlipEmail = async ({ to, subject, text, slipPath }) => {
     const mailOptions = {
@@ -23,5 +15,5 @@ export const sendSlipEmail = async ({ to, subject, text, slipPath }) => {
         ],
     };
 
-    await transporter.sendMail(mailOptions);
+    await emailQueue.add('sendEmail', mailOptions);
 };
