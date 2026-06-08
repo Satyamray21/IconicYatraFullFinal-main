@@ -38,7 +38,7 @@ const StepClientDetails = ({ onNext, convertSector, convertNights }) => {
   const { list: leads, status } = useSelector((state) => state.leads);
 
   const activeLeads = leads ? leads.filter((lead) => {
-    if (lead.status === "Cancelled") return false;
+    if (lead.status === "Cancelled" || lead.status === "Confirmed") return false;
     const departure = lead.tourDetails?.pickupDrop?.departureDate || lead.tourDetails?.departureDate || lead.tourDetails?.travelDate;
     if (departure) {
       const depDate = new Date(departure);
