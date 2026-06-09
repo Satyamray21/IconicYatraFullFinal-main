@@ -67,10 +67,30 @@ export const createHotelStep1 = async (req, res) => {
             });
         }
 
+        const roomType = String(bodyData.roomType || "").trim();
+        const category = String(bodyData.category || "").trim();
+
+        let hotelType = bodyData.hotelType;
+        if (typeof hotelType === "string") {
+            try {
+                hotelType = JSON.parse(hotelType);
+            } catch {
+                hotelType = hotelType ? [hotelType] : [];
+            }
+        }
+        if (!Array.isArray(hotelType)) {
+            hotelType = hotelType ? [String(hotelType)] : [];
+        }
+        if (!hotelType.length && roomType) {
+            hotelType = [roomType];
+        } else if (!hotelType.length && category) {
+            hotelType = [category];
+        }
+
         // ✅ PROPERLY STRUCTURE THE DATA ACCORDING TO SCHEMA
         const hotelData = {
             hotelName: bodyData.hotelName,
-            hotelType: bodyData.hotelType,
+            hotelType,
 
             // ✅ Contact Details - PROPERLY STRUCTURE
             contactDetails: {
@@ -101,6 +121,23 @@ export const createHotelStep1 = async (req, res) => {
 
             policy: bodyData.policy,
         };
+
+        if (roomType) {
+            hotelData.tempRoomDetails = [
+                {
+                    roomDetails: [
+                        {
+                            roomType,
+                            ep: 0,
+                            cp: 0,
+                            map: 0,
+                            ap: 0,
+                            images: [],
+                        },
+                    ],
+                },
+            ];
+        }
 
         // Handle main image
         if (req.files?.mainImage) {

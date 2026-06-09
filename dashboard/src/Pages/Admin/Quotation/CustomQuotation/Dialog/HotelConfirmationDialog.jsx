@@ -47,11 +47,48 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { createHotelStep1, fetchHotels } from "../../../../../features/hotel/hotelSlice";
+import { getLeadOptions } from "../../../../../features/leads/leadSlice";
+
+const getQuotationSector = (q) => {
+    if (!q) return "";
+    return String(
+        q.clientDetails?.sector ||
+        q.packageSnapshot?.sector ||
+        q.sector ||
+        q.lead?.location?.state ||
+        "",
+    ).trim();
+};
+
+const getQuotationRoomType = (q) => {
+    if (!q) return "";
+    const qd =
+        q.tourDetails?.quotationDetails ||
+        q.packageSnapshot?.quotationDetails ||
+        {};
+    return String(
+        qd.rooms?.roomType ||
+        qd.roomType ||
+        q.roomType ||
+        "",
+    ).trim();
+};
+
+/** API expects category (standard/deluxe/superior); UI shows room type from quotation/options. */
+const categoryForHotelPayload = (q, roomType = "") => {
+    const pkg = String(q?.finalizedPackage || "").toLowerCase();
+    if (["standard", "deluxe", "superior"].includes(pkg)) return pkg;
+    const rt = String(roomType || getQuotationRoomType(q)).toLowerCase();
+    if (rt.includes("superior")) return "superior";
+    if (rt.includes("deluxe")) return "deluxe";
+    return "standard";
+};
 
 const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quotationRef, onSaveSuccess }) => {
         const dispatch = useDispatch();
+        const { options: leadOptions = [] } = useSelector((state) => state.leads);
     const [hotels, setHotels] = useState([]);
     const [hotelsMap, setHotelsMap] = useState({}); // { city: [hotels] }
     const [loading, setLoading] = useState(false);
@@ -84,8 +121,18 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         country: "India",
         address: "",
         mobile: "",
-        category: "standard",
+        roomType: "",
     });
+
+    const roomTypeOptions = React.useMemo(() => {
+        const fromApi = (leadOptions || [])
+            .filter((opt) => opt.fieldName === "roomType")
+            .map((opt) => opt.value)
+            .filter(Boolean);
+        const fromQuotation = getQuotationRoomType(quotation);
+        const merged = [...new Set([fromQuotation, ...fromApi].filter(Boolean))];
+        return merged.length > 0 ? merged : ["Standard", "Deluxe", "Superior"];
+    }, [leadOptions, quotation]);
 
     // Rich Booking Email states
     const [mailType, setMailType] = useState("booking"); // "hotel" or "booking"
@@ -199,10 +246,11 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             fetchMailCompanies();
             fetchEmailAccounts();
             fetchReceipts();
+            dispatch(getLeadOptions());
             const uniqueCities = [...new Set(hotels.map(h => h.city).filter(Boolean))];
             uniqueCities.forEach(city => fetchHotelsForCity(city));
         }
-    }, [open, hotels.length, quotation?._id]);
+    }, [open, hotels.length, quotation?._id, dispatch]);
 
     useEffect(() => {
         if (selectedCompanyId && emailAccounts.length > 0) {
@@ -457,7 +505,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                         hotelAddress: "",
                         city: cityName,
                         nights: nights,
-                        roomType: qd.rooms?.roomType || "",
+                        roomType: qd.rooms?.roomType || qd.roomType || getQuotationRoomType(quotation),
                         noOfRooms: qd.rooms?.numberOfRooms?.toString() || "1",
                         checkInDate: "",
                         checkInTime: "12:00",
@@ -502,7 +550,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             hotelAddress: "",
             city: "",
             nights: 1,
-            roomType: "",
+            roomType: getQuotationRoomType(quotation),
             noOfRooms: "1",
             checkInDate: "",
             checkInTime: "12:00",
@@ -612,11 +660,11 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         setNewHotelForm({
             hotelName: "",
             city: cityName || "",
-            state: "",
+            state: getQuotationSector(quotation),
             country: "India",
             address: "",
             mobile: "",
-            category: "standard",
+            roomType: getQuotationRoomType(quotation),
         });
         setAddHotelDialogOpen(true);
     };
@@ -642,8 +690,16 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             };
             hotelFormData.append("location", JSON.stringify(locationData));
             hotelFormData.append("hotelName", newHotelForm.hotelName.trim());
-            hotelFormData.append("category", newHotelForm.category || "standard");
-            
+            const roomType = String(newHotelForm.roomType || "").trim();
+            if (roomType) {
+                hotelFormData.append("roomType", roomType);
+                hotelFormData.append("hotelType", JSON.stringify([roomType]));
+            }
+            hotelFormData.append(
+                "category",
+                categoryForHotelPayload(quotation, roomType),
+            );
+
             const contactData = {
                 mobile: newHotelForm.mobile || "",
                 email: "",
@@ -675,6 +731,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                             hotelAddress: newHotelForm.address || "",
                             contactNo: newHotelForm.mobile || "",
                             city: newHotelForm.city || h.city,
+                            roomType: roomType || h.roomType,
                         };
                     }
                     return h;
@@ -1355,12 +1412,21 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                 />
                             </Grid>
                             <Grid size={{ xs: 12, md: 3 }}>
-                                <TextField
-                                    label="Room Type"
-                                    fullWidth
+                                <Autocomplete
+                                    freeSolo
                                     size="small"
-                                    value={hotel.roomType}
-                                    onChange={(e) => handleChange(hotel.id, "roomType", e.target.value)}
+                                    options={roomTypeOptions}
+                                    inputValue={hotel.roomType || ""}
+                                    onInputChange={(_event, newInputValue) =>
+                                        handleChange(hotel.id, "roomType", newInputValue)
+                                    }
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Room Type"
+                                            placeholder="Select or type room type"
+                                        />
+                                    )}
                                 />
                             </Grid>
                             <Grid size={{ xs: 12, md: 3 }}>
@@ -1636,18 +1702,25 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                             />
                         </Grid>
                         <Grid size={{ xs: 12, md: 6 }}>
-                            <TextField
-                                select
-                                label="Category"
-                                fullWidth
+                            <Autocomplete
+                                freeSolo
                                 size="small"
-                                value={newHotelForm.category}
-                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, category: e.target.value }))}
-                            >
-                                <MenuItem value="standard">Standard</MenuItem>
-                                <MenuItem value="deluxe">Deluxe</MenuItem>
-                                <MenuItem value="superior">Superior</MenuItem>
-                            </TextField>
+                                options={roomTypeOptions}
+                                inputValue={newHotelForm.roomType || ""}
+                                onInputChange={(_event, newInputValue) =>
+                                    setNewHotelForm((prev) => ({
+                                        ...prev,
+                                        roomType: newInputValue,
+                                    }))
+                                }
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        label="Room Type"
+                                        placeholder="Select or type room type"
+                                    />
+                                )}
+                            />
                         </Grid>
                         <Grid size={{ xs: 12 }}>
                             <TextField
