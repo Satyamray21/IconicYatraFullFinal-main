@@ -32,6 +32,7 @@ import {
   Snackbar,
   Alert,
   Divider,
+  Autocomplete,
 } from "@mui/material";
 import {
   FormatQuote as FormatQuoteIcon,
@@ -85,6 +86,7 @@ import {
   updateQuickQuotation,
   finalizeQuickQuotation,
 } from "../../../../features/quotation/quickQuotationSlice";
+import { getLeadOptions } from "../../../../features/leads/leadSlice";
 import axios from "../../../../utils/axios";
 import AddBankDialog from "../VehicleQuotation/Dialog/AddBankDialog";
 import EditDialog from "../VehicleQuotation/Dialog/EditDialog";
@@ -769,6 +771,25 @@ function titleCaseWords(s) {
     .join(" ");
 }
 
+function getQuickMealPlanRaw(apiData) {
+  if (!apiData) return "";
+  const pkg = mergeQuickPackageForDisplay(apiData);
+  const qd = pkg?.quotationDetails || {};
+  const fromQd =
+    typeof qd.mealPlan === "string"
+      ? qd.mealPlan.trim()
+      : qd.mealPlan && typeof qd.mealPlan === "object"
+        ? String(qd.mealPlan.planType || "").trim()
+        : "";
+  return fromQd || String(pkg?.mealPlan?.planType || "").trim();
+}
+
+function mealPlanForEditor(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  return s.replace(/\s+plan$/i, "").trim() || s;
+}
+
 function formatQuickMealPlan(pkg) {
   const qd = pkg?.quotationDetails || {};
   const fromQd =
@@ -1252,6 +1273,7 @@ const QuickFinalize = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const { data: company } = useSelector((state) => state.companyUI);
+  const { options: leadOptions = [] } = useSelector((state) => state.leads);
   const { currentQuotation, loading: reduxLoading } = useSelector(
     (state) => state.quickQuotation,
   );
@@ -1444,6 +1466,19 @@ const QuickFinalize = () => {
     noOfMattress: 0,
     roomType: "Double sharing",
   });
+  const [mealPlanDialog, setMealPlanDialog] = useState({
+    open: false,
+    mealPlan: "",
+  });
+
+  const mealPlanOptions = useMemo(() => {
+    const fromApi = (leadOptions || [])
+      .filter((opt) => opt.fieldName === "mealPlan")
+      .map((opt) => opt.value)
+      .filter(Boolean);
+    const current = mealPlanForEditor(getQuickMealPlanRaw(currentQuotation));
+    return [...new Set([current, ...fromApi, "CP", "MAP", "AP", "EP"].filter(Boolean))];
+  }, [leadOptions, currentQuotation]);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [itinerarySaving, setItinerarySaving] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -1684,6 +1719,67 @@ const QuickFinalize = () => {
     });
   };
 
+  const openMealPlanDialog = () => {
+    const q = currentQuotation;
+    if (!q) return;
+    setMealPlanDialog({
+      open: true,
+      mealPlan: mealPlanForEditor(getQuickMealPlanRaw(q)),
+    });
+  };
+
+  const handleSaveMealPlan = async () => {
+    const mealPlan = String(mealPlanDialog.mealPlan || "").trim();
+    if (!mealPlan) {
+      setSnackbar({
+        open: true,
+        message: "Meal plan is required",
+        severity: "warning",
+      });
+      return;
+    }
+    if (!apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Missing quotation id",
+        severity: "error",
+      });
+      return;
+    }
+    setMealPlanDialog((s) => ({ ...s, open: false }));
+    try {
+      const existingMealPlan = currentQuotation?.packageSnapshot?.mealPlan;
+      await dispatch(
+        updateQuickQuotation({
+          id: apiEntityId,
+          formData: {
+            packageSnapshot: {
+              mealPlan:
+                existingMealPlan && typeof existingMealPlan === "object"
+                  ? { ...existingMealPlan, planType: mealPlan }
+                  : { planType: mealPlan },
+              quotationDetails: {
+                mealPlan,
+              },
+            },
+          },
+        }),
+      ).unwrap();
+      await refreshQuotationFromApi();
+      setSnackbar({
+        open: true,
+        message: "Meal plan saved",
+        severity: "success",
+      });
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: String(e?.message || e || "Save failed"),
+        severity: "error",
+      });
+    }
+  };
+
   const handleSaveRoomDetails = async () => {
     const { noOfRooms, noOfMattress, roomType } = roomDetailsDialog;
     const rCount = Math.max(1, Number(noOfRooms) || 1);
@@ -1822,7 +1918,8 @@ const QuickFinalize = () => {
       }
     };
     loadGlobal();
-  }, []);
+    dispatch(getLeadOptions());
+  }, [dispatch]);
 
   useEffect(() => {
     if (!id) {
@@ -3423,11 +3520,19 @@ const QuickFinalize = () => {
                               </Box>
                               {quotation.hotel.hotelType}
                             </Typography>
-                            <Typography variant="body2">
-                              <Box component="span" fontWeight={600}>
+                            <Typography variant="body2" sx={{ display: "flex", alignItems: "center" }}>
+                              <Box component="span" fontWeight={600} sx={{ mr: 0.5 }}>
                                 Meal Plan:{" "}
                               </Box>
                               {quotation.hotel.mealPlan}
+                              <IconButton
+                                size="small"
+                                onClick={openMealPlanDialog}
+                                sx={{ ml: 0.5, p: 0.25 }}
+                                title="Edit Meal Plan"
+                              >
+                                <Edit fontSize="small" style={{ fontSize: "0.95rem" }} />
+                              </IconButton>
                             </Typography>
                             <Typography variant="body2">
                               <Box component="span" fontWeight={600}>
@@ -4047,11 +4152,19 @@ const QuickFinalize = () => {
                     </Box>
                     {quotation.hotel.hotelType || "—"}
                   </Typography>
-                  <Typography variant="body2">
-                    <Box component="span" fontWeight={600}>
+                  <Typography variant="body2" sx={{ display: "flex", alignItems: "center" }}>
+                    <Box component="span" fontWeight={600} sx={{ mr: 0.5 }}>
                       Meal Plan:{" "}
                     </Box>
                     {quotation.hotel.mealPlan}
+                    <IconButton
+                      size="small"
+                      onClick={openMealPlanDialog}
+                      sx={{ ml: 0.5, p: 0.25 }}
+                      title="Edit Meal Plan"
+                    >
+                      <Edit fontSize="small" style={{ fontSize: "0.95rem" }} />
+                    </IconButton>
                   </Typography>
                   <Typography variant="body2">
                     <Box component="span" fontWeight={600}>
@@ -4387,6 +4500,45 @@ const QuickFinalize = () => {
             Cancel
           </Button>
           <Button variant="contained" onClick={handleSaveGuestCounts}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={mealPlanDialog.open}
+        onClose={() => setMealPlanDialog((s) => ({ ...s, open: false }))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Meal Plan</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Update the meal plan shown on this quick quotation.
+          </Typography>
+          <Autocomplete
+            freeSolo
+            fullWidth
+            options={mealPlanOptions}
+            inputValue={mealPlanDialog.mealPlan || ""}
+            onInputChange={(_event, newInputValue) =>
+              setMealPlanDialog((s) => ({ ...s, mealPlan: newInputValue }))
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Meal Plan"
+                placeholder="e.g. CP, MAP, AP, EP"
+              />
+            )}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setMealPlanDialog((s) => ({ ...s, open: false }))}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSaveMealPlan}>
             Save
           </Button>
         </DialogActions>
