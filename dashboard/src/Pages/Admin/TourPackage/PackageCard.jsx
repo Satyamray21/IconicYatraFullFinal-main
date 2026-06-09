@@ -243,6 +243,7 @@ const PackageDashboard = () => {
             }))}
             columns={columns}
             disableRowSelectionOnClick
+            onRowClick={(params) => handleEditClick(params.row)}
             paginationModel={paginationModel}
             onPaginationModelChange={setPaginationModel}
             pageSizeOptions={[10, 25, 50, 100]}
@@ -250,7 +251,8 @@ const PackageDashboard = () => {
             paginationMode="server"
             sx={{
               "& .MuiDataGrid-columnHeaders": { backgroundColor: "#f5f5f5" },
-              "& .MuiDataGrid-columnHeaderTitle": { fontWeight: "bold" }
+              "& .MuiDataGrid-columnHeaderTitle": { fontWeight: "bold" },
+              "& .MuiDataGrid-row": { cursor: "pointer" }
             }}
           />
         )}

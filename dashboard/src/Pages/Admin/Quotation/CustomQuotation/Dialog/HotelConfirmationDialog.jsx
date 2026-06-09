@@ -47,9 +47,12 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
+import { useDispatch } from "react-redux";
+import { createHotelStep1, fetchHotels } from "../../../../../features/hotel/hotelSlice";
 
 const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quotationRef, onSaveSuccess }) => {
-        const [hotels, setHotels] = useState([]);
+        const dispatch = useDispatch();
+    const [hotels, setHotels] = useState([]);
     const [hotelsMap, setHotelsMap] = useState({}); // { city: [hotels] }
     const [loading, setLoading] = useState(false);
     const [fetchingHotels, setFetchingHotels] = useState(false);
@@ -70,6 +73,19 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     const [hotelsHistory, setHotelsHistory] = useState([]);
     const receiptHiddenRef = React.useRef();
     const prevOpenRef = React.useRef(false);
+
+    // Add New Hotel Dialog states
+    const [addHotelDialogOpen, setAddHotelDialogOpen] = useState(false);
+    const [addHotelForStayId, setAddHotelForStayId] = useState(null);
+    const [newHotelForm, setNewHotelForm] = useState({
+        hotelName: "",
+        city: "",
+        state: "",
+        country: "India",
+        address: "",
+        mobile: "",
+        category: "standard",
+    });
 
     // Rich Booking Email states
     const [mailType, setMailType] = useState("booking"); // "hotel" or "booking"
@@ -406,7 +422,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         if (open && quotation && selectedCompanyId && senderAccount) {
             fetchEmailPreview();
         }
-    }, [open, mailType, selectedCompanyId, senderAccount, signatureHtml]);
+    }, [open, mailType, selectedCompanyId, senderAccount, signatureHtml, nextPayableAmount, paymentDueDate]);
 
     useEffect(() => {
         if (open && quotation) {
@@ -558,8 +574,10 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                     const cityHotels = hotelsMap[h.city] || [];
                     const matched = cityHotels.find(ah => ah.hotelName === value);
                     if (matched) {
-                        updated.hotelAddress = matched.location?.address || "";
+                        updated.hotelAddress = matched.location?.address || matched.location?.address1 || "";
                         updated.contactNo = matched.contactDetails?.mobile || matched.contactDetails?.contactPerson || "";
+                        updated.hotelState = matched.location?.state || "";
+                        updated.hotelCountry = matched.location?.country || "India";
                     }
                 }
                 return updated;
@@ -587,6 +605,88 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         }
 
         setHotels(updatedHotels);
+    };
+
+    const handleOpenAddHotelDialog = (stayId, cityName) => {
+        setAddHotelForStayId(stayId);
+        setNewHotelForm({
+            hotelName: "",
+            city: cityName || "",
+            state: "",
+            country: "India",
+            address: "",
+            mobile: "",
+            category: "standard",
+        });
+        setAddHotelDialogOpen(true);
+    };
+
+    const handleCreateNewHotel = async () => {
+        if (!newHotelForm.hotelName.trim()) {
+            setSnackbar({ open: true, message: "Hotel name is required", severity: "warning" });
+            return;
+        }
+        if (!newHotelForm.city.trim()) {
+            setSnackbar({ open: true, message: "City is required", severity: "warning" });
+            return;
+        }
+
+        try {
+            const hotelFormData = new FormData();
+            const locationData = {
+                country: newHotelForm.country || "India",
+                state: newHotelForm.state || "",
+                city: newHotelForm.city,
+                address: newHotelForm.address || "",
+                pincode: "",
+            };
+            hotelFormData.append("location", JSON.stringify(locationData));
+            hotelFormData.append("hotelName", newHotelForm.hotelName.trim());
+            hotelFormData.append("category", newHotelForm.category || "standard");
+            
+            const contactData = {
+                mobile: newHotelForm.mobile || "",
+                email: "",
+            };
+            hotelFormData.append("contactDetails", JSON.stringify(contactData));
+
+            await dispatch(createHotelStep1(hotelFormData)).unwrap();
+
+            // Refresh the global hotel list
+            dispatch(fetchHotels());
+
+            // Refresh the city-specific hotelsMap
+            const trimmedCity = newHotelForm.city.trim();
+            try {
+                const res = await axios.get(`/all-hotel?city=${encodeURIComponent(trimmedCity)}`);
+                const cityHotels = res.data?.data || [];
+                setHotelsMap(prev => ({ ...prev, [trimmedCity]: cityHotels }));
+            } catch (err) {
+                console.error(`Failed to refresh hotels for ${trimmedCity}:`, err);
+            }
+
+            // Auto-fill the hotel fields in the stay
+            if (addHotelForStayId) {
+                setHotels(prev => prev.map(h => {
+                    if (h.id === addHotelForStayId) {
+                        return {
+                            ...h,
+                            hotelName: newHotelForm.hotelName.trim(),
+                            hotelAddress: newHotelForm.address || "",
+                            contactNo: newHotelForm.mobile || "",
+                            city: newHotelForm.city || h.city,
+                        };
+                    }
+                    return h;
+                }));
+            }
+
+            setSnackbar({ open: true, message: `Hotel "${newHotelForm.hotelName}" created successfully!`, severity: "success" });
+            setAddHotelDialogOpen(false);
+        } catch (err) {
+            console.error("Failed to create hotel:", err);
+            setSnackbar({ open: true, message: `Failed to create hotel: ${err.message || err}`, severity: "error" });
+        }
     };
 
     const handleSave = async () => {
@@ -946,34 +1046,30 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                             />
                         </Grid>
 
-                        {mailType === "booking" && (
-                            <>
-                                <Grid size={{ xs: 12, md: 3 }}>
-                                    <TextField
-                                        size="small"
-                                        fullWidth
-                                        label="Next Payable Amount (INR)"
-                                        value={nextPayableAmount}
-                                        onChange={(e) => setNextPayableAmount(e.target.value)}
-                                        sx={{ bgcolor: "#fff" }}
-                                    />
-                                </Grid>
-                                <Grid size={{ xs: 12, md: 3 }}>
-                                    <DatePicker
-                                        label="Payment Due Date"
-                                        value={paymentDueDate}
-                                        onChange={(newDate) => setPaymentDueDate(newDate)}
-                                        slotProps={{
-                                            textField: {
-                                                fullWidth: true,
-                                                size: "small",
-                                                sx: { bgcolor: "#fff" }
-                                            },
-                                        }}
-                                    />
-                                </Grid>
-                            </>
-                        )}
+                        <Grid size={{ xs: 12, md: 3 }}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label="Next Payable Amount (INR)"
+                                value={nextPayableAmount}
+                                onChange={(e) => setNextPayableAmount(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 3 }}>
+                            <DatePicker
+                                label="Payment Due Date"
+                                value={paymentDueDate}
+                                onChange={(newDate) => setPaymentDueDate(newDate)}
+                                slotProps={{
+                                    textField: {
+                                        fullWidth: true,
+                                        size: "small",
+                                        sx: { bgcolor: "#fff" }
+                                    },
+                                }}
+                            />
+                        </Grid>
 
                         <Grid size={{ xs: 12 }}>
                             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
@@ -1187,10 +1283,36 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                 <Autocomplete
                                     freeSolo
                                     size="small"
-                                    options={(hotelsMap[hotel.city] || []).map((h) => h.hotelName)}
+                                    options={[
+                                        ...(hotelsMap[hotel.city] || []).map((h) => h.hotelName),
+                                        "__add_new"
+                                    ]}
                                     value={hotel.hotelName}
                                     disabled={!hotel.city}
-                                    onChange={(event, newValue) => handleChange(hotel.id, "hotelName", newValue)}
+                                    onChange={(event, newValue) => {
+                                        if (newValue === "__add_new") {
+                                            handleOpenAddHotelDialog(hotel.id, hotel.city);
+                                        } else {
+                                            handleChange(hotel.id, "hotelName", newValue);
+                                        }
+                                    }}
+                                    renderOption={(props, option) => {
+                                        if (option === "__add_new") {
+                                            return (
+                                                <li {...props} key="__add_new" style={{ color: "#1976d2", fontWeight: 600, backgroundColor: "#f0f7ff", borderTop: "2px solid #1976d2" }}>
+                                                    + Add New Hotel
+                                                </li>
+                                            );
+                                        }
+                                        return <li {...props} key={option}>{option}</li>;
+                                    }}
+                                    filterOptions={(options, params) => {
+                                        const filtered = options.filter(opt => {
+                                            if (opt === "__add_new") return true;
+                                            return opt.toLowerCase().includes((params.inputValue || "").toLowerCase());
+                                        });
+                                        return filtered;
+                                    }}
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
@@ -1445,6 +1567,125 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                         }}
                     >
                         Split Now
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Add New Hotel Dialog */}
+            <Dialog
+                open={addHotelDialogOpen}
+                onClose={() => setAddHotelDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+                    }
+                }}
+            >
+                <DialogTitle sx={{ 
+                    fontWeight: "bold", 
+                    textAlign: "center", 
+                    background: "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)",
+                    color: "#fff",
+                    py: 2
+                }}>
+                    Add New Hotel
+                </DialogTitle>
+                <DialogContent sx={{ p: 3, mt: 1 }}>
+                    <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+                        Create a new hotel entry. It will be saved to the database and available in the hotel list.
+                    </Typography>
+                    <Grid container spacing={2}>
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                label="Hotel Name *"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.hotelName}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, hotelName: e.target.value }))}
+                                autoFocus
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                label="City *"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.city}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, city: e.target.value }))}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                label="State"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.state}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, state: e.target.value }))}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                label="Country"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.country}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, country: e.target.value }))}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                select
+                                label="Category"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.category}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, category: e.target.value }))}
+                            >
+                                <MenuItem value="standard">Standard</MenuItem>
+                                <MenuItem value="deluxe">Deluxe</MenuItem>
+                                <MenuItem value="superior">Superior</MenuItem>
+                            </TextField>
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                label="Address"
+                                fullWidth
+                                size="small"
+                                multiline
+                                rows={2}
+                                value={newHotelForm.address}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, address: e.target.value }))}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                label="Contact / Mobile"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.mobile}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, mobile: e.target.value }))}
+                            />
+                        </Grid>
+                    </Grid>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, py: 2, bgcolor: "#f1f3f5" }}>
+                    <Button onClick={() => setAddHotelDialogOpen(false)} color="inherit" sx={{ fontWeight: "bold", textTransform: "none" }}>
+                        Cancel
+                    </Button>
+                    <Button 
+                        variant="contained" 
+                        onClick={handleCreateNewHotel}
+                        sx={{ 
+                            fontWeight: "bold", 
+                            textTransform: "none", 
+                            bgcolor: "#1e3c72", 
+                            '&:hover': { bgcolor: "#122c5a" } 
+                        }}
+                    >
+                        Create Hotel
                     </Button>
                 </DialogActions>
             </Dialog>

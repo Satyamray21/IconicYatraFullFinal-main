@@ -57,7 +57,7 @@ const HotelCard = () => {
     hotelName: "",
     hotelType: "",
     contactDetails: { mobile: "", email: "" },
-    location: { address1: "", city: "" },
+    location: { address1: "", city: "", address: "", state: "" },
   });
 
   // Delete Confirm
@@ -105,6 +105,8 @@ const HotelCard = () => {
       location: {
         address1: hotel.location?.address1 || "",
         city: hotel.location?.city || "",
+        address: hotel.location?.address || "",
+        state: hotel.location?.state || "",
       },
     });
     setEditOpen(true);
@@ -182,6 +184,8 @@ const HotelCard = () => {
               <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Mobile</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Address</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>State</TableCell>
               <TableCell sx={{ fontWeight: "bold", }}>Country</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Destination</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
@@ -198,6 +202,8 @@ const HotelCard = () => {
                 <TableCell>{hotel.hotelType}</TableCell>
                 <TableCell>{hotel.contactDetails?.mobile}</TableCell>
                 <TableCell>{hotel.contactDetails?.email}</TableCell>
+                <TableCell sx={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hotel.location?.address || '-'}</TableCell>
+                <TableCell>{hotel.location?.state || '-'}</TableCell>
                 <TableCell>{hotel.location?.country}</TableCell>
                 <TableCell>{hotel.location?.city}</TableCell>
                 <TableCell>
