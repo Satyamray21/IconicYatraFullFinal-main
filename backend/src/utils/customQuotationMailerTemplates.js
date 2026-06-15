@@ -1147,12 +1147,26 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
   if (infants > 0) guestsParts.push(`${infants} Infants`);
   const guestsLine = guestsParts.join(", ");
 
-  const resolvedNumberOfRooms = toNum(
+  let resolvedNumberOfRooms = toNum(
     quotation?.noOfRooms ||
       qd?.rooms?.numberOfRooms ||
       qd?.noOfRooms ||
-      1
+      0
   );
+  if (quotation?.confirmedHotels && quotation.confirmedHotels.length > 0) {
+    const firstHotelRooms = quotation.confirmedHotels[0].noOfRooms;
+    if (firstHotelRooms) {
+      const parsed = parseInt(firstHotelRooms, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        if (resolvedNumberOfRooms === 0 || resolvedNumberOfRooms === 1) {
+          resolvedNumberOfRooms = parsed;
+        }
+      }
+    }
+  }
+  if (resolvedNumberOfRooms <= 0) {
+    resolvedNumberOfRooms = 1;
+  }
   const resolvedSharingType = safe(
     quotation?.roomType ||
       qd?.rooms?.sharingType ||

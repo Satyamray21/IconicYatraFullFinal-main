@@ -76,6 +76,21 @@ const getQuotationRoomType = (q) => {
     ).trim();
 };
 
+const getQuotationRoomCount = (q) => {
+    if (!q) return 1;
+    const qd =
+        q.tourDetails?.quotationDetails ||
+        q.packageSnapshot?.quotationDetails ||
+        {};
+    return Number(
+        qd.rooms?.numberOfRooms ||
+        qd.noOfRooms ||
+        qd.numberOfRooms ||
+        q.noOfRooms ||
+        1
+    );
+};
+
 /** API expects category (standard/deluxe/superior); UI shows room type from quotation/options. */
 const categoryForHotelPayload = (q, roomType = "") => {
     const pkg = String(q?.finalizedPackage || "").toLowerCase();
@@ -506,7 +521,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                         city: cityName,
                         nights: nights,
                         roomType: qd.rooms?.roomType || qd.roomType || getQuotationRoomType(quotation),
-                        noOfRooms: qd.rooms?.numberOfRooms?.toString() || "1",
+                        noOfRooms: getQuotationRoomCount(quotation).toString(),
                         checkInDate: "",
                         checkInTime: "12:00",
                         checkOutDate: "",
@@ -551,7 +566,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             city: "",
             nights: 1,
             roomType: getQuotationRoomType(quotation),
-            noOfRooms: "1",
+            noOfRooms: getQuotationRoomCount(quotation).toString(),
             checkInDate: "",
             checkInTime: "12:00",
             checkOutDate: "",
