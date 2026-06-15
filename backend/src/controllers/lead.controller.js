@@ -534,14 +534,14 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
 
   // FIX: Change 'Confirm' to 'Confirmed' to match frontend and error message
-  const allowedStatuses = ['Active', 'Cancelled', 'Confirmed'];
+  const allowedStatuses = ['Active', 'Cancelled', 'Confirmed', 'Not Converted'];
 
   if (!leadId) {
     throw new ApiError(400, "leadId is required");
   }
 
   if (!status || !allowedStatuses.includes(status)) {
-    throw new ApiError(400, "Valid status is required (Active, Cancelled, Confirmed)");
+    throw new ApiError(400, "Valid status is required (Active, Cancelled, Confirmed, Not Converted)");
   }
 
   const lead = await Lead.findOne({ leadId });
@@ -551,14 +551,6 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
   }
 
   const currentStatus = lead.status;
-
-  if (currentStatus === 'Cancelled') {
-    throw new ApiError(400, "Cancelled lead cannot be changed to another status");
-  }
-
-  if (currentStatus === 'Confirmed' && status === 'Active') {
-    throw new ApiError(400, "Confirmed lead cannot be changed back to Active");
-  }
 
   if (currentStatus === status) {
     return res.status(200).json(new ApiResponse(200, lead, `Status is already ${status}`));
