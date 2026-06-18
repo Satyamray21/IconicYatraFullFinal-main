@@ -15,7 +15,7 @@ import {
   buildHotelConfirmationEmail,
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
-import { buildHotelConfirmationPdf } from "../../utils/hotelConfirmationPdf.js";
+import { buildHotelConfirmationPdf, quotationWithConfirmedHotels } from "../../utils/hotelConfirmationPdf.js";
 import { buildPaymentReceiptPdf } from "../../utils/paymentReceiptPdf.js";
 import emailQueue from "../../utils/emailQueue.js";
 import PDFDocument from "pdfkit";
@@ -127,6 +127,7 @@ export const createQuickQuotation = async (req, res) => {
   try {
     const {
       customerName,
+      title,
       email,
       phone,
       clientLocation,
@@ -210,6 +211,7 @@ export const createQuickQuotation = async (req, res) => {
 
     const newQuotation = await QuickQuotation.create({
       customerName,
+      title: title || "Mr",
       email,
       phone,
       clientLocation: String(clientLocation || "").trim(),
@@ -1418,12 +1420,14 @@ export const saveQuickConfirmedHotels = async (req, res) => {
 export const sendQuickHotelConfirmationMail = async (req, res) => {
   try {
     const mongoId = await resolveQuickQuotationMongoId(req.params.id);
-    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
+    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf, confirmedHotels } = req.body;
 
     const quotation = await QuickQuotation.findById(mongoId).lean();
     if (!quotation) {
       return res.status(404).json({ message: "Quotation not found" });
     }
+
+    const outputQuotation = quotationWithConfirmedHotels(quotation, confirmedHotels);
 
     const company = await resolveCompanyForEmail({ 
       companyId: req.body.companyId || req.user?.companyId, 
@@ -1485,11 +1489,11 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
         );
         htmlBody = buildCustomQuotationBookingEmail(shaped, bookingPayload);
       } else {
-        htmlBody = buildHotelConfirmationEmail(quotation, options);
+        htmlBody = buildHotelConfirmationEmail(outputQuotation, options);
       }
     }
 
-    const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
+    const pdfBuffer = await buildHotelConfirmationPdf(outputQuotation, options);
     const auth = await resolveMailAuth(senderAccount, company);
     const smtpConfig = {
       ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
@@ -1540,12 +1544,14 @@ export const sendQuickHotelConfirmationMail = async (req, res) => {
 export const previewQuickHotelConfirmation = async (req, res) => {
   try {
     const mongoId = await resolveQuickQuotationMongoId(req.params.id);
-    const { customText, mailType, nextPayableAmount, paymentDueDate } = req.body;
+    const { customText, mailType, nextPayableAmount, paymentDueDate, confirmedHotels } = req.body;
 
     const quotation = await QuickQuotation.findById(mongoId).lean();
     if (!quotation) {
       return res.status(404).json({ message: "Quotation not found" });
     }
+
+    const outputQuotation = quotationWithConfirmedHotels(quotation, confirmedHotels);
 
     const company = await resolveCompanyForEmail({ 
       companyId: req.body.companyId || req.user?.companyId, 
@@ -1602,7 +1608,7 @@ export const previewQuickHotelConfirmation = async (req, res) => {
       );
       htmlBody = buildCustomQuotationBookingEmail(shaped, bookingPayload);
     } else {
-      htmlBody = buildHotelConfirmationEmail(quotation, options);
+      htmlBody = buildHotelConfirmationEmail(outputQuotation, options);
     }
 
     res.status(200).json({ success: true, data: { html: htmlBody } });

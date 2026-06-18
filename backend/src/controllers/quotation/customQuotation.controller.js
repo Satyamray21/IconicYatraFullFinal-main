@@ -20,7 +20,7 @@ import {
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
 import ReceivedVoucher from "../../models/payment.model.js";
-import { buildHotelConfirmationPdf } from "../../utils/hotelConfirmationPdf.js";
+import { buildHotelConfirmationPdf, quotationWithConfirmedHotels } from "../../utils/hotelConfirmationPdf.js";
 import { buildPaymentReceiptPdf } from "../../utils/paymentReceiptPdf.js";
 import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 
@@ -1204,12 +1204,14 @@ export const saveConfirmedHotels = async (req, res) => {
 export const sendHotelConfirmationMail = async (req, res) => {
   try {
     const { id } = req.params;
-    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
+    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf, confirmedHotels } = req.body;
 
     const quotation = await CustomQuotation.findById(id).lean();
     if (!quotation) {
       return res.status(404).json({ message: "Quotation not found" });
     }
+
+    const outputQuotation = quotationWithConfirmedHotels(quotation, confirmedHotels);
 
     const company = await resolveCompanyForEmail({ 
       companyId: req.body.companyId || req.user?.companyId, 
@@ -1268,11 +1270,11 @@ export const sendHotelConfirmationMail = async (req, res) => {
         );
         htmlBody = buildCustomQuotationBookingEmail(quotation, bookingPayload);
       } else {
-        htmlBody = buildHotelConfirmationEmail(quotation, options);
+        htmlBody = buildHotelConfirmationEmail(outputQuotation, options);
       }
     }
 
-    const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
+    const pdfBuffer = await buildHotelConfirmationPdf(outputQuotation, options);
     
     const auth = await resolveMailAuth(senderAccount, company);
 
@@ -1325,12 +1327,14 @@ export const sendHotelConfirmationMail = async (req, res) => {
 export const previewHotelConfirmation = async (req, res) => {
   try {
     const { id } = req.params;
-    const { customText, mailType, nextPayableAmount, paymentDueDate } = req.body;
+    const { customText, mailType, nextPayableAmount, paymentDueDate, confirmedHotels } = req.body;
 
     const quotation = await CustomQuotation.findById(id).lean();
     if (!quotation) {
       return res.status(404).json({ message: "Quotation not found" });
     }
+
+    const outputQuotation = quotationWithConfirmedHotels(quotation, confirmedHotels);
 
     const company = await resolveCompanyForEmail({ 
       companyId: req.body.companyId || req.user?.companyId, 
@@ -1384,7 +1388,7 @@ export const previewHotelConfirmation = async (req, res) => {
       );
       htmlBody = buildCustomQuotationBookingEmail(quotation, bookingPayload);
     } else {
-      htmlBody = buildHotelConfirmationEmail(quotation, options);
+      htmlBody = buildHotelConfirmationEmail(outputQuotation, options);
     }
 
     res.status(200).json(new ApiResponse(200, { html: htmlBody }, "Preview generated"));

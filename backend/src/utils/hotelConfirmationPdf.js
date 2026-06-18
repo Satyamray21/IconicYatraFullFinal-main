@@ -5,6 +5,27 @@ const FONT_BODY = "Times-Roman";
 const FONT_BOLD = "Times-Bold";
 const FONT_ITALIC = "Times-Italic";
 
+/** Custom booking PNR from the stay row wins; otherwise company default confirmation text. */
+export const resolveHotelBookingPnr = (
+  hotel = {},
+  companyName = "Iconic Travel",
+) => {
+  const custom = String(hotel?.bookingPnr ?? "").trim();
+  if (custom) return custom;
+  const company =
+    String(companyName || "Iconic Travel").trim() || "Iconic Travel";
+  return `${company} (for Confirmation)`;
+};
+
+/** Prefer in-form hotel rows (e.g. before save) over persisted quotation data. */
+export const quotationWithConfirmedHotels = (quotation, confirmedHotels) => {
+  if (!quotation) return quotation;
+  if (!Array.isArray(confirmedHotels) || confirmedHotels.length === 0) {
+    return quotation;
+  }
+  return { ...quotation, confirmedHotels };
+};
+
 export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
   const companyName = options.companyName || "Iconic Travel";
   const companyMobile = options.phone || options.companyMobile || "8130883907";
@@ -25,8 +46,12 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
   const cancellationPolicy = pickHttp(options.cancellationPolicy);
   const paymentLink = pickHttp(options.paymentLink);
 
-  const guestName =
+  const guestTitle = String(
+    quotation?.title || quotation?.clientDetails?.title || "",
+  ).trim();
+  const guestBaseName =
     quotation?.clientDetails?.clientName || quotation?.customerName || "Guest";
+  const guestName = guestTitle ? `${guestTitle}. ${guestBaseName}` : guestBaseName;
   const bookingId =
     quotation?.bookingId ||
     quotation?.quotationId ||
@@ -282,11 +307,15 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
           ["Guest Name -", guestName],
           ["Person-", options.guestsLine || defaultGuestsLine || "N/A"],
           ["Rooms-", hotelRoomsVal],
-          ["Booking PNR -", `${companyName} (for Confirmation)`],
-          ["Check-in Date -", formatDate(h.checkInDate)],
-          ["Check-in Time -", formatTime(h.checkInTime)],
-          ["Check Out Date -", formatDate(h.checkOutDate)],
-          ["Check Out Time -", formatTime(h.checkOutTime)],
+          ["Booking ID/PNR -", resolveHotelBookingPnr(h, companyName)],
+          [
+            "Check-in Date -",
+            `${formatDate(h.checkInDate)}, Time - ${formatTime(h.checkInTime)}`,
+          ],
+          [
+            "Check Out Date -",
+            `${formatDate(h.checkOutDate)}, Time - ${formatTime(h.checkOutTime)}`,
+          ],
           ["Room Type-", h.roomType || "Standard"],
           ["Contact No-", `${h.contactNo || "N/A"} (Manager)`],
         ];
@@ -406,13 +435,10 @@ export const buildHotelConfirmationPdf = async (quotation, options = {}) => {
             .fillColor("#000000")
             .font(FONT_BOLD)
             .text("Cancellation Policy: ", { continued: true });
-          doc
-            .fillColor("#0000ff")
-            .font(FONT_BODY)
-            .text(cancellationPolicy, {
-              link: cancellationPolicy,
-              underline: true,
-            });
+          doc.fillColor("#0000ff").font(FONT_BODY).text(cancellationPolicy, {
+            link: cancellationPolicy,
+            underline: true,
+          });
         }
 
         if (paymentLink) {

@@ -149,6 +149,22 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         return merged.length > 0 ? merged : ["Standard", "Deluxe", "Superior"];
     }, [leadOptions, quotation]);
 
+    const selectedCompanyName = React.useMemo(() => {
+        const company = mailCompanies.find((c) => c._id === selectedCompanyId);
+        return company?.companyName || quotation?.companyName || "Iconic Travel";
+    }, [mailCompanies, selectedCompanyId, quotation?.companyName]);
+
+    const defaultBookingPnr = `${selectedCompanyName} (for Confirmation)`;
+
+    const hotelsForApi = React.useCallback(
+        (rows = hotels) =>
+            (rows || []).map(({ id, _id, ...hotel }) => ({
+                ...hotel,
+                bookingPnr: String(hotel.bookingPnr || "").trim(),
+            })),
+        [hotels],
+    );
+
     // Rich Booking Email states
     const [mailType, setMailType] = useState("booking"); // "hotel" or "booking"
     const [ccEmail, setCcEmail] = useState("");
@@ -441,6 +457,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 const res = await axios.post(endpoint, {
                     companyId: selectedCompanyId,
                     senderAccount: senderAccount,
+                    confirmedHotels: hotelsForApi(),
                     customText: {
                         additionalNote: customMessage,
                         signature: signatureHtml,
@@ -460,6 +477,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 const res = await axios.post(endpoint, {
                     companyId: selectedCompanyId,
                     senderAccount: senderAccount,
+                    confirmedHotels: hotelsForApi(),
                     customText: {
                         signature: signatureHtml,
                         booking: {
@@ -492,6 +510,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             if (!prevOpenRef.current) {
                 setRecipientEmail(quotation.email || quotation.clientDetails?.email || "");
                 setRecipientName(quotation.clientDetails?.clientName || quotation.customerName || "");
+                setSalutation(quotation.title || quotation.clientDetails?.title || "");
                 const qId = quotation.quotationId || quotation.quickQuotationId || quotation._id;
                 setSubject(`Hotel Confirmation Voucher - ${qId || ""}`);
             }
@@ -768,7 +787,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 ? `/quickQT/${quotation._id}/save-confirmed-hotels`
                 : `/customQT/${quotation._id}/save-confirmed-hotels`;
 
-            await axios.post(endpoint, { confirmedHotels: hotels });
+            await axios.post(endpoint, { confirmedHotels: hotelsForApi() });
 
             setSnackbar({ open: true, message: "Hotel details saved successfully", severity: "success" });
             if (onSaveSuccess) {
@@ -784,6 +803,17 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     const handleSendMail = async () => {
         setSending(true);
         try {
+            const saveEndpoint = type === "quick"
+                ? `/quickQT/${quotation._id}/save-confirmed-hotels`
+                : `/customQT/${quotation._id}/save-confirmed-hotels`;
+            const confirmedHotelsPayload = hotelsForApi();
+
+            try {
+                await axios.post(saveEndpoint, { confirmedHotels: confirmedHotelsPayload });
+            } catch (saveErr) {
+                console.warn("Could not persist hotel details before send:", saveErr);
+            }
+
             let receiptPdfAttachment = null;
 
             if (selectedReceiptId && mailType === "booking") {
@@ -831,6 +861,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 mailType: mailType,
                 companyId: selectedCompanyId,
                 senderAccount: senderAccount,
+                confirmedHotels: confirmedHotelsPayload,
                 receiptPdf: receiptPdfAttachment,
                 paymentVoucherId: mailType === "booking" ? selectedReceiptId : undefined,
                 nextPayableAmount: nextPayableAmount,
@@ -1521,6 +1552,12 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     fullWidth
                                     size="small"
                                     value={hotel.bookingPnr}
+                                    placeholder={defaultBookingPnr}
+                                    helperText={
+                                        String(hotel.bookingPnr || "").trim()
+                                            ? "Custom PNR will be used in the email and PDF."
+                                            : `Leave blank to use default: ${defaultBookingPnr}`
+                                    }
                                     onChange={(e) => handleChange(hotel.id, "bookingPnr", e.target.value)}
                                 />
                             </Grid>

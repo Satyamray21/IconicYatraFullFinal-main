@@ -5,6 +5,12 @@ import { policySchema } from "../../common/policy.js";
 const quickQuotationSchema = new mongoose.Schema(
     {
         customerName: { type: String, required: true, trim: true },
+        title: {
+            type: String,
+            enum: ["Mr", "Mrs", "Ms"],
+            default: "Mr",
+            trim: true,
+        },
         email: { type: String, required: true, trim: true },
         phone: { type: String, trim: true },
         clientLocation: { type: String, trim: true, default: "" },

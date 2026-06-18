@@ -37,6 +37,7 @@ export const generateBookingId = async (companyName) => {
         { upsert: true, new: true }
     );
 
-    const seq = String(counter.seq).padStart(4, "0");
+    const padLength = prefix === "ITRK" ? 6 : 4;
+    const seq = String(counter.seq).padStart(padLength, "0");
     return `${prefix}${seq}`;
 };

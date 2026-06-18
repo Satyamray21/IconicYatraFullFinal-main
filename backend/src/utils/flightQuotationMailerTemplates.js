@@ -131,11 +131,11 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
         <br/>
         <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
-        <div style="text-align:center;">
+        <div style="text-align:left; display:flex; flex-direction:column; align-items:flex-start;">
         ${(bankDetails || [])
           .map(
             (b, i) => `
-                    <div style="margin-bottom:12px;">
+                    <div style="margin-bottom:12px; text-align:left;">
                         <b>${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
                           b?.branchName,
                           "Branch",
@@ -184,6 +184,9 @@ export function buildFlightQuotationNormalEmail(data, customText = {}) {
 
   return `
     <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <style>
+            p { margin: 4px 0; }
+        </style>
         <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, "Dear Sir/Ma'am,")}
         </p>
@@ -254,6 +257,9 @@ export function buildFlightQuotationBookingEmail(data, customText = {}) {
 
   return `
     <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+      <style>
+        p { margin: 4px 0; }
+      </style>
       <p style="color:#003366; font-weight:bold; font-size: 16px;">
         ${safe(customText.greeting, `Dear ${safe(quotation?.personalDetails?.fullName, "Guest")},`)}
       </p>
