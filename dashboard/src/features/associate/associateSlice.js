@@ -1,10 +1,17 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "../../utils/axios";
 
+const normalizeAssociateList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.data)) return payload.data.data;
+  return [];
+};
+
 // Fetch all associates
 export const fetchAllAssociates = createAsyncThunk("associate/fetchAll", async () => {
   const res = await axios.get("/associate");
-  return res.data;
+  return normalizeAssociateList(res.data);
 });
 
 export const fetchAssociateStats = createAsyncThunk("associate/fetchStats", async () => {
@@ -109,11 +116,14 @@ export const updateAssociate = createAsyncThunk("associate/update", async ({ id,
   }
 });
 
-// Delete associate
-export const deleteAssociate = createAsyncThunk("associate/delete", async (id) => {
-  await axios.delete(`/associate/${id}`);
-  return id;
-});
+// Delete associate by associateId (same pattern as staff/staffId)
+export const deleteAssociate = createAsyncThunk(
+  "associate/delete",
+  async (associateId) => {
+    await axios.delete(`/associate/${encodeURIComponent(associateId)}`);
+    return associateId;
+  },
+);
 
 const associateSlice = createSlice({
   name: "associate",
@@ -203,7 +213,9 @@ const associateSlice = createSlice({
       })
       .addCase(deleteAssociate.fulfilled, (state, action) => {
         state.deleting = false;
-        state.list = state.list.filter(item => item._id !== action.payload);
+        state.list = state.list.filter(
+          (item) => item.associateId !== action.payload,
+        );
       })
       .addCase(deleteAssociate.rejected, (state, action) => {
         state.deleting = false;

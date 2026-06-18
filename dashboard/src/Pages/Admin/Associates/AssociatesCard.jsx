@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -19,7 +19,7 @@ import {
   DialogContent,
   DialogActions,
 } from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
+import { DataGrid, GridActionsCellItem } from "@mui/x-data-grid";
 import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -56,6 +56,7 @@ const AssociateDashboard = () => {
   });
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
+    deleteId: null,
     associateId: null,
     associateName: "",
   });
@@ -75,26 +76,30 @@ const AssociateDashboard = () => {
     navigate("/associatesform");
   };
 
-  const handleEditClick = (row) => {
+  const handleEditClick = useCallback((row) => {
+    if (!row?.associateId) return;
     navigate(`/associates/associateseditform/${row.associateId}`);
-  };
+  }, [navigate]);
 
-  const handleDeleteClick = (row) => {
+  const handleDeleteClick = useCallback((associateId, associateName) => {
+    if (!associateId) return;
     setDeleteDialog({
       open: true,
-      associateId: row.associateId,
-      associateName: row.associateName,
+      deleteId: associateId,
+      associateId,
+      associateName: associateName || "",
     });
-  };
+  }, []);
 
-  const handleViewQuotations = (row) => {
+  const handleViewQuotations = useCallback((row) => {
+    if (!row?.associateId) return;
     setQuotationsDialog({
       open: true,
       associateId: row.associateId,
       associateName: row.associateName,
     });
     dispatch(fetchAssociateQuotations(row.associateId));
-  };
+  }, [dispatch]);
 
   const handleCloseQuotationsDialog = () => {
     setQuotationsDialog({
@@ -122,24 +127,35 @@ const AssociateDashboard = () => {
   };
 
   const confirmDelete = () => {
-    if (deleteDialog.associateId) {
-      dispatch(deleteAssociate(deleteDialog.associateId))
+    const idToDelete = deleteDialog.deleteId;
+    if (idToDelete) {
+      dispatch(deleteAssociate(idToDelete))
         .unwrap()
         .then(() => {
           showSnackbar("Associate deleted successfully", "success");
-          // Refresh the list
           dispatch(fetchAllAssociates());
+          dispatch(fetchAssociateStats());
         })
         .catch((error) => {
           console.error("Failed to delete associate:", error);
           showSnackbar("Failed to delete associate", "error");
         });
     }
-    setDeleteDialog({ open: false, associateId: null, associateName: "" });
+    setDeleteDialog({
+      open: false,
+      deleteId: null,
+      associateId: null,
+      associateName: "",
+    });
   };
 
   const cancelDelete = () => {
-    setDeleteDialog({ open: false, associateId: null, associateName: "" });
+    setDeleteDialog({
+      open: false,
+      deleteId: null,
+      associateId: null,
+      associateName: "",
+    });
   };
 
   const showSnackbar = (message, severity = "success") => {
@@ -157,92 +173,106 @@ const AssociateDashboard = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // Filter associates based on search term
-  const filteredAssociates = associateList.filter((associate) => {
+  const filteredAssociates = useMemo(() => {
     const searchLower = searchTerm.toLowerCase();
-    return (
+    return associateList.filter((associate) => (
       associate.personalDetails?.fullName?.toLowerCase().includes(searchLower) ||
       associate.personalDetails?.email?.toLowerCase().includes(searchLower) ||
       associate.personalDetails?.mobileNumber?.includes(searchTerm) ||
       associate.associateId?.toLowerCase().includes(searchLower) ||
       associate.firm?.firmName?.toLowerCase().includes(searchLower)
-    );
-  });
+    ));
+  }, [associateList, searchTerm]);
 
-  const mappedAssociateList = filteredAssociates.map((associate, index) => ({
-    id: index + 1,
-    associateId: associate.associateId,
-    associateType: associate.personalDetails?.associateType,
-    associateName: associate.personalDetails?.fullName || "",
-    mobile: associate.personalDetails?.mobileNumber || "",
-    email: associate.personalDetails?.email || "",
-    city: associate.staffLocation?.city || "",
-    firm: associate.firm?.firmName || "",
-  }));
+  const mappedAssociateList = useMemo(
+    () =>
+      filteredAssociates.map((associate, index) => {
+        const associateId =
+          associate.associateId ||
+          (associate._id ? String(associate._id) : `missing-id-${index}`);
+        const rowKey = associate._id
+          ? String(associate._id)
+          : associateId;
+        return {
+          rowKey,
+          id: associateId,
+          srNo: index + 1,
+          associateId,
+          associateType: associate.personalDetails?.associateType,
+          associateName: associate.personalDetails?.fullName || "",
+          mobile: associate.personalDetails?.mobileNumber || "",
+          email: associate.personalDetails?.email || "",
+          city: associate.staffLocation?.city || "",
+          firm: associate.firm?.firmName || "",
+        };
+      }),
+    [filteredAssociates],
+  );
 
-  const columns = [
-    { field: "id", headerName: "Sr No.", width: 60 },
-    { field: "associateId", headerName: "Associate Id", width: 150 },
-    { field: "associateType", headerName: "Associate Type", width: 150 },
-    {
-      field: "associateName",
-      headerName: "Associate Name",
-      width: 200,
-      renderCell: (params) => (
-        <Typography
-          variant="body2"
-          sx={{
-            color: "primary.main",
-            cursor: "pointer",
-            fontWeight: 500,
-            textDecoration: "underline",
-            "&:hover": { color: "primary.dark" },
-          }}
-          onClick={() => handleViewQuotations(params.row)}
-          title="View assigned quotations"
-        >
-          {params.row.associateName}
-        </Typography>
-      ),
-    },
-    { field: "mobile", headerName: "Mobile", width: 120 },
-    { field: "email", headerName: "Email", width: 200 },
-    { field: "city", headerName: "City", width: 90 },
-    { field: "firm", headerName: "Firm", width: 150 },
-    {
-      field: "action",
-      headerName: "Action",
-      width: 160,
-      renderCell: (params) => (
-        <Box display="flex" gap={1}>
-          <IconButton
-            color="info"
-            size="small"
+  const columns = useMemo(
+    () => [
+      { field: "srNo", headerName: "Sr No.", width: 60 },
+      { field: "associateId", headerName: "Associate Id", width: 150 },
+      { field: "associateType", headerName: "Associate Type", width: 150 },
+      {
+        field: "associateName",
+        headerName: "Associate Name",
+        width: 200,
+        renderCell: (params) => (
+          <Typography
+            variant="body2"
+            sx={{
+              color: "primary.main",
+              cursor: "pointer",
+              fontWeight: 500,
+              textDecoration: "underline",
+              "&:hover": { color: "primary.dark" },
+            }}
             onClick={() => handleViewQuotations(params.row)}
-            title="View Assigned Quotations"
+            title="View assigned quotations"
           >
-            <ReceiptLongIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            color="primary"
-            size="small"
+            {params.row.associateName}
+          </Typography>
+        ),
+      },
+      { field: "mobile", headerName: "Mobile", width: 120 },
+      { field: "email", headerName: "Email", width: 200 },
+      { field: "city", headerName: "City", width: 90 },
+      { field: "firm", headerName: "Firm", width: 150 },
+      {
+        field: "actions",
+        type: "actions",
+        headerName: "Action",
+        width: 120,
+        getActions: (params) => [
+          <GridActionsCellItem
+            key="view"
+            icon={<ReceiptLongIcon fontSize="small" />}
+            label="View Assigned Quotations"
+            onClick={() => handleViewQuotations(params.row)}
+            showInMenu={false}
+          />,
+          <GridActionsCellItem
+            key="edit"
+            icon={<EditIcon fontSize="small" />}
+            label="Edit Associate"
             onClick={() => handleEditClick(params.row)}
-            title="Edit Associate"
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            color="error"
-            size="small"
-            onClick={() => handleDeleteClick(params.row)}
-            title="Delete Associate"
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      ),
-    },
-  ];
+            showInMenu={false}
+          />,
+          <GridActionsCellItem
+            key="delete"
+            icon={<DeleteIcon fontSize="small" />}
+            label="Delete Associate"
+            onClick={() =>
+              handleDeleteClick(params.row.associateId, params.row.associateName)
+            }
+            showInMenu={false}
+          />,
+        ],
+      },
+    ],
+    [handleDeleteClick, handleEditClick, handleViewQuotations],
+  );
 
   const quotationColumns = [
     { field: "srNo", headerName: "Sr No.", width: 70 },
@@ -355,8 +385,11 @@ const AssociateDashboard = () => {
               <DataGrid
                 rows={mappedAssociateList}
                 columns={columns}
-                pageSize={7}
-                rowsPerPageOptions={[7, 25, 50, 100]}
+                getRowId={(row) => row.rowKey}
+                initialState={{
+                  pagination: { paginationModel: { pageSize: 7 } },
+                }}
+                pageSizeOptions={[7, 25, 50, 100]}
                 autoHeight
                 disableRowSelectionOnClick
                 loading={loading}
@@ -378,7 +411,11 @@ const AssociateDashboard = () => {
         <DialogContent>
           <Typography>
             Are you sure you want to delete associate{" "}
-            <strong>{deleteDialog.associateName}</strong>? This action cannot be undone.
+            <strong>{deleteDialog.associateName}</strong>
+            {deleteDialog.associateId ? (
+              <> ({deleteDialog.associateId})</>
+            ) : null}
+            ? This action cannot be undone.
           </Typography>
         </DialogContent>
         <DialogActions>

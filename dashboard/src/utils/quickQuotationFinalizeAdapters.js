@@ -161,6 +161,7 @@ export function quickToHotelsFormData(quick) {
     return {
         clientDetails: {
             clientName: quick?.customerName || "",
+            title: quick?.title || "",
             phone: quick?.phone || "",
             email: quick?.email || "",
         },

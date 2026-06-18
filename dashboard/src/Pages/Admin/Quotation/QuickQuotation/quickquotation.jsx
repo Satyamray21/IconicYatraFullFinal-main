@@ -121,6 +121,7 @@ const QuickQuotationForm = () => {
 
       const apiData = {
         customerName: finalData.clientDetails?.customerName || "",
+        title: finalData.clientDetails?.title || "Mr",
         email: finalData.clientDetails?.email || "",
         phone: finalData.clientDetails?.phone || "",
         clientLocation: finalData.clientDetails?.clientLocation || "",
@@ -319,7 +320,7 @@ const QuickQuotationForm = () => {
   const getStepContent = (step) => {
     switch (step) {
       case 0:
-        return <StepClientDetails onNext={handleNext} convertSector={convertSector} convertNights={convertNights} />;
+        return <StepClientDetails onNext={handleNext} convertSector={convertSector} convertNights={convertNights} initialClientDetails={formData.clientDetails} />;
       case 1:
         return (
           <StepPackageDetails

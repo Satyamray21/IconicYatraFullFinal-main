@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Associate } from "../models/associates.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import QuickQuotation from "../models/quotation/quickQuotation.model.js";
@@ -187,12 +188,27 @@ export const updateAssociate = async (req, res, next) => {
   }
 };
 
-// Delete Associate
+// Delete Associate — prefer associateId (matches Staff/staffId pattern)
 export const deleteAssociate = async (req, res, next) => {
   try {
-    const deleted = await Associate.findOneAndDelete(req.params.id);
+    const { id } = req.params;
+    let deleted = await Associate.findOneAndDelete({ associateId: id });
+
+    if (
+      !deleted &&
+      mongoose.Types.ObjectId.isValid(id) &&
+      String(new mongoose.Types.ObjectId(id)) === id
+    ) {
+      deleted = await Associate.findByIdAndDelete(id);
+    }
+
     if (!deleted) return res.status(404).json({ message: "Not found" });
-    res.status(200).json({ message: "Deleted successfully" });
+
+    res.status(200).json({
+      message: "Deleted successfully",
+      _id: deleted._id,
+      associateId: deleted.associateId,
+    });
   } catch (err) {
     next(err);
   }

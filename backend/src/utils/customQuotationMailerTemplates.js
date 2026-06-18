@@ -40,6 +40,26 @@ const pkgKey = (q = {}) => {
   return ["standard", "deluxe", "superior"].includes(p) ? p : "standard";
 };
 
+const guestDisplayName = (quotation = {}) => {
+  const title = safe(quotation?.clientDetails?.title || quotation?.title, "");
+  const name = safe(
+    quotation?.clientDetails?.clientName || quotation?.customerName,
+    "Guest",
+  );
+  return title ? `${title}. ${name}` : name;
+};
+
+const guestGreeting = (quotation = {}, customGreeting) => {
+  const custom = safe(customGreeting, "");
+  if (custom) return custom;
+  const title = safe(quotation?.clientDetails?.title || quotation?.title, "");
+  const name = safe(
+    quotation?.clientDetails?.clientName || quotation?.customerName,
+    "Guest",
+  );
+  return title ? `Dear ${title}. ${name},` : `Dear ${name},`;
+};
+
 export const packageTotals = (q = {}) => {
   const qd = q?.tourDetails?.quotationDetails || {};
   const calc = qd.packageCalculations || {};
@@ -289,11 +309,11 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
         <br/>
         <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
-        <div style="text-align:center;">
+        <div style="text-align:left; display:flex; flex-direction:column; align-items:flex-start;">
         ${(bankDetails || [])
           .map(
             (b, i) => `
-                    <div style="margin-bottom:12px;">
+                    <div style="margin-bottom:12px; text-align:left;">
                         <b>${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
                           b?.branchName,
                           "Branch",
@@ -396,6 +416,9 @@ export const buildCustomQuotationNormalEmail = (
 
   return `
     <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <style>
+            p { margin: 4px 0; }
+        </style>
 
         <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, "Dear Sir/Ma'am,")}
@@ -413,7 +436,8 @@ export const buildCustomQuotationNormalEmail = (
     <a href="${companyWebsite}" target="_blank" style="font-weight:bold; color:#1976d2; text-decoration:none;">
         ${companyWebsite}
     </a>
-    <p>
+   </p>
+   <p>
 This is referenced in our discussion regarding your forthcoming Tour to the 
 <span style="color:#003366; font-weight:bold;">
     ${td.quotationTitle}
@@ -544,6 +568,9 @@ export const buildCustomQuotationPdfPreviewEmail = (
 
   return `
     <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <style>
+            p { margin: 4px 0; }
+        </style>
 
         <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, "Dear Sir/Ma'am,")}
@@ -561,7 +588,8 @@ export const buildCustomQuotationPdfPreviewEmail = (
     <a href="${companyWebsite}" target="_blank" style="font-weight:bold; color:#1976d2; text-decoration:none;">
         ${companyWebsite}
     </a>
-    <p>
+   </p>
+   <p>
 This is referenced in our discussion regarding your forthcoming Tour to the 
 <span style="color:#003366; font-weight:bold;">
     ${td.quotationTitle}
@@ -668,8 +696,11 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
 
   return `
     <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <style>
+            p { margin: 4px 0; }
+        </style>
         <p style="color:#003366; font-weight:bold; font-size: 16px;">
-            ${safe(customText.greeting, `Dear ${safe(quotation?.clientDetails?.clientName, "Guest")},`)}
+            ${safe(customText.greeting, guestGreeting(quotation))}
         </p>
         <p style="color:#003366; font-weight:bold; font-size: 18px;">
             ${safe(customText.opening, `BOOKING CONFIRMATION FROM ${companyName.toUpperCase()}!!!`)}
@@ -995,7 +1026,10 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     quotationId: String(quick.quickQuotationId || quick._id || ""),
     quickQuotationId: String(quick.quickQuotationId || ""),
     bookingId: safe(quick.bookingId, ""),
-    clientDetails: { clientName: safe(quick.customerName, "Guest") },
+    clientDetails: {
+      clientName: safe(quick.customerName, "Guest"),
+      title: safe(quick.title, ""),
+    },
     finalizedPackage,
     confirmedHotels: quick.confirmedHotels || [],
     tourDetails: {
@@ -1134,7 +1168,7 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
   const companyMobile = safe(options.companyMobile, "+91-8130883907");
   const companyAddress = safe(options.companyAddress, "2nd floor, B Block B-25 Sector- 64, Noida Uttar Pradesh 201301");
   
-  const guestName = safe(quotation?.clientDetails?.clientName || quotation?.customerName, "Guest");
+  const guestName = guestDisplayName(quotation);
   const bookingId = safe(quotation?.bookingId || quotation?.quotationId || quotation?.quickQuotationId, "Booking Id");
   const adults = toNum(quotation?.adults || qd?.adults);
   const children = toNum(quotation?.children || qd?.children);
@@ -1201,7 +1235,7 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
         <p style="margin: 2px 0;"><b>Guest Name -</b> ${guestName}</p>
         <p style="margin: 2px 0;"><b>Person -</b> ${guestsLine}</p>
         <p style="margin: 2px 0;"><b>Rooms -</b> ${safe(h.noOfRooms)}</p>
-        <p style="margin: 2px 0;"><b>Booking PNR -</b> ${safe(h.bookingPnr, "Iconic Travel (for Confirmation)")}</p>
+        <p style="margin: 2px 0;"><b>Booking PNR -</b> ${safe(h.bookingPnr, `${companyName} (for Confirmation)`)}</p>
         <p style="margin: 2px 0;"><b>Check-in Date -</b> ${safe(h.checkInDate)}, Time – 12: 00 PM</p>
         <p style="margin: 2px 0;"><b>Check Out Date -</b> ${safe(h.checkOutDate)}, Time – 11:00 AM</p>
         <p style="margin: 2px 0;"><b>Room Type -</b> ${safe(h.roomType)}</p>
@@ -1216,7 +1250,7 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
             <p style="color: #666; margin: 5px 0;">${companyName}</p>
         </div>
 
-        <p>Dear ${guestName},</p>
+        <p>Dear ${guestDisplayName(quotation)},</p>
         <p>Thank you for choosing ${companyName}, we are pleased to inform you to start planning your way for the following to be confirmed successfully.</p>
         
         ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
