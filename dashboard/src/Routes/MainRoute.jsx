@@ -108,6 +108,9 @@ const Profile = lazy(() => import("../Pages/Admin/Profile/Profile"));
 const QuotationCard = lazy(() =>
   import("../Pages/Admin/Quotation/QuotationCard")
 );
+const HotelAvailability = lazy(() => 
+  import("../Pages/Admin/Quotation/HotelAvailability/HotelAvailability")
+);
 const VehicleQuotation = lazy(() =>
   import("../Pages/Admin/Quotation/VehicleQuotation/VehicleQuotation")
 );
@@ -390,6 +393,7 @@ const MainRoute = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/edit" element={<EditProfile />} />
           <Route path="/quotation" element={<QuotationCard />} />
+          <Route path="/hotel-availability" element={<HotelAvailability />} />
           <Route path="/vehiclequotation" element={<VehicleQuotation />} />
           <Route path="/hotelquotation" element={<HotelQuotationMain />} />
           <Route path="/flightquotation" element={<FlightQuotation />} />
