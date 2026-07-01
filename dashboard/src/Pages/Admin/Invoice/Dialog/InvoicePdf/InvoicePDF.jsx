@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useImperativeHandle, forwardRef } from "react";
 import {
   Box,
   Typography,
@@ -17,7 +17,7 @@ import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
-const InvoicePDF = ({ invoiceData }) => {
+const InvoicePDF = forwardRef(({ invoiceData }, ref) => {
   const componentRef = useRef();
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -146,6 +146,72 @@ const InvoicePDF = ({ invoiceData }) => {
     if (n > 0) res += convert(n);
     return res.trim() + " Only INR";
   };
+
+  useImperativeHandle(ref, () => ({
+    generateBase64: async () => {
+      if (!componentRef.current) return null;
+      try {
+        const deviceScale = Math.min(2, window.devicePixelRatio || 1.5);
+        const canvas = await html2canvas(componentRef.current, {
+          scale: deviceScale,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+        });
+
+        const pdf = new jsPDF({
+          orientation: "p",
+          unit: "mm",
+          format: "a4",
+          compress: true,
+        });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const pxPerMm = canvas.width / pdfWidth;
+        const pageHeightInCanvasPx = Math.floor(pdfHeight * pxPerMm);
+        const JPEG_QUALITY = 0.72;
+
+        const sliceCanvas = document.createElement("canvas");
+        const sliceCtx = sliceCanvas.getContext("2d");
+        const totalPages = Math.max(1, Math.ceil(canvas.height / pageHeightInCanvasPx));
+
+        for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+          const sourceY = pageIndex * pageHeightInCanvasPx;
+          const sliceHeight = Math.min(pageHeightInCanvasPx, canvas.height - sourceY);
+          
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = sliceHeight;
+          sliceCtx.fillStyle = "#ffffff";
+          sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+          sliceCtx.drawImage(
+            canvas,
+            0,
+            sourceY,
+            canvas.width,
+            sliceHeight,
+            0,
+            0,
+            canvas.width,
+            sliceHeight
+          );
+
+          const sliceImg = sliceCanvas.toDataURL("image/jpeg", JPEG_QUALITY);
+          const sliceHeightInMm = sliceHeight / pxPerMm;
+
+          if (pageIndex > 0) pdf.addPage();
+          pdf.addImage(sliceImg, "JPEG", 0, 0, pdfWidth, sliceHeightInMm, undefined, "FAST");
+        }
+        
+        // Return base64 string without data:application/pdf;base64, prefix
+        const dataUri = pdf.output("datauristring");
+        return dataUri.split(",")[1];
+      } catch (e) {
+        console.error("Error generating base64:", e);
+        return null;
+      }
+    }
+  }));
 
   const handleDownloadPDF = async () => {
     if (!componentRef.current) return;
@@ -738,7 +804,6 @@ const InvoicePDF = ({ invoiceData }) => {
               {amountToWords(totalAmount)}
             </Box>
           </Box>
-
           <Box sx={{ flex: 1 }}>
             <Typography
               sx={{
@@ -758,9 +823,28 @@ const InvoicePDF = ({ invoiceData }) => {
               <b>Return Date</b>: {formatDate(returnDate)} ,{" "}
               <b>Returning Point </b> : {invoiceData?.dropPoint}
               <br />
-              <b>No Of Pax</b>:{noOfPax} || <b>Cab Type</b> : {cabType}
+              <b>No Of Pax</b>: {noOfPax} &nbsp;||&nbsp; <b>Cab Type</b> : {cabType}
               <br />
               <b>Tour Type</b>: {tourType}
+            </Box>
+          </Box>
+        </Box>
+
+        <Box sx={{ display: "flex", mt: 1 }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography
+              sx={{
+                bgcolor: "#1565c0",
+                color: "#fff",
+                p: 0.5,
+                fontWeight: "bold",
+                fontSize: "10px",
+              }}
+            >
+              Additional Notes
+            </Typography>
+            <Box sx={{ border: "1px solid #1565c0", p: 0.5 }}>
+              {invoiceData?.additionalNote || "-"}
             </Box>
           </Box>
         </Box>
@@ -833,6 +917,6 @@ const InvoicePDF = ({ invoiceData }) => {
       </Box>
     </Box>
   );
-};
+});
 
 export default InvoicePDF;
