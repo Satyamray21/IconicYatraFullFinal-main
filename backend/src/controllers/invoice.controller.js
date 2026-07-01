@@ -1,6 +1,8 @@
 import Invoice from "../models/invoice.model.js";
 import { clearPattern } from "../utils/cache.js";
 import Company from "../models/company.model.js";
+import EmailAccount from "../models/emailAccount.model.js";
+import nodemailer from "nodemailer";
 import { logActivity } from "../utils/ActivityLog.js";
 import {
     renumberInvoicesAfterDeleteForMonth,
@@ -342,4 +344,129 @@ export const backfillExistingInvoiceSerials = async (req, res) => {
     } catch (error) {
         return res.status(500).json({ message: error.message });
     }
+};
+
+const resolveCompanyForEmail = async ({ companyId, companyName }) => {
+  if (companyId) {
+    const byId = await Company.findById(companyId).lean();
+    if (byId) return byId;
+  }
+  if (companyName) {
+    const byName = await Company.findOne({
+      companyName: { $regex: `^${String(companyName).trim()}$`, $options: "i" },
+    }).lean();
+    if (byName) return byName;
+  }
+  return null;
+};
+
+const resolveMailAuth = async (senderAccount, selectedCompany) => {
+  if (senderAccount && senderAccount.length === 24) {
+    try {
+      const account = await EmailAccount.findById(senderAccount).lean();
+      if (account) {
+        return {
+          user: account.email,
+          pass: account.appPassword,
+          service: account.service,
+          host: account.host,
+          port: account.port,
+          secure: account.secure,
+        };
+      }
+    } catch (e) {
+      console.warn("EmailAccount lookup failed:", e.message);
+    }
+  }
+
+  if (selectedCompany?.email && selectedCompany?.emailAppPassword) {
+    return {
+      user: selectedCompany.email,
+      pass: selectedCompany.emailAppPassword,
+      service: "gmail",
+    };
+  }
+
+  const useSecondary = String(senderAccount || "").toLowerCase() === "gmail2";
+  const user = useSecondary
+    ? process.env.gmail2 || process.env.EMAIL_USER2 || process.env.gmail || process.env.EMAIL_USER
+    : process.env.gmail || process.env.EMAIL_USER;
+
+  const pass = useSecondary
+    ? process.env.app_pass2 || process.env.EMAIL_PASS2 || process.env.app_pass || process.env.EMAIL_PASS
+    : process.env.app_pass || process.env.EMAIL_PASS;
+
+  return { user, pass, service: "gmail" };
+};
+
+export const sendInvoiceMail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      to,
+      cc,
+      subject,
+      bodyHtml,
+      senderAccount,
+      companyId,
+      companyName,
+      pdfAttachment,
+    } = req.body || {};
+
+    if (!to || (Array.isArray(to) && to.length === 0)) {
+      return res.status(400).json({ message: "Receiver email is required" });
+    }
+
+    const invoice = await Invoice.findById(id).lean();
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+
+    const selectedCompany = await resolveCompanyForEmail({ companyId, companyName });
+    const auth = await resolveMailAuth(senderAccount, selectedCompany);
+    if (!auth.user || !auth.pass) {
+      return res.status(500).json({ message: "Sender email credentials are not configured" });
+    }
+
+    const smtpConfig = {
+      ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
+      auth: { user: auth.user, pass: auth.pass },
+    };
+
+    const attachments = [];
+    if (pdfAttachment && pdfAttachment.contentBase64) {
+      attachments.push({
+        filename: pdfAttachment.filename || "invoice.pdf",
+        content: Buffer.from(String(pdfAttachment.contentBase64).trim(), "base64"),
+        contentType: String(pdfAttachment.mimeType || "").trim() || "application/pdf",
+      });
+    }
+
+    const transporter = nodemailer.createTransport(smtpConfig);
+
+    const mailOptions = {
+      from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
+      to: Array.isArray(to) ? to.join(",") : to,
+      cc: cc || undefined,
+      subject: subject || `Invoice ${invoice.invoiceNo} - ${invoice.billingName}`,
+      html: bodyHtml || "Please find attached your invoice.",
+      attachments,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    // Optionally log this activity
+    if (req.user) {
+      await logActivity({
+        action: "Email Sent",
+        model: "Invoice",
+        refId: invoice.invoiceNo,
+        user: req.user._id,
+        description: `Invoice email sent to ${to} by ${req.user.name}`
+      });
+    }
+
+    return res.status(200).json({ success: true, message: "Email sent successfully", info });
+  } catch (error) {
+    console.error("Error in sendInvoiceMail:", error);
+    return res.status(500).json({ message: error.message || "Failed to send email" });
+  }
 };
