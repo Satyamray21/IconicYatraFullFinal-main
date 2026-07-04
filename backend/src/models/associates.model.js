@@ -2,67 +2,72 @@ import mongoose from "mongoose";
 import { addressSchema } from "../common/address.common.js";
 import { firmSchema } from "../common/firm.common.js";
 import { bankSchema } from "../common/bankDetails.common.js";
-const associateSchema = mongoose.Schema({
-  personalDetails: {
-    dob: {
-      type: Date,
-    },
-    fullName: {
-      type: String,
-      required: true
-    },
+const associateSchema = mongoose.Schema(
+  {
+    personalDetails: {
+      dob: {
+        type: Date,
+      },
+      fullName: {
+        type: String,
+        required: true,
+      },
 
-
-    mobileNumber: {
-      type: String,
-      required: true,
-      unique: true
+      mobileNumber: {
+        type: String,
+        required: true,
+        unique: true,
+      },
+      alternateContact: {
+        type: String,
+      },
+      associateType: {
+        type: String,
+        enum: [
+          "B2B Vendor",
+          "Hotel Vendor",
+          "Referral Partner",
+          "Staff",
+          "Sub Agent",
+          "Vehicle Vendor",
+        ],
+        required: true,
+      },
+      email: {
+        type: String,
+        required: false,
+        unique: false,
+      },
+      title: {
+        type: String,
+        required: true,
+      },
     },
-    alternateContact: {
+    associateId: {
       type: String,
-      
-    },
-    associateType: {
-      type: String,
-      enum: ["B2B Vendor", "Hotel Vendor", "Referral Partner", "Staff", "Sub Agent", "Vehicle Vendor"],
-      required: true
-    },
-    email: {
-      type: String,
-      required: true,
-      unique: true
-    },
-    title: {
 
-      type: String,
-      required: true,
-    }
-
-
+      unique: true,
+    },
+    staffLocation: {
+      country: {
+        type: String,
+        required: true,
+      },
+      state: {
+        type: String,
+        required: true,
+      },
+      city: {
+        type: String,
+        required: true,
+      },
+    },
+    address: addressSchema,
+    firm: firmSchema,
+    bank: bankSchema,
   },
-  associateId: {
-    type: String,
-
-    unique: true
-  },
-  staffLocation: {
-    country: {
-      type: String,
-      required: true
-    },
-    state: {
-      type: String,
-      required: true
-    },
-    city: {
-      type: String,
-      required: true
-    }
-  },
-  address: addressSchema,
-  firm: firmSchema,
-  bank: bankSchema,
-}, { timestamps: true })
+  { timestamps: true },
+);
 associateSchema.pre("save", async function (next) {
   if (this.isNew && !this.associateId) {
     const Associate = mongoose.model("Associate", associateSchema);

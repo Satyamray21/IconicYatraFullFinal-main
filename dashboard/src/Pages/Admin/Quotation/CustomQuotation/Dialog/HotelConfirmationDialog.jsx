@@ -47,9 +47,64 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
+import { useDispatch, useSelector } from "react-redux";
+import { createHotelStep1, fetchHotels } from "../../../../../features/hotel/hotelSlice";
+import { getLeadOptions } from "../../../../../features/leads/leadSlice";
+
+const getQuotationSector = (q) => {
+    if (!q) return "";
+    return String(
+        q.clientDetails?.sector ||
+        q.packageSnapshot?.sector ||
+        q.sector ||
+        q.lead?.location?.state ||
+        "",
+    ).trim();
+};
+
+const getQuotationRoomType = (q) => {
+    if (!q) return "";
+    const qd =
+        q.tourDetails?.quotationDetails ||
+        q.packageSnapshot?.quotationDetails ||
+        {};
+    return String(
+        qd.rooms?.roomType ||
+        qd.roomType ||
+        q.roomType ||
+        "",
+    ).trim();
+};
+
+const getQuotationRoomCount = (q) => {
+    if (!q) return 1;
+    const qd =
+        q.tourDetails?.quotationDetails ||
+        q.packageSnapshot?.quotationDetails ||
+        {};
+    return Number(
+        qd.rooms?.numberOfRooms ||
+        qd.noOfRooms ||
+        qd.numberOfRooms ||
+        q.noOfRooms ||
+        1
+    );
+};
+
+/** API expects category (standard/deluxe/superior); UI shows room type from quotation/options. */
+const categoryForHotelPayload = (q, roomType = "") => {
+    const pkg = String(q?.finalizedPackage || "").toLowerCase();
+    if (["standard", "deluxe", "superior"].includes(pkg)) return pkg;
+    const rt = String(roomType || getQuotationRoomType(q)).toLowerCase();
+    if (rt.includes("superior")) return "superior";
+    if (rt.includes("deluxe")) return "deluxe";
+    return "standard";
+};
 
 const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quotationRef, onSaveSuccess }) => {
-        const [hotels, setHotels] = useState([]);
+        const dispatch = useDispatch();
+        const { options: leadOptions = [] } = useSelector((state) => state.leads);
+    const [hotels, setHotels] = useState([]);
     const [hotelsMap, setHotelsMap] = useState({}); // { city: [hotels] }
     const [loading, setLoading] = useState(false);
     const [fetchingHotels, setFetchingHotels] = useState(false);
@@ -70,6 +125,45 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     const [hotelsHistory, setHotelsHistory] = useState([]);
     const receiptHiddenRef = React.useRef();
     const prevOpenRef = React.useRef(false);
+
+    // Add New Hotel Dialog states
+    const [addHotelDialogOpen, setAddHotelDialogOpen] = useState(false);
+    const [addHotelForStayId, setAddHotelForStayId] = useState(null);
+    const [newHotelForm, setNewHotelForm] = useState({
+        hotelName: "",
+        city: "",
+        state: "",
+        country: "India",
+        address: "",
+        mobile: "",
+        roomType: "",
+    });
+
+    const roomTypeOptions = React.useMemo(() => {
+        const fromApi = (leadOptions || [])
+            .filter((opt) => opt.fieldName === "roomType")
+            .map((opt) => opt.value)
+            .filter(Boolean);
+        const fromQuotation = getQuotationRoomType(quotation);
+        const merged = [...new Set([fromQuotation, ...fromApi].filter(Boolean))];
+        return merged.length > 0 ? merged : ["Standard", "Deluxe", "Superior"];
+    }, [leadOptions, quotation]);
+
+    const selectedCompanyName = React.useMemo(() => {
+        const company = mailCompanies.find((c) => c._id === selectedCompanyId);
+        return company?.companyName || quotation?.companyName || "Iconic Travel";
+    }, [mailCompanies, selectedCompanyId, quotation?.companyName]);
+
+    const defaultBookingPnr = `${selectedCompanyName} (for Confirmation)`;
+
+    const hotelsForApi = React.useCallback(
+        (rows = hotels) =>
+            (rows || []).map(({ id, _id, ...hotel }) => ({
+                ...hotel,
+                bookingPnr: String(hotel.bookingPnr || "").trim(),
+            })),
+        [hotels],
+    );
 
     // Rich Booking Email states
     const [mailType, setMailType] = useState("booking"); // "hotel" or "booking"
@@ -183,10 +277,11 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             fetchMailCompanies();
             fetchEmailAccounts();
             fetchReceipts();
+            dispatch(getLeadOptions());
             const uniqueCities = [...new Set(hotels.map(h => h.city).filter(Boolean))];
             uniqueCities.forEach(city => fetchHotelsForCity(city));
         }
-    }, [open, hotels.length, quotation?._id]);
+    }, [open, hotels.length, quotation?._id, dispatch]);
 
     useEffect(() => {
         if (selectedCompanyId && emailAccounts.length > 0) {
@@ -362,6 +457,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 const res = await axios.post(endpoint, {
                     companyId: selectedCompanyId,
                     senderAccount: senderAccount,
+                    confirmedHotels: hotelsForApi(),
                     customText: {
                         additionalNote: customMessage,
                         signature: signatureHtml,
@@ -381,6 +477,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 const res = await axios.post(endpoint, {
                     companyId: selectedCompanyId,
                     senderAccount: senderAccount,
+                    confirmedHotels: hotelsForApi(),
                     customText: {
                         signature: signatureHtml,
                         booking: {
@@ -406,13 +503,14 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         if (open && quotation && selectedCompanyId && senderAccount) {
             fetchEmailPreview();
         }
-    }, [open, mailType, selectedCompanyId, senderAccount, signatureHtml]);
+    }, [open, mailType, selectedCompanyId, senderAccount, signatureHtml, nextPayableAmount, paymentDueDate]);
 
     useEffect(() => {
         if (open && quotation) {
             if (!prevOpenRef.current) {
                 setRecipientEmail(quotation.email || quotation.clientDetails?.email || "");
                 setRecipientName(quotation.clientDetails?.clientName || quotation.customerName || "");
+                setSalutation(quotation.title || quotation.clientDetails?.title || "");
                 const qId = quotation.quotationId || quotation.quickQuotationId || quotation._id;
                 setSubject(`Hotel Confirmation Voucher - ${qId || ""}`);
             }
@@ -441,8 +539,8 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                         hotelAddress: "",
                         city: cityName,
                         nights: nights,
-                        roomType: qd.rooms?.roomType || "",
-                        noOfRooms: qd.rooms?.numberOfRooms?.toString() || "1",
+                        roomType: qd.rooms?.roomType || qd.roomType || getQuotationRoomType(quotation),
+                        noOfRooms: getQuotationRoomCount(quotation).toString(),
                         checkInDate: "",
                         checkInTime: "12:00",
                         checkOutDate: "",
@@ -486,8 +584,8 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
             hotelAddress: "",
             city: "",
             nights: 1,
-            roomType: "",
-            noOfRooms: "1",
+            roomType: getQuotationRoomType(quotation),
+            noOfRooms: getQuotationRoomCount(quotation).toString(),
             checkInDate: "",
             checkInTime: "12:00",
             checkOutDate: "",
@@ -558,8 +656,10 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                     const cityHotels = hotelsMap[h.city] || [];
                     const matched = cityHotels.find(ah => ah.hotelName === value);
                     if (matched) {
-                        updated.hotelAddress = matched.location?.address || "";
+                        updated.hotelAddress = matched.location?.address || matched.location?.address1 || "";
                         updated.contactNo = matched.contactDetails?.mobile || matched.contactDetails?.contactPerson || "";
+                        updated.hotelState = matched.location?.state || "";
+                        updated.hotelCountry = matched.location?.country || "India";
                     }
                 }
                 return updated;
@@ -589,6 +689,97 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
         setHotels(updatedHotels);
     };
 
+    const handleOpenAddHotelDialog = (stayId, cityName) => {
+        setAddHotelForStayId(stayId);
+        setNewHotelForm({
+            hotelName: "",
+            city: cityName || "",
+            state: getQuotationSector(quotation),
+            country: "India",
+            address: "",
+            mobile: "",
+            roomType: getQuotationRoomType(quotation),
+        });
+        setAddHotelDialogOpen(true);
+    };
+
+    const handleCreateNewHotel = async () => {
+        if (!newHotelForm.hotelName.trim()) {
+            setSnackbar({ open: true, message: "Hotel name is required", severity: "warning" });
+            return;
+        }
+        if (!newHotelForm.city.trim()) {
+            setSnackbar({ open: true, message: "City is required", severity: "warning" });
+            return;
+        }
+
+        try {
+            const hotelFormData = new FormData();
+            const locationData = {
+                country: newHotelForm.country || "India",
+                state: newHotelForm.state || "",
+                city: newHotelForm.city,
+                address: newHotelForm.address || "",
+                pincode: "",
+            };
+            hotelFormData.append("location", JSON.stringify(locationData));
+            hotelFormData.append("hotelName", newHotelForm.hotelName.trim());
+            const roomType = String(newHotelForm.roomType || "").trim();
+            if (roomType) {
+                hotelFormData.append("roomType", roomType);
+                hotelFormData.append("hotelType", JSON.stringify([roomType]));
+            }
+            hotelFormData.append(
+                "category",
+                categoryForHotelPayload(quotation, roomType),
+            );
+
+            const contactData = {
+                mobile: newHotelForm.mobile || "",
+                email: "",
+            };
+            hotelFormData.append("contactDetails", JSON.stringify(contactData));
+
+            await dispatch(createHotelStep1(hotelFormData)).unwrap();
+
+            // Refresh the global hotel list
+            dispatch(fetchHotels());
+
+            // Refresh the city-specific hotelsMap
+            const trimmedCity = newHotelForm.city.trim();
+            try {
+                const res = await axios.get(`/all-hotel?city=${encodeURIComponent(trimmedCity)}`);
+                const cityHotels = res.data?.data || [];
+                setHotelsMap(prev => ({ ...prev, [trimmedCity]: cityHotels }));
+            } catch (err) {
+                console.error(`Failed to refresh hotels for ${trimmedCity}:`, err);
+            }
+
+            // Auto-fill the hotel fields in the stay
+            if (addHotelForStayId) {
+                setHotels(prev => prev.map(h => {
+                    if (h.id === addHotelForStayId) {
+                        return {
+                            ...h,
+                            hotelName: newHotelForm.hotelName.trim(),
+                            hotelAddress: newHotelForm.address || "",
+                            contactNo: newHotelForm.mobile || "",
+                            city: newHotelForm.city || h.city,
+                            roomType: roomType || h.roomType,
+                        };
+                    }
+                    return h;
+                }));
+            }
+
+            setSnackbar({ open: true, message: `Hotel "${newHotelForm.hotelName}" created successfully!`, severity: "success" });
+            setAddHotelDialogOpen(false);
+        } catch (err) {
+            console.error("Failed to create hotel:", err);
+            setSnackbar({ open: true, message: `Failed to create hotel: ${err.message || err}`, severity: "error" });
+        }
+    };
+
     const handleSave = async () => {
         setLoading(true);
         try {
@@ -596,7 +787,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 ? `/quickQT/${quotation._id}/save-confirmed-hotels`
                 : `/customQT/${quotation._id}/save-confirmed-hotels`;
 
-            await axios.post(endpoint, { confirmedHotels: hotels });
+            await axios.post(endpoint, { confirmedHotels: hotelsForApi() });
 
             setSnackbar({ open: true, message: "Hotel details saved successfully", severity: "success" });
             if (onSaveSuccess) {
@@ -612,6 +803,17 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
     const handleSendMail = async () => {
         setSending(true);
         try {
+            const saveEndpoint = type === "quick"
+                ? `/quickQT/${quotation._id}/save-confirmed-hotels`
+                : `/customQT/${quotation._id}/save-confirmed-hotels`;
+            const confirmedHotelsPayload = hotelsForApi();
+
+            try {
+                await axios.post(saveEndpoint, { confirmedHotels: confirmedHotelsPayload });
+            } catch (saveErr) {
+                console.warn("Could not persist hotel details before send:", saveErr);
+            }
+
             let receiptPdfAttachment = null;
 
             if (selectedReceiptId && mailType === "booking") {
@@ -659,6 +861,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 mailType: mailType,
                 companyId: selectedCompanyId,
                 senderAccount: senderAccount,
+                confirmedHotels: confirmedHotelsPayload,
                 receiptPdf: receiptPdfAttachment,
                 paymentVoucherId: mailType === "booking" ? selectedReceiptId : undefined,
                 nextPayableAmount: nextPayableAmount,
@@ -946,34 +1149,30 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                             />
                         </Grid>
 
-                        {mailType === "booking" && (
-                            <>
-                                <Grid size={{ xs: 12, md: 3 }}>
-                                    <TextField
-                                        size="small"
-                                        fullWidth
-                                        label="Next Payable Amount (INR)"
-                                        value={nextPayableAmount}
-                                        onChange={(e) => setNextPayableAmount(e.target.value)}
-                                        sx={{ bgcolor: "#fff" }}
-                                    />
-                                </Grid>
-                                <Grid size={{ xs: 12, md: 3 }}>
-                                    <DatePicker
-                                        label="Payment Due Date"
-                                        value={paymentDueDate}
-                                        onChange={(newDate) => setPaymentDueDate(newDate)}
-                                        slotProps={{
-                                            textField: {
-                                                fullWidth: true,
-                                                size: "small",
-                                                sx: { bgcolor: "#fff" }
-                                            },
-                                        }}
-                                    />
-                                </Grid>
-                            </>
-                        )}
+                        <Grid size={{ xs: 12, md: 3 }}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label="Next Payable Amount (INR)"
+                                value={nextPayableAmount}
+                                onChange={(e) => setNextPayableAmount(e.target.value)}
+                                sx={{ bgcolor: "#fff" }}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 3 }}>
+                            <DatePicker
+                                label="Payment Due Date"
+                                value={paymentDueDate}
+                                onChange={(newDate) => setPaymentDueDate(newDate)}
+                                slotProps={{
+                                    textField: {
+                                        fullWidth: true,
+                                        size: "small",
+                                        sx: { bgcolor: "#fff" }
+                                    },
+                                }}
+                            />
+                        </Grid>
 
                         <Grid size={{ xs: 12 }}>
                             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
@@ -1187,10 +1386,36 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                 <Autocomplete
                                     freeSolo
                                     size="small"
-                                    options={(hotelsMap[hotel.city] || []).map((h) => h.hotelName)}
+                                    options={[
+                                        ...(hotelsMap[hotel.city] || []).map((h) => h.hotelName),
+                                        "__add_new"
+                                    ]}
                                     value={hotel.hotelName}
                                     disabled={!hotel.city}
-                                    onChange={(event, newValue) => handleChange(hotel.id, "hotelName", newValue)}
+                                    onChange={(event, newValue) => {
+                                        if (newValue === "__add_new") {
+                                            handleOpenAddHotelDialog(hotel.id, hotel.city);
+                                        } else {
+                                            handleChange(hotel.id, "hotelName", newValue);
+                                        }
+                                    }}
+                                    renderOption={(props, option) => {
+                                        if (option === "__add_new") {
+                                            return (
+                                                <li {...props} key="__add_new" style={{ color: "#1976d2", fontWeight: 600, backgroundColor: "#f0f7ff", borderTop: "2px solid #1976d2" }}>
+                                                    + Add New Hotel
+                                                </li>
+                                            );
+                                        }
+                                        return <li {...props} key={option}>{option}</li>;
+                                    }}
+                                    filterOptions={(options, params) => {
+                                        const filtered = options.filter(opt => {
+                                            if (opt === "__add_new") return true;
+                                            return opt.toLowerCase().includes((params.inputValue || "").toLowerCase());
+                                        });
+                                        return filtered;
+                                    }}
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
@@ -1233,12 +1458,21 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                 />
                             </Grid>
                             <Grid size={{ xs: 12, md: 3 }}>
-                                <TextField
-                                    label="Room Type"
-                                    fullWidth
+                                <Autocomplete
+                                    freeSolo
                                     size="small"
-                                    value={hotel.roomType}
-                                    onChange={(e) => handleChange(hotel.id, "roomType", e.target.value)}
+                                    options={roomTypeOptions}
+                                    inputValue={hotel.roomType || ""}
+                                    onInputChange={(_event, newInputValue) =>
+                                        handleChange(hotel.id, "roomType", newInputValue)
+                                    }
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Room Type"
+                                            placeholder="Select or type room type"
+                                        />
+                                    )}
                                 />
                             </Grid>
                             <Grid size={{ xs: 12, md: 3 }}>
@@ -1318,6 +1552,12 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                                     fullWidth
                                     size="small"
                                     value={hotel.bookingPnr}
+                                    placeholder={defaultBookingPnr}
+                                    helperText={
+                                        String(hotel.bookingPnr || "").trim()
+                                            ? "Custom PNR will be used in the email and PDF."
+                                            : `Leave blank to use default: ${defaultBookingPnr}`
+                                    }
                                     onChange={(e) => handleChange(hotel.id, "bookingPnr", e.target.value)}
                                 />
                             </Grid>
@@ -1445,6 +1685,132 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                         }}
                     >
                         Split Now
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Add New Hotel Dialog */}
+            <Dialog
+                open={addHotelDialogOpen}
+                onClose={() => setAddHotelDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+                    }
+                }}
+            >
+                <DialogTitle sx={{ 
+                    fontWeight: "bold", 
+                    textAlign: "center", 
+                    background: "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)",
+                    color: "#fff",
+                    py: 2
+                }}>
+                    Add New Hotel
+                </DialogTitle>
+                <DialogContent sx={{ p: 3, mt: 1 }}>
+                    <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+                        Create a new hotel entry. It will be saved to the database and available in the hotel list.
+                    </Typography>
+                    <Grid container spacing={2}>
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                label="Hotel Name *"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.hotelName}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, hotelName: e.target.value }))}
+                                autoFocus
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                label="City *"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.city}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, city: e.target.value }))}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                label="State"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.state}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, state: e.target.value }))}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                                label="Country"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.country}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, country: e.target.value }))}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                            <Autocomplete
+                                freeSolo
+                                size="small"
+                                options={roomTypeOptions}
+                                inputValue={newHotelForm.roomType || ""}
+                                onInputChange={(_event, newInputValue) =>
+                                    setNewHotelForm((prev) => ({
+                                        ...prev,
+                                        roomType: newInputValue,
+                                    }))
+                                }
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        label="Room Type"
+                                        placeholder="Select or type room type"
+                                    />
+                                )}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                label="Address"
+                                fullWidth
+                                size="small"
+                                multiline
+                                rows={2}
+                                value={newHotelForm.address}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, address: e.target.value }))}
+                            />
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                            <TextField
+                                label="Contact / Mobile"
+                                fullWidth
+                                size="small"
+                                value={newHotelForm.mobile}
+                                onChange={(e) => setNewHotelForm(prev => ({ ...prev, mobile: e.target.value }))}
+                            />
+                        </Grid>
+                    </Grid>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, py: 2, bgcolor: "#f1f3f5" }}>
+                    <Button onClick={() => setAddHotelDialogOpen(false)} color="inherit" sx={{ fontWeight: "bold", textTransform: "none" }}>
+                        Cancel
+                    </Button>
+                    <Button 
+                        variant="contained" 
+                        onClick={handleCreateNewHotel}
+                        sx={{ 
+                            fontWeight: "bold", 
+                            textTransform: "none", 
+                            bgcolor: "#1e3c72", 
+                            '&:hover': { bgcolor: "#122c5a" } 
+                        }}
+                    >
+                        Create Hotel
                     </Button>
                 </DialogActions>
             </Dialog>

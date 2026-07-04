@@ -230,9 +230,11 @@ const PackageEntryForm = ({ onNext, initialData }) => {
         .unwrap()
         .then((cityList) => {
           console.log("Domestic cities received:", cityList);
-          const cities = cityList.map((c) => c.name || c.city || c);
-          setAllCities(cities);
-          setLocationList(cities);
+          const apiCities = cityList.map((c) => c.name || c.city || c);
+          const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+          const combinedCities = [...new Set([...apiCities, ...customCities])];
+          setAllCities(combinedCities);
+          setLocationList(combinedCities);
           setSearchText("");
           // ✅ DON'T reset stayLocationList here - keep existing selections
         })
@@ -250,9 +252,11 @@ const PackageEntryForm = ({ onNext, initialData }) => {
         .unwrap()
         .then((cityList) => {
           console.log("International cities received:", cityList);
-          const cities = cityList.map((c) => c.name || c.city || c);
-          setAllCities(cities);
-          setLocationList(cities);
+          const apiCities = cityList.map((c) => c.name || c.city || c);
+          const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+          const combinedCities = [...new Set([...apiCities, ...customCities])];
+          setAllCities(combinedCities);
+          setLocationList(combinedCities);
           setSearchText("");
           // ✅ DON'T reset stayLocationList here - keep existing selections
         })
@@ -317,6 +321,12 @@ const PackageEntryForm = ({ onNext, initialData }) => {
   };
 
   const handleOptionAdd = (newValue) => {
+    if (currentField === "city") {
+      setAllCities((prev) => prev.includes(newValue) ? prev : [...prev, newValue]);
+      setLocationList((prev) => prev.includes(newValue) ? prev : [...prev, newValue]);
+      return;
+    }
+
     // If the field is an array (like packageSubType), add the new value to it
     if (Array.isArray(formik.values[currentField])) {
       if (!formik.values[currentField].includes(newValue)) {
@@ -331,27 +341,7 @@ const PackageEntryForm = ({ onNext, initialData }) => {
     }
   };
 
-  // ✅ Add New Location Logic
-  const handleOpenLocationDialog = () => {
-    setNewLocation("");
-    setOpenLocationDialog(true);
-  };
-
-  const handleCloseLocationDialog = () => {
-    setOpenLocationDialog(false);
-  };
-
-  const handleAddNewLocation = () => {
-    if (!newLocation.trim()) return;
-
-    const locationName = newLocation.trim();
-
-    // Add to all cities and location list
-    setAllCities((prev) => [...prev, locationName]);
-    setLocationList((prev) => [...prev, locationName]);
-
-    handleCloseLocationDialog();
-  };
+  // Remove old Add Location Dialog logic, as we now use LeadOptionsManager
 
   // ✅ Delete Location from Available Locations
   const handleDeleteLocation = (locationToDelete, e) => {
@@ -657,7 +647,7 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                     startIcon={<AddIcon />}
                     size="small"
                     variant="outlined"
-                    onClick={handleOpenLocationDialog}
+                    onClick={() => handleOpenDialog("city")}
                     disabled={!formik.values.sector}
                   >
                     Add Location
@@ -959,27 +949,7 @@ const PackageEntryForm = ({ onNext, initialData }) => {
         </DialogActions>
       </Dialog>
 
-      {/* Add New Location Dialog */}
-      <Dialog open={openLocationDialog} onClose={handleCloseLocationDialog}>
-        <DialogTitle>Add New Location</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            autoFocus
-            margin="dense"
-            label="New Location Name"
-            value={newLocation}
-            onChange={(e) => setNewLocation(e.target.value)}
-            placeholder="Enter location name"
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseLocationDialog}>Cancel</Button>
-          <Button onClick={handleAddNewLocation} variant="contained">
-            Add Location
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Add New Location Dialog removed as we use LeadOptionsManager */}
     </Box>
   );
 };

@@ -40,6 +40,26 @@ const pkgKey = (q = {}) => {
   return ["standard", "deluxe", "superior"].includes(p) ? p : "standard";
 };
 
+const guestDisplayName = (quotation = {}) => {
+  const title = safe(quotation?.clientDetails?.title || quotation?.title, "");
+  const name = safe(
+    quotation?.clientDetails?.clientName || quotation?.customerName,
+    "Guest",
+  );
+  return title ? `${title}. ${name}` : name;
+};
+
+const guestGreeting = (quotation = {}, customGreeting) => {
+  const custom = safe(customGreeting, "");
+  if (custom) return custom;
+  const title = safe(quotation?.clientDetails?.title || quotation?.title, "");
+  const name = safe(
+    quotation?.clientDetails?.clientName || quotation?.customerName,
+    "Guest",
+  );
+  return title ? `Dear ${title}. ${name},` : `Dear ${name},`;
+};
+
 export const packageTotals = (q = {}) => {
   const qd = q?.tourDetails?.quotationDetails || {};
   const calc = qd.packageCalculations || {};
@@ -48,8 +68,17 @@ export const packageTotals = (q = {}) => {
   const packageFinal = toNum(calc?.[key]?.finalTotal);
   const extras = sumBillableAdditionalServices(qd.additionalServices);
   const total = packageFinal + extras;
-  const beforeTax = toNum(calc?.[key]?.afterDiscount);
-  const taxPercent = toNum(qd?.taxes?.taxPercent);
+  
+  let taxPercent = toNum(qd?.taxes?.taxPercent) || 5;
+  if (qd?.taxes?.applyGST === false || qd?.taxes?.gstOn === "None") {
+    taxPercent = 0;
+  }
+
+  let beforeTax = total;
+  if (taxPercent > 0) {
+    const taxMultiplier = 1 + (taxPercent / 100);
+    beforeTax = total > 0 ? Math.round((total / taxMultiplier) * 100) / 100 : 0;
+  }
 
   return {
     total,
@@ -280,11 +309,11 @@ const bankHtmlSection = (bankDetails = [], paymentLink = "") => {
         <br/>
         <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">NET BANKING PAYMENT DETAILS:</p>
         ${paymentLinkHtml}
-        <div style="text-align:center;">
+        <div style="text-align:left; display:flex; flex-direction:column; align-items:flex-start;">
         ${(bankDetails || [])
           .map(
             (b, i) => `
-                    <div style="margin-bottom:12px;">
+                    <div style="margin-bottom:12px; text-align:left;">
                         <b>${i + 1}. ${safe(b?.bankName, "Bank")} (${safe(
                           b?.branchName,
                           "Branch",
@@ -387,6 +416,9 @@ export const buildCustomQuotationNormalEmail = (
 
   return `
     <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <style>
+            p { margin: 4px 0; }
+        </style>
 
         <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, "Dear Sir/Ma'am,")}
@@ -404,7 +436,8 @@ export const buildCustomQuotationNormalEmail = (
     <a href="${companyWebsite}" target="_blank" style="font-weight:bold; color:#1976d2; text-decoration:none;">
         ${companyWebsite}
     </a>
-    <p>
+   </p>
+   <p>
 This is referenced in our discussion regarding your forthcoming Tour to the 
 <span style="color:#003366; font-weight:bold;">
     ${td.quotationTitle}
@@ -535,6 +568,9 @@ export const buildCustomQuotationPdfPreviewEmail = (
 
   return `
     <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <style>
+            p { margin: 4px 0; }
+        </style>
 
         <p style="color:#003366; font-weight:bold; font-size: 16px;">
             ${safe(customText.greeting, "Dear Sir/Ma'am,")}
@@ -552,7 +588,8 @@ export const buildCustomQuotationPdfPreviewEmail = (
     <a href="${companyWebsite}" target="_blank" style="font-weight:bold; color:#1976d2; text-decoration:none;">
         ${companyWebsite}
     </a>
-    <p>
+   </p>
+   <p>
 This is referenced in our discussion regarding your forthcoming Tour to the 
 <span style="color:#003366; font-weight:bold;">
     ${td.quotationTitle}
@@ -659,8 +696,11 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
 
   return `
     <div style="font-family: 'Georgia', serif; font-size:15px; color:#333; line-height:1.6;">
+        <style>
+            p { margin: 4px 0; }
+        </style>
         <p style="color:#003366; font-weight:bold; font-size: 16px;">
-            ${safe(customText.greeting, `Dear ${safe(quotation?.clientDetails?.clientName, "Guest")},`)}
+            ${safe(customText.greeting, guestGreeting(quotation))}
         </p>
         <p style="color:#003366; font-weight:bold; font-size: 18px;">
             ${safe(customText.opening, `BOOKING CONFIRMATION FROM ${companyName.toUpperCase()}!!!`)}
@@ -791,13 +831,17 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   };
   const policy = quick.policy || pkg.policy || {};
   const total = toNum(quick.totalCost);
-  const approxBeforeTax =
-    total > 0 ? Math.round((total / 1.05) * 100) / 100 : 0;
 
   const qdSnap =
     snap.quotationDetails && typeof snap.quotationDetails === "object"
       ? snap.quotationDetails
       : {};
+  const taxes = qdSnap.taxes || { taxPercent: 5, applyGST: true, gstOn: "Full" };
+  const taxMultiplier = 1 + (toNum(taxes.taxPercent) || 5) / 100;
+
+  const approxBeforeTax =
+    total > 0 ? Math.round((total / taxMultiplier) * 100) / 100 : 0;
+
   const additionalServicesFromSnapshot = Array.isArray(qdSnap.additionalServices)
     ? qdSnap.additionalServices
     : [];
@@ -872,7 +916,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
           : 0;
   const resolvedTierAfterDiscount =
     resolvedTierFinalTotal > 0
-      ? Math.round((resolvedTierFinalTotal / 1.05) * 100) / 100
+      ? Math.round((resolvedTierFinalTotal / taxMultiplier) * 100) / 100
       : 0;
   const normalizedCalcSnap = {
     standard: {
@@ -982,7 +1026,10 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     quotationId: String(quick.quickQuotationId || quick._id || ""),
     quickQuotationId: String(quick.quickQuotationId || ""),
     bookingId: safe(quick.bookingId, ""),
-    clientDetails: { clientName: safe(quick.customerName, "Guest") },
+    clientDetails: {
+      clientName: safe(quick.customerName, "Guest"),
+      title: safe(quick.title, ""),
+    },
     finalizedPackage,
     confirmedHotels: quick.confirmedHotels || [],
     tourDetails: {
@@ -1121,7 +1168,7 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
   const companyMobile = safe(options.companyMobile, "+91-8130883907");
   const companyAddress = safe(options.companyAddress, "2nd floor, B Block B-25 Sector- 64, Noida Uttar Pradesh 201301");
   
-  const guestName = safe(quotation?.clientDetails?.clientName || quotation?.customerName, "Guest");
+  const guestName = guestDisplayName(quotation);
   const bookingId = safe(quotation?.bookingId || quotation?.quotationId || quotation?.quickQuotationId, "Booking Id");
   const adults = toNum(quotation?.adults || qd?.adults);
   const children = toNum(quotation?.children || qd?.children);
@@ -1134,12 +1181,26 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
   if (infants > 0) guestsParts.push(`${infants} Infants`);
   const guestsLine = guestsParts.join(", ");
 
-  const resolvedNumberOfRooms = toNum(
+  let resolvedNumberOfRooms = toNum(
     quotation?.noOfRooms ||
       qd?.rooms?.numberOfRooms ||
       qd?.noOfRooms ||
-      1
+      0
   );
+  if (quotation?.confirmedHotels && quotation.confirmedHotels.length > 0) {
+    const firstHotelRooms = quotation.confirmedHotels[0].noOfRooms;
+    if (firstHotelRooms) {
+      const parsed = parseInt(firstHotelRooms, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        if (resolvedNumberOfRooms === 0 || resolvedNumberOfRooms === 1) {
+          resolvedNumberOfRooms = parsed;
+        }
+      }
+    }
+  }
+  if (resolvedNumberOfRooms <= 0) {
+    resolvedNumberOfRooms = 1;
+  }
   const resolvedSharingType = safe(
     quotation?.roomType ||
       qd?.rooms?.sharingType ||
@@ -1174,7 +1235,7 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
         <p style="margin: 2px 0;"><b>Guest Name -</b> ${guestName}</p>
         <p style="margin: 2px 0;"><b>Person -</b> ${guestsLine}</p>
         <p style="margin: 2px 0;"><b>Rooms -</b> ${safe(h.noOfRooms)}</p>
-        <p style="margin: 2px 0;"><b>Booking PNR -</b> ${safe(h.bookingPnr, "Iconic Travel (for Confirmation)")}</p>
+        <p style="margin: 2px 0;"><b>Booking PNR -</b> ${safe(h.bookingPnr, `${companyName} (for Confirmation)`)}</p>
         <p style="margin: 2px 0;"><b>Check-in Date -</b> ${safe(h.checkInDate)}, Time – 12: 00 PM</p>
         <p style="margin: 2px 0;"><b>Check Out Date -</b> ${safe(h.checkOutDate)}, Time – 11:00 AM</p>
         <p style="margin: 2px 0;"><b>Room Type -</b> ${safe(h.roomType)}</p>
@@ -1189,7 +1250,7 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
             <p style="color: #666; margin: 5px 0;">${companyName}</p>
         </div>
 
-        <p>Dear ${guestName},</p>
+        <p>Dear ${guestDisplayName(quotation)},</p>
         <p>Thank you for choosing ${companyName}, we are pleased to inform you to start planning your way for the following to be confirmed successfully.</p>
         
         ${options.additionalNote ? `<div style="background-color: #fff3e0; padding: 10px; border-left: 4px solid #ff9800; margin: 15px 0;"><b>Note:</b> ${options.additionalNote}</div>` : ''}
@@ -1245,3 +1306,119 @@ export function buildHotelConfirmationEmail(quotation, options = {}) {
     </div>
   `;
 }
+
+
+export const buildHotelAvailabilityRequestEmail = (stay, options = {}) => {
+  const safe = (val, fallback = "") => (val !== undefined && val !== null && val !== "" ? val : fallback);
+  const toNum = (val) => (isNaN(Number(val)) ? 0 : Number(val));
+
+  const companyName = safe(options.companyName, "Iconic Travel");
+  const companyPhone = safe(options.companyPhone, "+91-8130883907");
+  const companyEmail = safe(options.companyEmail, "res.fom@iconictravel.in");
+  const companyWebsite = safe(options.companyWebsite, "http://www.iconictravel.in/");
+
+  const city = safe(stay.city, "City");
+  const nights = toNum(stay.nights);
+  const guestName = safe(stay.clientName, "Guest");
+  const adults = toNum(stay.adults);
+  const children = toNum(stay.children);
+  const kids = toNum(stay.kids);
+  const infants = toNum(stay.infants);
+  const totalPax = adults + children + kids + infants;
+  
+  let paxDetails = [];
+  if (adults > 0) paxDetails.push(`${adults} Adults`);
+  if (children > 0) paxDetails.push(`${children} Childs`);
+  if (kids > 0) paxDetails.push(`${kids} Kids`);
+  if (infants > 0) paxDetails.push(`${infants} Infants`);
+  const paxString = paxDetails.length > 0 ? paxDetails.join(", ") : "";
+
+  const rooms = toNum(stay.noOfRooms) || 1;
+  const sharingType = safe(stay.sharingType, "Double sharing");
+  const mealPlan = safe(stay.mealPlan, "Breakfast Only");
+  const roomCategory = safe(stay.roomCategory, "Premium Room");
+  const checkIn = safe(stay.checkInDate, "TBD");
+  const checkOut = safe(stay.checkOutDate, "TBD");
+  const companyLogo = options.companyLogo;
+
+  const messageHtml = `
+    <div style="font-family: 'Georgia', serif; font-size: 15px; color: #333; line-height: 1.6; max-width: 650px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+      
+      <!-- Header -->
+      <div style="background-color: #f8f9fa; padding: 25px; text-align: center; border-bottom: 4px solid #0047b3;">
+        ${companyLogo ? `<img src="${companyLogo}" alt="${companyName}" style="max-height: 70px; margin-bottom: 10px;" />` : `<h2 style="margin: 0; color: #0047b3; font-size: 26px; font-weight: bold; letter-spacing: 1px;">${companyName.toUpperCase()}</h2>`}
+        <h3 style="margin: 5px 0 0 0; color: #555; font-size: 18px; font-weight: normal; font-style: italic;">Hotel Booking Request</h3>
+      </div>
+
+      <!-- Body -->
+      <div style="padding: 30px;">
+        <p style="margin-top: 0; font-size: 16px;">Dear Partner,</p>
+        <p style="font-size: 16px;">Greetings from <strong>${companyName}</strong>!!</p>
+        
+        <h3 style="font-size: 18px; margin-top: 30px; color: #0047b3; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">
+          Our Requirement for Hotel Stay
+        </h3>
+        
+        <div style="background-color: #fdfdfd; border: 1px solid #e8e8e8; border-radius: 6px; padding: 20px; margin-top: 20px; box-shadow: inset 0 0 10px rgba(0,0,0,0.02);">
+          <h4 style="margin: 0 0 15px 0; color: #0b5394; font-size: 17px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">
+            📍 1- Hotel in <span style="text-decoration: underline;">${city}</span> <span style="font-weight: normal; color: #666; font-size: 15px;">(${nights} Night${nights > 1 ? "s" : ""})</span>
+          </h4>
+          
+          <table style="width: 100%; border-collapse: collapse; font-family: 'Georgia', serif; font-size: 15px; background-color: #fff; border-radius: 4px; overflow: hidden; border: 1px solid #eee;">
+            <tbody>
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 12px 15px; width: 35%; color: #555; background-color: #f9f9f9;"><strong>Guest Name</strong></td>
+                <td style="padding: 12px 15px; font-weight: bold; color: #222;">${guestName}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 12px 15px; color: #555; background-color: #f9f9f9;"><strong>Persons</strong></td>
+                <td style="padding: 12px 15px;">${String(totalPax).padStart(2, "0")} Adults/Childs ${paxString ? `(${paxString})` : ""}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 12px 15px; color: #555; background-color: #f9f9f9;"><strong>No of Rooms</strong></td>
+                <td style="padding: 12px 15px;">${String(rooms).padStart(2, "0")} ${sharingType}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 12px 15px; color: #555; background-color: #f9f9f9;"><strong>Meal Plan</strong></td>
+                <td style="padding: 12px 15px;">${mealPlan}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 12px 15px; color: #555; background-color: #f9f9f9;"><strong>Room Type</strong></td>
+                <td style="padding: 12px 15px;">${roomCategory}</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 15px; color: #0047b3; background-color: #eef2f6; border-right: 1px solid #fff;"><strong>Check-in Date</strong></td>
+                <td style="padding: 12px 15px; font-weight: bold; color: #0047b3; background-color: #eef2f6;">${checkIn}</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 15px; color: #b30000; background-color: #fdf5f5; border-top: 1px solid #fff; border-right: 1px solid #fff;"><strong>Check out</strong></td>
+                <td style="padding: 12px 15px; font-weight: bold; color: #b30000; background-color: #fdf5f5; border-top: 1px solid #fff;">${checkOut}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 20px; border-left: 5px solid #f5b041; background-color: #fcf9ec; border-radius: 4px;">
+          <p style="margin: 0 0 10px 0; font-weight: bold; color: #c0392b; font-size: 16px;">
+            ➤ Kindly share ${rooms} ${sharingType} rooms with CPI = ???
+          </p>
+          <p style="margin: 0; font-weight: bold; font-size: 16px; color: #333;">
+            Kindly share your confirmation for this booking...
+          </p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="background-color: #f4f6f9; padding: 20px 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+        <p style="margin: 0; font-style: italic; font-weight: bold; color: #444; font-size: 15px;">
+          Thank You For Choosing ${companyName} as your Travel Partner...
+        </p>
+      </div>
+    </div>
+  `;
+
+  return {
+    subject: `Hotel Booking Request - ${guestName} - ${checkIn} - ${companyName}`,
+    message: messageHtml
+  };
+};

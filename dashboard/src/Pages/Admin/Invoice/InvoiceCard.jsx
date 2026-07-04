@@ -32,6 +32,12 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import WhatsAppIcon from "@mui/icons-material/WhatsApp";
+import EmailIcon from "@mui/icons-material/Email";
+import api from "../../../utils/axios";
+import { buildInvoiceWhatsAppText, buildInvoiceEmailHtml } from "../../../utils/invoiceMailerTemplates";
+import EmailInvoiceDialog from "./Dialog/EmailInvoiceDialog";
+import InvoicePDF from "./Dialog/InvoicePdf/InvoicePDF";
 import {
   getInvoices,
   deleteInvoice,
@@ -63,6 +69,22 @@ const InvoiceCard = () => {
   });
   const [repairingAr, setRepairingAr] = useState(false);
   const [repairingSerials, setRepairingSerials] = useState(false);
+
+  // 💬 WhatsApp state
+  const [whatsAppOpen, setWhatsAppOpen] = useState(false);
+  const [whatsAppInvoice, setWhatsAppInvoice] = useState(null);
+  const [whatsAppPhone, setWhatsAppPhone] = useState("");
+
+  const [mailOpen, setMailOpen] = useState(false);
+  const [mailInvoice, setMailInvoice] = useState(null);
+  const invoicePdfRef = React.useRef();
+
+  const [emailAccountOptions, setEmailAccountOptions] = useState([]);
+  useEffect(() => {
+    api.get("/email-accounts").then((res) => {
+      setEmailAccountOptions(res.data?.data || []);
+    }).catch(console.error);
+  }, []);
 
   const handleCloseSnackbar = () => {
     setSnackbar((prev) => ({ ...prev, open: false }));
@@ -176,6 +198,71 @@ const InvoiceCard = () => {
   // 👁️ View invoice
   const handleRowClick = (invoice) => {
     navigate(`/invoice/generate/${invoice._id}`);
+  };
+
+  const handleWhatsAppClick = (invoice) => {
+    setWhatsAppInvoice(invoice);
+    setWhatsAppPhone(invoice.mobile || "");
+    setWhatsAppOpen(true);
+  };
+
+  const submitWhatsApp = () => {
+    if (!whatsAppInvoice) return;
+    const text = buildInvoiceWhatsAppText(whatsAppInvoice);
+    const url = `https://wa.me/${whatsAppPhone}?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+    setWhatsAppOpen(false);
+  };
+
+  const handleMailClick = (invoice) => {
+    setMailInvoice(invoice);
+    setMailOpen(true);
+  };
+
+  const submitMail = async (values) => {
+    if (!mailInvoice || !invoicePdfRef.current) return;
+    try {
+      const base64 = await invoicePdfRef.current.generateBase64();
+      if (!base64) throw new Error("Failed to generate PDF");
+
+      const company = companies.find(c => c._id === values.companyId) || (typeof mailInvoice.companyId === 'object' ? mailInvoice.companyId : null);
+      const bodyHtml = buildInvoiceEmailHtml(mailInvoice, {
+        companyName: company?.companyName || "Iconic Travel",
+        intro: values.message,
+        signature: values.signature,
+        companyTermsConditions: company?.termsAndConditions,
+        bankDetails: company?.bankDetails,
+        logo: company?.logo
+      });
+
+      await api.post(`/invoice/${mailInvoice._id}/email/send`, {
+        to: values.to,
+        subject: values.subject,
+        bodyHtml,
+        senderAccount: values.senderAccount,
+        pdfAttachment: {
+          filename: `Invoice_${mailInvoice.invoiceNo.replace(/\//g, '_')}.pdf`,
+          contentBase64: base64,
+          mimeType: "application/pdf"
+        },
+        companyId: company?._id || mailInvoice.companyId
+      });
+      
+      setSnackbar({
+        open: true,
+        message: "Email sent successfully",
+        severity: "success",
+      });
+      return true;
+    } catch (error) {
+      console.error(error);
+      setSnackbar({
+        open: true,
+        message: "Failed to send email",
+        severity: "error",
+      });
+      return false;
+    }
   };
 
   // 🔍 Filter invoices
@@ -366,6 +453,26 @@ const InvoiceCard = () => {
                     </TableCell>
                     <TableCell align="center">
                       <IconButton
+                        color="success"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleWhatsAppClick(invoice);
+                        }}
+                        title="Share on WhatsApp"
+                      >
+                        <WhatsAppIcon />
+                      </IconButton>
+                      <IconButton
+                        color="primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMailClick(invoice);
+                        }}
+                        title="Send Mail"
+                      >
+                        <EmailIcon />
+                      </IconButton>
+                      <IconButton
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEditClick(invoice);
@@ -410,17 +517,63 @@ const InvoiceCard = () => {
 
       {/* Confirm Delete Dialog */}
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <DialogTitle>Delete Invoice</DialogTitle>
+        <DialogTitle>Confirm Delete</DialogTitle>
         <DialogContent>
-          <Typography>Are you sure you want to delete this invoice?</Typography>
+          Are you sure you want to delete this invoice?
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={confirmDelete}>
+          <Button onClick={confirmDelete} color="error" variant="contained">
             Delete
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* WhatsApp Dialog */}
+      <Dialog open={whatsAppOpen} onClose={() => setWhatsAppOpen(false)}>
+        <DialogTitle>Send via WhatsApp</DialogTitle>
+        <DialogContent>
+          <Box mt={1}>
+            <TextField
+              fullWidth
+              label="Phone Number (with Country Code)"
+              variant="outlined"
+              value={whatsAppPhone}
+              onChange={(e) => setWhatsAppPhone(e.target.value)}
+              placeholder="e.g., 919876543210"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWhatsAppOpen(false)}>Cancel</Button>
+          <Button onClick={submitWhatsApp} color="primary" variant="contained">
+            Open WhatsApp
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Send Mail Dialog */}
+      <EmailInvoiceDialog
+        open={mailOpen}
+        onClose={() => setMailOpen(false)}
+        onSend={submitMail}
+        companyOptions={companies}
+        emailAccountOptions={emailAccountOptions}
+        initialValuesOverride={{
+          to: mailInvoice?.email || "",
+          subject: mailInvoice ? `Invoice ${mailInvoice.invoiceNo} - ${mailInvoice.billingName}` : "",
+          companyId: typeof mailInvoice?.companyId === 'object' ? mailInvoice?.companyId?._id : (mailInvoice?.companyId || "")
+        }}
+      />
+
+      {/* Hidden InvoicePDF for base64 generation */}
+      <Box sx={{ position: "absolute", top: -9999, left: -9999, zIndex: -1000 }}>
+        {mailInvoice && (
+          <Box sx={{ width: "1000px" }}>
+            <InvoicePDF invoiceData={mailInvoice} ref={invoicePdfRef} />
+          </Box>
+        )}
+      </Box>
 
       {/* Snackbar */}
       <Snackbar

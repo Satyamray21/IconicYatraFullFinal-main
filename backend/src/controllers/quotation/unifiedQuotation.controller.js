@@ -7,8 +7,12 @@ import { HotelQuotation } from "../../models/quotation/hotelQuotation.model.js";
 import { fullQuotation } from "../../models/quotation/fullQuotation.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
-import { startOfDay, endOfDay, startOfMonth, subMonths } from 'date-fns';
+import { startOfDay, endOfDay, startOfMonth, subMonths, format, addDays } from 'date-fns';
 import { getCache, setCache } from "../../utils/cache.js";
+import Company from "../../models/company.model.js";
+import emailQueue from "../../utils/emailQueue.js";
+import { buildHotelAvailabilityRequestEmail } from "../../utils/customQuotationMailerTemplates.js";
+import EmailAccount from "../../models/emailAccount.model.js";
 
 export const searchAllQuotations = asyncHandler(async (req, res) => {
   const { search } = req.query;
@@ -267,4 +271,153 @@ export const getPaymentSummary = asyncHandler(async (req, res) => {
   }, "Payment summary fetched successfully"));
 });
 
+
+
+export const getUpcomingStayLocations = asyncHandler(async (req, res) => {
+  const custom = await CustomQuotation.find({ finalizeStatus: "finalized" }).lean();
+  const quick = await QuickQuotation.find({ finalizeStatus: "finalized" }).lean();
+  const hotel = await HotelQuotation.find({ finalizeStatus: "finalized" }).lean();
+
+  const stays = [];
+
+  const processDestinations = (quotation, quotationType, idField, clientName, arrivalDate, destinations, paxDetails, roomDetails) => {
+    if (!destinations || destinations.length === 0) return;
+    
+    let currentCheckIn = arrivalDate ? new Date(arrivalDate) : new Date();
+    
+    const today = startOfDay(new Date());
+    if (currentCheckIn < today) return;
+
+    destinations.forEach((dest) => {
+      const nights = Number(dest.nights) || 1;
+      const currentCheckOut = addDays(currentCheckIn, nights);
+
+      stays.push({
+        quotationId: quotation[idField],
+        quotationType,
+        _id: quotation._id,
+        clientName: clientName || "Guest",
+        city: dest.cityName || dest.city || dest.destination || "City",
+        nights,
+        checkInDate: isNaN(currentCheckIn) ? "TBD" : format(currentCheckIn, "dd MMM yyyy"),
+        checkOutDate: isNaN(currentCheckOut) ? "TBD" : format(currentCheckOut, "dd MMM yyyy"),
+        adults: paxDetails?.adults,
+        children: paxDetails?.children,
+        kids: paxDetails?.kids,
+        infants: paxDetails?.infants,
+        noOfRooms: roomDetails?.numberOfRooms || dest.noOfRooms || 1,
+        sharingType: roomDetails?.sharingType || dest.sharingType || "Double sharing",
+        mealPlan: roomDetails?.mealPlan || dest.mealPlan || "Breakfast Only",
+        roomCategory: roomDetails?.roomCategory || dest.roomCategory || "Premium Room"
+      });
+
+      currentCheckIn = currentCheckOut; // next destination check-in is current check-out
+    });
+  };
+
+  custom.forEach(q => {
+    const qd = q.tourDetails?.quotationDetails;
+    processDestinations(
+      q,
+      "CustomQuotation",
+      "quotationId",
+      q.clientDetails?.clientName,
+      q.tourDetails?.arrivalDate,
+      qd?.destinations || [],
+      { adults: qd?.adults, children: qd?.children, kids: qd?.kids, infants: qd?.infants },
+      { numberOfRooms: qd?.rooms?.numberOfRooms, sharingType: qd?.rooms?.sharingType, mealPlan: qd?.mealPlan }
+    );
+  });
+
+  quick.forEach(q => {
+    const qd = q.packageSnapshot?.quotationDetails;
+    const arrivalDate = q.arrivalDate || qd?.arrivalDate;
+    const destinations = q.destinations || qd?.destinations || q.packageSnapshot?.stayLocations || q.packageSnapshot?.destinationNights || [];
+    
+    processDestinations(
+      q,
+      "QuickQuotation",
+      "quickQuotationId",
+      q.customerName,
+      arrivalDate,
+      destinations,
+      { adults: q.adults, children: q.children, kids: q.kids, infants: q.infants },
+      { numberOfRooms: q.noOfRooms || q.numberOfRooms, sharingType: q.roomType || q.sharingType, mealPlan: q.mealPlan || qd?.mealPlan }
+    );
+  });
+
+  hotel.forEach(q => {
+    processDestinations(
+      q,
+      "HotelQuotation",
+      "hotelQuotationId",
+      q.clientDetails?.clientName,
+      q.pickupDrop?.arrivalDate,
+      q.stayLocation || [],
+      { adults: q.clientDetails?.adults, children: q.clientDetails?.children, kids: q.clientDetails?.kids, infants: q.clientDetails?.infants },
+      { numberOfRooms: q.accommodationDetails?.noOfRooms, sharingType: q.accommodationDetails?.sharingType, mealPlan: q.accommodationDetails?.mealPlan }
+    );
+  });
+
+  res.status(200).json(new ApiResponse(200, stays, "Stay locations fetched successfully"));
+});
+
+export const previewHotelAvailabilityEmail = asyncHandler(async (req, res) => {
+  const { stay, companyId } = req.body;
+
+  let options = {};
+  if (companyId) {
+    const company = await Company.findById(companyId).lean();
+    if (company) {
+      options.companyName = company.companyName;
+      options.companyLogo = company.logo;
+      options.companyPhone = company.phone;
+      options.companyEmail = company.email;
+      options.companyWebsite = company.companyWebsite;
+      options.companyAddress = company.address;
+    }
+  }
+
+  const emailData = buildHotelAvailabilityRequestEmail(stay, options);
+  res.status(200).json(new ApiResponse(200, { normal: emailData }, "Preview generated"));
+});
+
+export const sendHotelAvailabilityEmail = asyncHandler(async (req, res) => {
+  const { to, cc, subject, bodyHtml, senderAccount, companyId } = req.body;
+
+  let smtpConfig;
+  let fromEmail = "info@iconicyatra.com";
+  let fromName = "Iconic Yatra";
+
+  if (senderAccount) {
+    const account = await EmailAccount.findById(senderAccount);
+    if (account) {
+      smtpConfig = {
+        service: account.service || "gmail",
+        auth: {
+          user: account.email,
+          pass: account.appPassword,
+        },
+      };
+      if (account.host) smtpConfig.host = account.host;
+      if (account.port) smtpConfig.port = account.port;
+      if (account.secure !== undefined) smtpConfig.secure = account.secure;
+
+      fromEmail = account.email;
+      fromName = account.displayName || account.label || "Reservation Team";
+    }
+  }
+
+  const mailOptions = {
+    from: `"${fromName}" <${fromEmail}>`,
+    to,
+    cc,
+    subject,
+    html: bodyHtml,
+  };
+
+  emailQueue.add("hotel-availability", { mailOptions, smtpConfig });
+
+  res.status(200).json(new ApiResponse(200, null, "Email added to queue successfully"));
+});
 

@@ -24,7 +24,23 @@ import {
 import { Formik, Form, FieldArray } from "formik";
 import { Add, Delete } from "@mui/icons-material";
 import { useDispatch, useSelector } from "react-redux";
-import { getAllLeads } from "../../../../features/leads/leadSlice";
+import { getAllLeads, getLeadOptions } from "../../../../features/leads/leadSlice";
+
+const TITLE_OPTIONS = ["Mr", "Mrs", "Ms"];
+
+const normalizeTitle = (value, allowed = TITLE_OPTIONS) => {
+  const raw = String(value ?? "")
+    .trim()
+    .replace(/\.$/, "");
+  if (!raw) return allowed[0] || "Mr";
+  const match = allowed.find((t) => t.toLowerCase() === raw.toLowerCase());
+  return match || allowed[0] || "Mr";
+};
+
+const findLeadByName = (leadList, name) =>
+  (leadList || []).find(
+    (lead) => lead.personalDetails?.fullName === name,
+  ) || null;
 
 const formatPickupDropLine = (city, location) => {
   const c = (city || "").trim();
@@ -33,12 +49,62 @@ const formatPickupDropLine = (city, location) => {
   return c || l || "";
 };
 
-const StepClientDetails = ({ onNext }) => {
+const StepClientDetails = ({ onNext, convertSector, convertNights, initialClientDetails = {} }) => {
   const dispatch = useDispatch();
-  const { list: leads, status } = useSelector((state) => state.leads);
+  const { list: leads, status, options: leadOptions = [] } = useSelector(
+    (state) => state.leads,
+  );
+
+  const titleOptions = React.useMemo(() => {
+    const fromApi = (leadOptions || [])
+      .filter((opt) => opt.fieldName === "title")
+      .map((opt) => opt.value)
+      .filter(Boolean);
+    return [...new Set([...TITLE_OPTIONS, ...fromApi])];
+  }, [leadOptions]);
+
+  const buildInitialValues = React.useCallback(
+    () => ({
+      title: normalizeTitle(initialClientDetails.title, titleOptions),
+      customerName: initialClientDetails.customerName || "",
+      email: initialClientDetails.email || "",
+      phone: initialClientDetails.phone || "",
+      adults: initialClientDetails.adults ?? "",
+      children: initialClientDetails.children ?? "",
+      kids: initialClientDetails.kids ?? "",
+      infants: initialClientDetails.infants ?? "",
+      message: initialClientDetails.message || "",
+      tourType: initialClientDetails.tourType || "",
+      clientLocation: initialClientDetails.clientLocation || "",
+      tourDestination: initialClientDetails.tourDestination || "",
+      pickupPoint: initialClientDetails.pickupPoint || "",
+      dropPoint: initialClientDetails.dropPoint || "",
+      arrivalDate: initialClientDetails.arrivalDate || "",
+      departureDate: initialClientDetails.departureDate || "",
+      pickupTime: initialClientDetails.pickupTime || "",
+      dropTime: initialClientDetails.dropTime || "",
+      roomType: initialClientDetails.roomType || "",
+      noOfRooms: initialClientDetails.noOfRooms ?? 1,
+      noOfMattress: initialClientDetails.noOfMattress ?? "",
+      noOfVehicles: initialClientDetails.noOfVehicles ?? 0,
+      vehiclesSameOrDifferent: initialClientDetails.vehiclesSameOrDifferent || "Same",
+      multipleVehicles: Array.isArray(initialClientDetails.multipleVehicles)
+        ? initialClientDetails.multipleVehicles
+        : [
+            {
+              vehicleType: "",
+              tripType: "Round Trip",
+              noOfDays: "",
+              perDayCost: "",
+              totalCost: "",
+            },
+          ],
+    }),
+    [initialClientDetails, titleOptions],
+  );
 
   const activeLeads = leads ? leads.filter((lead) => {
-    if (lead.status === "Cancelled") return false;
+    if (lead.status === "Cancelled" || lead.status === "Confirmed") return false;
     const departure = lead.tourDetails?.pickupDrop?.departureDate || lead.tourDetails?.departureDate || lead.tourDetails?.travelDate;
     if (departure) {
       const depDate = new Date(departure);
@@ -46,43 +112,143 @@ const StepClientDetails = ({ onNext }) => {
       today.setHours(0, 0, 0, 0);
       if (!isNaN(depDate) && depDate < today) return false;
     }
+    
+    // Sector-based filtering from "Convert to Quotation"
+    if (convertSector) {
+      const s = String(convertSector).toLowerCase().trim();
+      const dest = String(lead.tourDetails?.tourDestination || "").toLowerCase().trim();
+      const locCity = String(lead.location?.city || "").toLowerCase().trim();
+      if (!dest.includes(s) && !locCity.includes(s) && !s.includes(dest) && !s.includes(locCity)) {
+        return false;
+      }
+    }
+
+    // Nights-based filtering from "Convert to Quotation"
+    if (convertNights !== undefined && convertNights !== null && convertNights > 0) {
+      const leadNights = Number(lead.tourDetails?.accommodation?.noOfNights) || Number(lead.tourDetails?.numberOfNights) || 0;
+      if (leadNights > 0 && leadNights !== convertNights) {
+        return false; // Exclude if nights are explicitly specified in the lead and they don't match
+      }
+    }
+    
     return true;
   }) : [];
 
   useEffect(() => {
-    // Fetch all leads when component mounts
     dispatch(getAllLeads());
+    dispatch(getLeadOptions());
   }, [dispatch]);
+
+  const applyLeadToForm = (selectedClient, setFieldValue) => {
+    if (!selectedClient) return;
+
+    setFieldValue(
+      "title",
+      normalizeTitle(selectedClient.personalDetails?.title, titleOptions),
+    );
+    setFieldValue(
+      "email",
+      selectedClient.personalDetails?.emailId || "",
+    );
+    setFieldValue(
+      "phone",
+      selectedClient.personalDetails?.mobile || "",
+    );
+    const fullLocation = [
+      selectedClient.location?.city,
+      selectedClient.location?.state,
+      selectedClient.location?.country,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    setFieldValue(
+      "clientLocation",
+      fullLocation || selectedClient.location?.city || "",
+    );
+    setFieldValue(
+      "tourDestination",
+      selectedClient.tourDetails?.tourDestination || "",
+    );
+    setFieldValue(
+      "tourType",
+      selectedClient.tourDetails?.tourType || "",
+    );
+    setFieldValue(
+      "adults",
+      selectedClient.tourDetails?.members?.adults || "",
+    );
+    setFieldValue(
+      "children",
+      selectedClient.tourDetails?.members?.children || 0,
+    );
+    setFieldValue(
+      "kids",
+      selectedClient.tourDetails?.members?.kidsWithoutMattress || 0,
+    );
+    setFieldValue(
+      "infants",
+      selectedClient.tourDetails?.members?.infants || 0,
+    );
+
+    const tourDestination = selectedClient.tourDetails?.tourDestination;
+    if (tourDestination) {
+      setFieldValue(
+        "message",
+        `Interested in ${tourDestination} tour package`,
+      );
+    }
+
+    const pd = selectedClient.tourDetails?.pickupDrop;
+    if (pd) {
+      setFieldValue("arrivalDate", pd.arrivalDate || "");
+      setFieldValue("departureDate", pd.departureDate || "");
+      setFieldValue(
+        "pickupTime",
+        pd.arrivalTime || pd.pickupTime || "",
+      );
+      setFieldValue(
+        "dropTime",
+        pd.departureTime || pd.dropTime || "",
+      );
+      setFieldValue(
+        "pickupPoint",
+        formatPickupDropLine(pd.arrivalCity, pd.arrivalLocation),
+      );
+      setFieldValue(
+        "dropPoint",
+        formatPickupDropLine(pd.departureCity, pd.departureLocation),
+      );
+    } else {
+      setFieldValue("arrivalDate", "");
+      setFieldValue("departureDate", "");
+      setFieldValue("pickupTime", "");
+      setFieldValue("dropTime", "");
+      setFieldValue("pickupPoint", "");
+      setFieldValue("dropPoint", "");
+    }
+
+    setFieldValue(
+      "noOfRooms",
+      Number(selectedClient.tourDetails?.accommodation?.noOfRooms) || 1,
+    );
+    setFieldValue(
+      "noOfMattress",
+      Number(selectedClient.tourDetails?.accommodation?.noOfMattress) || 0,
+    );
+    setFieldValue(
+      "noOfVehicles",
+      Number(selectedClient.tourDetails?.pickupDrop?.noOfVehicles) || 0,
+    );
+    setFieldValue(
+      "roomType",
+      selectedClient.tourDetails?.accommodation?.sharingType || "",
+    );
+  };
 
   return (
     <Formik
-      initialValues={{
-        customerName: "",
-        email: "",
-        phone: "",
-        adults: "",
-        children: "",
-        kids: "",
-        infants: "",
-        message: "",
-        tourType: "",
-        clientLocation: "",
-        tourDestination: "",
-        pickupPoint: "",
-        dropPoint: "",
-        arrivalDate: "",
-        departureDate: "",
-        pickupTime: "",
-        dropTime: "",
-        roomType: "",
-        noOfRooms: 1,
-        noOfMattress: "",
-        noOfVehicles: 0,
-        vehiclesSameOrDifferent: "Same",
-        multipleVehicles: [
-          { vehicleType: "", tripType: "Round Trip", noOfDays: "", perDayCost: "", totalCost: "" }
-        ],
-      }}
+      enableReinitialize
+      initialValues={buildInitialValues()}
       validate={(values) => {
         const errors = {};
 
@@ -121,7 +287,27 @@ const StepClientDetails = ({ onNext }) => {
         errors,
         touched,
         isSubmitting,
-      }) => (
+      }) => {
+        useEffect(() => {
+          if (!values.customerName || !leads?.length) return;
+          const selectedClient =
+            findLeadByName(leads, values.customerName) ||
+            findLeadByName(activeLeads, values.customerName);
+          if (!selectedClient) return;
+
+          const nextTitle = normalizeTitle(
+            selectedClient.personalDetails?.title,
+            titleOptions,
+          );
+          const rawTitle = String(values.title || "").trim();
+          const shouldAutoFill =
+            !rawTitle || !titleOptions.includes(rawTitle);
+          if (shouldAutoFill && normalizeTitle(values.title, titleOptions) !== nextTitle) {
+            setFieldValue("title", nextTitle);
+          }
+        }, [values.customerName, values.title, leads, activeLeads, titleOptions, setFieldValue]);
+
+        return (
         <Form>
           <Grid container spacing={2}>
             {/* Client Dropdown */}
@@ -136,122 +322,12 @@ const StepClientDetails = ({ onNext }) => {
                   const selectedName = e.target.value;
                   setFieldValue("customerName", selectedName);
 
-                  // Find selected client details
-                  const selectedClient = activeLeads.find(
-                    (lead) => lead.personalDetails?.fullName === selectedName,
-                  );
-
-                  console.log("Selected Client:", selectedClient); // Debug
+                  const selectedClient =
+                    findLeadByName(leads, selectedName) ||
+                    findLeadByName(activeLeads, selectedName);
 
                   if (selectedClient) {
-                    // Auto-fill all fields from the selected lead
-                    setFieldValue(
-                      "email",
-                      selectedClient.personalDetails?.emailId || "",
-                    );
-                    setFieldValue(
-                      "phone",
-                      selectedClient.personalDetails?.mobile || "",
-                    );
-                    const fullLocation = [
-                      selectedClient.location?.city,
-                      selectedClient.location?.state,
-                      selectedClient.location?.country,
-                    ]
-                      .filter(Boolean)
-                      .join(", ");
-                    setFieldValue(
-                      "clientLocation",
-                      fullLocation || selectedClient.location?.city || "",
-                    );
-                    setFieldValue(
-                      "tourDestination",
-                      selectedClient.tourDetails?.tourDestination || "",
-                    );
-                    setFieldValue(
-                      "tourType",
-                      selectedClient.tourDetails?.tourType || "",
-                    );
-
-                    // FIXED: Adults and children are inside tourDetails.members
-                    setFieldValue(
-                      "adults",
-                      selectedClient.tourDetails?.members?.adults || "",
-                    );
-                    setFieldValue(
-                      "children",
-                      selectedClient.tourDetails?.members?.children || 0,
-                    );
-                    setFieldValue(
-                      "kids",
-                      selectedClient.tourDetails?.members?.kidsWithoutMattress || 0,
-                    );
-                    setFieldValue(
-                      "infants",
-                      selectedClient.tourDetails?.members?.infants || 0,
-                    );
-
-                    // Auto-fill message with tour destination if available
-                    const tourDestination =
-                      selectedClient.tourDetails?.tourDestination;
-                    if (tourDestination) {
-                      setFieldValue(
-                        "message",
-                        `Interested in ${tourDestination} tour package`,
-                      );
-                    }
-
-                    const pd = selectedClient.tourDetails?.pickupDrop;
-                    if (pd) {
-                      setFieldValue("arrivalDate", pd.arrivalDate || "");
-                      setFieldValue("departureDate", pd.departureDate || "");
-                      setFieldValue(
-                        "pickupTime",
-                        pd.arrivalTime || pd.pickupTime || "",
-                      );
-                      setFieldValue(
-                        "dropTime",
-                        pd.departureTime || pd.dropTime || "",
-                      );
-                      setFieldValue(
-                        "pickupPoint",
-                        formatPickupDropLine(
-                          pd.arrivalCity,
-                          pd.arrivalLocation,
-                        ),
-                      );
-                      setFieldValue(
-                        "dropPoint",
-                        formatPickupDropLine(
-                          pd.departureCity,
-                          pd.departureLocation,
-                        ),
-                      );
-                    } else {
-                      setFieldValue("arrivalDate", "");
-                      setFieldValue("departureDate", "");
-                      setFieldValue("pickupTime", "");
-                      setFieldValue("dropTime", "");
-                      setFieldValue("pickupPoint", "");
-                      setFieldValue("dropPoint", "");
-                    }
-
-                    setFieldValue(
-                      "noOfRooms",
-                      Number(selectedClient.tourDetails?.accommodation?.noOfRooms) || 1,
-                    );
-                    setFieldValue(
-                      "noOfMattress",
-                      Number(selectedClient.tourDetails?.accommodation?.noOfMattress) || 0,
-                    );
-                    setFieldValue(
-                      "noOfVehicles",
-                      Number(selectedClient.tourDetails?.pickupDrop?.noOfVehicles) || 0,
-                    );
-                    setFieldValue(
-                      "roomType",
-                      selectedClient.tourDetails?.accommodation?.sharingType || "",
-                    );
+                    applyLeadToForm(selectedClient, setFieldValue);
                   }
                 }}
                 error={touched.customerName && Boolean(errors.customerName)}
@@ -275,6 +351,30 @@ const StepClientDetails = ({ onNext }) => {
                 ) : (
                   <MenuItem disabled>No clients found</MenuItem>
                 )}
+              </TextField>
+            </Grid>
+
+            {/* Title */}
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                select
+                fullWidth
+                label="Title"
+                name="title"
+                value={normalizeTitle(values.title, titleOptions)}
+                onChange={(e) =>
+                  setFieldValue(
+                    "title",
+                    normalizeTitle(e.target.value, titleOptions),
+                  )
+                }
+                helperText="Auto-filled from lead when client is selected"
+              >
+                {titleOptions.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
               </TextField>
             </Grid>
 
@@ -664,7 +764,8 @@ const StepClientDetails = ({ onNext }) => {
             </Button>
           </Box>
         </Form>
-      )}
+        );
+      }}
     </Formik>
   );
 };

@@ -7,7 +7,7 @@ import { uploadOnCloudinary } from "../../utils/cloudinary.js";
 import { getCache, setCache, clearPattern } from "../../utils/cache.js";
 import { logActivity } from "../../utils/ActivityLog.js";
 import mongoose from "mongoose";
-import nodemailer from "nodemailer";
+import emailQueue from "../../utils/emailQueue.js";
 import Company from "../../models/company.model.js";
 import EmailAccount from "../../models/emailAccount.model.js";
 import Bank from "../../models/bankDetails.js";
@@ -20,7 +20,7 @@ import {
   packageTotals,
 } from "../../utils/customQuotationMailerTemplates.js";
 import ReceivedVoucher from "../../models/payment.model.js";
-import { buildHotelConfirmationPdf } from "../../utils/hotelConfirmationPdf.js";
+import { buildHotelConfirmationPdf, quotationWithConfirmedHotels } from "../../utils/hotelConfirmationPdf.js";
 import { buildPaymentReceiptPdf } from "../../utils/paymentReceiptPdf.js";
 import { generateBookingId } from "../../utils/bookingIdGenerator.js";
 
@@ -959,10 +959,10 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
     );
   }
 
-  const transporter = nodemailer.createTransport({
+  const smtpConfig = {
     ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
     auth: { user: auth.user, pass: auth.pass },
-  });
+  };
 
   const isBookingMail = String(type || "").trim().toLowerCase() === "booking";
   const attachments = [];
@@ -1009,7 +1009,7 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
   }
 
   try {
-    await transporter.sendMail({
+    const mailOptions = {
       from: `"${selectedCompany?.companyName || "Iconic Travel"}" <${auth.user}>`,
       to,
       cc: cc && cc.length ? cc : undefined,
@@ -1018,7 +1018,8 @@ export const sendCustomQuotationMail = asyncHandler(async (req, res) => {
       html: body,
       text: body.replace(/<[^>]*>/g, ""), // fallback
       attachments: attachments,
-    });
+    };
+    await emailQueue.add('sendEmail', { mailOptions, smtpConfig });
   } catch (error) {
     console.error("Mail Error:", error);
     throw new ApiError(500, "Failed to send email");
@@ -1203,12 +1204,14 @@ export const saveConfirmedHotels = async (req, res) => {
 export const sendHotelConfirmationMail = async (req, res) => {
   try {
     const { id } = req.params;
-    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf } = req.body;
+    const { toEmail, cc, subject, bodyHtml, mailType, nextPayableAmount, paymentDueDate, customText, senderAccount, paymentVoucherId, receiptPdf, confirmedHotels } = req.body;
 
     const quotation = await CustomQuotation.findById(id).lean();
     if (!quotation) {
       return res.status(404).json({ message: "Quotation not found" });
     }
+
+    const outputQuotation = quotationWithConfirmedHotels(quotation, confirmedHotels);
 
     const company = await resolveCompanyForEmail({ 
       companyId: req.body.companyId || req.user?.companyId, 
@@ -1267,18 +1270,18 @@ export const sendHotelConfirmationMail = async (req, res) => {
         );
         htmlBody = buildCustomQuotationBookingEmail(quotation, bookingPayload);
       } else {
-        htmlBody = buildHotelConfirmationEmail(quotation, options);
+        htmlBody = buildHotelConfirmationEmail(outputQuotation, options);
       }
     }
 
-    const pdfBuffer = await buildHotelConfirmationPdf(quotation, options);
+    const pdfBuffer = await buildHotelConfirmationPdf(outputQuotation, options);
     
     const auth = await resolveMailAuth(senderAccount, company);
 
-    const transporter = nodemailer.createTransport({
+    const smtpConfig = {
       ...(auth.service ? { service: auth.service } : { host: auth.host || "smtp.gmail.com", port: auth.port || 587, secure: auth.secure ?? false }),
       auth: { user: auth.user, pass: auth.pass },
-    });
+    };
 
     const mailOptions = {
       from: `"${options.companyName}" <${auth.user}>`,
@@ -1313,7 +1316,7 @@ export const sendHotelConfirmationMail = async (req, res) => {
       }
     }
 
-    await transporter.sendMail(mailOptions);
+    await emailQueue.add('sendEmail', { mailOptions, smtpConfig });
 
     res.status(200).json(new ApiResponse(200, null, "Hotel confirmation mail sent successfully"));
   } catch (error) {
@@ -1324,12 +1327,14 @@ export const sendHotelConfirmationMail = async (req, res) => {
 export const previewHotelConfirmation = async (req, res) => {
   try {
     const { id } = req.params;
-    const { customText, mailType, nextPayableAmount, paymentDueDate } = req.body;
+    const { customText, mailType, nextPayableAmount, paymentDueDate, confirmedHotels } = req.body;
 
     const quotation = await CustomQuotation.findById(id).lean();
     if (!quotation) {
       return res.status(404).json({ message: "Quotation not found" });
     }
+
+    const outputQuotation = quotationWithConfirmedHotels(quotation, confirmedHotels);
 
     const company = await resolveCompanyForEmail({ 
       companyId: req.body.companyId || req.user?.companyId, 
@@ -1383,7 +1388,7 @@ export const previewHotelConfirmation = async (req, res) => {
       );
       htmlBody = buildCustomQuotationBookingEmail(quotation, bookingPayload);
     } else {
-      htmlBody = buildHotelConfirmationEmail(quotation, options);
+      htmlBody = buildHotelConfirmationEmail(outputQuotation, options);
     }
 
     res.status(200).json(new ApiResponse(200, { html: htmlBody }, "Preview generated"));

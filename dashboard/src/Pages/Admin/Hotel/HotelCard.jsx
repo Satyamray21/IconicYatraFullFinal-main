@@ -1,73 +1,86 @@
-// src/components/HotelCard.jsx
+// src/Pages/Admin/Hotel/HotelCard.jsx
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import {
   fetchHotels,
   deleteHotel,
   updateHotelStatus,
-  updateHotel,
 } from "../../../features/hotel/hotelSlice";
-import { useNavigate } from "react-router-dom";
 
 import {
   Container,
   Typography,
-  CircularProgress,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  TableContainer,
   IconButton,
-  Paper,
-  Menu,
-  MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  TextField,
-  DialogActions,
   Button,
   Stack,
   Chip,
+  Box,
+  TextField,
+  InputAdornment,
+  Menu,
+  MenuItem,
   ListItemIcon,
   ListItemText,
-  Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   Delete,
   Edit,
   MoreVert,
+  CheckCircle,
+  Cancel,
+  Search,
 } from "@mui/icons-material";
-import { CheckCircle, Cancel } from "@mui/icons-material";
+import { DataGrid } from "@mui/x-data-grid";
 
 const HotelCard = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { hotels, loading, error } = useSelector((state) => state.hotel);
+  const { hotels = [], loading, error } = useSelector((state) => state.hotel);
 
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // Menu states
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [selectedHotel, setSelectedHotel] = useState(null);
 
-  // Edit Modal states
-  const [editOpen, setEditOpen] = useState(false);
-  const [cityFilter, setCityFilter] = useState("");
-  const [formData, setFormData] = useState({
-    hotelName: "",
-    hotelType: "",
-    contactDetails: { mobile: "", email: "" },
-    location: { address1: "", city: "" },
-  });
-
-  // Delete Confirm
+  // Delete Confirm Dialog state
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  useEffect(() => {
-    dispatch(fetchHotels({ city: cityFilter }));
-  }, [dispatch, cityFilter]);
+  // Snackbar state
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
 
-  // Handle Menu
+  // Fetch hotels on mount
+  useEffect(() => {
+    dispatch(fetchHotels());
+  }, [dispatch]);
+
+  // Handle errors from Redux store
+  useEffect(() => {
+    if (error) {
+      setSnackbar({
+        open: true,
+        message: error,
+        severity: "error",
+      });
+    }
+  }, [error]);
+
+  const handleCloseSnackbar = () => {
+    setSnackbar((prev) => ({ ...prev, open: false }));
+  };
+
   const handleMenuOpen = (event, hotel) => {
     setMenuAnchor(event.currentTarget);
     setSelectedHotel(hotel);
@@ -79,217 +92,303 @@ const HotelCard = () => {
   };
 
   // Delete
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!selectedHotel) return;
-    dispatch(deleteHotel(selectedHotel._id));
+    try {
+      await dispatch(deleteHotel(selectedHotel._id)).unwrap();
+      setSnackbar({
+        open: true,
+        message: "Hotel deleted successfully!",
+        severity: "success",
+      });
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: err || "Failed to delete hotel. Please try again.",
+        severity: "error",
+      });
+    }
     setDeleteOpen(false);
-    handleMenuClose();
-  };
-
-  // Status Update
-  const handleStatusChange = (status) => {
-    dispatch(updateHotelStatus({ id: selectedHotel._id, status }));
-    handleMenuClose();
-  };
-
-  // Edit Modal
-  const handleEditOpen = (hotel) => {
-    setSelectedHotel(hotel);
-    setFormData({
-      hotelName: hotel.hotelName,
-      hotelType: hotel.hotelType,
-      contactDetails: {
-        mobile: hotel.contactDetails?.mobile || "",
-        email: hotel.contactDetails?.email || "",
-      },
-      location: {
-        address1: hotel.location?.address1 || "",
-        city: hotel.location?.city || "",
-      },
-    });
-    setEditOpen(true);
-    handleMenuClose();
-  };
-
-  const handleEditClose = () => {
-    setEditOpen(false);
     setSelectedHotel(null);
   };
 
-  const handleEditSave = () => {
+  // Status Update
+  const handleStatusChange = async (status) => {
     if (!selectedHotel) return;
-    dispatch(updateHotel({ id: selectedHotel._id, formData }));
-    handleEditClose();
+    try {
+      await dispatch(updateHotelStatus({ id: selectedHotel._id, status })).unwrap();
+      setSnackbar({
+        open: true,
+        message: `Status updated to ${status} successfully!`,
+        severity: "success",
+      });
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: err || "Failed to update status. Please try again.",
+        severity: "error",
+      });
+    }
+    handleMenuClose();
   };
 
-  if (loading) {
-    return (
-      <Container sx={{ textAlign: "center", mt: 5 }}>
-        <CircularProgress />
-      </Container>
-    );
-  }
+  // Filter client-side
+  const mappedHotels = (hotels || [])
+    .map((hotel, index) => ({
+      id: hotel._id, // unique id required for DataGrid rows
+      srNo: index + 1,
+      hotelId: hotel.hotelId || "-",
+      hotelName: hotel.hotelName || "-",
+      hotelType: hotel.hotelType || "-",
+      mobile: hotel.contactDetails?.mobile || "-",
+      email: hotel.contactDetails?.email || "-",
+      address: hotel.location?.address || "-",
+      state: hotel.location?.state || "-",
+      country: hotel.location?.country || "India",
+      city: hotel.location?.city || "-",
+      status: hotel.status || "Active",
+      originalData: hotel,
+    }))
+    .filter((hotel) => {
+      if (!searchTerm) return true;
+      const term = searchTerm.toLowerCase();
+      return (
+        hotel.hotelName.toLowerCase().includes(term) ||
+        hotel.hotelId.toLowerCase().includes(term) ||
+        hotel.city.toLowerCase().includes(term) ||
+        hotel.state.toLowerCase().includes(term) ||
+        hotel.mobile.toLowerCase().includes(term) ||
+        hotel.email.toLowerCase().includes(term)
+      );
+    });
 
-  if (error) {
-    return (
-      <Container sx={{ textAlign: "center", mt: 5 }}>
-        <Typography color="error">{error}</Typography>
-      </Container>
-    );
-  }
+  const columns = [
+    { field: "srNo", headerName: "Sr. No", width: 70 },
+    { field: "hotelId", headerName: "Hotel ID", width: 110 },
+    { field: "hotelName", headerName: "Hotel Name", width: 180 },
+    { field: "hotelType", headerName: "Category", width: 120 },
+    { field: "mobile", headerName: "Mobile", width: 120 },
+    { field: "email", headerName: "Email", width: 180 },
+    {
+      field: "address",
+      headerName: "Address",
+      width: 200,
+      renderCell: (params) => (
+        <Box
+          sx={{
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            width: "100%",
+          }}
+          title={params.value}
+        >
+          {params.value}
+        </Box>
+      ),
+    },
+    { field: "state", headerName: "State", width: 120 },
+    { field: "country", headerName: "Country", width: 100 },
+    { field: "city", headerName: "Destination", width: 130 },
+    {
+      field: "status",
+      headerName: "Status",
+      width: 100,
+      renderCell: (params) => (
+        <Chip
+          label={params.value}
+          color={params.value === "Active" ? "success" : "error"}
+          size="small"
+        />
+      ),
+    },
+    {
+      field: "action",
+      headerName: "Action",
+      width: 150,
+      sortable: false,
+      renderCell: (params) => {
+        const hotel = params.row;
+        return (
+          <Stack direction="row" spacing={0.5} alignItems="center" height="100%">
+            {/* Edit */}
+            <IconButton
+              color="primary"
+              size="small"
+              onClick={() => navigate(`/hotel/edit/${hotel.id}`)}
+            >
+              <Edit fontSize="small" />
+            </IconButton>
+            {/* Delete */}
+            <IconButton
+              color="error"
+              size="small"
+              onClick={() => {
+                setSelectedHotel(hotel.originalData);
+                setDeleteOpen(true);
+              }}
+            >
+              <Delete fontSize="small" />
+            </IconButton>
+            {/* Menu */}
+            <IconButton
+              size="small"
+              onClick={(e) => handleMenuOpen(e, hotel.originalData)}
+            >
+              <MoreVert fontSize="small" />
+            </IconButton>
+          </Stack>
+        );
+      },
+    },
+  ];
 
   return (
-    <Container sx={{ mt: 4 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h4" gutterBottom>
-          Hotel List
-        </Typography>
-        <Box display="flex" gap={2}>
-          <TextField
-            label="Filter by City"
-            size="small"
-            value={cityFilter}
-            onChange={(e) => setCityFilter(e.target.value)}
-            sx={{ width: 250 }}
-          />
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => navigate("/hotelform")}
+    <Container maxWidth="xl">
+      <Box py={3}>
+        <Box
+          display="flex"
+          flexDirection={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "stretch", sm: "center" }}
+          gap={2}
+          mb={3}
+        >
+          <Typography variant="h4" fontWeight="bold">
+            Hotel List
+          </Typography>
+          <Box
+            display="flex"
+            flexDirection={{ xs: "column", sm: "row" }}
+            gap={2}
+            alignItems="center"
           >
-            Add Hotel
-          </Button>
+            <TextField
+              placeholder="Search hotels..."
+              size="small"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={{ width: { xs: "100%", sm: 250 } }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton size="small" disabled>
+                      <Search fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={() => navigate("/hotelform")}
+              sx={{ minWidth: 120, height: 40 }}
+            >
+              Add Hotel
+            </Button>
+          </Box>
         </Box>
-      </Box>
 
-      <TableContainer component={Paper} sx={{ overflowX: "auto" }}>
-        <Table>
-          <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
-            <TableRow>
-              <TableCell sx={{ fontWeight: "bold" }}>S.No</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Hotel ID</TableCell>
-              <TableCell
-                sx={{
-                  fontWeight: "bold",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  maxWidth: 150
-                }}
-              >
-                Hotel Name
-              </TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Mobile</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
-              <TableCell sx={{ fontWeight: "bold", }}>Country</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>City</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
-              <TableCell sx={{ fontWeight: "bold", whiteSpace: "nowrap", minWidth: 140 }}>Action</TableCell>
-            </TableRow>
-          </TableHead>
+        {/* Data Grid */}
+        <Box sx={{ width: "100%", overflowX: "auto" }}>
+          <Box sx={{ minWidth: "800px" }}>
+            <DataGrid
+              rows={mappedHotels}
+              columns={columns}
+              pageSize={10}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+              autoHeight
+              disableRowSelectionOnClick
+              loading={loading}
+            />
+          </Box>
+        </Box>
 
-          <TableBody>
-            {hotels.map((hotel, index) => (
-              <TableRow key={hotel._id}>
-                <TableCell>{index + 1}</TableCell>
-                <TableCell>{hotel.hotelId}</TableCell>
-                <TableCell>{hotel.hotelName}</TableCell>
-                <TableCell>{hotel.hotelType}</TableCell>
-                <TableCell>{hotel.contactDetails?.mobile}</TableCell>
-                <TableCell>{hotel.contactDetails?.email}</TableCell>
-                <TableCell>{hotel.location?.country}</TableCell>
-                <TableCell>{hotel.location?.city}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={hotel.status}
-                    color={hotel.status === "Active" ? "success" : "error"}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1}>
-                    {/* Edit */}
-                    <IconButton
-                      color="primary"
-                      onClick={() => navigate(`/hotel/edit/${hotel._id}`)}
-                    >
-                      <Edit />
-                    </IconButton>
-                    {/* Delete */}
-                    <IconButton
-                      color="error"
-                      onClick={() => {
-                        setSelectedHotel(hotel);
-                        setDeleteOpen(true);
-                      }}
-                    >
-                      <Delete />
-                    </IconButton>
-                    {/* Menu */}
-                    <IconButton onClick={(e) => handleMenuOpen(e, hotel)}>
-                      <MoreVert />
-                    </IconButton>
-                  </Stack>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+        {/* Action Menu */}
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={handleMenuClose}
+          PaperProps={{
+            sx: {
+              borderRadius: 2,
+              minWidth: 180,
+              boxShadow: "0px 4px 12px rgba(0,0,0,0.1)",
+            },
+          }}
+        >
+          <MenuItem onClick={() => handleStatusChange("Active")}>
+            <ListItemIcon>
+              <CheckCircle sx={{ color: "green" }} fontSize="small" />
+            </ListItemIcon>
+            <ListItemText
+              primary="Set Active"
+              primaryTypographyProps={{ sx: { color: "green", fontWeight: "bold" } }}
+            />
+          </MenuItem>
 
-      {/* More Menu */}
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={handleMenuClose}
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            minWidth: 180,
-            boxShadow: "0px 4px 12px rgba(0,0,0,0.1)",
-          },
-        }}
-      >
-        <MenuItem onClick={() => handleStatusChange("Active")}>
-          <ListItemIcon>
-            <CheckCircle sx={{ color: "green" }} fontSize="small" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Set Active"
-            primaryTypographyProps={{ sx: { color: "green", fontWeight: "bold" } }}
-          />
-        </MenuItem>
+          <MenuItem onClick={() => handleStatusChange("Inactive")}>
+            <ListItemIcon>
+              <Cancel sx={{ color: "red" }} fontSize="small" />
+            </ListItemIcon>
+            <ListItemText
+              primary="Set Inactive"
+              primaryTypographyProps={{ sx: { color: "red", fontWeight: "bold" } }}
+            />
+          </MenuItem>
+        </Menu>
 
-        <MenuItem onClick={() => handleStatusChange("Inactive")}>
-          <ListItemIcon>
-            <Cancel sx={{ color: "red" }} fontSize="small" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Set Inactive"
-            primaryTypographyProps={{ sx: { color: "red", fontWeight: "bold" } }}
-          />
-        </MenuItem>
-      </Menu>
+        {/* Delete Confirmation Dialog */}
+        <Dialog
+          open={deleteOpen}
+          onClose={() => {
+            setDeleteOpen(false);
+            setSelectedHotel(null);
+          }}
+        >
+          <DialogTitle>Confirm Delete</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Are you sure you want to delete hotel{" "}
+              <b>{selectedHotel?.hotelName}</b>? This action cannot be undone.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                setDeleteOpen(false);
+                setSelectedHotel(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteConfirm}
+              variant="contained"
+              color="error"
+            >
+              Delete
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-      {/* Delete Confirm Dialog */}
-      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
-        <DialogTitle>Confirm Delete</DialogTitle>
-        <DialogContent>
-          Are you sure you want to delete{" "}
-          <b>{selectedHotel?.hotelName}</b>?
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleDeleteConfirm}
-            variant="contained"
-            color="error"
+        {/* Notifications Snackbar */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        >
+          <Alert
+            onClose={handleCloseSnackbar}
+            severity={snackbar.severity}
+            sx={{ width: "100%" }}
           >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Box>
     </Container>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Box,
   Button,
@@ -29,6 +30,11 @@ const steps = [
 
 const QuickQuotationForm = () => {
   const dispatch = useDispatch();
+  const location = useLocation();
+  const convertPackageId = location.state?.convertPackageId || null;
+  const convertSector = location.state?.convertSector || null;
+  const convertNights = location.state?.convertNights || null;
+
   const { loading, error, successMessage } = useSelector(
     (state) => state.quickQuotation,
   );
@@ -115,6 +121,7 @@ const QuickQuotationForm = () => {
 
       const apiData = {
         customerName: finalData.clientDetails?.customerName || "",
+        title: finalData.clientDetails?.title || "Mr",
         email: finalData.clientDetails?.email || "",
         phone: finalData.clientDetails?.phone || "",
         clientLocation: finalData.clientDetails?.clientLocation || "",
@@ -171,18 +178,10 @@ const QuickQuotationForm = () => {
         packageSnapshot: {
           clientLocation: finalData.clientDetails?.clientLocation?.trim() || "",
           tourType: finalData.packageDetails?.tourType || "",
-          destinations: Array.isArray(finalData.packageDetails?.destinationNights)
-            ? finalData.packageDetails.destinationNights.filter(
-                (dn) => dn && dn.destination && dn.destination.trim() !== "",
-              ).map(dn => dn.destination.trim())
-            : [],
-          destinationNights: Array.isArray(finalData.packageDetails?.destinationNights)
-            ? finalData.packageDetails.destinationNights.filter(
-                (dn) => dn && dn.destination && dn.destination.trim() !== "",
-              ).map(dn => ({
-                  destination: dn.destination.trim(),
-                  nights: Number(dn.nights) || 0
-              }))
+          destinations: Array.isArray(finalData.packageDetails?.destinations)
+            ? finalData.packageDetails.destinations.filter(
+                (dest) => dest && dest.trim() !== "",
+              )
             : [],
           days: parseInt(finalData.packageDetails?.days) || 0,
           nights: parseInt(finalData.packageDetails?.nights) || 0,
@@ -321,13 +320,14 @@ const QuickQuotationForm = () => {
   const getStepContent = (step) => {
     switch (step) {
       case 0:
-        return <StepClientDetails onNext={handleNext} />;
+        return <StepClientDetails onNext={handleNext} convertSector={convertSector} convertNights={convertNights} initialClientDetails={formData.clientDetails} />;
       case 1:
         return (
           <StepPackageDetails
             onNext={handleNext}
             onBack={handleBack}
             clientDetails={formData.clientDetails}
+            convertPackageId={convertPackageId}
           />
         );
       case 2:

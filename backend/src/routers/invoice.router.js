@@ -9,6 +9,7 @@ import {
   renumberInvoiceMonth,
   renumberCompanyAdvancedReceipts,
   backfillExistingInvoiceSerials,
+  sendInvoiceMail,
 } from "../controllers/invoice.controller.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
@@ -41,5 +42,11 @@ router
   .get(requirePermission("canAccessInvoices"), getInvoiceById)
   .put(requirePermission("canEditInvoice"), updateInvoice)
   .delete(requirePermission("canEditInvoice"), deleteInvoice);
+
+router.post(
+  "/:id/email/send",
+  requirePermission("canEditInvoice"),
+  sendInvoiceMail
+);
 
 export default router;

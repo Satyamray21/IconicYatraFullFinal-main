@@ -67,18 +67,38 @@ export const createHotelStep1 = async (req, res) => {
             });
         }
 
+        const roomType = String(bodyData.roomType || "").trim();
+        const category = String(bodyData.category || "").trim();
+
+        let hotelType = bodyData.hotelType;
+        if (typeof hotelType === "string") {
+            try {
+                hotelType = JSON.parse(hotelType);
+            } catch {
+                hotelType = hotelType ? [hotelType] : [];
+            }
+        }
+        if (!Array.isArray(hotelType)) {
+            hotelType = hotelType ? [String(hotelType)] : [];
+        }
+        if (!hotelType.length && roomType) {
+            hotelType = [roomType];
+        } else if (!hotelType.length && category) {
+            hotelType = [category];
+        }
+
         // ✅ PROPERLY STRUCTURE THE DATA ACCORDING TO SCHEMA
         const hotelData = {
             hotelName: bodyData.hotelName,
-            hotelType: bodyData.hotelType,
+            hotelType,
 
             // ✅ Contact Details - PROPERLY STRUCTURE
             contactDetails: {
-                email: bodyData.email,
-                mobile: bodyData.mobile,
-                alternateContact: bodyData.alternateContact,
-                designation: bodyData.designation,
-                contactPerson: bodyData.contactPerson,
+                email: bodyData.contactDetails?.email || bodyData.email,
+                mobile: bodyData.contactDetails?.mobile || bodyData.mobile,
+                alternateContact: bodyData.contactDetails?.alternateContact || bodyData.alternateContact,
+                designation: bodyData.contactDetails?.designation || bodyData.designation,
+                contactPerson: bodyData.contactDetails?.contactPerson || bodyData.contactPerson,
             },
 
             description: bodyData.description,
@@ -87,20 +107,37 @@ export const createHotelStep1 = async (req, res) => {
 
             // ✅ Location - PROPERLY STRUCTURE
             location: {
-                country: bodyData.country || "India",
-                state: bodyData.state,
-                city: bodyData.city,
-                address: bodyData.address,
-                pincode: bodyData.pincode,
+                country: bodyData.location?.country || bodyData.country || "India",
+                state: bodyData.location?.state || bodyData.state,
+                city: bodyData.location?.city || bodyData.city,
+                address: bodyData.location?.address || bodyData.address,
+                pincode: bodyData.location?.pincode || bodyData.pincode,
             },
 
             // ✅ Social Media - PROPERLY STRUCTURE
             socialMedia: {
-                googleLink: bodyData.googleLink,
+                googleLink: bodyData.socialMedia?.googleLink || bodyData.googleLink,
             },
 
             policy: bodyData.policy,
         };
+
+        if (roomType) {
+            hotelData.tempRoomDetails = [
+                {
+                    roomDetails: [
+                        {
+                            roomType,
+                            ep: 0,
+                            cp: 0,
+                            map: 0,
+                            ap: 0,
+                            images: [],
+                        },
+                    ],
+                },
+            ];
+        }
 
         // Handle main image
         if (req.files?.mainImage) {

@@ -103,6 +103,7 @@ export const createLead = asyncHandler(async (req, res) => {
     noOfMattress,
     noOfNights,
     requirementNote,
+    noOfVehicles = 0,
   } = req.body;
 
   // ✅ Handle addMore for single values
@@ -158,8 +159,10 @@ export const createLead = asyncHandler(async (req, res) => {
     members,
     accommodation
   );
-  accommodation.noOfRooms = autoCalculatedRooms;
-  accommodation.noOfMattress = extraMattress;
+  
+  // Prioritize the frontend's provided numbers, use auto-calculation as fallback
+  accommodation.noOfRooms = noOfRooms || autoCalculatedRooms;
+  accommodation.noOfMattress = noOfMattress !== undefined ? Number(noOfMattress) : extraMattress;
 
   // ✅ Build schema fields
   const personalDetails = {
@@ -201,6 +204,7 @@ export const createLead = asyncHandler(async (req, res) => {
       departureDate,
       departureCity: departureCityToSave,
       departureLocation: departureLocationToSave,
+      noOfVehicles: Number(noOfVehicles) || 0,
     },
     accommodation,
   };
@@ -530,14 +534,14 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
 
   // FIX: Change 'Confirm' to 'Confirmed' to match frontend and error message
-  const allowedStatuses = ['Active', 'Cancelled', 'Confirmed'];
+  const allowedStatuses = ['Active', 'Cancelled', 'Confirmed', 'Not Converted'];
 
   if (!leadId) {
     throw new ApiError(400, "leadId is required");
   }
 
   if (!status || !allowedStatuses.includes(status)) {
-    throw new ApiError(400, "Valid status is required (Active, Cancelled, Confirmed)");
+    throw new ApiError(400, "Valid status is required (Active, Cancelled, Confirmed, Not Converted)");
   }
 
   const lead = await Lead.findOne({ leadId });
@@ -547,14 +551,6 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
   }
 
   const currentStatus = lead.status;
-
-  if (currentStatus === 'Cancelled') {
-    throw new ApiError(400, "Cancelled lead cannot be changed to another status");
-  }
-
-  if (currentStatus === 'Confirmed' && status === 'Active') {
-    throw new ApiError(400, "Confirmed lead cannot be changed back to Active");
-  }
 
   if (currentStatus === status) {
     return res.status(200).json(new ApiResponse(200, lead, `Status is already ${status}`));
