@@ -416,18 +416,27 @@ const InvoiceCard = () => {
                 <TableCell>Invoice No</TableCell>
                 <TableCell>Adv. receipt</TableCell>
                 <TableCell>Invoice Date</TableCell>
-                <TableCell>Due Date</TableCell>
                 <TableCell>Party Name</TableCell>
                 <TableCell align="right">Total</TableCell>
-                <TableCell align="right">Received</TableCell>
-                <TableCell align="right">Balance</TableCell>
+                <TableCell align="right">Tax Amount</TableCell>
+                <TableCell align="right">CGST</TableCell>
+                <TableCell align="right">SGST</TableCell>
+                <TableCell align="right">IGST</TableCell>
+                <TableCell align="center">Mode of Tax</TableCell>
                 <TableCell align="center">Action</TableCell>
               </TableRow>
             </TableHead>
 
             <TableBody>
               {paginatedData.length ? (
-                paginatedData.map((invoice, index) => (
+                paginatedData.map((invoice, index) => {
+                  const taxAmount = invoice.items?.reduce((acc, item) => acc + (Number(item.taxAmount) || 0), 0) || 0;
+                  const modeOfTax = invoice.withTax ? "With Tax" : "Without Tax";
+                  const isInterState = !String(invoice.stateOfSupply || "").toLowerCase().includes("uttar pradesh");
+                  const igst = isInterState ? taxAmount : 0;
+                  const cgst = isInterState ? 0 : taxAmount / 2;
+                  const sgst = isInterState ? 0 : taxAmount / 2;
+                  return (
                   <TableRow
                     key={invoice._id}
                     hover
@@ -440,16 +449,24 @@ const InvoiceCard = () => {
                       {invoice.advancedReceiptNo || "—"}
                     </TableCell>
                     <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
-                    <TableCell>{formatDate(invoice.dueDate)}</TableCell>
                     <TableCell>{invoice.billingName}</TableCell>
                     <TableCell align="right">
                       {formatCurrency(invoice.totalAmount)}
                     </TableCell>
                     <TableCell align="right">
-                      {formatCurrency(invoice.receivedAmount)}
+                      {formatCurrency(taxAmount)}
                     </TableCell>
                     <TableCell align="right">
-                      {formatCurrency(invoice.balanceAmount)}
+                      {formatCurrency(cgst)}
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(sgst)}
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(igst)}
+                    </TableCell>
+                    <TableCell align="center">
+                      {modeOfTax}
                     </TableCell>
                     <TableCell align="center">
                       <IconButton
@@ -491,10 +508,11 @@ const InvoiceCard = () => {
                       </IconButton>
                     </TableCell>
                   </TableRow>
-                ))
+                );
+              })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} align="center">
+                  <TableCell colSpan={12} align="center">
                     No invoices found
                   </TableCell>
                 </TableRow>
