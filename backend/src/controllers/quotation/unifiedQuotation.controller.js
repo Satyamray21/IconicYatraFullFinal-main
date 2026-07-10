@@ -316,50 +316,98 @@ export const getUpcomingStayLocations = asyncHandler(async (req, res) => {
   };
 
   custom.forEach(q => {
-    const qd = q.tourDetails?.quotationDetails;
-    processDestinations(
-      q,
-      "CustomQuotation",
-      "quotationId",
-      q.clientDetails?.clientName,
-      q.tourDetails?.arrivalDate,
-      qd?.destinations || [],
-      { adults: qd?.adults, children: qd?.children, kids: qd?.kids, infants: qd?.infants },
-      { numberOfRooms: qd?.rooms?.numberOfRooms, sharingType: qd?.rooms?.sharingType, mealPlan: qd?.mealPlan }
-    );
+    if (q.availabilityHotels && q.availabilityHotels.length > 0) {
+      q.availabilityHotels.forEach(ah => stays.push({
+        ...ah, quotationId: q.quotationId, quotationType: "CustomQuotation", _id: q._id, clientName: q.clientDetails?.clientName || "Guest"
+      }));
+    } else {
+      const qd = q.tourDetails?.quotationDetails;
+      processDestinations(
+        q,
+        "CustomQuotation",
+        "quotationId",
+        q.clientDetails?.clientName,
+        q.tourDetails?.arrivalDate,
+        qd?.destinations || [],
+        { adults: qd?.adults, children: qd?.children, kids: qd?.kids, infants: qd?.infants },
+        { numberOfRooms: qd?.rooms?.numberOfRooms, sharingType: qd?.rooms?.sharingType, mealPlan: qd?.mealPlan }
+      );
+    }
   });
 
   quick.forEach(q => {
-    const qd = q.packageSnapshot?.quotationDetails;
-    const arrivalDate = q.arrivalDate || qd?.arrivalDate;
-    const destinations = q.destinations || qd?.destinations || q.packageSnapshot?.stayLocations || q.packageSnapshot?.destinationNights || [];
-    
-    processDestinations(
-      q,
-      "QuickQuotation",
-      "quickQuotationId",
-      q.customerName,
-      arrivalDate,
-      destinations,
-      { adults: q.adults, children: q.children, kids: q.kids, infants: q.infants },
-      { numberOfRooms: q.noOfRooms || q.numberOfRooms, sharingType: q.roomType || q.sharingType, mealPlan: q.mealPlan || qd?.mealPlan }
-    );
+    if (q.availabilityHotels && q.availabilityHotels.length > 0) {
+      q.availabilityHotels.forEach(ah => stays.push({
+        ...ah, quotationId: q.quickQuotationId, quotationType: "QuickQuotation", _id: q._id, clientName: q.customerName || "Guest"
+      }));
+    } else {
+      const qd = q.packageSnapshot?.quotationDetails;
+      const arrivalDate = q.arrivalDate || qd?.arrivalDate;
+      const destinations = q.destinations || qd?.destinations || q.packageSnapshot?.stayLocations || q.packageSnapshot?.destinationNights || [];
+      
+      processDestinations(
+        q,
+        "QuickQuotation",
+        "quickQuotationId",
+        q.customerName,
+        arrivalDate,
+        destinations,
+        { adults: q.adults, children: q.children, kids: q.kids, infants: q.infants },
+        { numberOfRooms: q.noOfRooms || q.numberOfRooms, sharingType: q.roomType || q.sharingType, mealPlan: q.mealPlan || qd?.mealPlan }
+      );
+    }
   });
 
   hotel.forEach(q => {
-    processDestinations(
-      q,
-      "HotelQuotation",
-      "hotelQuotationId",
-      q.clientDetails?.clientName,
-      q.pickupDrop?.arrivalDate,
-      q.stayLocation || [],
-      { adults: q.clientDetails?.adults, children: q.clientDetails?.children, kids: q.clientDetails?.kids, infants: q.clientDetails?.infants },
-      { numberOfRooms: q.accommodationDetails?.noOfRooms, sharingType: q.accommodationDetails?.sharingType, mealPlan: q.accommodationDetails?.mealPlan }
-    );
+    if (q.availabilityHotels && q.availabilityHotels.length > 0) {
+      q.availabilityHotels.forEach(ah => stays.push({
+        ...ah, quotationId: q.hotelQuotationId, quotationType: "HotelQuotation", _id: q._id, clientName: q.clientDetails?.clientName || "Guest"
+      }));
+    } else {
+      processDestinations(
+        q,
+        "HotelQuotation",
+        "hotelQuotationId",
+        q.clientDetails?.clientName,
+        q.pickupDrop?.arrivalDate,
+        q.stayLocation || [],
+        { adults: q.clientDetails?.adults, children: q.clientDetails?.children, kids: q.clientDetails?.kids, infants: q.clientDetails?.infants },
+        { numberOfRooms: q.accommodationDetails?.noOfRooms, sharingType: q.accommodationDetails?.sharingType, mealPlan: q.accommodationDetails?.mealPlan }
+      );
+    }
   });
 
   res.status(200).json(new ApiResponse(200, stays, "Stay locations fetched successfully"));
+});
+
+export const saveAvailabilityHotels = asyncHandler(async (req, res) => {
+  const { stays } = req.body;
+  const groupedStays = {};
+  
+  stays.forEach(stay => {
+    const qId = stay._id;
+    if (!qId) return;
+    if (!groupedStays[qId]) {
+      groupedStays[qId] = {
+         quotationType: stay.quotationType,
+         hotels: []
+      };
+    }
+    groupedStays[qId].hotels.push(stay);
+  });
+
+  for (const qId in groupedStays) {
+     const { quotationType, hotels } = groupedStays[qId];
+     if (quotationType === "CustomQuotation") {
+        await CustomQuotation.findByIdAndUpdate(qId, { availabilityHotels: hotels });
+     } else if (quotationType === "QuickQuotation") {
+        await QuickQuotation.findByIdAndUpdate(qId, { availabilityHotels: hotels });
+     } else if (quotationType === "HotelQuotation") {
+        await HotelQuotation.findByIdAndUpdate(qId, { availabilityHotels: hotels });
+     }
+  }
+
+  res.status(200).json(new ApiResponse(200, null, "Availability hotels saved successfully"));
 });
 
 export const previewHotelAvailabilityEmail = asyncHandler(async (req, res) => {
