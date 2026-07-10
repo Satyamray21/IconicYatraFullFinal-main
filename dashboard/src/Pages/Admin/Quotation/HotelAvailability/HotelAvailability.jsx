@@ -3,13 +3,124 @@ import {
   Box, Typography, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, Paper, Button, CircularProgress, Alert,
   IconButton, Tooltip, Dialog, DialogTitle, DialogContent,
-  DialogActions, TextField, Grid, Divider 
+  DialogActions, TextField, Grid, Divider, Collapse 
 } from "@mui/material";
 import EmailIcon from "@mui/icons-material/Email";
 import EditIcon from "@mui/icons-material/Edit";
 import CallSplitIcon from "@mui/icons-material/CallSplit";
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import axios from "../../../../utils/axios";
 import HotelEmailDialog from "./HotelEmailDialog";
+import HotelWhatsAppDialog from "./HotelWhatsAppDialog";
+
+const QuotationRow = ({ group, handleEditClick, handleSplitClick, handleOpenEmail, handleOpenWhatsApp }) => {
+  const [open, setOpen] = useState(false);
+  
+  return (
+    <React.Fragment>
+      <TableRow 
+        sx={{ '& > *': { borderBottom: 'unset' }, cursor: 'pointer', '&:hover': { backgroundColor: '#f5f5f5' } }}
+        onClick={() => setOpen(!open)}
+      >
+        <TableCell>
+          <IconButton
+            aria-label="expand row"
+            size="small"
+            onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+          >
+            {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+          </IconButton>
+        </TableCell>
+        <TableCell><strong>{group.quotationId}</strong></TableCell>
+        <TableCell>{group.clientName}</TableCell>
+        <TableCell>Stays: {group.stays.length}</TableCell>
+      </TableRow>
+      <TableRow>
+        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={4}>
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Box sx={{ margin: 1 }}>
+              <Typography variant="h6" gutterBottom component="div">
+                Stay Details
+              </Typography>
+              <Table size="small" aria-label="stays">
+                <TableHead>
+                  <TableRow>
+                    <TableCell><strong>Stay Location</strong></TableCell>
+                    <TableCell><strong>Check In / Out</strong></TableCell>
+                    <TableCell><strong>Details</strong></TableCell>
+                    <TableCell><strong>Actions</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {group.stays.map(({ stay, originalIndex }) => (
+                    <TableRow key={stay._localId || originalIndex}>
+                      <TableCell>
+                        <strong>Hotel</strong><br/>
+                        <span style={{color: "gray"}}>{stay.city} ({stay.nights} Nights)</span>
+                      </TableCell>
+                      <TableCell>
+                        IN: {stay.checkInDate}<br/>
+                        OUT: {stay.checkOutDate}
+                      </TableCell>
+                      <TableCell>
+                        {stay.noOfRooms} Room(s) - {stay.sharingType}<br/>
+                        <span style={{color: "gray"}}>{stay.mealPlan} | {stay.roomCategory}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Tooltip title="Edit Stay Details">
+                            <IconButton 
+                              color="primary" 
+                              size="small"
+                              onClick={() => handleEditClick(stay, originalIndex)}
+                              sx={{ border: "1px solid #1976d2", borderRadius: 1 }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Split Stay">
+                            <IconButton 
+                              color="secondary" 
+                              size="small"
+                              onClick={() => handleSplitClick(stay, originalIndex)}
+                              sx={{ border: "1px solid #9c27b0", borderRadius: 1 }}
+                            >
+                              <CallSplitIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Button 
+                            variant="contained" 
+                            color="primary" 
+                            size="small"
+                            startIcon={<EmailIcon />}
+                            onClick={(e) => { e.stopPropagation(); handleOpenEmail(stay); }}
+                          >
+                            SEND REQUEST
+                          </Button>
+                          <Button 
+                            variant="contained" 
+                            color="success" 
+                            size="small"
+                            startIcon={<WhatsAppIcon />}
+                            onClick={(e) => { e.stopPropagation(); handleOpenWhatsApp(stay); }}
+                          >
+                            SHARE
+                          </Button>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </React.Fragment>
+  );
+};
 
 const HotelAvailability = () => {
   const [stays, setStays] = useState([]);
@@ -24,6 +135,10 @@ const HotelAvailability = () => {
   
   const [companies, setCompanies] = useState([]);
   const [emailAccounts, setEmailAccounts] = useState([]);
+
+  // WhatsApp Share State
+  const [openWhatsAppDialog, setOpenWhatsAppDialog] = useState(false);
+  const [whatsAppStay, setWhatsAppStay] = useState(null);
 
   // Edit Stay State
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -114,6 +229,11 @@ const HotelAvailability = () => {
     }
   };
 
+  const handleOpenWhatsApp = (stay) => {
+    setWhatsAppStay(stay);
+    setOpenWhatsAppDialog(true);
+  };
+
   const handleSaveChangesToBackend = async (staysToSave = stays) => {
     try {
       setSavingToBackend(true);
@@ -201,6 +321,20 @@ const HotelAvailability = () => {
 
   if (loading) return <CircularProgress />;
 
+  const groupedStaysMap = stays.reduce((acc, stay, index) => {
+    const qId = stay.quotationId;
+    if (!acc[qId]) {
+      acc[qId] = {
+        quotationId: qId,
+        clientName: stay.clientName,
+        stays: [],
+      };
+    }
+    acc[qId].stays.push({ stay, originalIndex: index });
+    return acc;
+  }, {});
+  const quotationGroups = Object.values(groupedStaysMap);
+
   return (
     <Box p={3}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -220,69 +354,26 @@ const HotelAvailability = () => {
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell />
               <TableCell><strong>Quotation ID</strong></TableCell>
               <TableCell><strong>Client</strong></TableCell>
-              <TableCell><strong>Stay Location</strong></TableCell>
-              <TableCell><strong>Check In / Out</strong></TableCell>
-              <TableCell><strong>Details</strong></TableCell>
-              <TableCell><strong>Actions</strong></TableCell>
+              <TableCell><strong>Total Stays</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {stays.map((stay, index) => (
-              <TableRow key={stay._localId || index}>
-                <TableCell>{stay.quotationId}</TableCell>
-                <TableCell>{stay.clientName}</TableCell>
-                <TableCell>
-                  <strong>Hotel</strong><br/>
-                  <span style={{color: "gray"}}>{stay.city} ({stay.nights} Nights)</span>
-                </TableCell>
-                <TableCell>
-                  IN: {stay.checkInDate}<br/>
-                  OUT: {stay.checkOutDate}
-                </TableCell>
-                <TableCell>
-                  {stay.noOfRooms} Room(s) - {stay.sharingType}<br/>
-                  <span style={{color: "gray"}}>{stay.mealPlan} | {stay.roomCategory}</span>
-                </TableCell>
-                <TableCell>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Tooltip title="Edit Stay Details">
-                      <IconButton 
-                        color="primary" 
-                        size="small"
-                        onClick={() => handleEditClick(stay, index)}
-                        sx={{ border: "1px solid #1976d2", borderRadius: 1 }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Split Stay">
-                      <IconButton 
-                        color="secondary" 
-                        size="small"
-                        onClick={() => handleSplitClick(stay, index)}
-                        sx={{ border: "1px solid #9c27b0", borderRadius: 1 }}
-                      >
-                        <CallSplitIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Button 
-                      variant="contained" 
-                      color="primary" 
-                      size="small"
-                      startIcon={<EmailIcon />}
-                      onClick={() => handleOpenEmail(stay)}
-                    >
-                      SEND REQUEST
-                    </Button>
-                  </Box>
-                </TableCell>
-              </TableRow>
+            {quotationGroups.map((group) => (
+              <QuotationRow 
+                key={group.quotationId} 
+                group={group} 
+                handleEditClick={handleEditClick} 
+                handleSplitClick={handleSplitClick} 
+                handleOpenEmail={handleOpenEmail} 
+                handleOpenWhatsApp={handleOpenWhatsApp}
+              />
             ))}
-            {stays.length === 0 && (
+            {quotationGroups.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} align="center">No upcoming stays found.</TableCell>
+                <TableCell colSpan={4} align="center">No upcoming stays found.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -298,6 +389,8 @@ const HotelAvailability = () => {
           initialValuesOverride={{
             subject: emailData?.normal?.subject || "",
             message: emailData?.normal?.message || "",
+            companyId: companies[0]?._id || "",
+            senderAccount: emailAccounts.find(a => (a.companyId?._id || a.companyId) === companies[0]?._id)?._id || "",
           }}
           companyOptions={companies}
           emailAccountOptions={emailAccounts}
@@ -342,6 +435,16 @@ const HotelAvailability = () => {
             <Button variant="contained" color="primary" onClick={handleSaveEdit} sx={{ fontWeight: "bold" }}>Save Changes</Button>
         </DialogActions>
       </Dialog>
+
+      {openWhatsAppDialog && (
+        <HotelWhatsAppDialog
+          open={openWhatsAppDialog}
+          onClose={() => setOpenWhatsAppDialog(false)}
+          stay={whatsAppStay}
+          companyOptions={companies}
+          emailAccountOptions={emailAccounts}
+        />
+      )}
 
       {/* Split Stay Dialog */}
       <Dialog open={splitDialogOpen} onClose={() => setSplitDialogOpen(false)} maxWidth="xs" fullWidth>
