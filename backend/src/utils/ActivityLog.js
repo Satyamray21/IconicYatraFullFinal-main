@@ -10,6 +10,7 @@ import { ActivityLog } from "../models/ActivityLog.js";
  * @param {string} params.user - The name/ID of the staff
  * @param {string} params.description - Human-readable description
  */
+//testing
 export const logActivity = async ({
     action,
     model,
