@@ -27,7 +27,12 @@ instance.interceptors.request.use((config) => {
     
     // Inject the tenant domain so the backend knows which company we are
     if (typeof window !== 'undefined') {
-        config.headers['x-tenant-domain'] = window.location.hostname;
+        let hostname = window.location.hostname;
+        // If accessed via admin.domain.com, strip the admin. prefix to find the correct tenant!
+        if (hostname.startsWith('admin.')) {
+            hostname = hostname.substring(6);
+        }
+        config.headers['x-tenant-domain'] = hostname;
     }
 
     const token = resolveAuthToken();
