@@ -108,6 +108,7 @@ const InvoiceEditForm = () => {
             companyId: selectedInvoice.companyId?._id || selectedInvoice.companyId || "",
             accountType: selectedInvoice.accountType || "",
             mobile: selectedInvoice.mobile || "",
+            email: selectedInvoice.email || "",
             billingName: selectedInvoice.billingName || "",
             billingAddress: selectedInvoice.billingAddress || "",
             gstin: selectedInvoice.gstin || "",
@@ -164,6 +165,7 @@ const InvoiceEditForm = () => {
             mobile: Yup.string()
                 .matches(/^[0-9]{10}$/, "Enter valid mobile number")
                 .required("Required"),
+            email: Yup.string().email("Invalid email"),
             billingName: Yup.string().required("Required"),
             items: Yup.array().of(
                 Yup.object().shape({
@@ -436,6 +438,19 @@ const InvoiceEditForm = () => {
                             onChange={handleChange}
                             error={formik.touched.mobile && Boolean(formik.errors.mobile)}
                             helperText={formik.touched.mobile && formik.errors.mobile}
+                        />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                        <TextField
+                            fullWidth
+                            type="email"
+                            label="Email"
+                            name="email"
+                            value={values.email}
+                            onChange={handleChange}
+                            error={formik.touched.email && Boolean(formik.errors.email)}
+                            helperText={formik.touched.email && formik.errors.email}
                         />
                     </Grid>
 

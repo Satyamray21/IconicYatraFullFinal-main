@@ -21,6 +21,8 @@ import {
   Skeleton,
   useTheme,
   alpha,
+  Divider,
+  Button
 } from "@mui/material";
 import {
   CalendarToday,
@@ -58,6 +60,35 @@ export default function BlogList() {
 
   const [sortBy, setSortBy] = useState("-publishedAt");
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Automated News State
+  const [automatedNews, setAutomatedNews] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsError, setNewsError] = useState("");
+
+  useEffect(() => {
+    const fetchAutomatedNews = async () => {
+      try {
+        setNewsLoading(true);
+
+        // Fetch The Hindu Travel RSS Feed via rss2json (100% Indian travel & culture news)
+        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=https://www.thehindu.com/life-and-style/travel/feeder/default.rss`);
+        const data = await res.json();
+
+        if (data.status === "ok" && data.items) {
+          // Display the top 10 latest travel news articles
+          setAutomatedNews(data.items.slice(0, 10));
+        } else {
+          setNewsError("Failed to fetch automated news.");
+        }
+      } catch (err) {
+        setNewsError("An error occurred while fetching news.");
+      } finally {
+        setNewsLoading(false);
+      }
+    };
+    fetchAutomatedNews();
+  }, []);
 
   const categories = ["All", "Domestic", "International"];
 
@@ -174,7 +205,91 @@ const subCategories = [
   return (
     <Box sx={{ bgcolor: "#fafafa", minHeight: "100vh" }}>
       <Container maxWidth="lg" sx={{ py: 6 }}>
-        {/* Header */}
+        {/* GLOBAL TRAVEL NEWS SECTION */}
+        <Typography
+          variant="h4"
+          fontWeight="bold"
+          gutterBottom
+          sx={{ mb: 3 }}
+        >
+          🌍 Global Travel News
+        </Typography>
+
+        {newsError ? (
+          <Alert severity="info" sx={{ mb: 6, borderRadius: 2 }}>
+            {newsError}
+          </Alert>
+        ) : newsLoading ? (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 3, mb: 6 }}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+              <Skeleton key={i} variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
+            ))}
+          </Box>
+        ) : automatedNews.length > 0 ? (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 3, mb: 6 }}>
+            {automatedNews.map((article, idx) => (
+                <Card
+                  key={idx}
+                  sx={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    "&:hover": { boxShadow: "0 10px 20px rgba(0,0,0,0.12)" },
+                  }}
+                  onClick={() => window.open(article.link || article.url, "_blank")}
+                >
+                  <CardMedia
+                    component="img"
+                    height="180"
+                    image={article.thumbnail || article.enclosure?.link || "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=800&q=80"}
+                    alt={article.title}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=800&q=80";
+                    }}
+                  />
+                  <CardContent sx={{ flexGrow: 1 }}>
+                    <Typography variant="caption" color="primary" fontWeight="bold">
+                      The Hindu Travel • {new Date(article.pubDate.replace(/-/g, '/')).toLocaleDateString()}
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      sx={{
+                        mt: 1,
+                        mb: 1,
+                        fontSize: "1.1rem",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {article.title}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {article.description ? article.description.replace(/<[^>]*>?/gm, '') : ""}
+                    </Typography>
+                  </CardContent>
+                </Card>
+            ))}
+          </Box>
+        ) : null}
+
+        <Divider sx={{ mb: 6 }} />
+
+        {/* CUSTOM BLOGS HEADER */}
         <Typography
           variant="h3"
           fontWeight="bold"

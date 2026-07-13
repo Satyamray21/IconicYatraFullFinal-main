@@ -54,6 +54,8 @@ const InvoiceCard = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
 
@@ -279,12 +281,46 @@ const InvoiceCard = () => {
       });
     }
 
+    if (fromDate) {
+      source = source.filter(item => new Date(item.invoiceDate) >= new Date(fromDate));
+    }
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      source = source.filter(item => new Date(item.invoiceDate) <= endOfDay);
+    }
+
     if (!searchQuery.trim()) return source;
 
     return source.filter((item) =>
-      item.partyName?.toLowerCase().includes(searchQuery.toLowerCase()),
+      item.partyName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      item.billingName?.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [invoices, searchQuery, selectedCompanyId]);
+  }, [invoices, searchQuery, selectedCompanyId, fromDate, toDate]);
+
+  const summaryTotals = useMemo(() => {
+    let totalAmount = 0;
+    let totalTax = 0;
+    let totalIGST = 0;
+    let totalCGST = 0;
+    let totalSGST = 0;
+
+    filteredData.forEach(invoice => {
+      const taxAmount = invoice.items?.reduce((acc, item) => acc + (Number(item.taxAmount) || 0), 0) || 0;
+      const isInterState = !String(invoice.stateOfSupply || "").toLowerCase().includes("uttar pradesh");
+      
+      totalAmount += (Number(invoice.totalAmount) || 0);
+      totalTax += taxAmount;
+      if (isInterState) {
+        totalIGST += taxAmount;
+      } else {
+        totalCGST += taxAmount / 2;
+        totalSGST += taxAmount / 2;
+      }
+    });
+
+    return { totalAmount, totalTax, totalIGST, totalCGST, totalSGST };
+  }, [filteredData]);
 
   // 📄 Pagination
   const paginatedData = useMemo(() => {
@@ -390,6 +426,28 @@ const InvoiceCard = () => {
 
             <TextField
               size="small"
+              type="date"
+              label="From Date"
+              InputLabelProps={{ shrink: true }}
+              value={fromDate}
+              onChange={(e) => {
+                setFromDate(e.target.value);
+                setPage(0);
+              }}
+            />
+            <TextField
+              size="small"
+              type="date"
+              label="To Date"
+              InputLabelProps={{ shrink: true }}
+              value={toDate}
+              onChange={(e) => {
+                setToDate(e.target.value);
+                setPage(0);
+              }}
+            />
+            <TextField
+              size="small"
               placeholder="Search by party name..."
               value={searchQuery}
               onChange={(e) => {
@@ -407,6 +465,25 @@ const InvoiceCard = () => {
           </Box>
         </Box>
 
+        {/* Summary Calculator */}
+        <Paper sx={{ p: 2, mb: 2, display: "flex", gap: 3, flexWrap: "wrap", bgcolor: "#e3f2fd", borderRadius: 2 }}>
+          <Typography variant="subtitle1" sx={{ color: "#1565c0" }}>
+            <strong>Total Amount:</strong> {formatCurrency(summaryTotals.totalAmount)}
+          </Typography>
+          <Typography variant="subtitle1" sx={{ color: "#1565c0" }}>
+            <strong>Total Tax:</strong> {formatCurrency(summaryTotals.totalTax)}
+          </Typography>
+          <Typography variant="subtitle1" sx={{ color: "#1565c0" }}>
+            <strong>Total CGST:</strong> {formatCurrency(summaryTotals.totalCGST)}
+          </Typography>
+          <Typography variant="subtitle1" sx={{ color: "#1565c0" }}>
+            <strong>Total SGST:</strong> {formatCurrency(summaryTotals.totalSGST)}
+          </Typography>
+          <Typography variant="subtitle1" sx={{ color: "#1565c0" }}>
+            <strong>Total IGST:</strong> {formatCurrency(summaryTotals.totalIGST)}
+          </Typography>
+        </Paper>
+
         {/* Table */}
         <TableContainer component={Paper}>
           <Table>
@@ -416,18 +493,26 @@ const InvoiceCard = () => {
                 <TableCell>Invoice No</TableCell>
                 <TableCell>Adv. receipt</TableCell>
                 <TableCell>Invoice Date</TableCell>
-                <TableCell>Due Date</TableCell>
                 <TableCell>Party Name</TableCell>
                 <TableCell align="right">Total</TableCell>
-                <TableCell align="right">Received</TableCell>
-                <TableCell align="right">Balance</TableCell>
+                <TableCell align="right">Tax Amount</TableCell>
+                <TableCell align="right">IGST</TableCell>
+                <TableCell align="right">CGST</TableCell>
+                <TableCell align="right">SGST</TableCell>
                 <TableCell align="center">Action</TableCell>
               </TableRow>
             </TableHead>
 
             <TableBody>
               {paginatedData.length ? (
-                paginatedData.map((invoice, index) => (
+                paginatedData.map((invoice, index) => {
+                  const taxAmount = invoice.items?.reduce((acc, item) => acc + (Number(item.taxAmount) || 0), 0) || 0;
+                  const modeOfTax = invoice.withTax ? "With Tax" : "Without Tax";
+                  const isInterState = !String(invoice.stateOfSupply || "").toLowerCase().includes("uttar pradesh");
+                  const igst = isInterState ? taxAmount : 0;
+                  const cgst = isInterState ? 0 : taxAmount / 2;
+                  const sgst = isInterState ? 0 : taxAmount / 2;
+                  return (
                   <TableRow
                     key={invoice._id}
                     hover
@@ -440,16 +525,21 @@ const InvoiceCard = () => {
                       {invoice.advancedReceiptNo || "—"}
                     </TableCell>
                     <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
-                    <TableCell>{formatDate(invoice.dueDate)}</TableCell>
                     <TableCell>{invoice.billingName}</TableCell>
                     <TableCell align="right">
                       {formatCurrency(invoice.totalAmount)}
                     </TableCell>
                     <TableCell align="right">
-                      {formatCurrency(invoice.receivedAmount)}
+                      {formatCurrency(taxAmount)}
                     </TableCell>
                     <TableCell align="right">
-                      {formatCurrency(invoice.balanceAmount)}
+                      {formatCurrency(igst)}
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(cgst)}
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(sgst)}
                     </TableCell>
                     <TableCell align="center">
                       <IconButton
@@ -491,10 +581,11 @@ const InvoiceCard = () => {
                       </IconButton>
                     </TableCell>
                   </TableRow>
-                ))
+                );
+              })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} align="center">
+                  <TableCell colSpan={11} align="center">
                     No invoices found
                   </TableCell>
                 </TableRow>

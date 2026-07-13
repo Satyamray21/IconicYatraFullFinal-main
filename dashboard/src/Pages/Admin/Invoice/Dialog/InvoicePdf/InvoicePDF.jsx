@@ -357,6 +357,7 @@ const InvoicePDF = forwardRef(({ invoiceData }, ref) => {
   const {
     billingName = "N/A",
     mobile = "N/A",
+    email = "",
     gstin = "N/A",
     billingAddress = "N/A",
     stateOfSupply = "N/A",
@@ -494,8 +495,18 @@ const InvoicePDF = forwardRef(({ invoiceData }, ref) => {
             >
               <b>{billingName}</b>
               <br />
-              Mobile:+91 {mobile}
-              <br />
+              {mobile && mobile !== "N/A" && (
+                <>
+                  Mobile: +91 {mobile}
+                  <br />
+                </>
+              )}
+              {email && email !== "N/A" && (
+                <>
+                  Email: {email}
+                  <br />
+                </>
+              )}
               {billingAddress}
               <br />
               GSTIN: {gstin}

@@ -1400,7 +1400,7 @@ export const buildHotelAvailabilityRequestEmail = (stay, options = {}) => {
         
         <div style="margin-top: 30px; padding: 20px; border-left: 5px solid #f5b041; background-color: #fcf9ec; border-radius: 4px;">
           <p style="margin: 0 0 10px 0; font-weight: bold; color: #c0392b; font-size: 16px;">
-            ➤ Kindly share ${rooms} ${sharingType} rooms with CPI = ???
+            ➤ Kindly share ${rooms} ${sharingType} rooms with ${mealPlan} = ???
           </p>
           <p style="margin: 0; font-weight: bold; font-size: 16px; color: #333;">
             Kindly share your confirmation for this booking...
