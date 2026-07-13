@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // 🔹 Change this to your live URL when deploying
-export const BASE_URL = import.meta.env.VITE_BASE_URL;
+export const BASE_URL = import.meta.env.VITE_BASE_URL || "";
 
 // User APIs
 export const axiosInstance = axios.create({
