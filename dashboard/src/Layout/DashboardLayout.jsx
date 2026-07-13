@@ -2,7 +2,7 @@ import React from 'react';
 import { Box } from '@mui/material';
 import Sidebar from '../Components/Sidebar';
 import AppBarHeader from '../Components/AppBarHeader';
-
+//
 const DashboardLayout = ({ children }) => (
     <Box sx={{ display: 'flex' }}>
         <Sidebar />
