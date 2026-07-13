@@ -43,8 +43,9 @@ export function tenantIsolationPlugin(schema) {
         });
     });
 
-    // 3. Intercept Document Creation/Saving
-    schema.pre("save", function (next) {
+    // 3. Intercept Document Creation/Saving BEFORE Validation!
+    // Mongoose runs validation BEFORE pre('save'), so we must inject companyId during pre('validate')
+    schema.pre("validate", function (next) {
         const companyId = tenantContext.getStore();
         if (companyId && !this.companyId) {
             this.companyId = companyId;
