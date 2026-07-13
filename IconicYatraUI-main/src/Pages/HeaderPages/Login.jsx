@@ -44,7 +44,7 @@ const LoginPage = () => {
       const token = res.token;
       const user = res.user;
 
-      const adminUrl = import.meta.env.VITE_ADMIN_URL;
+      const adminUrl = import.meta.env.VITE_ADMIN_URL || "/admin";
 
       window.location.replace(
         `${adminUrl}/?token=${token}&user=${encodeURIComponent(
