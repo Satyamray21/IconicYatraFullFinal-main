@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: "iconicyatra-api",
-      script: "./index.js",
+      script: "./backend/index.js",
       cwd: "./backend",
       instances: "max",       // Run in cluster mode using all CPU cores
       exec_mode: "cluster",   // Cluster mode for zero-downtime reloads

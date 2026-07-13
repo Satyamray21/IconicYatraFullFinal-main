@@ -35,5 +35,6 @@ jobs:
             cd /var/www/iconicyatra/backend
             npm install --legacy-peer-deps
             
-            # Restart via PM2 using the ecosystem file for zero downtime!
-            pm2 startOrReload ../ecosystem.config.js --env production
+            # Go back to root to start PM2 so the ecosystem relative paths resolve correctly!
+            cd /var/www/iconicyatra
+            pm2 startOrReload ecosystem.config.js --env production
