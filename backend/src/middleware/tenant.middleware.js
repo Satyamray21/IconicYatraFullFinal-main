@@ -5,7 +5,7 @@ export const identifyTenant = async (req, res, next) => {
   try {
     // 1. Get the domain from the Origin header or a custom x-tenant-domain header
     // The frontend should send this with every request.
-    const origin = req.headers.origin || req.headers["x-tenant-domain"];
+    const origin = req.headers.host || req.headers.origin || req.headers["x-tenant-domain"];
 
     if (!origin) {
       return res.status(400).json({ 
@@ -27,6 +27,11 @@ export const identifyTenant = async (req, res, next) => {
 
     // Remove port numbers if testing locally (e.g. localhost:3000 -> localhost)
     domainName = domainName.split(':')[0];
+    
+    // Remove www. prefix for consistent lookup
+    if (domainName.startsWith('www.')) {
+      domainName = domainName.substring(4);
+    }
 
     // 2. Look up the company in the database
     const company = await Company.findOne({ domain: domainName });
