@@ -4,6 +4,7 @@ import { bankSchema } from "../common/bankDetails.common.js";
 
 const staffSchema = new mongoose.Schema(
   {
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
     personalDetails: {
       title:{
         type:String

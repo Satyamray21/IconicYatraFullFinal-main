@@ -183,6 +183,10 @@ const  HeroSectionForm=lazy(()=>import("../Components/HeroSectionForm"))
 const PostBlogForm = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogForm'));
 const PostBlogViewForm = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogViewForm'));
 const PostBlogFormEdit = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogEditForm'));
+
+// SaaS Super Admin
+const TenantsList = lazy(() => import('../pages/SaaSAdmin/TenantsList'));
+
 /* ========================== */
 /*        MAIN ROUTE          */
 /* ========================== */
@@ -432,6 +436,14 @@ const MainRoute = () => {
  <Route path="/setting/social-links" element={<SocialLinksForm />} />
   <Route path="/setting/hero-section" element={<HeroSectionForm />} />
   <Route path="/destination-description" element={<DestinationMasterForm />} />
+  
+  {/* SaaS Admin Routes */}
+  <Route path="/saas-admin" element={
+      window.location.hostname === "iconicyatra.com" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
+      ? <TenantsList /> 
+      : <div><h1>404 Not Found</h1></div>
+  } />
+
           <Route
             path="*"
             element={

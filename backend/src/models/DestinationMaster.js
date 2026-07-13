@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const DestinationMasterSchema = new mongoose.Schema({
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
   tourType: {
     type: String,
     enum: ["Domestic", "International"],

@@ -11,6 +11,7 @@ function generateUserId(role) {
 
 const userSchema = new mongoose.Schema(
   {
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
     fullName: { type: String, required: true },
     mobileNumber: { type: String, required: true, unique: true },
     userRole: {

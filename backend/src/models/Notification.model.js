@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const notificationSchema = new mongoose.Schema({
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     recipient: {
         type: String, // Staff Name or Staff ID
         required: true,

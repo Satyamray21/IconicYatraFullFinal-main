@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 const leadSchema = new mongoose.Schema({
+  companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
   personalDetails: {
     fullName: {
       type: String,

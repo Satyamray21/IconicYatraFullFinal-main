@@ -3,6 +3,9 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { Staff } from "../models/staff.model.js";
+import { StaffPermission } from "../models/staffPermission.model.js";
+import bcrypt from "bcryptjs";
 
 // ✅ CREATE Company
 export const createCompany = asyncHandler(async (req, res) => {
@@ -21,6 +24,9 @@ export const createCompany = asyncHandler(async (req, res) => {
     cancellationPolicy,
     paymentPolicy,
     paymentLink,
+    domain,
+    adminEmail,
+    adminPassword,
   } = req.body;
 
   if (!companyName || !address)
@@ -60,6 +66,7 @@ export const createCompany = asyncHandler(async (req, res) => {
     gstin,
     stateCode,
     companyWebsite,
+    domain,
     logo: logoUrl,
     authorizedSignatory: {
       name: signatoryName,
@@ -72,9 +79,57 @@ export const createCompany = asyncHandler(async (req, res) => {
     paymentLink,
   });
 
+  // ✅ Auto-Provision First Admin (SaaS Setup)
+  if (adminEmail && adminPassword) {
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+    const staffIdStr = `STF-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const newStaff = await Staff.create({
+      companyId: company._id,
+      staffId: staffIdStr,
+      personalDetails: {
+        fullName: `${companyName} Admin`,
+        mobileNumber: phone || "0000000000",
+        email: adminEmail,
+        designation: "Admin",
+        userRole: "Superadmin",
+      },
+      staffLocation: {
+        country: "India",
+        state: "State",
+        city: "City",
+      },
+      isActive: true,
+    });
+
+    await StaffPermission.create({
+      staffId: newStaff._id,
+      staffUserId: adminEmail,
+      credentials: {
+        username: adminEmail,
+        password: hashedPassword,
+      },
+      role: "Superadmin",
+      status: "Active",
+      permissions: {
+        canAccessDashboard: true,
+        canAccessLeads: true,
+        canCreateLead: true,
+        canEditLead: true,
+        canDeleteLead: true,
+        canAccessSettings: true,
+        canAccessStaff: true,
+        canAccessUsers: true,
+        canAccessQuotations: true,
+        canAccessPackages: true,
+        canAccessBookings: true,
+      }
+    });
+  }
+
   res
     .status(201)
-    .json(new ApiResponse(201, company, "Company created successfully"));
+    .json(new ApiResponse(201, company, "Company and initial admin created successfully"));
 });
 
 // ✅ GET All Companies

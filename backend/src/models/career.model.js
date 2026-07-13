@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const careerSchema = new mongoose.Schema(
   {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     name: { type: String, required: true },
     mobile: { type: String, required: true },
     email: { type: String, required: true },

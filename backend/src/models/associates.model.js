@@ -4,6 +4,11 @@ import { firmSchema } from "../common/firm.common.js";
 import { bankSchema } from "../common/bankDetails.common.js";
 const associateSchema = mongoose.Schema(
   {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     personalDetails: {
       dob: {
         type: Date,

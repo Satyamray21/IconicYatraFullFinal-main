@@ -8,8 +8,12 @@ import {
 } from "../controllers/company.controller.js";
 import { upload } from "../middleware/imageMulter.middleware.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
+import { requireSuperAdmin } from "../middleware/superAdmin.middleware.js";
 
 const router = express.Router();
+
+// ALL COMPANY ENDPOINTS REQUIRE UNIVERSAL SUPERADMIN PRIVILEGES
+router.use(requireSuperAdmin);
 
 // handle multiple uploads: logo + signature
 router.post(

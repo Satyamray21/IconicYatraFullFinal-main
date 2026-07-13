@@ -2,6 +2,11 @@
 import mongoose from "mongoose";
 
 const slideSchema = new mongoose.Schema({
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
   image: String,
   imageName: String,
   title: String,

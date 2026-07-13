@@ -4,6 +4,11 @@ import { DaySchema } from "./day.model.js";
 // Stay Locations
 const StayLocationSchema = new mongoose.Schema(
     {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
         city: { type: String, trim: true },
         nights: { type: Number, min: 1 },
     },

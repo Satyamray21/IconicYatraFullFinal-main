@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const leadOptionsSchema = new mongoose.Schema(
     {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
         fieldName: {
             type: String,
             required: true,

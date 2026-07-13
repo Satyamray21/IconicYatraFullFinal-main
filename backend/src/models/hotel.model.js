@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const hotelSchema = new mongoose.Schema({
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     hotelId: { type: String, unique: true },
 
     // Step 1 - Basic Details

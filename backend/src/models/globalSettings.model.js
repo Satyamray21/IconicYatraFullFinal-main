@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const globalSettingsSchema = new mongoose.Schema(
   {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     inclusions: {
       type: [String],
       default: []

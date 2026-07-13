@@ -215,6 +215,7 @@ export const createLead = asyncHandler(async (req, res) => {
 
   // ✅ Create lead
   const newLead = await Lead.create({
+    companyId: req.companyId, // Force SaaS Data Isolation
     personalDetails,
     location,
     address,
@@ -269,14 +270,14 @@ export const viewAllLeads = asyncHandler(async (req, res) => {
     console.error("Auto-convert failed", e);
   }
 
-  const cacheKey = 'leads:all';
+  const cacheKey = `leads:all:${req.companyId}`;
   const cachedLeads = await getCache(cacheKey);
   if (cachedLeads) {
     return res.status(200).json(new ApiResponse(200, cachedLeads, "All leads fetched from cache"));
   }
 
   try {
-    const lead = await Lead.find().sort({ createdAt: -1 });
+    const lead = await Lead.find({ companyId: req.companyId }).sort({ createdAt: -1 });
     await setCache(cacheKey, lead, 3600); // Cache for 1 hour
     res.status(200)
       .json(new ApiResponse(200, lead, "All leads fetched successfully"))

@@ -37,6 +37,11 @@ app.use("/upload", express.static(path.join(process.cwd(), "upload")));
 // Routes — `verifyToken` on mounts that require a logged-in dashboard (or staff) user.
 // Public/marketing and auth endpoints stay without it.
 import authRoutes from "./src/routers/user.router.js";
+import { identifyTenant } from "./src/middleware/tenant.middleware.js";
+
+// Ensure every API v1 request goes through the Tenant Bouncer
+app.use("/api/v1", identifyTenant);
+
 app.use("/api/v1/user", authRoutes);
 
 import paymentRoutes from "./src/routers/payment.js";

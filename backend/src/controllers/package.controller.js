@@ -267,7 +267,7 @@ function normalizePackageUrls(packageData) {
 // CREATE PACKAGE (UPDATED FOR NEW TOUR TYPES)
 // ----------------------
 export const createPackage = asyncHandler(async (req, res) => {
-    const data = { ...req.body };
+    const data = { ...req.body, companyId: req.companyId };
 
     // -----------------------------------
     // ✅ PARSE JSON FIELDS (multipart fix)
@@ -444,9 +444,9 @@ export const createPackage = asyncHandler(async (req, res) => {
 // ----------------------
 export const updateStep1 = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await Package.findById(id);
+    const existing = await Package.findOne({ _id: id, companyId: req.companyId });
     if (!existing) {
-        return res.status(404).json({ message: "Package not found" });
+        return res.status(404).json({ message: "Package not found or unauthorized" });
     }
 
     const data = { ...req.body };
@@ -524,7 +524,7 @@ export const updateStep1 = asyncHandler(async (req, res) => {
         data.destinationCountry = "India";
     }
 
-    const updated = await Package.findByIdAndUpdate(id, data, {
+    const updated = await Package.findOneAndUpdate({ _id: id, companyId: req.companyId }, data, {
         new: true,
         runValidators: true
     });
@@ -566,9 +566,9 @@ export const updateTourDetails = asyncHandler(async (req, res) => {
 
     data.days = normalizeDays(data.days);
 
-    const existing = await Package.findById(id);
+    const existing = await Package.findOne({ _id: id, companyId: req.companyId });
     if (!existing) {
-        return res.status(404).json({ message: "Package not found" });
+        return res.status(404).json({ message: "Package not found or unauthorized" });
     }
 
     if (data.destinationNights !== undefined) {
@@ -584,7 +584,7 @@ export const updateTourDetails = asyncHandler(async (req, res) => {
     // Recalculate status based on existing dates
     data.status = calculateStatus(existing.validFrom, existing.validTill);
 
-    const updated = await Package.findByIdAndUpdate(id, data, {
+    const updated = await Package.findOneAndUpdate({ _id: id, companyId: req.companyId }, data, {
         new: true,
         runValidators: true
     });
@@ -623,8 +623,8 @@ export const uploadBanner = asyncHandler(async (req, res) => {
         return res.status(500).json({ message: "Failed to upload banner to Cloudinary" });
     }
 
-    const updated = await Package.findByIdAndUpdate(
-        id,
+    const updated = await Package.findOneAndUpdate(
+        { _id: id, companyId: req.companyId },
         {
             bannerImage: uploadResult.secure_url,
             bannerPublicId: uploadResult.public_id
@@ -632,7 +632,7 @@ export const uploadBanner = asyncHandler(async (req, res) => {
         { new: true }
     );
 
-    if (!updated) return res.status(404).json({ message: "Package not found" });
+    if (!updated) return res.status(404).json({ message: "Package not found or unauthorized" });
 
     await logActivity({
         action: "UPDATE",
@@ -664,9 +664,9 @@ export const uploadDayImage = asyncHandler(async (req, res) => {
         return res.status(500).json({ message: "Failed to upload day image to Cloudinary" });
     }
 
-    const pkg = await Package.findById(id);
+    const pkg = await Package.findOne({ _id: id, companyId: req.companyId });
     if (!pkg) {
-        return res.status(404).json({ message: "Package not found" });
+        return res.status(404).json({ message: "Package not found or unauthorized" });
     }
 
     const idx = Number(dayIndex);
@@ -720,9 +720,9 @@ export const getById = asyncHandler(async (req, res) => {
         return res.json({ fromCache: true, ...cachedData });
     }
 
-    const doc = await Package.findById(id);
+    const doc = await Package.findOne({ _id: id, companyId: req.companyId });
     if (!doc) {
-        return res.status(404).json({ message: "Package not found" });
+        return res.status(404).json({ message: "Package not found or unauthorized" });
     }
 
     const packageData = doc.toObject();
@@ -751,7 +751,7 @@ export const listPackages = asyncHandler(async (req, res) => {
         return res.json({ fromCache: true, ...cachedData });
     }
 
-    const query = {};
+    const query = { companyId: req.companyId };
 
     // ✅ UPDATED: Build query with new tour types
     if (tourType) {
@@ -827,7 +827,8 @@ export const getPackagesByTourType = async (req, res) => {
 
         // Build filter object
         const filter = {
-            tourType: formattedTourType
+            tourType: formattedTourType,
+            companyId: req.companyId
         };
 
         // Add status filter if provided (defaults to "active")
@@ -891,7 +892,8 @@ export const getPackagesByCategory = async (req, res) => {
 
         // Build filter object
         const filter = {
-            packageCategory: { $regex: `^${packageCategory}$`, $options: "i" }
+            packageCategory: { $regex: `^${packageCategory}$`, $options: "i" },
+            companyId: req.companyId
         };
 
         // Add status filter if provided
@@ -948,9 +950,10 @@ export const getPackagesByCategory = async (req, res) => {
 // ----------------------
 export const remove = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const doc = await Package.findByIdAndDelete(id);
-
-    if (!doc) return res.status(404).json({ message: "Package not found" });
+    const doc = await Package.findOneAndDelete({ _id: id, companyId: req.companyId });
+    if (!doc) {
+        return res.status(404).json({ message: "Package not found or unauthorized" });
+    }
 
     await logActivity({
         action: "DELETE",
@@ -974,10 +977,10 @@ export const remove = asyncHandler(async (req, res) => {
 // ----------------------
 export const clonePackage = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existingPackage = await Package.findById(id).lean();
+    const existingPackage = await Package.findOne({ _id: id, companyId: req.companyId }).lean();
 
     if (!existingPackage) {
-        return res.status(404).json({ message: "Package not found" });
+        return res.status(404).json({ message: "Package not found or unauthorized" });
     }
 
     // Remove ID, timestamps and the unique packageId
@@ -1023,7 +1026,8 @@ export const getPopularTours = asyncHandler(async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const matchStage = {
-        status: "active"
+        status: "active",
+        companyId: req.companyId
     };
 
     const aggregation = [
@@ -1108,7 +1112,7 @@ export const getPopularTours = asyncHandler(async (req, res) => {
 
 export const makeAllPopular = asyncHandler(async (req, res) => {
     const result = await Package.updateMany(
-        {},
+        { companyId: req.companyId },
         { $set: { isPopular: true } }
     );
 

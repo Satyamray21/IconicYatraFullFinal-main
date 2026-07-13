@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 export const bankSchema = mongoose.Schema({
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     bankName: {
         type: String,
         required: true,

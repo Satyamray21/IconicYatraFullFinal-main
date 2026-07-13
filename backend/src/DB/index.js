@@ -1,5 +1,9 @@
 import mongoose from "mongoose";
 import { DB_NAME } from "../constants.js";
+import { tenantIsolationPlugin } from "../plugins/tenant.plugin.js";
+
+// Register the global SaaS Tenant Isolation Plugin!
+mongoose.plugin(tenantIsolationPlugin);
 
 const connectDB = async () => {
     try {

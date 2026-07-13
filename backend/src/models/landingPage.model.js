@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const imageSchema = new mongoose.Schema({
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
   public_id: String,
   url: String,
 });

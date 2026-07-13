@@ -56,6 +56,11 @@ const DestinationNightSchema = new mongoose.Schema(
 // Package Schema
 const PackageSchema = new mongoose.Schema(
   {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Company", 
+      required: true 
+    },
     packageId: { type: String, unique: true },
 
     // ✅ ONLY 2 TYPES NOW

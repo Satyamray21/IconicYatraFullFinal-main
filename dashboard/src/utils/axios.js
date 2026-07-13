@@ -23,9 +23,15 @@ const instance = axios.create({
 });
 
 instance.interceptors.request.use((config) => {
+    config.headers = config.headers ?? {};
+    
+    // Inject the tenant domain so the backend knows which company we are
+    if (typeof window !== 'undefined') {
+        config.headers['x-tenant-domain'] = window.location.hostname;
+    }
+
     const token = resolveAuthToken();
     if (token) {
-        config.headers = config.headers ?? {};
         config.headers.Authorization = `Bearer ${token}`;
         if (!localStorage.getItem('token')?.trim()) {
             localStorage.setItem('token', token);

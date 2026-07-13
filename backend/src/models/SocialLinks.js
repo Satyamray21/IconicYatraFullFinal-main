@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const socialLinksSchema = new mongoose.Schema(
   {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     instagram: {
       type: String,
       default: "",

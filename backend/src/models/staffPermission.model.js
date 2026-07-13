@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const staffPermissionSchema = new mongoose.Schema(
   {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     staffId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Staff",

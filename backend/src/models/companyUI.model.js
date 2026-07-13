@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const companyUISchema = new mongoose.Schema(
   {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     headerLogo: {
       public_id: String,
       url: String,

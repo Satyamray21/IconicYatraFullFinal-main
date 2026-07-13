@@ -1,1 +1,1 @@
-export const DB_NAME = "iconicYatra"
+export const DB_NAME = "IconicYatra_SaaS_Test";

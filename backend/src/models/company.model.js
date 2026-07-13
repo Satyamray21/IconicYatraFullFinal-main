@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const companySchema = new mongoose.Schema(
   {
     companyName: { type: String, required: true },
+    domain: { type: String, unique: true }, // The origin URL (e.g. agencyA.com) used to identify the tenant
     address: { type: String, required: true },
     phone: { type: String },
     email: { type: String },
