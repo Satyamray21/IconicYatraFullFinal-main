@@ -24,9 +24,9 @@ jobs:
         run: |
           cd dashboard
           
-          # Create production .env file for Vite
-          echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}" > .env
-          echo "VITE_MAIN_URL=${{ secrets.VITE_MAIN_URL }}" >> .env
+          # Use relative paths for Multi-Tenancy! (This fixes CORS and Tenant Isolation)
+          echo "VITE_API_BASE_URL=/api/v1" > .env
+          echo "VITE_MAIN_URL=https://iconicyatra.com" >> .env
           
           npm install --legacy-peer-deps
           npm run build
