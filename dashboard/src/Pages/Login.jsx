@@ -1,3 +1,3 @@
 import React from 'react';
-const Login = () => <div>Login Page (Add form here)</div>;
+const Login = () => <div>Login Pae (Add form here)</div>;
 export default Login;
