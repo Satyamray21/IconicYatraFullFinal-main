@@ -14,21 +14,43 @@ const connectDB = async () => {
         // Ensure the Master Superadmin Tenant exists in the database
         const { default: Company } = await import("../models/company.model.js");
         const existingCompanies = await Company.find({});
+        let masterCompany;
+        
         if (existingCompanies.length > 0) {
-            const hasMaster = existingCompanies.some(c => c.domain === "iconicyatra.com");
-            if (!hasMaster) {
+            masterCompany = existingCompanies.find(c => c.domain === "iconicyatra.com");
+            if (!masterCompany) {
                 console.log("Upgrading existing primary company to Master Tenant (iconicyatra.com)...");
-                const primaryCompany = existingCompanies[0];
-                primaryCompany.domain = "iconicyatra.com";
-                await primaryCompany.save();
+                masterCompany = existingCompanies[0];
+                masterCompany.domain = "iconicyatra.com";
+                await masterCompany.save();
             }
         } else {
             console.log("No companies found. Creating Master Tenant (iconicyatra.com)...");
-            await Company.create({
+            masterCompany = await Company.create({
                 companyName: "Iconic Yatra",
                 domain: "iconicyatra.com",
                 address: "HQ"
             });
+        }
+        
+        // Migrate ALL historical data to the Master Tenant
+        if (masterCompany) {
+            for (const modelName in mongoose.models) {
+                const Model = mongoose.models[modelName];
+                if (Model.schema.path('companyId')) {
+                    try {
+                        const result = await Model.updateMany(
+                            { companyId: { $exists: false } },
+                            { $set: { companyId: masterCompany._id } }
+                        );
+                        if (result.modifiedCount > 0) {
+                            console.log(`Migrated ${result.modifiedCount} historical records in ${modelName} to Master Tenant`);
+                        }
+                    } catch (e) {
+                        console.error(`Error migrating ${modelName}:`, e.message);
+                    }
+                }
+            }
         }
         // ------------------------------------
 
