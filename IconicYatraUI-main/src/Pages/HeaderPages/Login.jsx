@@ -44,7 +44,17 @@ const LoginPage = () => {
       const token = res.token;
       const user = res.user;
 
-      const adminUrl = import.meta.env.VITE_ADMIN_URL || "/admin";
+      let adminUrl = import.meta.env.VITE_ADMIN_URL;
+      
+      if (!adminUrl) {
+          // If we are on the master domain, go to the dedicated admin subdomain!
+          if (window.location.hostname.includes("iconicyatra.com")) {
+              adminUrl = "https://admin.iconicyatra.com";
+          } else {
+              // Tenant agencies will access their dashboard via their own /admin path
+              adminUrl = "/admin";
+          }
+      }
 
       window.location.replace(
         `${adminUrl}/?token=${token}&user=${encodeURIComponent(
