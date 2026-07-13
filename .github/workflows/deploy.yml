@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - feature/fixed-version
-    paths:
-      - 'IconicYatraUI-main/**'
 
 jobs:
   deploy-frontend:

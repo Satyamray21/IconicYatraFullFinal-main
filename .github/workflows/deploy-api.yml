@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - feature/fixed-version
-    paths:
-      - 'backend/**'
-      - 'ecosystem.config.js'
 
 jobs:
   deploy-api:
