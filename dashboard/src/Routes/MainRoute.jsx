@@ -185,7 +185,7 @@ const PostBlogViewForm = lazy(() => import('../Pages/Admin/Profile/components/Bl
 const PostBlogFormEdit = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogEditForm'));
 
 // SaaS Super Admin
-const TenantsList = lazy(() => import('../pages/SaaSAdmin/TenantsList'));
+const TenantsList = lazy(() => import('../Pages/SaaSAdmin/TenantsList'));
 
 /* ========================== */
 /*        MAIN ROUTE          */
