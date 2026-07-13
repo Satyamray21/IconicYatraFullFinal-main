@@ -27,8 +27,8 @@ export const requireSuperAdmin = (req, res, next) => {
     // Remove port numbers (e.g. localhost:5173 -> localhost)
     domainName = domainName.split(':')[0];
 
-    // Allow localhost for local development, and the exact master domain for production
-    if (domainName !== masterDomain && domainName !== "localhost" && domainName !== "127.0.0.1") {
+    // Allow localhost for local development, and the exact master domains for production
+    if (domainName !== masterDomain && domainName !== "admin.iconicyatra.com" && domainName !== "localhost" && domainName !== "127.0.0.1") {
         return res.status(403).json({
             success: false,
             message: "Forbidden: This action requires Universal Superadmin privileges.",
