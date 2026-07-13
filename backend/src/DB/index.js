@@ -9,6 +9,28 @@ const connectDB = async () => {
     try {
         const connectionInstances = await mongoose.connect(`${process.env.MONGODB_URL}/${DB_NAME}`)
         console.log(`DB IS CONNECTED ${connectionInstances.connection.host}`);
+        
+        // --- MULTI-TENANT AUTO MIGRATION ---
+        // Ensure the Master Superadmin Tenant exists in the database
+        const { default: Company } = await import("../models/company.model.js");
+        const existingCompanies = await Company.find({});
+        if (existingCompanies.length > 0) {
+            const hasMaster = existingCompanies.some(c => c.domain === "iconicyatra.com");
+            if (!hasMaster) {
+                console.log("Upgrading existing primary company to Master Tenant (iconicyatra.com)...");
+                const primaryCompany = existingCompanies[0];
+                primaryCompany.domain = "iconicyatra.com";
+                await primaryCompany.save();
+            }
+        } else {
+            console.log("No companies found. Creating Master Tenant (iconicyatra.com)...");
+            await Company.create({
+                companyName: "Iconic Yatra",
+                domain: "iconicyatra.com",
+                address: "HQ"
+            });
+        }
+        // ------------------------------------
 
         // Drop stale unique index on "name" in counters collection if it exists.
         // This index causes E11000 "Name already exists" during bookingId generation
