@@ -35,4 +35,4 @@ jobs:
             cd /var/www/api.globevisitors.com/public_html
             npm install --legacy-peer-deps
             
-            pm2 start index.js --name "globe-api" || pm2 restart "globe-api"
+            pm2 start index.js --name "globe-api" || pm2 restart "globe-api" --update-env

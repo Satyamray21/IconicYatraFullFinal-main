@@ -8,7 +8,7 @@ const connectDB = async () => {
     try {
         // Connect exactly to the URL in .env, allowing you to easily change databases!
         const connectionInstances = await mongoose.connect(process.env.MONGODB_URL)
-        console.log(`DB IS CONNECTED ${connectionInstances.connection.host}`);
+        console.log(`DB IS CONNECTED to Host: ${connectionInstances.connection.host}, Database Name: [${connectionInstances.connection.name}]`);
         
         // --- MULTI-TENANT AUTO MIGRATION ---
         // Ensure the Master Superadmin Tenant exists in the database
