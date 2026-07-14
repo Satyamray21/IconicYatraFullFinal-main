@@ -1,4 +1,4 @@
-// src/data/allDomesticPackageData.js
+// src/data/allDomesticPackageDat a.js
 import guwahati1 from "../../assets/packageimg/package1.png";
 import guwahati2 from "../../assets/packageimg/package1.png";
 import guwahati3 from "../../assets/packageimg/package1.png";
