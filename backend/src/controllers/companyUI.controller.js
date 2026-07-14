@@ -4,16 +4,17 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import mongoose from "mongoose";
 import { getCache, setCache, deleteCache } from "../utils/cache.js";
 
-const COMPANY_ID = new mongoose.Types.ObjectId(
-  "000000000000000000000001"
-);
+import { tenantContext } from "../utils/tenantContext.js";
+
+// We no longer use a hardcoded COMPANY_ID, we fetch for the specific tenant!
 
 // ============================================
 // GET COMPANY
 // ============================================
 export const getCompany = async (req, res) => {
   try {
-    const cacheKey = "company:ui:data";
+    const companyId = tenantContext.getStore();
+    const cacheKey = `company:ui:data:${companyId}`;
     const cachedData = await getCache(cacheKey);
     if (cachedData) {
       console.log(`[Cache Hit] Company UI data fetched from Redis: ${cacheKey}`);
@@ -21,15 +22,15 @@ export const getCompany = async (req, res) => {
     }
 
     console.log(`[Cache Miss] Company UI data fetched from MongoDB: ${cacheKey}`);
-    const company = await CompanyUI.findById(COMPANY_ID);
+    // tenantIsolationPlugin will automatically filter by companyId
+    const company = await CompanyUI.findOne();
 
     if (!company) {
       return res.status(404).json({ message: "Company not found" });
     }
 
-    const bankDetails = await Bank.find({
-      accountHolderName: { $regex: "^Iconic Yatra$", $options: "i" },
-    });
+    // tenantIsolationPlugin automatically filters Banks by companyId
+    const bankDetails = await Bank.find();
 
     const responseData = {
       company,
@@ -53,7 +54,8 @@ export const upsertCompany = async (req, res) => {
     // =====================================
     // FIRST, GET THE EXISTING COMPANY DATA
     // =====================================
-    const existingCompany = await CompanyUI.findById(COMPANY_ID);
+    // tenantIsolationPlugin will automatically filter by companyId
+    const existingCompany = await CompanyUI.findOne();
 
     // =====================================
     // SINGLE IMAGE UPLOADS
@@ -293,8 +295,9 @@ export const upsertCompany = async (req, res) => {
     // UPSERT COMPANY
     // =====================================
 
-    const company = await CompanyUI.findByIdAndUpdate(
-      COMPANY_ID,
+    const companyId = tenantContext.getStore();
+    const company = await CompanyUI.findOneAndUpdate(
+      { companyId },
       { $set: updateData },
       {
         new: true,
@@ -304,7 +307,7 @@ export const upsertCompany = async (req, res) => {
       }
     );
 
-    await deleteCache("company:ui:data");
+    await deleteCache(`company:ui:data:${companyId}`);
     res.json(company);
   } catch (error) {
     console.error("Error in upsertCompany:", error);

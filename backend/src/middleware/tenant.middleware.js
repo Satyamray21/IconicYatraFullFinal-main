@@ -3,9 +3,9 @@ import { tenantContext } from "../utils/tenantContext.js";
 
 export const identifyTenant = async (req, res, next) => {
   try {
-    // 1. Get the domain from the Origin header or a custom x-tenant-domain header
-    // The frontend should send this with every request.
-    const origin = req.headers.host || req.headers.origin || req.headers["x-tenant-domain"];
+    // 1. Get the domain prioritizing explicit headers over Host
+    // x-tenant-domain > origin > host
+    const origin = req.headers["x-tenant-domain"] || req.headers.origin || req.headers.host;
 
     if (!origin) {
       return res.status(400).json({ 
