@@ -62,6 +62,22 @@ const attachToken = (config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Inject the tenant domain
+  if (typeof window !== "undefined") {
+    let hostname = window.location.hostname;
+    
+    // If testing locally, impersonate the Master Tenant
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      hostname = "iconicyatra.com";
+    }
+
+    if (hostname.startsWith("admin.")) {
+      hostname = hostname.substring(6);
+    }
+    config.headers["x-tenant-domain"] = hostname;
+  }
+
   return config;
 };
 

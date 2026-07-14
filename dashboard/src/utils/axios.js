@@ -28,6 +28,12 @@ instance.interceptors.request.use((config) => {
     // Inject the tenant domain so the backend knows which company we are
     if (typeof window !== 'undefined') {
         let hostname = window.location.hostname;
+        
+        // If testing locally, impersonate the Master Tenant so you can actually log in!
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            hostname = 'iconicyatra.com';
+        }
+
         // If accessed via admin.domain.com, strip the admin. prefix to find the correct tenant!
         if (hostname.startsWith('admin.')) {
             hostname = hostname.substring(6);

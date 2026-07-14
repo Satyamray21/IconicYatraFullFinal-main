@@ -92,7 +92,7 @@ export const createCompany = asyncHandler(async (req, res) => {
         mobileNumber: phone || "0000000000",
         email: adminEmail,
         designation: "Admin",
-        userRole: "Superadmin",
+        userRole: "Admin",
       },
       staffLocation: {
         country: "India",
@@ -109,7 +109,7 @@ export const createCompany = asyncHandler(async (req, res) => {
         username: adminEmail,
         password: hashedPassword,
       },
-      role: "Superadmin",
+      role: "Admin",
       status: "Active",
       permissions: {
         canAccessDashboard: true,
