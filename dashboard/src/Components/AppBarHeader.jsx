@@ -55,7 +55,7 @@ const DashboardHeader = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // ✅ Redux user state (profileSlice se)
+  // ✅ Redux user state 
   const { user } = useSelector((state) => state.profile);
 
   const [anchorEl, setAnchorEl] = useState(null);

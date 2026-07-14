@@ -35,7 +35,7 @@ const AchievementItem = ({ number, suffix, label, icon }) => (
     </Typography>
 
     <Typography variant="subtitle1" mt={1} sx={{ fontWeight: 500, color: '#666' }}>
-      {label}:
+      {label}
     </Typography>
   </Box>
 );
