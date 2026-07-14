@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import { DB_NAME } from "../constants.js";
 import { tenantIsolationPlugin } from "../plugins/tenant.plugin.js";
 
 // Register the global SaaS Tenant Isolation Plugin!
@@ -7,7 +6,8 @@ mongoose.plugin(tenantIsolationPlugin);
 
 const connectDB = async () => {
     try {
-        const connectionInstances = await mongoose.connect(`${process.env.MONGODB_URL}/${DB_NAME}`)
+        // Connect exactly to the URL in .env, allowing you to easily change databases!
+        const connectionInstances = await mongoose.connect(process.env.MONGODB_URL)
         console.log(`DB IS CONNECTED ${connectionInstances.connection.host}`);
         
         // --- MULTI-TENANT AUTO MIGRATION ---
