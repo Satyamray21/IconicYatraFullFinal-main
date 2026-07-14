@@ -38,5 +38,5 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "IconicYatraUI-main/dist/*"
-          strip_components: 1
-          target: "/var/www/iconicyatra/frontend"
+          strip_components: 2
+          target: "/var/www/globevisitors.com/public_html"
