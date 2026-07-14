@@ -75,6 +75,9 @@ app.use("/api/v1/associate", verifyToken, associateRouter);
 import paymentRouter from "./src/routers/payment.route.js";
 app.use("/api/v1/payment", verifyToken, paymentRouter);
 
+import expenseRouter from "./src/routers/expense.routes.js";
+app.use("/api/v1/expense", verifyToken, expenseRouter);
+
 import activityRouter from "./src/routers/activityRoutes.js";
 app.use("/api/v1/activity", verifyToken, activityRouter);
 

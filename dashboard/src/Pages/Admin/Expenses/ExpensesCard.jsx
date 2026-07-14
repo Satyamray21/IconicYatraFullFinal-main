@@ -6,8 +6,6 @@ import {
   IconButton,
   Card,
   Tooltip,
-  ToggleButton,
-  ToggleButtonGroup,
   FormControl,
   InputLabel,
   Select,
@@ -21,12 +19,12 @@ import { Edit, Delete } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
-  fetchAllVouchers,
-  deleteVoucher,
-  fetchCompanyTotals,
-} from "../../../features/payment/paymentSlice";
+  fetchAllExpenses,
+  deleteExpense,
+} from "../../../features/expense/expenseSlice";
 import { fetchCompanies } from "../../../features/company/InsideCompany";
 import { toast } from "react-toastify";
+import dayjs from "dayjs";
 
 const cellStyle = {
   whiteSpace: "nowrap",
@@ -34,23 +32,20 @@ const cellStyle = {
   textOverflow: "ellipsis",
 };
 
-const PaymentsCard = () => {
+const ExpensesCard = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [search, setSearch] = React.useState("");
-  const [voucherType, setVoucherType] = React.useState("Receive Voucher"); // 'Receive Voucher' or 'Payment Voucher'
   const [selectedCompanyId, setSelectedCompanyId] = React.useState("all");
   const [fromDate, setFromDate] = React.useState("");
   const [toDate, setToDate] = React.useState("");
-  const ITEMS_PER_PAGE = 100;
+  const ITEMS_PER_PAGE = 10;
   const [page, setPage] = React.useState(1);
-  const { list: payments = [], companyTotals = [] } = useSelector(
-    (state) => state.payment,
-  );
+  const { list: expenses = [] } = useSelector((state) => state.expense);
   const { companies = [] } = useSelector((state) => state.company || {});
 
-  const filteredPayments = React.useMemo(() => {
-    let source = payments.filter((p) => p.paymentType === voucherType);
+  const filteredExpenses = React.useMemo(() => {
+    let source = [...expenses];
 
     if (selectedCompanyId !== "all") {
       source = source.filter((item) => {
@@ -73,95 +68,44 @@ const PaymentsCard = () => {
 
     if (!search.trim()) return source;
 
-    return source.filter((item) =>
-      item.partyName?.toLowerCase().includes(search.toLowerCase()),
+    return source.filter((e) =>
+      e.category?.toLowerCase().includes(search.toLowerCase()) || 
+      e.particulars?.toLowerCase().includes(search.toLowerCase())
     );
-  }, [payments, voucherType, selectedCompanyId, fromDate, toDate, search]);
+  }, [expenses, selectedCompanyId, fromDate, toDate, search]);
 
-  const summaryTotals = React.useMemo(() => {
-    let totalAmount = 0;
-    filteredPayments.forEach(payment => {
-      totalAmount += (Number(payment.amount) || 0);
-    });
-    return { totalAmount };
-  }, [filteredPayments]);
+  const totalPages = Math.ceil(filteredExpenses.length / ITEMS_PER_PAGE);
 
-  const totalPages = Math.ceil(filteredPayments.length / ITEMS_PER_PAGE);
-
-  const paginatedPayments = filteredPayments.slice(
+  const paginatedExpenses = filteredExpenses.slice(
     (page - 1) * ITEMS_PER_PAGE,
     page * ITEMS_PER_PAGE,
   );
 
   useEffect(() => {
-    dispatch(fetchAllVouchers());
-    dispatch(fetchCompanyTotals());
+    dispatch(fetchAllExpenses());
     dispatch(fetchCompanies());
   }, [dispatch]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, voucherType, selectedCompanyId, fromDate, toDate]);
-
-  const handleVoucherTypeChange = (event, newType) => {
-    if (newType !== null) {
-      setVoucherType(newType);
-    }
-  };
+  }, [search, selectedCompanyId, fromDate, toDate]);
 
   const handleDelete = async (id, e) => {
     e.stopPropagation();
-    if (window.confirm("Delete this payment?")) {
+    if (window.confirm("Delete this expense?")) {
       try {
-        await dispatch(deleteVoucher(id)).unwrap();
-        toast.success("Payment deleted");
+        await dispatch(deleteExpense(id)).unwrap();
+        toast.success("Expense deleted");
       } catch {
         toast.error("Delete failed");
       }
     }
   };
 
+  const totalAmount = filteredExpenses.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
   return (
     <Box>
-      {/* Company Totals */}
-      <Box
-        mb={3}
-        p={2}
-        borderRadius={2}
-        bgcolor="#ffffff"
-        boxShadow="0 2px 8px rgba(0,0,0,0.08)"
-      >
-        <Typography variant="h6" fontWeight={600} mb={1}>
-          Company Payment Summary
-        </Typography>
-
-        {companyTotals.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            No data available
-          </Typography>
-        ) : (
-          <Box display="flex" flexWrap="wrap" gap={2}>
-            {companyTotals.map((item) => (
-              <Box
-                key={item.companyId}
-                px={2}
-                py={1}
-                borderRadius="8px"
-                bgcolor="#f5f6fa"
-                boxShadow="0 1px 4px rgba(0,0,0,0.05)"
-              >
-                <Typography variant="body2" fontWeight={600}>
-                  {item.companyName}
-                </Typography>
-                <Typography variant="body2" color="primary">
-                  ₹{item.totalAmount}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-        )}
-      </Box>
-
       {/* Header and Filters */}
       <Box
         mb={3}
@@ -177,56 +121,14 @@ const PaymentsCard = () => {
           {/* Left: Title */}
           <Box>
             <Typography variant="h5" fontWeight={700}>
-              {voucherType === "Receive Voucher"
-                ? "Received Payments"
-                : "Payment Vouchers"}
+              Daily Expenses
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              View, search and manage{" "}
-              {voucherType === "Receive Voucher"
-                ? "received payment"
-                : "payment voucher"}{" "}
-              records
+              Manage your daily business expenses
             </Typography>
           </Box>
-          <Box display="flex" gap={2} alignItems="center">
-            <ToggleButtonGroup
-              value={voucherType}
-              exclusive
-              onChange={handleVoucherTypeChange}
-              aria-label="voucher type"
-              size="small"
-              sx={{
-                height: 40,
-                "& .MuiToggleButton-root": {
-                  borderColor: "#e0e0e0",
-                  fontWeight: 600,
-                  px: 3,
-                  transition: "all 0.3s ease",
-                  color: "#f44336", // Red color for unselected
-                  border: "1px solid #f44336",
-                  "&:hover": {
-                    backgroundColor: "#ffebee",
-                  },
-                },
-                "& .MuiToggleButton-root.Mui-selected": {
-                  backgroundColor: "#4caf50", // Green for selected
-                  color: "white",
-                  border: "1px solid #4caf50",
-                  "&:hover": {
-                    backgroundColor: "#45a049",
-                  },
-                },
-              }}
-            >
-              <ToggleButton value="Receive Voucher" aria-label="receive voucher">
-                Receive Voucher
-              </ToggleButton>
-              <ToggleButton value="Payment Voucher" aria-label="payment voucher">
-                Payment Voucher
-              </ToggleButton>
-            </ToggleButtonGroup>
 
+          <Box display="flex" gap={2} alignItems="center">
             <Button
               variant="contained"
               size="medium"
@@ -236,9 +138,9 @@ const PaymentsCard = () => {
                 fontWeight: 600,
                 height: 40,
               }}
-              onClick={() => navigate("/payments-form")}
+              onClick={() => navigate("/expenses-form")}
             >
-              + Add Payment
+              + Add Expense
             </Button>
           </Box>
         </Box>
@@ -246,9 +148,9 @@ const PaymentsCard = () => {
         {/* Filters */}
         <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
           <FormControl size="small" sx={{ minWidth: 220 }}>
-            <InputLabel id="payment-company-filter-label">Company</InputLabel>
+            <InputLabel id="expense-company-filter-label">Company</InputLabel>
             <Select
-              labelId="payment-company-filter-label"
+              labelId="expense-company-filter-label"
               label="Company"
               value={selectedCompanyId}
               onChange={(e) => {
@@ -289,7 +191,7 @@ const PaymentsCard = () => {
           />
           <TextField
             size="small"
-            placeholder="Search by Name"
+            placeholder="Search category/desc..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             sx={{ width: 260 }}
@@ -307,14 +209,14 @@ const PaymentsCard = () => {
       {/* Summary Calculator */}
       <Paper sx={{ p: 2, mb: 2, display: "flex", gap: 3, flexWrap: "wrap", bgcolor: "#e3f2fd", borderRadius: 2 }}>
         <Typography variant="subtitle1" sx={{ color: "#1565c0" }}>
-          <strong>Total Filtered Amount:</strong> ₹{(Number(summaryTotals.totalAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          <strong>Total Filtered Expenses:</strong> ₹{(Number(totalAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
         </Typography>
       </Paper>
 
       {/* Table Header */}
       <Box
         display="grid"
-        gridTemplateColumns="60px 120px 120px 180px 240px 80px 140px 120px 120px"
+        gridTemplateColumns="60px 120px 150px 240px 120px 120px 120px 120px"
         bgcolor="#f5f6fa"
         p={1.5}
         fontWeight={600}
@@ -322,31 +224,24 @@ const PaymentsCard = () => {
         mb={1}
       >
         <Box>S.No</Box>
-        <Box>Receipt</Box>
-        <Box>Invoice</Box>
-        <Box>Name</Box>
+        <Box>Date</Box>
+        <Box>Category</Box>
         <Box>Particulars</Box>
-        <Box>Dr/Cr</Box>
-        <Box>Txn ID</Box>
+        <Box>Pay Mode</Box>
+        <Box>Company</Box>
         <Box>Amount</Box>
         <Box align="center">Actions</Box>
       </Box>
 
-      {payments.length === 0 ? (
-        <Typography>No payment records found</Typography>
-      ) : filteredPayments.length === 0 ? (
-        <Typography>
-          No{" "}
-          {voucherType === "Receive Voucher"
-            ? "received payment"
-            : "payment voucher"}{" "}
-          records found
-        </Typography>
+      {expenses.length === 0 ? (
+        <Typography>No expense records found</Typography>
+      ) : filteredExpenses.length === 0 ? (
+        <Typography>No matching records found</Typography>
       ) : (
-        paginatedPayments.map((p, i) => (
+        paginatedExpenses.map((expense, i) => (
           <Card
-            key={p._id}
-            onClick={() => navigate(`/invoice-view/${p._id}`)}
+            key={expense._id}
+            onClick={() => navigate(`/expenses-form/${expense._id}`)}
             sx={{
               mb: 1,
               p: 1.5,
@@ -360,34 +255,28 @@ const PaymentsCard = () => {
           >
             <Box
               display="grid"
-              gridTemplateColumns="60px 120px 120px 180px 240px 80px 140px 120px 120px"
+              gridTemplateColumns="60px 120px 150px 240px 120px 120px 120px 120px"
               alignItems="center"
             >
               <Box>{(page - 1) * ITEMS_PER_PAGE + i + 1}</Box>
 
-              <Tooltip title={p.receiptNumber || ""}>
-                <Box sx={cellStyle}>{p.receiptNumber || "-"}</Box>
+              <Box sx={cellStyle}>{dayjs(expense.date).format("DD MMM YYYY")}</Box>
+
+              <Tooltip title={expense.category}>
+                <Box sx={cellStyle} fontWeight={500} color="secondary.main">{expense.category}</Box>
               </Tooltip>
 
-              <Tooltip title={p.invoice || ""}>
-                <Box sx={cellStyle}>{p.invoiceId || "-"}</Box>
+              <Tooltip title={expense.particulars || "-"}>
+                <Box sx={cellStyle}>{expense.particulars || "-"}</Box>
               </Tooltip>
 
-              <Tooltip title={p.partyName}>
-                <Box sx={cellStyle}>{p.partyName}</Box>
+              <Box>{expense.paymentMode}</Box>
+              
+              <Tooltip title={expense.companyId?.companyName || "-"}>
+                <Box sx={cellStyle}>{expense.companyId?.companyName || "-"}</Box>
               </Tooltip>
 
-              <Tooltip title={p.particulars}>
-                <Box sx={cellStyle}>{p.particulars}</Box>
-              </Tooltip>
-
-              <Box>{p.drCr}</Box>
-
-              <Tooltip title={p.referenceNumber}>
-                <Box sx={cellStyle}>{p.referenceNumber}</Box>
-              </Tooltip>
-
-              <Box fontWeight={600}>₹{p.amount}</Box>
+              <Box fontWeight={600} color="error.main">₹{expense.amount}</Box>
 
               <Box display="flex" justifyContent="center" gap={1}>
                 <IconButton
@@ -395,7 +284,7 @@ const PaymentsCard = () => {
                   color="primary"
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate(`/payments-form/${p._id}`);
+                    navigate(`/expenses-form/${expense._id}`);
                   }}
                 >
                   <Edit />
@@ -403,7 +292,7 @@ const PaymentsCard = () => {
                 <IconButton
                   size="small"
                   color="error"
-                  onClick={(e) => handleDelete(p._id, e)}
+                  onClick={(e) => handleDelete(expense._id, e)}
                 >
                   <Delete />
                 </IconButton>
@@ -412,6 +301,7 @@ const PaymentsCard = () => {
           </Card>
         ))
       )}
+      
       {totalPages > 1 && (
         <Stack alignItems="center" mt={3}>
           <Pagination
@@ -427,4 +317,4 @@ const PaymentsCard = () => {
   );
 };
 
-export default PaymentsCard;
+export default ExpensesCard;

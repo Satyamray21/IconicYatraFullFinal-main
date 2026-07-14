@@ -363,7 +363,7 @@ useEffect(() => {
                         </Grid>
 
                         {/* Payment Link */}
-                        {voucherType === "payment" && (
+                        {voucherType === "receive" && (
                             <Grid size={{ xs: 12 }}>
                                 <Box
                                     sx={{

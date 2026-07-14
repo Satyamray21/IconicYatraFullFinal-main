@@ -83,6 +83,14 @@ const PaymentEdit = lazy(() =>
   import("../Pages/Admin/Payments/Form/PaymentEdit")
 );
 
+// Expenses
+const ExpensesCard = lazy(() =>
+  import("../Pages/Admin/Expenses/ExpensesCard")
+);
+const ExpenseForm = lazy(() =>
+  import("../Pages/Admin/Expenses/Form/ExpenseForm")
+);
+
 // Invoice
 const InvoiceCard = lazy(() =>
   import("../Pages/Admin/Invoice/InvoiceCard")
@@ -385,6 +393,9 @@ const MainRoute = () => {
           <Route path="/payments" element={<PaymentsCard />} />
           <Route path="/payments-form" element={<PaymentsForm />} />
           <Route path="/payments-form/:id" element={<PaymentEdit />} />
+          <Route path="/expenses" element={<ExpensesCard />} />
+          <Route path="/expenses-form" element={<ExpenseForm />} />
+          <Route path="/expenses-form/:id" element={<ExpenseForm />} />
           <Route path="/invoice" element={<InvoiceCard />} />
           <Route path="/invoiceform" element={<InvoiceForm />} />
           <Route path="/invoice/edit/:id" element={<InvoiceEditForm />} />

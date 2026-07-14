@@ -21,6 +21,7 @@ export const sidebarItems = [
   { label: "Package", route: "/tourpackage", icon: <Inventory2Icon /> },
   {label: "Destination Description", route: "/destination-description", icon: <Inventory2Icon />},
   { label: "Payments", route: "/payments", icon: <PaymentsIcon /> },
+  { label: "Daily Expenses", route: "/expenses", icon: <ReceiptIcon /> },
   { label: "Invoice", route: "/invoice", icon: <ReceiptIcon /> },
   { label: "Associates", route: "/associates", icon: <PersonIcon /> },
   { label: "Staff", route: "/staff", icon: <Diversity3Icon /> },
