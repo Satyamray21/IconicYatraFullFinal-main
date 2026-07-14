@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/fixed-version
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/deploy-admin.yml'
 
 jobs:
   deploy-admin:
@@ -18,6 +21,11 @@ jobs:
         with:
           node-version: '20'
           
+      - name: Create env file
+        run: |
+          cd dashboard
+          echo "${{ secrets.DASHBOARD_ENV }}" > .env
+
       - name: Install and Build Dashboard
         run: |
           cd dashboard

@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/fixed-version
+    paths:
+      - 'IconicYatraUI-main/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy-frontend:
@@ -17,6 +20,11 @@ jobs:
         with:
           node-version: '20'
           
+      - name: Create env file
+        run: |
+          cd IconicYatraUI-main
+          echo "${{ secrets.FRONTEND_ENV }}" > .env
+
       - name: Install and Build Frontend
         run: |
           cd IconicYatraUI-main
