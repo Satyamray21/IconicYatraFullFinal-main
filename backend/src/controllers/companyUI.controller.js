@@ -1,4 +1,5 @@
 import CompanyUI from "../models/companyUI.model.js";
+import Company from "../models/company.model.js";
 import Bank from "../models/bankDetails.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import mongoose from "mongoose";
@@ -310,7 +311,46 @@ export const upsertCompany = async (req, res) => {
     await deleteCache(`company:ui:data:${companyId}`);
     res.json(company);
   } catch (error) {
-    console.error("Error in upsertCompany:", error);
-    res.status(500).json({ message: error.message });
+    console.error("Error upserting company UI:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
+
+// ============================================
+// UPDATE SEO SETTINGS
+// ============================================
+export const updateSeoSettings = async (req, res) => {
+  try {
+    const companyId = tenantContext.getStore();
+    if (!companyId) return res.status(401).json({ success: false, message: "Unauthorized tenant" });
+
+    const { seoTitle, seoDescription, seoKeywords } = req.body;
+    let updateData = { seoTitle, seoDescription, seoKeywords };
+
+    if (req.files?.favicon) {
+      const result = await uploadOnCloudinary(req.files.favicon[0].path);
+      updateData.faviconUrl = result.secure_url;
+    }
+
+    if (req.files?.ogImage) {
+      const result = await uploadOnCloudinary(req.files.ogImage[0].path);
+      updateData.ogImageUrl = result.secure_url;
+    }
+
+    const company = await Company.findByIdAndUpdate(
+      companyId,
+      { $set: updateData },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "SEO Settings updated successfully",
+      company
+    });
+
+  } catch (error) {
+    console.error("Error updating SEO settings:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
   }
 };

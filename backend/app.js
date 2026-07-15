@@ -199,6 +199,57 @@ app.use("/api/v1", inquiryRoutes);
 import hotelRoutes from "./src/routers/hotel.router.js";
 app.use("/api/v1", verifyToken, hotelRoutes);
 
+import Company from "./src/models/company.model.js";
+
+// Serve frontend assets statically (excluding index.html)
+app.use(express.static(path.join(process.cwd(), "../IconicYatraUI-main/dist"), { index: false }));
+
+// Catch-all route to serve dynamic index.html
+app.get(/.*/, async (req, res, next) => {
+  if (req.originalUrl.startsWith("/api")) return next();
+  
+  try {
+    let domain = req.headers.host?.split(":")[0];
+    if (domain?.startsWith("www.")) domain = domain.substring(4);
+
+    const company = await Company.findOne({ domain });
+
+    const indexPath = path.join(process.cwd(), "../IconicYatraUI-main/dist/index.html");
+    if (!fs.existsSync(indexPath)) {
+      return res.status(404).send("Frontend build not found");
+    }
+
+    let html = fs.readFileSync(indexPath, "utf-8");
+
+    if (company) {
+      const title = company.seoTitle || `${company.companyName} | Tour Packages`;
+      const description = company.seoDescription || `Explore premium tour packages with ${company.companyName}.`;
+      const keywords = company.seoKeywords || `${company.companyName}, travel agency, tours`;
+      const favicon = company.faviconUrl || "https://www.iconicyatra.com/logoiconic.jpg";
+      const ogImage = company.ogImageUrl || "https://www.iconicyatra.com/og-image.jpg?v=1";
+
+      html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
+      html = html.replace(/<meta\s+name="title"\s+content="[^"]*"\s*\/>/i, `<meta name="title" content="${title}" />`);
+      html = html.replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/>/i, `<meta name="description" content="${description}" />`);
+      html = html.replace(/<meta\s+name="keywords"\s+content="[^"]*"\s*\/>/i, `<meta name="keywords" content="${keywords}" />`);
+      html = html.replace(/<link\s+rel="icon"\s+type="image\/jpeg"\s+href="[^"]*"\s*\/>/i, `<link rel="icon" href="${favicon}" />`);
+      html = html.replace(/<meta\s+property="og:site_name"\s+content="[^"]*"\s*\/>/i, `<meta property="og:site_name" content="${company.companyName}" />`);
+      html = html.replace(/<meta\s+property="og:title"\s+content="[^"]*"\s*\/>/i, `<meta property="og:title" content="${title}" />`);
+      html = html.replace(/<meta\s+property="og:description"\s+content="[^"]*"\s*\/>/i, `<meta property="og:description" content="${description}" />`);
+      html = html.replace(/<meta\s+property="og:image"\s+content="[^"]*"\s*\/>/i, `<meta property="og:image" content="${ogImage}" />`);
+      html = html.replace(/<meta\s+property="og:image:secure_url"\s+content="[^"]*"\s*\/>/i, `<meta property="og:image:secure_url" content="${ogImage}" />`);
+      html = html.replace(/<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/>/i, `<meta name="twitter:title" content="${title}" />`);
+      html = html.replace(/<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/>/i, `<meta name="twitter:description" content="${description}" />`);
+      html = html.replace(/<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/>/i, `<meta name="twitter:image" content="${ogImage}" />`);
+      html = html.replace(/content="Iconic Yatra"/g, `content="${company.companyName}"`);
+    }
+
+    res.send(html);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   let statusCode = err.statusCode || 500;

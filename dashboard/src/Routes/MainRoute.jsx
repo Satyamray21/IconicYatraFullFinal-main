@@ -179,7 +179,8 @@ const ViewLandingPage=lazy(()=>
 import("../Pages/Admin/Profile/components/AdsLandingPage/Form/GoogleAdsViewLanding")
 );
 const SocialLinksForm = lazy(() => import("../Components/SocialLinksForm"));
-const  HeroSectionForm=lazy(()=>import("../Components/HeroSectionForm"))
+const SeoSettings = lazy(() => import("../Pages/Admin/Profile/components/SeoSettings"));
+const HeroSectionForm=lazy(()=>import("../Components/HeroSectionForm"))
 const PostBlogForm = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogForm'));
 const PostBlogViewForm = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogViewForm'));
 const PostBlogFormEdit = lazy(() => import('../Pages/Admin/Profile/components/Blog/Form/PostBlogEditForm'));
@@ -434,7 +435,8 @@ const MainRoute = () => {
   element={<GoogleAdsLeadsTable />}
 />
  <Route path="/setting/social-links" element={<SocialLinksForm />} />
-  <Route path="/setting/hero-section" element={<HeroSectionForm />} />
+ <Route path="/setting/seo" element={<SeoSettings />} />
+  <Route path="/setting/hero-section" element={<HeroSectionForm/>} />
   <Route path="/destination-description" element={<DestinationMasterForm />} />
   
   {/* SaaS Admin Routes */}

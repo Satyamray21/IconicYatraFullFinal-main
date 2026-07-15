@@ -174,6 +174,11 @@ export const updateCompany = asyncHandler(async (req, res) => {
     paymentPolicy,
     paymentLink,
     companyWebsite,
+    seoTitle,
+    seoDescription,
+    seoKeywords,
+    faviconUrl,
+    ogImageUrl,
   } = req.body;
 
   const company = await Company.findById(id);
@@ -226,6 +231,11 @@ export const updateCompany = asyncHandler(async (req, res) => {
   company.termsConditions = termsConditions || company.termsConditions;
   company.paymentLink = paymentLink || company.paymentLink;
   company.companyWebsite = companyWebsite || company.companyWebsite;
+  company.seoTitle = seoTitle || company.seoTitle;
+  company.seoDescription = seoDescription || company.seoDescription;
+  company.seoKeywords = seoKeywords || company.seoKeywords;
+  company.faviconUrl = faviconUrl || company.faviconUrl;
+  company.ogImageUrl = ogImageUrl || company.ogImageUrl;
   await company.save();
 
   res

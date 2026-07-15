@@ -2,6 +2,7 @@ import express from "express";
 import {
   getCompany,
   upsertCompany,
+  updateSeoSettings,
 } from "../controllers/companyUI.controller.js";
 import { upload } from "../middleware/imageMulter.middleware.js";
 
@@ -20,9 +21,18 @@ router.put(
     { name: "bannerImage", maxCount: 1 },
     { name: "ourVisionImage", maxCount: 1 },
     { name: "testimonialPhotos", maxCount: 10 },
-    { name: "teamPhotos", maxCount: 10 }, // ✅ multiple QR
+    { name: "teamPhotos", maxCount: 10 }, 
   ]),
   upsertCompany,
+);
+
+router.patch(
+  "/seo",
+  upload.fields([
+    { name: "favicon", maxCount: 1 },
+    { name: "ogImage", maxCount: 1 },
+  ]),
+  updateSeoSettings
 );
 
 export default router;

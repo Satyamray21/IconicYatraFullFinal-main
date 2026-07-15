@@ -22,6 +22,12 @@ const companySchema = new mongoose.Schema(
     paymentLink: { type: String },
     companyWebsite: { type: String },
     isActive: { type: Boolean, default: true },
+    // SEO & Branding Fields
+    seoTitle: { type: String },
+    seoDescription: { type: String },
+    seoKeywords: { type: String },
+    faviconUrl: { type: String },
+    ogImageUrl: { type: String },
   },
   { timestamps: true },
 );

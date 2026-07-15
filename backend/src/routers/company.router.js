@@ -5,6 +5,7 @@ import {
     getCompanyById,
     updateCompany,
     deleteCompany,
+    toggleCompanyStatus,
 } from "../controllers/company.controller.js";
 import { upload } from "../middleware/imageMulter.middleware.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
@@ -40,5 +41,6 @@ router.put(
 );
 
 router.delete("/:id", requirePermission("canEditInvoice"), deleteCompany);
+router.patch("/:id/status", requirePermission("canEditInvoice"), toggleCompanyStatus);
 
 export default router;

@@ -32,6 +32,11 @@ export const sidebarItems = [
     icon: <SettingsIcon />,
     children: [
       {
+        label: "SEO Settings",
+        route: "/setting/seo",
+        icon: <LinkIcon />,
+      },
+      {
         label: "Social Links",
         route: "/setting/social-links",
         icon: <LinkIcon />,
