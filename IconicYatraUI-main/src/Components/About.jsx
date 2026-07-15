@@ -48,7 +48,7 @@ import axios from "axios";
 const values = [
   {
     icon: <FlightTakeoff sx={{ fontSize: 40 }} />,
-    title: "Adventure & Discovery",
+    title: "Adventure &  Discovery",
     description:
       "Exploring new horizons and creating stories that last a lifetime",
   },
