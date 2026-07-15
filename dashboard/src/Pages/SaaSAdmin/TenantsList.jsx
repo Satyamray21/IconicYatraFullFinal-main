@@ -34,6 +34,7 @@ const TenantsList = () => {
   const [formData, setFormData] = useState({
     companyName: '',
     address: '',
+    phone: '',
     email: '',
     domain: '',
     adminEmail: '',
@@ -67,7 +68,7 @@ const TenantsList = () => {
       // The backend expects 'email' for the company record
       await axios.post('/company', formData);
       setShowModal(false);
-      setFormData({ companyName: '', address: '', email: '', domain: '', adminEmail: '', adminPassword: '' });
+      setFormData({ companyName: '', address: '', phone: '', email: '', domain: '', adminEmail: '', adminPassword: '' });
       fetchTenants();
       toast.success("Tenant created successfully!");
     } catch (error) {
@@ -380,6 +381,16 @@ const TenantsList = () => {
                     fullWidth 
                     size="small"
                     placeholder="e.g. 123 Main St, NY" 
+                  />
+                  <TextField 
+                    required 
+                    label="Contact Number" 
+                    name="phone" 
+                    value={formData.phone} 
+                    onChange={handleChange} 
+                    fullWidth 
+                    size="small"
+                    placeholder="e.g. +91 9876543210" 
                   />
                   <TextField 
                     required 
