@@ -239,3 +239,17 @@ export const deleteCompany = asyncHandler(async (req, res) => {
   await Company.findByIdAndDelete(id);
   res.status(200).json(new ApiResponse(200, null, "Company deleted"));
 });
+
+// ✅ TOGGLE Company Status (Suspend/Restore)
+export const toggleCompanyStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const company = await Company.findById(id);
+  if (!company) throw new ApiError(404, "Company not found");
+
+  company.isActive = !company.isActive;
+  await company.save();
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, company, `Company ${company.isActive ? 'restored' : 'suspended'} successfully`));
+});

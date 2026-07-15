@@ -43,6 +43,13 @@ export const identifyTenant = async (req, res, next) => {
       });
     }
 
+    if (company.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message: "This account has been suspended. Please contact support."
+      });
+    }
+
     // 3. Attach the companyId securely to the request object
     req.companyId = company._id;
     
