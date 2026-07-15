@@ -99,8 +99,22 @@ const SeoSettings = () => {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      if (res.data.success) {
+      if (res.data.success && res.data.company) {
         setSuccessMsg("SEO Settings successfully updated!");
+        const updatedCompany = res.data.company;
+        setFormData(prev => ({
+          ...prev,
+          seoTitle: updatedCompany.seoTitle || prev.seoTitle,
+          seoDescription: updatedCompany.seoDescription || prev.seoDescription,
+          seoKeywords: updatedCompany.seoKeywords || prev.seoKeywords,
+        }));
+        setPreview(prev => ({
+          ...prev,
+          favicon: updatedCompany.faviconUrl || prev.favicon,
+          ogImage: updatedCompany.ogImageUrl || prev.ogImage,
+          companyName: updatedCompany.companyName || prev.companyName,
+          domain: updatedCompany.domain || prev.domain
+        }));
       }
     } catch (error) {
       console.error("Error updating SEO:", error);

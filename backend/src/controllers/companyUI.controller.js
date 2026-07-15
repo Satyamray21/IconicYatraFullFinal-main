@@ -350,6 +350,8 @@ export const updateSeoSettings = async (req, res) => {
       { new: true }
     );
 
+    await deleteCache(`company:ui:data:${companyId}`);
+
     res.status(200).json({
       success: true,
       message: "SEO Settings updated successfully",
