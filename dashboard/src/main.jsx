@@ -18,7 +18,7 @@ root.render(
   <React.StrictMode>
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Provider store={store}>
-        <BrowserRouter>
+        <BrowserRouter basename={window.location.pathname.startsWith('/admin') ? '/admin' : '/'}>
           <App />
 
           {/* ✅ Global Toast Container */}

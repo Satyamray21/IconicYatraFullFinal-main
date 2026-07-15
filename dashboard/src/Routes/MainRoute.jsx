@@ -290,11 +290,10 @@ const MainRoute = () => {
     setIsAuthenticated(false);
     setShowExpiryAlert(false);
     
-    // Dynamically redirect to /admin/login or /login based on the current URL
-    if (window.location.pathname.startsWith('/admin')) {
-      window.location.href = "/admin/login";
+    if (window.location.hostname.includes("iconicyatra.com")) {
+      window.location.href = "https://www.iconicyatra.com/login";
     } else {
-      window.location.href = "/login";
+      window.location.href = "/login"; // This drops the /admin path and goes to the tenant's root frontend
     }
   };
 
@@ -323,10 +322,10 @@ const MainRoute = () => {
   }
 
   if (!isAuthenticated) {
-    if (window.location.pathname.startsWith('/admin')) {
-      window.location.href = "/admin/login";
+    if (window.location.hostname.includes("iconicyatra.com")) {
+      window.location.href = "https://www.iconicyatra.com/login";
     } else {
-      window.location.href = "/login";
+      window.location.href = "/login"; // This drops the /admin path and goes to the tenant's root frontend
     }
     return null;
   }
