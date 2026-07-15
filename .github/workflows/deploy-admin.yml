@@ -6,6 +6,7 @@ on:
       - saas-migration
     paths:
       - 'dashboard/**'
+      - '.github/workflows/deploy-admin.yml'
 
 jobs:
   deploy-admin:
@@ -20,14 +21,14 @@ jobs:
         with:
           node-version: '20'
           
+      - name: Create env file
+        run: |
+          cd dashboard
+          echo "${{ secrets.DASHBOARD_ENV }}" > .env
+
       - name: Install and Build Dashboard
         run: |
           cd dashboard
-          
-          # Point to the dedicated API subdomain for globevisitors
-          echo "VITE_API_BASE_URL=https://api.globevisitors.com/api/v1" > .env
-          echo "VITE_BASE_URL=https://api.globevisitors.com" >> .env
-          echo "VITE_MAIN_URL=https://www.globevisitors.com" >> .env
           
           npm install --legacy-peer-deps
           npm run build
@@ -39,5 +40,5 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "dashboard/dist/*"
-          strip_components: 2
-          target: "/var/www/admin.globevisitors.com/public_html"
+          strip_components: 0
+          target: "/var/www/iconicyatra"

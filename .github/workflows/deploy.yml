@@ -6,6 +6,7 @@ on:
       - saas-migration
     paths:
       - 'IconicYatraUI-main/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy-frontend:
@@ -19,14 +20,14 @@ jobs:
         with:
           node-version: '20'
           
+      - name: Create env file
+        run: |
+          cd IconicYatraUI-main
+          echo "${{ secrets.FRONTEND_ENV }}" > .env
+
       - name: Install and Build Frontend
         run: |
           cd IconicYatraUI-main
-          
-          # Point to the dedicated API subdomain for globevisitors
-          echo "VITE_API_BASE_URL=https://api.globevisitors.com/api/v1" > .env
-          echo "VITE_BASE_URL=https://api.globevisitors.com" >> .env
-          echo "VITE_MAIN_URL=https://www.globevisitors.com" >> .env
           
           npm install --legacy-peer-deps
           npm run build
@@ -38,5 +39,5 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "IconicYatraUI-main/dist/*"
-          strip_components: 2
-          target: "/var/www/globevisitors.com/public_html"
+          strip_components: 1
+          target: "/var/www/iconicyatra/frontend"
