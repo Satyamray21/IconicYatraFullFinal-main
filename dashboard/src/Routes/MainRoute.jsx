@@ -83,7 +83,7 @@ const PaymentEdit = lazy(() =>
   import("../Pages/Admin/Payments/Form/PaymentEdit")
 );
 
-// Invoices
+// Invoices 
 const InvoiceCard = lazy(() =>
   import("../Pages/Admin/Invoice/InvoiceCard")
 );
