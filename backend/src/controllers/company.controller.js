@@ -91,6 +91,7 @@ export const createCompany = asyncHandler(async (req, res) => {
         personalDetails: {
           fullName: `${companyName} Admin`,
           mobileNumber: phone || `TMP${Date.now()}`,
+          alternateContact: `ALT${Date.now()}`,
           email: adminEmail,
           designation: "Admin",
           userRole: "Admin",
