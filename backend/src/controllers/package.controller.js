@@ -813,9 +813,19 @@ export const getPackagesByTourType = async (req, res) => {
         const cacheKey = `packages:tourType:${tourType}:${page}:${limit}:${status}:${dateStr}`;
 
         const cachedData = await getCache(cacheKey);
-        if (cachedData) {
+        // Ignore stale empty cache — packages may exist while Redis still holds []
+        const cachedEmpty =
+            cachedData &&
+            Number(cachedData.totalPackages || 0) === 0 &&
+            (!cachedData.packages || cachedData.packages.length === 0);
+
+        if (cachedData && !cachedEmpty) {
             console.log(`[Cache Hit] Packages by tour type fetched from Redis: ${cacheKey}`);
             return res.json({ fromCache: true, ...cachedData });
+        }
+
+        if (cachedEmpty) {
+            await clearPattern(`packages:tourType:${tourType}:*`);
         }
 
         const formattedTourType =
@@ -844,7 +854,11 @@ export const getPackagesByTourType = async (req, res) => {
             Package.countDocuments(filter)
         ]);
 
-        const packages = packagesDocs.map(pkg => normalizePackageUrls(pkg));
+        const packages = packagesDocs.map(pkg => {
+            const normalized = normalizePackageUrls(pkg);
+            normalized.status = calculateStatus(normalized.validFrom, normalized.validTill);
+            return normalized;
+        });
 
         const response = {
             packages,
@@ -857,7 +871,10 @@ export const getPackagesByTourType = async (req, res) => {
             }
         };
 
-        await setCache(cacheKey, response, 604800);
+        // Never cache empty results for a week — that hid real packages on the website
+        if (totalPackages > 0) {
+            await setCache(cacheKey, response, 3600);
+        }
         console.log(`[DB] Packages by tour type fetched from MongoDB: ${cacheKey}`);
         res.json({ fromCache: false, ...response });
     } catch (error) {
@@ -882,9 +899,18 @@ export const getPackagesByCategory = async (req, res) => {
         const cacheKey = `packages:category:${packageCategory}:${page}:${limit}:${status}:${dateStr}`;
 
         const cachedData = await getCache(cacheKey);
-        if (cachedData) {
+        const cachedEmpty =
+            cachedData &&
+            Number(cachedData.totalPackages || 0) === 0 &&
+            (!cachedData.packages || cachedData.packages.length === 0);
+
+        if (cachedData && !cachedEmpty) {
             console.log(`[Cache Hit] Packages by category fetched from Redis: ${cacheKey}`);
             return res.status(200).json({ fromCache: true, ...cachedData });
+        }
+
+        if (cachedEmpty) {
+            await clearPattern(`packages:category:${packageCategory}:*`);
         }
 
         const skip = (page - 1) * limit;
@@ -928,7 +954,10 @@ export const getPackagesByCategory = async (req, res) => {
             packages
         };
 
-        await setCache(cacheKey, response, 604800);
+        // Never lock empty category lists in Redis for a week
+        if (totalPackages > 0) {
+            await setCache(cacheKey, response, 3600);
+        }
         console.log(`[DB] Packages by category fetched from MongoDB: ${cacheKey}`);
         res.status(200).json({ fromCache: false, ...response });
 
