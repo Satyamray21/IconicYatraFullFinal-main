@@ -289,7 +289,13 @@ const MainRoute = () => {
     localStorage.clear();
     setIsAuthenticated(false);
     setShowExpiryAlert(false);
-    window.location.href = "https://iconicyatra.com/admin/login";
+    
+    // Dynamically redirect to /admin/login or /login based on the current URL
+    if (window.location.pathname.startsWith('/admin')) {
+      window.location.href = "/admin/login";
+    } else {
+      window.location.href = "/login";
+    }
   };
 
   const handleExtendSession = () => {
@@ -317,7 +323,11 @@ const MainRoute = () => {
   }
 
   if (!isAuthenticated) {
-    window.location.href = "https://iconicyatra.com/admin/login";
+    if (window.location.pathname.startsWith('/admin')) {
+      window.location.href = "/admin/login";
+    } else {
+      window.location.href = "/login";
+    }
     return null;
   }
 
