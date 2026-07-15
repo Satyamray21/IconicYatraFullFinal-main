@@ -34,7 +34,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   }
 
   const { activityDate, activityType, activityPage = 1, reminderPage = 1 } = req.query;
-  const cacheKey = `dashboard:stats:${activityDate || 'all'}:${activityType || 'all'}:ap${activityPage}:rp${reminderPage}`;
+  const cacheKey = `dashboard:stats:${req.companyId}:${activityDate || 'all'}:${activityType || 'all'}:ap${activityPage}:rp${reminderPage}`;
 
   // Try to get from cache
   const cachedData = await getCache(cacheKey);

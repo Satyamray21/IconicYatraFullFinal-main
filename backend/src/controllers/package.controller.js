@@ -712,7 +712,7 @@ export const uploadDayImage = asyncHandler(async (req, res) => {
 // ----------------------
 export const getById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const cacheKey = `packages:id:${id}`;
+    const cacheKey = `packages:${req.companyId}:id:${id}`;
 
     const cachedData = await getCache(cacheKey);
     if (cachedData) {
@@ -743,7 +743,7 @@ export const listPackages = asyncHandler(async (req, res) => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const dateStr = now.toISOString().split('T')[0];
-    const cacheKey = `packages:list:${page}:${limit}:${tourType || 'all'}:${search || 'none'}:${status || 'all'}:${dateStr}`;
+    const cacheKey = `packages:${req.companyId}:list:${page}:${limit}:${tourType || 'all'}:${search || 'none'}:${status || 'all'}:${dateStr}`;
 
     const cachedData = await getCache(cacheKey);
     if (cachedData) {
@@ -810,7 +810,7 @@ export const getPackagesByTourType = async (req, res) => {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         const dateStr = now.toISOString().split('T')[0];
-        const cacheKey = `packages:tourType:${tourType}:${page}:${limit}:${status}:${dateStr}`;
+        const cacheKey = `packages:${req.companyId}:tourType:${tourType}:${page}:${limit}:${status}:${dateStr}`;
 
         const cachedData = await getCache(cacheKey);
         if (cachedData) {
@@ -880,7 +880,7 @@ export const getPackagesByCategory = async (req, res) => {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         const dateStr = now.toISOString().split('T')[0];
-        const cacheKey = `packages:category:${packageCategory}:${page}:${limit}:${status}:${dateStr}`;
+        const cacheKey = `packages:${req.companyId}:category:${packageCategory}:${page}:${limit}:${status}:${dateStr}`;
 
         const cachedData = await getCache(cacheKey);
         if (cachedData) {

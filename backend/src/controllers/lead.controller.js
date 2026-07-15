@@ -397,7 +397,7 @@ export const updateLead = asyncHandler(async (req, res) => {
 
 //view Data wise 
 export const viewAllLeadsReports = asyncHandler(async (req, res) => {
-  const cacheKey = 'leads:reports';
+  const cacheKey = `leads:reports:${req.companyId}`;
   const cachedReports = await getCache(cacheKey);
   if (cachedReports) {
     return res.status(200).json(new ApiResponse(200, cachedReports, "Leads reports fetched from cache"));
@@ -581,7 +581,7 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
 });
 
 export const getLeadOptions = asyncHandler(async (req, res) => {
-  const cacheKey = 'leads:options';
+  const cacheKey = `leads:options:${req.companyId}`;
   const cachedOptions = await getCache(cacheKey);
   if (cachedOptions) {
     return res.status(200).json(new ApiResponse(200, cachedOptions, "Lead options fetched from cache"));
