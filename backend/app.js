@@ -34,7 +34,7 @@ app.use(express.urlencoded({ extended: true, limit: "500mb" }));
 app.use(cookieParser());
 app.use("/upload", express.static(path.join(process.cwd(), "upload")));
 
-// Routes — `verifyToken` on mounts that require a logged-in dashboard (or staff) user.
+// Rout es — `verifyToken` on mounts that require a logged-in dashboard (or staff) user.
 // Public/marketing and auth endpoints stay without it.
 import authRoutes from "./src/routers/user.router.js";
 import { identifyTenant } from "./src/middleware/tenant.middleware.js";
