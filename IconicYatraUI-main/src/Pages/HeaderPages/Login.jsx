@@ -50,8 +50,8 @@ const LoginPage = () => {
       if (window.location.hostname.includes("iconicyatra.com")) {
           adminUrl = import.meta.env.VITE_ADMIN_URL || "https://admin.iconicyatra.com";
       } else {
-          // Tenant agencies will access their dashboard via /admin on their own domain
-          adminUrl = `${window.location.origin}/admin`;
+          // Tenant agencies will access their dashboard via /admin/ on their own domain
+          adminUrl = `${window.location.origin}/admin/`;
       }
 
       window.location.replace(
