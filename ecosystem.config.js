@@ -10,7 +10,7 @@ module.exports = {
       max_memory_restart: "1G", // Restart if it uses too much memory
       env_production: {
         NODE_ENV: "production",
-        PORT: 5000
+        PORT: 3000
       }
     }
   ]
