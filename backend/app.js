@@ -38,7 +38,7 @@ app.use("/upload", express.static(path.join(process.cwd(), "upload")));
 // Public/marketing and auth endpoints stay without it.
 import authRoutes from "./src/routers/user.router.js";
 import { identifyTenant } from "./src/middleware/tenant.middleware.js";
-//testing
+
 // Ensure every API v1 request goes through the Tenant Bouncer
 app.use("/api/v1", identifyTenant);
 
