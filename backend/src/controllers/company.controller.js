@@ -104,6 +104,7 @@ export const createCompany = asyncHandler(async (req, res) => {
       });
 
       await StaffPermission.create({
+        companyId: company._id,
         staffId: newStaff._id,
         staffUserId: adminEmail,
         credentials: {
