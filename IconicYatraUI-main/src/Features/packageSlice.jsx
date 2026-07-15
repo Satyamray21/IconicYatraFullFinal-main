@@ -7,6 +7,30 @@ const normalizeArray = (payload) => {
   return payload?.items || payload?.packages || [];
 };
 
+const filterByCategory = (items, category) =>
+  (items || []).filter(
+    (pkg) =>
+      String(pkg?.packageCategory || "").toLowerCase() ===
+      String(category).toLowerCase(),
+  );
+
+const fetchActivePackagesByCategory = async (category, limit = 50) => {
+  const res = await packagesAxios.get("/", {
+    params: {
+      page: 1,
+      limit: 100,
+      status: "active",
+    },
+  });
+  const items = res.data?.items || res.data?.packages || [];
+  const packages = filterByCategory(items, category).slice(0, limit);
+  return {
+    packages,
+    totalPackages: packages.length,
+    filters: { packageCategory: category, status: "active" },
+  };
+};
+
 // ✅ Fetch all packages
 export const fetchPackages = createAsyncThunk(
   "packages/fetchPackages",
@@ -23,15 +47,52 @@ export const fetchPackages = createAsyncThunk(
 // ✅ Fetch domestic packages
 export const fetchDomesticPackages = createAsyncThunk(
   "packages/fetchDomesticPackages",
-  async ({ page = 1, limit = 9 }, { rejectWithValue }) => {
+  async ({ page = 1, limit = 9 } = {}, { rejectWithValue }) => {
     try {
-      const res = await packagesAxios.get(
-        `/tour-type/domestic?page=${page}&limit=${limit}`
-      );
-      return res.data;
+      // Use list endpoint (avoids stale empty Redis cache on /tour-type/domestic)
+      const res = await packagesAxios.get("/", {
+        params: {
+          page,
+          limit,
+          tourType: "Domestic",
+          status: "active",
+        },
+      });
+      const data = res.data || {};
+      return {
+        packages: data.items || data.packages || [],
+        totalPackages: data.total ?? data.totalPackages ?? 0,
+        totalPages: data.totalPages || 0,
+        currentPage: data.page || page,
+        filters: { tourType: "Domestic", status: "active" },
+      };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message);
     }
+  },
+  {
+    // Prevent empty-result / remount loops from firing the same request repeatedly
+    condition: ({ page = 1, limit = 9 } = {}, { getState }) => {
+      const { packages } = getState();
+      const queryKey = `${page}:${limit}`;
+      if (packages.domesticStatus === "loading") return false;
+      if (
+        packages.domesticStatus === "succeeded" &&
+        packages.domesticQueryKey === queryKey &&
+        packages.domestic.length > 0
+      ) {
+        return false;
+      }
+      // Allow one retry if previous result was empty (stale/wrong cache)
+      if (
+        packages.domesticStatus === "succeeded" &&
+        packages.domesticQueryKey === queryKey &&
+        packages.domestic.length === 0
+      ) {
+        return packages.domesticEmptyRetries < 1;
+      }
+      return true;
+    },
   }
 );
 
@@ -40,11 +101,41 @@ export const fetchInternationalPackages = createAsyncThunk(
   "packages/fetchInternationalPackages",
   async (_, { rejectWithValue }) => {
     try {
-      const res = await packagesAxios.get("/tour-type/international");
-      return res.data;
+      const res = await packagesAxios.get("/", {
+        params: {
+          page: 1,
+          limit: 50,
+          tourType: "International",
+          status: "active",
+        },
+      });
+      const data = res.data || {};
+      return {
+        packages: data.items || data.packages || [],
+        totalPackages: data.total ?? data.totalPackages ?? 0,
+      };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message);
     }
+  },
+  {
+    condition: (_, { getState }) => {
+      const { packages } = getState();
+      if (packages.internationalStatus === "loading") return false;
+      if (
+        packages.internationalStatus === "succeeded" &&
+        packages.international.length > 0
+      ) {
+        return false;
+      }
+      if (
+        packages.internationalStatus === "succeeded" &&
+        packages.international.length === 0
+      ) {
+        return packages.internationalEmptyRetries < 1;
+      }
+      return true;
+    },
   }
 );
 
@@ -53,11 +144,20 @@ export const fetchYatraPackages = createAsyncThunk(
   "packages/fetchYatraPackages",
   async (_, { rejectWithValue }) => {
     try {
-      const res = await packagesAxios.get("/category/yatra");
-      return res.data;
+      return await fetchActivePackagesByCategory("Yatra");
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message);
     }
+  },
+  {
+    condition: (_, { getState }) => {
+      const { packages } = getState();
+      if (packages.yatraStatus === "loading") return false;
+      if (packages.yatraStatus === "succeeded" && packages.yatra.length > 0) {
+        return false;
+      }
+      return true;
+    },
   }
 );
 
@@ -66,11 +166,20 @@ export const fetchHolidayPackages = createAsyncThunk(
   "packages/fetchHolidayPackages",
   async (_, { rejectWithValue }) => {
     try {
-      const res = await packagesAxios.get("/category/holiday");
-      return res.data;
+      return await fetchActivePackagesByCategory("Holiday");
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message);
     }
+  },
+  {
+    condition: (_, { getState }) => {
+      const { packages } = getState();
+      if (packages.holidayStatus === "loading") return false;
+      if (packages.holidayStatus === "succeeded" && packages.holiday.length > 0) {
+        return false;
+      }
+      return true;
+    },
   }
 );
 
@@ -79,11 +188,20 @@ export const fetchSpecialPackages = createAsyncThunk(
   "packages/fetchSpecialPackages",
   async (_, { rejectWithValue }) => {
     try {
-      const res = await packagesAxios.get("/category/special");
-      return res.data;
+      return await fetchActivePackagesByCategory("Special");
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message);
     }
+  },
+  {
+    condition: (_, { getState }) => {
+      const { packages } = getState();
+      if (packages.specialStatus === "loading") return false;
+      if (packages.specialStatus === "succeeded" && packages.special.length > 0) {
+        return false;
+      }
+      return true;
+    },
   }
 );
 
@@ -92,11 +210,20 @@ export const fetchLatestPackages = createAsyncThunk(
   "packages/fetchLatestPackages",
   async (_, { rejectWithValue }) => {
     try {
-      const res = await packagesAxios.get("/category/latest");
-      return res.data;
+      return await fetchActivePackagesByCategory("Latest");
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message);
     }
+  },
+  {
+    condition: (_, { getState }) => {
+      const { packages } = getState();
+      if (packages.latestStatus === "loading") return false;
+      if (packages.latestStatus === "succeeded" && packages.latest.length > 0) {
+        return false;
+      }
+      return true;
+    },
   }
 );
 
@@ -110,6 +237,15 @@ export const fetchPopularTours = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message);
     }
+  },
+  {
+    condition: (_, { getState }) => {
+      const { packages } = getState();
+      return (
+        packages.popularStatus !== "loading" &&
+        packages.popularStatus !== "succeeded"
+      );
+    },
   }
 );
 
@@ -159,6 +295,16 @@ const packageSlice = createSlice({
     page: 1,
     limit: 9,
     currentSector: "All",
+    domesticStatus: "idle",
+    domesticQueryKey: null,
+    domesticEmptyRetries: 0,
+    internationalStatus: "idle",
+    internationalEmptyRetries: 0,
+    yatraStatus: "idle",
+    holidayStatus: "idle",
+    specialStatus: "idle",
+    latestStatus: "idle",
+    popularStatus: "idle",
   },
 
   reducers: {
@@ -182,6 +328,21 @@ const packageSlice = createSlice({
       state.popular = [];
       state.page = 1;
       state.currentSector = "All";
+      state.domesticStatus = "idle";
+      state.domesticQueryKey = null;
+      state.domesticEmptyRetries = 0;
+      state.internationalStatus = "idle";
+      state.internationalEmptyRetries = 0;
+      state.yatraStatus = "idle";
+      state.holidayStatus = "idle";
+      state.specialStatus = "idle";
+      state.latestStatus = "idle";
+      state.popularStatus = "idle";
+    },
+    // Allow forced refetch (e.g. pagination / manual refresh)
+    invalidateDomesticPackages: (state) => {
+      state.domesticStatus = "idle";
+      state.domesticQueryKey = null;
     },
     setCurrentSector: (state, action) => {
       state.currentSector = action.payload;
@@ -208,60 +369,121 @@ const packageSlice = createSlice({
       })
 
       // Domestic
-      // Domestic
-.addCase(fetchDomesticPackages.pending, (state) => {
-  state.loading = true;
-  state.error = null;
-})
-
-.addCase(fetchDomesticPackages.fulfilled, (state, action) => {
-  state.loading = false;
-  state.domestic = normalizeArray(action.payload);
-  state.page = action.payload?.currentPage || 1;
-  state.totalPages = action.payload?.totalPages || 1;
-  state.totalPackages = action.payload?.totalPackages || 0;
-})
-
-.addCase(fetchDomesticPackages.rejected, (state, action) => {
-  state.loading = false;
-  state.error = action.payload;
-})
-
+      .addCase(fetchDomesticPackages.pending, (state, action) => {
+        state.loading = true;
+        state.error = null;
+        state.domesticStatus = "loading";
+        const { page = 1, limit = 9 } = action.meta.arg || {};
+        state.domesticQueryKey = `${page}:${limit}`;
+      })
+      .addCase(fetchDomesticPackages.fulfilled, (state, action) => {
+        state.loading = false;
+        state.domesticStatus = "succeeded";
+        state.domestic = normalizeArray(action.payload);
+        state.page = action.payload?.currentPage || 1;
+        state.totalPages = Number(action.payload?.totalPages) || 0;
+        state.totalPackages = Number(action.payload?.totalPackages) || 0;
+        const { page = 1, limit = 9 } = action.meta.arg || {};
+        state.domesticQueryKey = `${page}:${limit}`;
+        if (state.domestic.length === 0) {
+          state.domesticEmptyRetries += 1;
+        } else {
+          state.domesticEmptyRetries = 0;
+        }
+      })
+      .addCase(fetchDomesticPackages.rejected, (state, action) => {
+        state.loading = false;
+        state.domesticStatus = "failed";
+        state.error = action.payload;
+      })
 
       // International
+      .addCase(fetchInternationalPackages.pending, (state) => {
+        state.internationalStatus = "loading";
+      })
       .addCase(fetchInternationalPackages.fulfilled, (state, action) => {
         state.loading = false;
+        state.internationalStatus = "succeeded";
         state.international = normalizeArray(action.payload);
+        if (state.international.length === 0) {
+          state.internationalEmptyRetries += 1;
+        } else {
+          state.internationalEmptyRetries = 0;
+        }
+      })
+      .addCase(fetchInternationalPackages.rejected, (state, action) => {
+        state.internationalStatus = "failed";
+        state.error = action.payload;
       })
 
       // Yatra
+      .addCase(fetchYatraPackages.pending, (state) => {
+        state.yatraStatus = "loading";
+      })
       .addCase(fetchYatraPackages.fulfilled, (state, action) => {
         state.loading = false;
+        state.yatraStatus = "succeeded";
         state.yatra = normalizeArray(action.payload);
+      })
+      .addCase(fetchYatraPackages.rejected, (state, action) => {
+        state.yatraStatus = "failed";
+        state.error = action.payload;
       })
 
       // Holiday
+      .addCase(fetchHolidayPackages.pending, (state) => {
+        state.holidayStatus = "loading";
+      })
       .addCase(fetchHolidayPackages.fulfilled, (state, action) => {
         state.loading = false;
+        state.holidayStatus = "succeeded";
         state.holiday = normalizeArray(action.payload);
+      })
+      .addCase(fetchHolidayPackages.rejected, (state, action) => {
+        state.holidayStatus = "failed";
+        state.error = action.payload;
       })
 
       // Special
+      .addCase(fetchSpecialPackages.pending, (state) => {
+        state.specialStatus = "loading";
+      })
       .addCase(fetchSpecialPackages.fulfilled, (state, action) => {
         state.loading = false;
+        state.specialStatus = "succeeded";
         state.special = normalizeArray(action.payload);
+      })
+      .addCase(fetchSpecialPackages.rejected, (state, action) => {
+        state.specialStatus = "failed";
+        state.error = action.payload;
       })
 
       // Latest
+      .addCase(fetchLatestPackages.pending, (state) => {
+        state.latestStatus = "loading";
+      })
       .addCase(fetchLatestPackages.fulfilled, (state, action) => {
         state.loading = false;
+        state.latestStatus = "succeeded";
         state.latest = normalizeArray(action.payload);
+      })
+      .addCase(fetchLatestPackages.rejected, (state, action) => {
+        state.latestStatus = "failed";
+        state.error = action.payload;
       })
 
       // Popular
+      .addCase(fetchPopularTours.pending, (state) => {
+        state.popularStatus = "loading";
+      })
       .addCase(fetchPopularTours.fulfilled, (state, action) => {
         state.loading = false;
+        state.popularStatus = "succeeded";
         state.popular = normalizeArray(action.payload);
+      })
+      .addCase(fetchPopularTours.rejected, (state, action) => {
+        state.popularStatus = "failed";
+        state.error = action.payload;
       })
 
       // Single package
@@ -292,6 +514,7 @@ export const {
   clearError,
   setLoading,
   clearAllPackages,
+  invalidateDomesticPackages,
   setCurrentSector,
 } = packageSlice.actions;
 

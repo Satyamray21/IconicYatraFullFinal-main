@@ -63,19 +63,14 @@ const Domestic = () => {
       ? String(destination).toLowerCase().trim()
       : "";
 
-  // ✅ Fetch packages (fetch more when filtering by sector to show all matches)
+  // ✅ Fetch packages once per page/destination (empty results must not re-trigger)
   useEffect(() => {
     const limit = destination ? 200 : 9;
     const targetSector = destination || "All";
 
-    // Skip fetch if we already have the data for this page and sector in Redux
-    if (packages.length > 0 && page === reduxPage && targetSector === currentSector && !loading) {
-      return;
-    }
-
     dispatch(fetchDomesticPackages({ page, limit }));
     dispatch(setCurrentSector(targetSector));
-  }, [dispatch, page, destination, packages.length, reduxPage, currentSector, loading]);
+  }, [dispatch, page, destination]);
 
   useEffect(() => {
     let isMounted = true;
@@ -390,9 +385,6 @@ const Domestic = () => {
                     page={page}
                     onChange={(e, value) => {
                       setPage(value);
-                      dispatch(
-                        fetchDomesticPackages({ page: value, limit: 9 }),
-                      );
                       window.scrollTo(0, 0);
                     }}
                     color="primary"

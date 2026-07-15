@@ -46,16 +46,19 @@ const InternationalPackage = () => {
     };
   }, [dispatch]);
 
-  // Auto slide effect
+  // Auto slide effect — wrap back to start so cards don't disappear
   useEffect(() => {
     if (internationalPackages.length === 0) return;
 
     const interval = setInterval(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollBy({
-          left: scrollRef.current.offsetWidth / cardsToShow,
-          behavior: 'smooth',
-        });
+      const el = scrollRef.current;
+      if (!el) return;
+      const step = el.offsetWidth / cardsToShow;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (el.scrollLeft >= maxScroll - 8) {
+        el.scrollTo({ left: 0, behavior: "smooth" });
+      } else {
+        el.scrollBy({ left: step, behavior: "smooth" });
       }
     }, 4000);
     return () => clearInterval(interval);
