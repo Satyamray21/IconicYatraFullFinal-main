@@ -201,8 +201,13 @@ app.use("/api/v1", verifyToken, hotelRoutes);
 
 import Company from "./src/models/company.model.js";
 
+// Dynamically resolve the frontend directory because it's "IconicYatraUI-main" locally but "frontend" on the VPS
+const frontendDir1 = path.join(process.cwd(), "../frontend/dist");
+const frontendDir2 = path.join(process.cwd(), "../IconicYatraUI-main/dist");
+const activeFrontendDir = fs.existsSync(frontendDir1) ? frontendDir1 : frontendDir2;
+
 // Serve frontend assets statically (excluding index.html)
-app.use(express.static(path.join(process.cwd(), "../IconicYatraUI-main/dist"), { index: false }));
+app.use(express.static(activeFrontendDir, { index: false }));
 
 // Catch-all route to serve dynamic index.html
 app.get(/.*/, async (req, res, next) => {
@@ -214,9 +219,9 @@ app.get(/.*/, async (req, res, next) => {
 
     const company = await Company.findOne({ domain });
 
-    const indexPath = path.join(process.cwd(), "../IconicYatraUI-main/dist/index.html");
+    const indexPath = path.join(activeFrontendDir, "index.html");
     if (!fs.existsSync(indexPath)) {
-      return res.status(404).send("Frontend build not found");
+      return res.status(404).send(`Frontend build not found at ${indexPath}`);
     }
 
     let html = fs.readFileSync(indexPath, "utf-8");
