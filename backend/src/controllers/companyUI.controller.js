@@ -24,11 +24,7 @@ export const getCompany = async (req, res) => {
 
     console.log(`[Cache Miss] Company UI data fetched from MongoDB: ${cacheKey}`);
     // tenantIsolationPlugin will automatically filter by companyId
-    const company = await CompanyUI.findOne();
-
-    if (!company) {
-      return res.status(404).json({ message: "Company not found" });
-    }
+    const company = await CompanyUI.findOne() || null;
 
     // tenantIsolationPlugin automatically filters Banks by companyId
     const bankDetails = await Bank.find();
