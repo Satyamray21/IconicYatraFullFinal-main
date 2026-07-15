@@ -84,47 +84,54 @@ export const createCompany = asyncHandler(async (req, res) => {
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
     const staffIdStr = `STF-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const newStaff = await Staff.create({
-      companyId: company._id,
-      staffId: staffIdStr,
-      personalDetails: {
-        fullName: `${companyName} Admin`,
-        mobileNumber: phone || "0000000000",
-        email: adminEmail,
-        designation: "Admin",
-        userRole: "Admin",
-      },
-      staffLocation: {
-        country: "India",
-        state: "State",
-        city: "City",
-      },
-      isActive: true,
-    });
+    try {
+      const newStaff = await Staff.create({
+        companyId: company._id,
+        staffId: staffIdStr,
+        personalDetails: {
+          fullName: `${companyName} Admin`,
+          mobileNumber: phone || `TMP${Date.now()}`,
+          email: adminEmail,
+          designation: "Admin",
+          userRole: "Admin",
+        },
+        staffLocation: {
+          country: "India",
+          state: "State",
+          city: "City",
+        },
+        isActive: true,
+      });
 
-    await StaffPermission.create({
-      staffId: newStaff._id,
-      staffUserId: adminEmail,
-      credentials: {
-        username: adminEmail,
-        password: hashedPassword,
-      },
-      role: "Admin",
-      status: "Active",
-      permissions: {
-        canAccessDashboard: true,
-        canAccessLeads: true,
-        canCreateLead: true,
-        canEditLead: true,
-        canDeleteLead: true,
-        canAccessSettings: true,
-        canAccessStaff: true,
-        canAccessUsers: true,
-        canAccessQuotations: true,
-        canAccessPackages: true,
-        canAccessBookings: true,
-      }
-    });
+      await StaffPermission.create({
+        staffId: newStaff._id,
+        staffUserId: adminEmail,
+        credentials: {
+          username: adminEmail,
+          password: hashedPassword,
+        },
+        role: "Admin",
+        status: "Active",
+        permissions: {
+          canAccessDashboard: true,
+          canAccessLeads: true,
+          canCreateLead: true,
+          canEditLead: true,
+          canDeleteLead: true,
+          canAccessSettings: true,
+          canAccessStaff: true,
+          canAccessUsers: true,
+          canAccessQuotations: true,
+          canAccessPackages: true,
+          canAccessBookings: true,
+        }
+      });
+    } catch (err) {
+      console.error("STAFF CREATION FAILED WITH ERROR:", err);
+      // To prevent silent failures, we should really delete the company if staff creation fails!
+      await Company.deleteOne({ _id: company._id });
+      throw err;
+    }
   }
 
   res
