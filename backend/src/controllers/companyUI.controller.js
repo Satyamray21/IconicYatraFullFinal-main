@@ -33,8 +33,11 @@ export const getCompany = async (req, res) => {
     // tenantIsolationPlugin automatically filters Banks by companyId
     const bankDetails = await Bank.find();
 
+    const baseCompany = await Company.findById(companyId);
+
     const responseData = {
       company,
+      baseCompany,
       bankDetails,
     };
 
@@ -329,12 +332,16 @@ export const updateSeoSettings = async (req, res) => {
 
     if (req.files?.favicon) {
       const result = await uploadOnCloudinary(req.files.favicon[0].path);
-      updateData.faviconUrl = result.secure_url;
+      if (result) {
+        updateData.faviconUrl = result.secure_url;
+      }
     }
 
     if (req.files?.ogImage) {
       const result = await uploadOnCloudinary(req.files.ogImage[0].path);
-      updateData.ogImageUrl = result.secure_url;
+      if (result) {
+        updateData.ogImageUrl = result.secure_url;
+      }
     }
 
     const company = await Company.findByIdAndUpdate(

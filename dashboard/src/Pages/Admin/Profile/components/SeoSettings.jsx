@@ -42,15 +42,24 @@ const SeoSettings = () => {
     const fetchCompanyData = async () => {
       try {
         const response = await axios.get("/companyUI");
-        if (response.data) {
-          // CompanyUI doesn't have SEO directly, wait, we need to fetch from Company.
-          // Since the user is logged in, and we can fetch company from /company/profile? 
-          // Wait, we don't have a direct endpoint for the tenant's Company data!
-          // We can fetch it via /companyUI but the SEO fields are saved in Company.
-          // Let's rely on Redux profile or add a new endpoint if necessary.
-          // Actually, since I'm just saving to Company, I should fetch from Company.
-          // BUT `requireSuperAdmin` prevents tenants from accessing `/company/:id`.
-          // For now, I'll let the fields be blank or fetch from profile if we have it in Redux.
+        if (response.data && response.data.baseCompany) {
+          const { baseCompany } = response.data;
+          
+          setFormData({
+            seoTitle: baseCompany.seoTitle || "",
+            seoDescription: baseCompany.seoDescription || "",
+            seoKeywords: baseCompany.seoKeywords || "",
+            favicon: null,
+            ogImage: null,
+          });
+
+          setPreview(prev => ({
+            ...prev,
+            favicon: baseCompany.faviconUrl || "",
+            ogImage: baseCompany.ogImageUrl || "",
+            companyName: baseCompany.companyName || "Iconic Yatra",
+            domain: baseCompany.domain || "iconicyatra.com"
+          }));
         }
       } catch (error) {
         console.error("Error fetching data", error);
