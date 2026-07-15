@@ -44,21 +44,14 @@ const LoginPage = () => {
       const token = res.token;
       const user = res.user;
 
-      let adminUrl = import.meta.env.VITE_ADMIN_URL;
-      
-      if (!adminUrl) {
-          // If we are on the master domain, go to the dedicated admin subdomain
-          if (window.location.hostname.includes("iconicyatra.com")) {
-              adminUrl = "https://admin.iconicyatra.com";
-          } else {
-              // Tenant agencies will access their dashboard via admin.domain.com
-              let hostname = window.location.hostname;
-              // Remove www if it exists to get the root domain
-              if (hostname.startsWith('www.')) {
-                  hostname = hostname.substring(4);
-              }
-              adminUrl = `https://admin.${hostname}`;
-          }
+      let adminUrl = "";
+
+      // If we are on the master domain, go to the dedicated admin subdomain
+      if (window.location.hostname.includes("iconicyatra.com")) {
+          adminUrl = import.meta.env.VITE_ADMIN_URL || "https://admin.iconicyatra.com";
+      } else {
+          // Tenant agencies will access their dashboard via /admin on their own domain
+          adminUrl = `${window.location.origin}/admin`;
       }
 
       window.location.replace(
