@@ -124,6 +124,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
   // Loading state for save button
   const [saving, setSaving] = useState(false);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
   // Search states
   const [arrivalSearch, setArrivalSearch] = useState("");
@@ -844,6 +845,56 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     setTourDetails({ ...tourDetails, days: updatedDays });
   };
 
+  const handleGenerateItinerary = async () => {
+    try {
+      setIsGeneratingAi(true);
+      const totalNights = packageData?.stayLocations?.reduce((sum, sl) => sum + (Number(sl.nights) || 0), 0) || 0;
+      const targetDays = totalNights > 0 ? totalNights + 1 : Math.max(1, tourDetails.days.length);
+
+      const res = await axios.post("/ai/generate-itinerary", {
+        arrivalCity: tourDetails.arrivalCity,
+        departureCity: tourDetails.departureCity,
+        destinationCountry: selectedCountry,
+        sector: selectedState,
+        days: targetDays,
+        tourType: tourType,
+        stayLocations: packageData?.stayLocations
+      });
+      if (res.data?.success && res.data?.data) {
+        const generatedDays = res.data.data;
+        setTourDetails(prev => {
+          const newDays = [...prev.days];
+          generatedDays.forEach((genDay, idx) => {
+            const aiSightseeing = Array.isArray(genDay.sightseeing) ? genDay.sightseeing : [];
+            if (newDays[idx]) {
+              newDays[idx].title = genDay.title || newDays[idx].title;
+              newDays[idx].notes = genDay.notes || newDays[idx].notes;
+              newDays[idx].aboutCity = genDay.aboutCity || newDays[idx].aboutCity;
+              newDays[idx].sightseeing = aiSightseeing.length > 0 ? aiSightseeing : newDays[idx].sightseeing;
+              newDays[idx].selectedSightseeing = aiSightseeing.length > 0 ? aiSightseeing : newDays[idx].selectedSightseeing;
+            } else {
+              newDays.push({
+                title: genDay.title || "",
+                notes: genDay.notes || "",
+                aboutCity: genDay.aboutCity || "",
+                dayImage: null,
+                sightseeing: aiSightseeing,
+                selectedSightseeing: aiSightseeing,
+              });
+            }
+          });
+          return { ...prev, days: newDays };
+        });
+        setSnackbar({ open: true, message: "Itinerary generated successfully!", severity: "success" });
+      }
+    } catch (err) {
+      console.error("Failed to generate itinerary:", err);
+      setSnackbar({ open: true, message: "Failed to generate itinerary. Check your API key and try again.", severity: "error" });
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
+
   const handleAddDay = () => {
     setTourDetails({
       ...tourDetails,
@@ -1396,9 +1447,20 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       </Grid>
 
       {/* Days Section */}
-      <Typography variant="h6" color="primary" sx={{ mt: 3 }}>
-        Day Wise Plan
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mt={3} mb={1}>
+        <Typography variant="h6" color="primary">
+          Day Wise Plan
+        </Typography>
+        <Button 
+          variant="contained" 
+          color="secondary" 
+          onClick={handleGenerateItinerary} 
+          disabled={isGeneratingAi}
+          startIcon={isGeneratingAi ? <CircularProgress size={20} /> : <span>✨</span>}
+        >
+          {isGeneratingAi ? "Generating..." : "Generate Itinerary with AI"}
+        </Button>
+      </Box>
       {tourDetails.days.map((day, index) => (
         <Paper key={index} sx={{ p: 2, my: 2, border: "1px solid #ccc" }}>
           <Box display="flex" justifyContent="space-between">
