@@ -3,7 +3,7 @@ name: Deploy Customer Frontend
 on:
   push:
     branches:
-      - saas-migration
+      - feature/fixed-version
     paths:
       - 'IconicYatraUI-main/**'
       - '.github/workflows/deploy.yml'
