@@ -3,7 +3,7 @@ name: Deploy SaaS Admin Dashboard
 on:
   push:
     branches:
-      - saas-migration
+      - feature/fixed-version
     paths:
       - 'dashboard/**'
       - '.github/workflows/deploy-admin.yml'
