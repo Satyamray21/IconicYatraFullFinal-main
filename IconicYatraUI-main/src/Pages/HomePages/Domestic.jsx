@@ -14,20 +14,39 @@ import {
   Alert,
 } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchDomesticPackages } from "../../Features/packageSlice";
+import { fetchDomesticPackages, setCurrentSector } from "../../Features/packageSlice";
 import PackageCard from "../../Components/PackageCard";
-import { BASE_URL } from "../../Utils/axiosInstance";
+import { BASE_URL, destinationAxios } from "../../Utils/axiosInstance";
 import { Pagination } from "@mui/material";
 import InquiryFormDialog from "../../Components/InquiryFormDialog";
+
+const normalizeText = (value = "") =>
+  String(value).toLowerCase().trim().replace(/\s+/g, " ");
+const slugifyValue = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-");
+const DEFAULT_DOMESTIC_DESCRIPTION =
+  "Explore the beauty of India with our curated domestic tours";
 
 const Domestic = () => {
   const { destination } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-
-  const [page, setPage] = useState(1);
+  const [currency, setCurrency] = useState("INR");
+  const [rates, setRates] = useState({});
+  const { page: savedPage } = useSelector((state) => state.packages);
+  const [page, setPage] = useState(savedPage || 1);
   const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
   const [selectedPackageTitle, setSelectedPackageTitle] = useState("");
+  const [domesticDescriptionsBySlug, setDomesticDescriptionsBySlug] = useState(
+    {},
+  );
+  const [domesticSectorLabelBySlug, setDomesticSectorLabelBySlug] = useState({});
+  const [domesticAllDescription, setDomesticAllDescription] = useState("");
 
   const {
     domestic: packages = [],
@@ -35,48 +54,114 @@ const Domestic = () => {
     error,
     totalPages = 1,
     totalPackages = 0,
+    page: reduxPage = 1,
+    currentSector,
   } = useSelector((state) => state.packages);
 
-  const [selectedDestination, setSelectedDestination] = useState("All");
+  const routeSlug =
+    destination && destination !== "All"
+      ? String(destination).toLowerCase().trim()
+      : "";
 
-  // ✅ Fetch packages (avoid unnecessary API calls)
+  // ✅ Fetch packages once per page/destination (empty results must not re-trigger)
   useEffect(() => {
-  if (packages.length === 0) {
-    dispatch(fetchDomesticPackages({ page, limit: 9 }));
-  }
-}, [dispatch, packages.length]);
+    const limit = destination ? 200 : 9;
+    const targetSector = destination || "All";
 
-  // ✅ Handle destination filter
+    dispatch(fetchDomesticPackages({ page, limit }));
+    dispatch(setCurrentSector(targetSector));
+  }, [dispatch, page, destination]);
+
   useEffect(() => {
-    if (destination && destination !== "All") {
-      const formattedDestination = destination
-        .replace(/-/g, " ")
-        .toLowerCase()
-        .trim();
+    let isMounted = true;
 
-      const matched = packages?.find(
-        (pkg) => pkg.title.toLowerCase().trim() === formattedDestination
+    const fetchDomesticDescriptions = async () => {
+      try {
+        const res = await destinationAxios.get("/?tourType=Domestic");
+        if (!isMounted) return;
+
+        const list = Array.isArray(res.data) ? res.data : [];
+        const map = list.reduce(
+          (acc, item) => {
+            const sector = item?.sector?.trim();
+            if (!sector) return acc;
+            acc[slugifyValue(sector)] = item?.description?.trim() || "";
+            return acc;
+          },
+          {},
+        );
+        const labelMap = list.reduce((acc, item) => {
+          const sector = item?.sector?.trim();
+          if (!sector) return acc;
+          acc[slugifyValue(sector)] = sector;
+          return acc;
+        }, {});
+
+        setDomesticDescriptionsBySlug(map);
+        setDomesticSectorLabelBySlug(labelMap);
+        const allDescriptionItem = list.find((item) => !item?.sector);
+        setDomesticAllDescription(
+          allDescriptionItem?.tourTypeDescription?.trim() || "",
+        );
+      } catch (error) {
+        if (isMounted) {
+          setDomesticDescriptionsBySlug({});
+          setDomesticSectorLabelBySlug({});
+          setDomesticAllDescription("");
+        }
+      }
+    };
+
+    fetchDomesticDescriptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // ✅ Reset page only when route changes (destination changes)
+  useEffect(() => {
+    const targetSector = destination || "All";
+    if (targetSector !== currentSector) {
+      setPage(1);
+    }
+  }, [destination, currentSector]);
+  useEffect(() => {
+    const fetchRates = async () => {
+      try {
+        const res = await fetch("https://open.er-api.com/v6/latest/INR");
+        const data = await res.json();
+        setRates(data.rates || {});
+      } catch (err) {
+        console.error("Currency fetch error", err);
+      }
+    };
+
+    fetchRates();
+  }, []);
+  // ✅ Filter packages
+  const filteredPackages = !routeSlug
+    ? packages
+    : packages.filter(
+        (pkg) =>
+          slugifyValue(pkg.sector) === routeSlug ||
+          slugifyValue(pkg.title) === routeSlug ||
+          normalizeText(pkg.title) === normalizeText(routeSlug.replace(/-/g, " ")),
       );
 
-      setSelectedDestination(matched ? matched.title : "All");
-    } else {
-      setSelectedDestination("All");
-    }
-
-    setPage(1);
-  }, [destination, packages]);
-
-  // ✅ Filter packages
-  const filteredPackages =
-    selectedDestination === "All"
-      ? packages
-      : packages.filter(
-          (pkg) =>
-            pkg.title.toLowerCase().trim() ===
-            selectedDestination.toLowerCase().trim()
-        );
-
   const currentPackages = filteredPackages || [];
+  const selectedDestination = !routeSlug
+    ? "All"
+    : domesticSectorLabelBySlug[routeSlug] ||
+      routeSlug
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+  const selectedDescription =
+    !routeSlug
+      ? domesticAllDescription || DEFAULT_DOMESTIC_DESCRIPTION
+      : domesticDescriptionsBySlug[routeSlug] ||
+        DEFAULT_DOMESTIC_DESCRIPTION;
 
   // ✅ Navigate to details page (pass package data)
   const handleCardClick = (pkg) => {
@@ -92,29 +177,58 @@ const Domestic = () => {
 
   // ✅ Price helpers
   const getStandardHotelPrice = (pkg) => {
+    if (pkg?.finalStandardCost && Number(pkg.finalStandardCost) > 0) {
+      return Number(pkg.finalStandardCost);
+    }
+
     if (pkg?.startingPrice) return pkg.startingPrice;
     if (pkg?.price) return pkg.price;
 
     if (!pkg.destinationNights?.length) return null;
 
-    const firstDestination = pkg.destinationNights[0];
-
-    if (!firstDestination?.hotels?.length) return null;
-
-    const standardHotel = firstDestination.hotels.find(
-      (hotel) => hotel.category === "standard"
+    const totalStandardCost = pkg.destinationNights.reduce(
+      (sum, destination) => {
+        const nights = Number(destination?.nights) || 0;
+        const standardHotel = (destination?.hotels || []).find(
+          (hotel) => hotel?.category === "standard",
+        );
+        const standardRate = Number(standardHotel?.pricePerPerson) || 0;
+        return sum + nights * standardRate;
+      },
+      0,
     );
 
-    if (standardHotel && standardHotel.pricePerPerson > 0) {
-      return standardHotel.pricePerPerson;
-    }
-
-    return null;
+    return totalStandardCost > 0 ? totalStandardCost : null;
   };
+  const convertPrice = (price) => {
+    if (!price) return null;
 
+    // INR → selected currency
+    if (currency === "INR") return price;
+
+    const rate = rates[currency];
+    if (!rate) return price;
+
+    let converted = price * rate;
+
+    // ✅ increase by 25 if not INR
+    converted += 25;
+
+    return converted;
+  };
   const formatPrice = (price) => {
     if (!price) return "Price on request";
-    return `₹${price.toLocaleString()}`;
+
+    const converted = convertPrice(price);
+
+    const symbols = {
+      INR: "₹",
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+    };
+
+    return `${symbols[currency] || currency} ${Math.round(converted).toLocaleString()}`;
   };
 
   const getPriceDisplay = (pkg) => {
@@ -138,6 +252,18 @@ const Domestic = () => {
     <>
       <Box sx={{ backgroundColor: "#f4f6f8", minHeight: "100vh", py: 6 }}>
         <Container maxWidth="lg">
+          <Box display="flex" justifyContent="flex-end" mb={3}>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              style={{ padding: "8px", borderRadius: "5px" }}
+            >
+              <option value="INR">INR</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+            </select>
+          </Box>
           {/* Breadcrumbs */}
           <Paper
             elevation={2}
@@ -149,7 +275,12 @@ const Domestic = () => {
             }}
           >
             <Breadcrumbs aria-label="breadcrumb">
-              <MUILink underline="hover" color="inherit" component={Link} to="/">
+              <MUILink
+                underline="hover"
+                color="inherit"
+                component={Link}
+                to="/"
+              >
                 Home
               </MUILink>
 
@@ -198,7 +329,7 @@ const Domestic = () => {
             />
 
             <Typography variant="subtitle1" color="text.secondary">
-              Discover the best domestic travel packages
+              {selectedDescription}
             </Typography>
           </Box>
 
@@ -230,8 +361,8 @@ const Domestic = () => {
                           ? pkg.bannerImage.startsWith("http")
                             ? pkg.bannerImage
                             : pkg.bannerImage.startsWith("/upload/")
-                            ? `${BASE_URL}${pkg.bannerImage}`
-                            : `${BASE_URL}/upload/${pkg.bannerImage}`
+                              ? `${BASE_URL}${pkg.bannerImage}`
+                              : `${BASE_URL}/upload/${pkg.bannerImage}`
                           : "https://via.placeholder.com/300x200?text=No+Image"
                       }
                       title={pkg.title || "No Title"}
@@ -247,20 +378,18 @@ const Domestic = () => {
               </Grid>
 
               {/* Pagination */}
-              {totalPages > 1 && (
+              {!routeSlug && totalPages > 1 && (
                 <Box display="flex" justifyContent="center" mt={5}>
-                 <Pagination
-    count={totalPages}
-    page={page}
-    onChange={(e, value) => {
-      setPage(value);
-      dispatch(fetchDomesticPackages({ page: value, limit: 9 }));
-      window.scrollTo(0, 0);
-    }}
-    color="primary"
-    size="large"
-  />
-
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(e, value) => {
+                      setPage(value);
+                      window.scrollTo(0, 0);
+                    }}
+                    color="primary"
+                    size="large"
+                  />
                 </Box>
               )}
             </>

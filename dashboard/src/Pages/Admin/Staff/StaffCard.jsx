@@ -18,44 +18,183 @@ import {
   DialogContentText,
   Snackbar,
   Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import LockIcon from "@mui/icons-material/Lock";
+import HistoryIcon from "@mui/icons-material/History";
+import ListAltIcon from "@mui/icons-material/ListAlt";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchAllStaff, deleteStaff } from "../../../features/staff/staffSlice";
+import { fetchAllStaff, deleteStaff, fetchStaffStats } from "../../../features/staff/staffSlice";
+import { isStaffSession } from "../../../features/user/userSlice";
+import axios from "../../../utils/axios";
 
-const stats = [
-  { title: "Today's", active: 0, lead: 0, quotation: 0 },
-  { title: "This Month", active: 0, lead: 0, quotation: 0 },
-  { title: "Last 3 Months", active: 0, lead: 0, quotation: 0 },
-  { title: "Last 6 Months", active: 0, lead: 0, quotation: 0 },
-  { title: "Last 12 Months", active: 0, lead: 0, quotation: 0 },
-];
+function isUserModelAdmin(user) {
+  if (!user || isStaffSession(user)) return false;
+  const role = user.userRole || user.role || "";
+  return ["Superadmin", "Admin", "Executive"].includes(role);
+}
+
+function normalizeLoginHistoryPayload(res) {
+  const inner = res?.data?.data;
+  if (Array.isArray(inner)) return inner;
+  if (inner && Array.isArray(inner.data)) return inner.data;
+  return [];
+}
+
+// Remove hardcoded stats array
 
 const StaffCard = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { list: staffList = [], loading, error } = useSelector((state) => state.staffs);
+  const { list: staffList = [], stats = [], loading, error } = useSelector((state) => state.staffs);
+  const user = useSelector((state) => state.profile.user);
+  const canViewStaffLoginHistory = isUserModelAdmin(user);
 
-  // State for delete confirmation dialog
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
     staffId: null,
     staffName: "",
   });
 
-  // State for snackbar notifications
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success",
   });
 
+  const [staffLoginDialog, setStaffLoginDialog] = useState({
+    open: false,
+    staffId: "",
+    staffName: "",
+    rows: [],
+    loading: false,
+    error: null,
+  });
+
+  const [activeNamesDialog, setActiveNamesDialog] = useState({
+    open: false,
+    names: [],
+    title: "",
+  });
+
+  const [assignedLeadsDialog, setAssignedLeadsDialog] = useState({
+    open: false,
+    staffName: "",
+    rows: [],
+    loading: false,
+    error: null,
+  });
+
+  const openAssignedLeads = async (row) => {
+    setAssignedLeadsDialog({
+      open: true,
+      staffName: row.staffName,
+      rows: [],
+      loading: true,
+      error: null,
+    });
+    try {
+      const { data } = await axios.get(
+        `/lead/assigned-to/${encodeURIComponent(row.staffName)}`
+      );
+      setAssignedLeadsDialog((prev) => ({
+        ...prev,
+        rows: data?.data || [],
+        loading: false,
+      }));
+    } catch (e) {
+      setAssignedLeadsDialog((prev) => ({
+        ...prev,
+        loading: false,
+        error: e.response?.data?.message || "Failed to fetch leads",
+      }));
+    }
+  };
+
+  const closeAssignedLeads = () => {
+    setAssignedLeadsDialog({
+      open: false,
+      staffName: "",
+      rows: [],
+      loading: false,
+      error: null,
+    });
+  };
+
+  const handleShowActiveNames = (item) => {
+    if (item.activeStaffNames && item.activeStaffNames.length > 0) {
+      setActiveNamesDialog({
+        open: true,
+        names: item.activeStaffNames,
+        title: `Staff Assigned to Leads — ${item.title}`,
+      });
+    }
+  };
+
+  const closeActiveNamesDialog = () => {
+    setActiveNamesDialog({ ...activeNamesDialog, open: false });
+  };
+
+  const openStaffLoginHistory = async (row) => {
+    setStaffLoginDialog({
+      open: true,
+      staffId: row.staffId,
+      staffName: row.staffName || row.staffId,
+      rows: [],
+      loading: true,
+      error: null,
+    });
+    try {
+      const r = await axios.get(
+        `/staff-permission/${encodeURIComponent(row.staffId)}/login-history`,
+        { params: { limit: 80 } }
+      );
+      const rows = normalizeLoginHistoryPayload(r);
+      setStaffLoginDialog((prev) => ({
+        ...prev,
+        rows,
+        loading: false,
+      }));
+    } catch (e) {
+      setStaffLoginDialog((prev) => ({
+        ...prev,
+        loading: false,
+        error:
+          e.response?.data?.message ||
+          e.response?.data?.error ||
+          "Failed to fetch login history",
+      }));
+    }
+  };
+
+  const closeStaffLoginHistory = () => {
+    setStaffLoginDialog({
+      open: false,
+      staffId: "",
+      staffName: "",
+      rows: [],
+      loading: false,
+      error: null,
+    });
+  };
+
   useEffect(() => {
     dispatch(fetchAllStaff());
+    dispatch(fetchStaffStats());
   }, [dispatch]);
 
   const handleAddClick = () => {
@@ -64,6 +203,13 @@ const StaffCard = () => {
 
   const handleEditClick = (row) => {
     navigate(`/staff/staffeditform/${row.staffId}`);
+  };
+
+  const handleManagePermissions = (row) => {
+    const staffData = staffList.find((s) => s.staffId === row.staffId);
+    navigate(`/admin/staff/${row.staffId}/permissions`, {
+      state: { staffData },
+    });
   };
 
   const handleDeleteClick = (row) => {
@@ -131,22 +277,63 @@ const StaffCard = () => {
     {
       field: "action",
       headerName: "Action",
-      width: 100,
+      width: canViewStaffLoginHistory ? 200 : 150,
+      sortable: false,
       renderCell: (params) => (
-        <Box display="flex" gap={1}>
+        <Box display="flex" gap={0.5} alignItems="center">
           <IconButton
             color="primary"
             size="small"
             onClick={() => handleEditClick(params.row)}
             disabled={loading}
+            title="Edit Staff"
           >
             <EditIcon fontSize="small" />
           </IconButton>
+          <IconButton
+            color="success"
+            size="small"
+            onClick={() => handleManagePermissions(params.row)}
+            disabled={loading}
+            title="Manage Permissions"
+          >
+            <LockIcon fontSize="small" />
+          </IconButton>
+          {canViewStaffLoginHistory && (
+            <Tooltip title="Login history">
+              <IconButton
+                color="info"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openStaffLoginHistory(params.row);
+                }}
+                disabled={loading}
+                aria-label={`Login history for ${params.row.staffName}`}
+              >
+                <HistoryIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip title="View Assigned Leads">
+            <IconButton
+              color="secondary"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                openAssignedLeads(params.row);
+              }}
+              disabled={loading}
+            >
+              <ListAltIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <IconButton
             color="error"
             size="small"
             onClick={() => handleDeleteClick(params.row)}
             disabled={loading}
+            title="Delete Staff"
           >
             <DeleteIcon fontSize="small" />
           </IconButton>
@@ -161,7 +348,7 @@ const StaffCard = () => {
         {/* Stat Cards */}
         <Grid container spacing={2}>
           {stats.map((item, index) => (
-            <Grid key={index} item xs={12} sm={6} md={4} lg={2.4}>
+            <Grid key={index} size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
               <Card
                 sx={{
                   backgroundColor: "#0b6396ff",
@@ -173,7 +360,16 @@ const StaffCard = () => {
                   <Typography variant="h6">
                     {item.title}: {item.active}
                   </Typography>
-                  <Typography variant="body2">Active: {item.active}</Typography>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      cursor: item.activeStaffNames?.length > 0 ? "pointer" : "default",
+                      "&:hover": { textDecoration: item.activeStaffNames?.length > 0 ? "underline" : "none" }
+                    }}
+                    onClick={() => handleShowActiveNames(item)}
+                  >
+                    Active: {item.active}
+                  </Typography>
                   <Typography variant="body2">Lead: {item.lead}</Typography>
                   <Typography variant="body2">
                     Quotation: {item.quotation}
@@ -235,6 +431,150 @@ const StaffCard = () => {
           </Box>
         </Box>
 
+        <Dialog
+          open={staffLoginDialog.open}
+          onClose={closeStaffLoginHistory}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>
+            Login history — {staffLoginDialog.staffName}{" "}
+            <Typography component="span" variant="body2" color="text.secondary">
+              ({staffLoginDialog.staffId})
+            </Typography>
+          </DialogTitle>
+          <DialogContent dividers>
+            {staffLoginDialog.loading ? (
+              <Box
+                display="flex"
+                justifyContent="center"
+                alignItems="center"
+                minHeight={220}
+              >
+                <CircularProgress />
+              </Box>
+            ) : staffLoginDialog.error ? (
+              <Alert severity="error">{staffLoginDialog.error}</Alert>
+            ) : staffLoginDialog.rows.length === 0 ? (
+              <Typography color="text.secondary" sx={{ py: 2 }}>
+                No login history for this staff (create staff login &amp; permissions
+                first).
+              </Typography>
+            ) : (
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "action.hover" }}>
+                      <TableCell>Date &amp; time</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>IP</TableCell>
+                      <TableCell>Location</TableCell>
+                      <TableCell>ISP</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {staffLoginDialog.rows.map((log, idx) => (
+                      <TableRow
+                        key={
+                          log._id
+                            ? String(log._id)
+                            : `${staffLoginDialog.staffId}-${log.dateTime}-${idx}`
+                        }
+                      >
+                        <TableCell>{log.dateTime}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={log.status}
+                            size="small"
+                            color={
+                              log.status === "Login Successful"
+                                ? "success"
+                                : "error"
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>{log.ip}</TableCell>
+                        <TableCell>
+                          {[log.city, log.region, log.country]
+                            .filter(Boolean)
+                            .join(", ") || "—"}
+                        </TableCell>
+                        <TableCell>{log.isp || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeStaffLoginHistory}>Close</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Assigned Leads Dialog */}
+        <Dialog
+          open={assignedLeadsDialog.open}
+          onClose={closeAssignedLeads}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>Leads Assigned to — {assignedLeadsDialog.staffName}</DialogTitle>
+          <DialogContent dividers>
+            {assignedLeadsDialog.loading ? (
+              <Box display="flex" justifyContent="center" py={4}>
+                <CircularProgress />
+              </Box>
+            ) : assignedLeadsDialog.error ? (
+              <Alert severity="error">{assignedLeadsDialog.error}</Alert>
+            ) : assignedLeadsDialog.rows.length === 0 ? (
+              <Typography color="text.secondary" align="center" py={2}>
+                No leads assigned to this staff member.
+              </Typography>
+            ) : (
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "action.hover" }}>
+                      <TableCell>Lead ID</TableCell>
+                      <TableCell>Customer Name</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Assigned Date</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {assignedLeadsDialog.rows.map((lead) => (
+                      <TableRow key={lead.leadId}>
+                        <TableCell>{lead.leadId}</TableCell>
+                        <TableCell>{lead.personalDetails?.fullName}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={lead.status}
+                            size="small"
+                            color={
+                              lead.status === "Confirmed"
+                                ? "success"
+                                : lead.status === "Cancelled"
+                                  ? "error"
+                                  : "primary"
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {new Date(lead.createdAt).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeAssignedLeads}>Close</Button>
+          </DialogActions>
+        </Dialog>
+
         {/* Delete Confirmation Dialog */}
         <Dialog
           open={deleteDialog.open}
@@ -263,6 +603,28 @@ const StaffCard = () => {
             >
               Delete
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Active Staff Names Dialog */}
+        <Dialog
+          open={activeNamesDialog.open}
+          onClose={closeActiveNamesDialog}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>{activeNamesDialog.title}</DialogTitle>
+          <DialogContent dividers>
+            <Box component="ul" sx={{ m: 0, pl: 2 }}>
+              {activeNamesDialog.names.map((item, idx) => (
+                <Typography component="li" key={idx} sx={{ py: 0.5 }}>
+                  {item.name} — <strong>{item.count} leads</strong>
+                </Typography>
+              ))}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeActiveNamesDialog}>Close</Button>
           </DialogActions>
         </Dialog>
 

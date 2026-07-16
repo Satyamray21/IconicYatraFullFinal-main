@@ -123,8 +123,45 @@ const hotelQuotationSchema = new mongoose.Schema(
         hotelQuotationId: {
             type: String,
             unique: true
-        }
-
+        },
+        availabilityHotels: [
+            {
+                hotelName: { type: String },
+                hotelAddress: { type: String },
+                city: { type: String },
+                nights: { type: Number },
+                roomType: { type: String },
+                noOfRooms: { type: String },
+                checkInDate: { type: String },
+                checkInTime: { type: String },
+                checkOutDate: { type: String },
+                checkOutTime: { type: String },
+                mealPlan: { type: String },
+                contactNo: { type: String },
+                bookingPnr: { type: String },
+                sharingType: { type: String },
+                roomCategory: { type: String },
+                adults: { type: Number },
+                children: { type: Number },
+                kids: { type: Number },
+                infants: { type: Number },
+            }
+        ],
+        bookingId: {
+            type: String,
+        },
+        companyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Company",
+        },
+        companyName: {
+            type: String,
+        },
+        finalizeStatus: {
+            type: String,
+            enum: ["draft", "finalized", "cancelled"],
+            default: "draft",
+        },
     }, { timestamps: true }
 )
 export const HotelQuotation = mongoose.model("HotelQuotation", hotelQuotationSchema)

@@ -1,6 +1,8 @@
 import Package from "../models/package.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { logActivity } from "../utils/ActivityLog.js";
+import { getCache, setCache, clearPattern } from "../utils/cache.js";
 
 // ----------------------
 // Improved Helpers
@@ -10,7 +12,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 // ----------------------
 function calculateStatus(validFrom, validTill, isNewPackage = false) {
     const now = new Date();
-    
+
     // Reset time part for accurate date comparison
     now.setHours(0, 0, 0, 0);
 
@@ -23,11 +25,11 @@ function calculateStatus(validFrom, validTill, isNewPackage = false) {
     if (validFrom && validTill) {
         const fromDate = new Date(validFrom);
         const tillDate = new Date(validTill);
-        
+
         // Reset time for both dates
         fromDate.setHours(0, 0, 0, 0);
         tillDate.setHours(0, 0, 0, 0);
-        
+
         return now >= fromDate && now <= tillDate ? "active" : "deactive";
     }
 
@@ -113,6 +115,75 @@ function normalizeDestinationNights(destNights) {
     }));
 }
 
+function normalizePricing(data) {
+    const destinationNights = Array.isArray(data.destinationNights) ? data.destinationNights : [];
+    const numberOfRooms = Math.max(1, Number(data.numberOfRooms) || 1);
+    const transportationCostPerDay = Math.max(0, Number(data.transportationCostPerDay) || 0);
+    const transportationDays = Math.max(0, Number(data.transportationDays) || 0);
+
+    const categoryTotals = destinationNights.reduce((acc, dest) => {
+        const nights = Math.max(0, Number(dest?.nights) || 0);
+        const hotels = Array.isArray(dest?.hotels) ? dest.hotels : [];
+
+        const standardRate = Math.max(
+            0,
+            Number(hotels.find((hotel) => hotel?.category === "standard")?.pricePerPerson) || 0
+        );
+        const deluxeRate = Math.max(
+            0,
+            Number(hotels.find((hotel) => hotel?.category === "deluxe")?.pricePerPerson) || 0
+        );
+        const superiorRate = Math.max(
+            0,
+            Number(hotels.find((hotel) => hotel?.category === "superior")?.pricePerPerson) || 0
+        );
+
+        acc.standardHotelTotalCost += (nights * standardRate * numberOfRooms);
+        acc.deluxeHotelTotalCost += (nights * deluxeRate * numberOfRooms);
+        acc.superiorHotelTotalCost += (nights * superiorRate * numberOfRooms);
+
+        return acc;
+    }, {
+        standardHotelTotalCost: 0,
+        deluxeHotelTotalCost: 0,
+        superiorHotelTotalCost: 0,
+    });
+
+    const hotelTotalCost = destinationNights.reduce((destTotal, dest) => {
+        const nights = Math.max(0, Number(dest?.nights) || 0);
+        const hotelRatePerNight = (Array.isArray(dest?.hotels) ? dest.hotels : []).reduce(
+            (rateTotal, hotel) => rateTotal + Math.max(0, Number(hotel?.pricePerPerson) || 0),
+            0
+        );
+        return destTotal + (nights * hotelRatePerNight * numberOfRooms);
+    }, 0);
+
+    const transportationTotalCost = transportationCostPerDay * transportationDays;
+    const calculatedTotalCost = hotelTotalCost + transportationTotalCost;
+    const margin = Math.max(0, Number(data.manualCostMargin) || 0);
+    data.manualCostMargin = margin;
+
+    const finalStandardCost = categoryTotals.standardHotelTotalCost + transportationTotalCost + margin;
+    const finalDeluxeCost = categoryTotals.deluxeHotelTotalCost + transportationTotalCost + margin;
+    const finalSuperiorCost = categoryTotals.superiorHotelTotalCost + transportationTotalCost + margin;
+
+    data.numberOfRooms = numberOfRooms;
+    data.transportationCostPerDay = transportationCostPerDay;
+    data.transportationDays = transportationDays;
+    data.transportationTotalCost = transportationTotalCost;
+    data.hotelTotalCost = hotelTotalCost;
+    data.standardHotelTotalCost = categoryTotals.standardHotelTotalCost;
+    data.deluxeHotelTotalCost = categoryTotals.deluxeHotelTotalCost;
+    data.superiorHotelTotalCost = categoryTotals.superiorHotelTotalCost;
+    data.calculatedTotalCost = calculatedTotalCost;
+    data.finalStandardCost = finalStandardCost;
+    data.finalDeluxeCost = finalDeluxeCost;
+    data.finalSuperiorCost = finalSuperiorCost;
+    data.totalCost = calculatedTotalCost + margin;
+
+    return data;
+}
+
 // ✅ IMPROVED: Policy Normalization with validation
 function normalizePolicy(policy) {
     if (!policy || typeof policy !== 'object') {
@@ -158,7 +229,7 @@ function normalizeDates(data) {
         const tillDate = new Date(data.validTill);
         tillDate.setHours(23, 59, 59, 999);
         data.validTill = tillDate;
-        
+
         // Ensure validTill is after validFrom
         if (data.validFrom && tillDate <= data.validFrom) {
             // Add one day to validFrom
@@ -309,6 +380,7 @@ export const createPackage = asyncHandler(async (req, res) => {
     data.mealPlan = normalizeMealPlan(data.mealPlan);
     data.destinationNights = normalizeDestinationNights(data.destinationNights);
     data.policy = normalizePolicy(data.policy);
+    normalizePricing(data);
 
     // -----------------------------------
     // ✅ DATE NORMALIZATION
@@ -340,6 +412,20 @@ export const createPackage = asyncHandler(async (req, res) => {
         const doc = await Package.create(data);
         const responseData = normalizePackageUrls(doc.toObject());
 
+        await logActivity({
+            action: "CREATE",
+            model: "Package",
+            refId: doc._id,
+            description: `Package "${doc.sector}" created by ${req.user?.name || 'System'}`,
+            user: req.user?.name || "System",
+        });
+
+        // Invalidate caches
+        await Promise.all([
+            clearPattern('packages:*'),
+            clearPattern('dashboard:stats:*')
+        ]);
+
         return res.status(201).json({
             message: "Package created successfully",
             package: responseData
@@ -358,6 +444,11 @@ export const createPackage = asyncHandler(async (req, res) => {
 // ----------------------
 export const updateStep1 = asyncHandler(async (req, res) => {
     const { id } = req.params;
+    const existing = await Package.findById(id);
+    if (!existing) {
+        return res.status(404).json({ message: "Package not found" });
+    }
+
     const data = { ...req.body };
 
     // ✅ VALIDATE TOUR TYPE
@@ -409,13 +500,20 @@ export const updateStep1 = asyncHandler(async (req, res) => {
             message: "destinationCountry is required for International tours"
         });
     }
-     if (data.perPerson !== undefined) {
+    if (data.perPerson !== undefined) {
         data.perPerson = parseInt(data.perPerson) || 1;
+    }
+    if (Array.isArray(data.days)) {
+        data.days = normalizeDays(data.days);
+    }
+    if (data.manualCostMargin === undefined || data.manualCostMargin === null) {
+        data.manualCostMargin = existing.manualCostMargin ?? 0;
     }
     // Normalize data
     data.mealPlan = normalizeMealPlan(data.mealPlan);
     data.destinationNights = normalizeDestinationNights(data.destinationNights);
     data.policy = normalizePolicy(data.policy);
+    normalizePricing(data);
 
     // Normalize dates and calculate status
     normalizeDates(data);
@@ -434,6 +532,20 @@ export const updateStep1 = asyncHandler(async (req, res) => {
     if (!updated) {
         return res.status(404).json({ message: "Package not found" });
     }
+
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: updated._id,
+        description: `Package "${updated.sector}" updated by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    // Invalidate caches
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
 
     const responseData = normalizePackageUrls(updated.toObject());
     res.json(responseData);
@@ -459,12 +571,40 @@ export const updateTourDetails = asyncHandler(async (req, res) => {
         return res.status(404).json({ message: "Package not found" });
     }
 
+    if (data.destinationNights !== undefined) {
+        data.destinationNights = normalizeDestinationNights(data.destinationNights);
+    } else {
+        data.destinationNights = existing.destinationNights || [];
+    }
+    if (data.manualCostMargin === undefined || data.manualCostMargin === null) {
+        data.manualCostMargin = existing.manualCostMargin ?? 0;
+    }
+    normalizePricing(data);
+
     // Recalculate status based on existing dates
     data.status = calculateStatus(existing.validFrom, existing.validTill);
 
     const updated = await Package.findByIdAndUpdate(id, data, {
         new: true,
         runValidators: true
+    });
+
+    if (!updated) {
+        return res.status(404).json({ message: "Package not found" });
+    }
+
+    // Invalidate caches
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
+
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: updated._id,
+        description: `Package "${updated.sector}" tour details updated by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
     });
 
     const responseData = normalizePackageUrls(updated.toObject());
@@ -493,6 +633,14 @@ export const uploadBanner = asyncHandler(async (req, res) => {
     );
 
     if (!updated) return res.status(404).json({ message: "Package not found" });
+
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: updated._id,
+        description: `Package "${updated.sector}" banner updated by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
 
     const packageData = updated.toObject();
     res.json({
@@ -544,6 +692,14 @@ export const uploadDayImage = asyncHandler(async (req, res) => {
     pkg.days[idx].dayImagePublicId = uploadResult.public_id;
     await pkg.save();
 
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: pkg._id,
+        description: `Package "${pkg.sector}" day ${idx + 1} image updated by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
     const packageData = pkg.toObject();
     res.json({
         message: "Day image uploaded successfully",
@@ -555,7 +711,16 @@ export const uploadDayImage = asyncHandler(async (req, res) => {
 // GET BY ID (IMPROVED)
 // ----------------------
 export const getById = asyncHandler(async (req, res) => {
-    const doc = await Package.findById(req.params.id);
+    const { id } = req.params;
+    const cacheKey = `packages:id:${id}`;
+
+    const cachedData = await getCache(cacheKey);
+    if (cachedData) {
+        console.log(`[Cache] Package by ID fetched from Redis: ${cacheKey}`);
+        return res.json({ fromCache: true, ...cachedData });
+    }
+
+    const doc = await Package.findById(id);
     if (!doc) {
         return res.status(404).json({ message: "Package not found" });
     }
@@ -564,7 +729,10 @@ export const getById = asyncHandler(async (req, res) => {
     packageData.status = calculateStatus(packageData.validFrom, packageData.validTill);
 
     const responseData = normalizePackageUrls(packageData);
-    res.json(responseData);
+
+    await setCache(cacheKey, responseData, 604800);
+    console.log(`[DB] Package by ID fetched from MongoDB: ${cacheKey}`);
+    res.json({ fromCache: false, ...responseData });
 });
 
 // ----------------------
@@ -572,6 +740,17 @@ export const getById = asyncHandler(async (req, res) => {
 // ----------------------
 export const listPackages = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, tourType, search, status } = req.query;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const dateStr = now.toISOString().split('T')[0];
+    const cacheKey = `packages:list:${page}:${limit}:${tourType || 'all'}:${search || 'none'}:${status || 'all'}:${dateStr}`;
+
+    const cachedData = await getCache(cacheKey);
+    if (cachedData) {
+        console.log(`[Cache Hit] Package list fetched from Redis: ${cacheKey}`);
+        return res.json({ fromCache: true, ...cachedData });
+    }
+
     const query = {};
 
     // ✅ UPDATED: Build query with new tour types
@@ -607,60 +786,100 @@ export const listPackages = asyncHandler(async (req, res) => {
         return normalizePackageUrls(packageData);
     });
 
-    res.json({
+    const response = {
         items: responseItems,
         total,
         page: Number(page),
         limit: limitNum,
         totalPages: Math.ceil(total / limitNum)
-    });
+    };
+
+    await setCache(cacheKey, response, 3600);
+    console.log(`[DB] Package list fetched from MongoDB: ${cacheKey}`);
+    res.json({ fromCache: false, ...response });
 });
 
 // ----------------------
 // GET PACKAGES BY TOUR TYPE (NEW FUNCTION)
 // ----------------------
 export const getPackagesByTourType = async (req, res) => {
-  try {
-    const { tourType } = req.params;
-    const { page = 1, limit = 9, status = "active" } = req.query; // Default to active only
+    try {
+        const { tourType } = req.params;
+        const { page = 1, limit = 9, status = "active" } = req.query;
 
-    const formattedTourType =
-      tourType.toLowerCase() === "domestic"
-        ? "Domestic"
-        : "International";
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const dateStr = now.toISOString().split('T')[0];
+        const cacheKey = `packages:tourType:${tourType}:${page}:${limit}:${status}:${dateStr}`;
 
-    const skip = (page - 1) * limit;
-    
-    // Build filter object
-    const filter = {
-      tourType: formattedTourType
-    };
-    
-    // Add status filter if provided (defaults to "active")
-    if (status) {
-      filter.status = status;
+        const cachedData = await getCache(cacheKey);
+        // Ignore stale empty cache — packages may exist while Redis still holds []
+        const cachedEmpty =
+            cachedData &&
+            Number(cachedData.totalPackages || 0) === 0 &&
+            (!cachedData.packages || cachedData.packages.length === 0);
+
+        if (cachedData && !cachedEmpty) {
+            console.log(`[Cache Hit] Packages by tour type fetched from Redis: ${cacheKey}`);
+            return res.json({ fromCache: true, ...cachedData });
+        }
+
+        if (cachedEmpty) {
+            await clearPattern(`packages:tourType:${tourType}:*`);
+        }
+
+        const formattedTourType =
+            tourType.toLowerCase() === "domestic"
+                ? "Domestic"
+                : "International";
+
+        const skip = (page - 1) * limit;
+
+        // Build filter object
+        const filter = {
+            tourType: formattedTourType
+        };
+
+        // Add status filter if provided (defaults to "active")
+        if (status) {
+            filter.status = status;
+        }
+
+        const [packagesDocs, totalPackages] = await Promise.all([
+            Package.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(Number(limit))
+                .lean(),
+            Package.countDocuments(filter)
+        ]);
+
+        const packages = packagesDocs.map(pkg => {
+            const normalized = normalizePackageUrls(pkg);
+            normalized.status = calculateStatus(normalized.validFrom, normalized.validTill);
+            return normalized;
+        });
+
+        const response = {
+            packages,
+            totalPackages,
+            totalPages: Math.ceil(totalPackages / limit),
+            currentPage: Number(page),
+            filters: {
+                tourType: formattedTourType,
+                status: status || "all"
+            }
+        };
+
+        // Never cache empty results for a week — that hid real packages on the website
+        if (totalPackages > 0) {
+            await setCache(cacheKey, response, 3600);
+        }
+        console.log(`[DB] Packages by tour type fetched from MongoDB: ${cacheKey}`);
+        res.json({ fromCache: false, ...response });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-
-    const packages = await Package.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit));
-
-    const totalPackages = await Package.countDocuments(filter);
-
-    res.json({
-      packages,
-      totalPackages,
-      totalPages: Math.ceil(totalPackages / limit),
-      currentPage: Number(page),
-      filters: {
-        tourType: formattedTourType,
-        status: status || "all"
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 };
 
 
@@ -668,71 +887,158 @@ export const getPackagesByTourType = async (req, res) => {
 
 
 export const getPackagesByCategory = async (req, res) => {
-  try {
-    const { packageCategory } = req.params;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const { status = "active" } = req.query; // Default to active only
+    try {
+        const { packageCategory } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const { status = "active" } = req.query;
 
-    const skip = (page - 1) * limit;
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const dateStr = now.toISOString().split('T')[0];
+        const cacheKey = `packages:category:${packageCategory}:${page}:${limit}:${status}:${dateStr}`;
 
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
+        const cachedData = await getCache(cacheKey);
+        const cachedEmpty =
+            cachedData &&
+            Number(cachedData.totalPackages || 0) === 0 &&
+            (!cachedData.packages || cachedData.packages.length === 0);
 
-    // Build filter object
-    const filter = {
-      packageCategory: { $regex: `^${packageCategory}$`, $options: "i" }
-    };
-    
-    // Add status filter if provided
-    if (status) {
-      filter.status = status;
+        if (cachedData && !cachedEmpty) {
+            console.log(`[Cache Hit] Packages by category fetched from Redis: ${cacheKey}`);
+            return res.status(200).json({ fromCache: true, ...cachedData });
+        }
+
+        if (cachedEmpty) {
+            await clearPattern(`packages:category:${packageCategory}:*`);
+        }
+
+        const skip = (page - 1) * limit;
+
+        // Build filter object
+        const filter = {
+            packageCategory: { $regex: `^${packageCategory}$`, $options: "i" }
+        };
+
+        // Add status filter if provided
+        if (status) {
+            filter.status = status;
+        }
+
+        // For active packages, also check dates (optional - depending on your business logic)
+        if (status === "active") {
+            filter.validFrom = { $lte: now };
+            filter.validTill = { $gte: now };
+        }
+
+        const [packagesDocs, totalPackages] = await Promise.all([
+            Package.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Package.countDocuments(filter)
+        ]);
+
+        const packages = packagesDocs.map(pkg => normalizePackageUrls(pkg));
+
+        const response = {
+            success: true,
+            totalPackages,
+            currentPage: page,
+            totalPages: Math.ceil(totalPackages / limit),
+            filters: {
+                packageCategory,
+                status: status || "all"
+            },
+            packages
+        };
+
+        // Never lock empty category lists in Redis for a week
+        if (totalPackages > 0) {
+            await setCache(cacheKey, response, 3600);
+        }
+        console.log(`[DB] Packages by category fetched from MongoDB: ${cacheKey}`);
+        res.status(200).json({ fromCache: false, ...response });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
-
-    // For active packages, also check dates (optional - depending on your business logic)
-    if (status === "active") {
-      filter.validFrom = { $lte: now };
-      filter.validTill = { $gte: now };
-    }
-
-    const totalPackages = await Package.countDocuments(filter);
-
-    const packages = await Package.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    res.status(200).json({
-      success: true,
-      totalPackages,
-      currentPage: page,
-      totalPages: Math.ceil(totalPackages / limit),
-      filters: {
-        packageCategory,
-        status: status || "all"
-      },
-      packages
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
 };
 
 
 
 
 // ----------------------
-// DELETE
+// DELETE PACKAGE
 // ----------------------
 export const remove = asyncHandler(async (req, res) => {
-    const doc = await Package.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+    const doc = await Package.findByIdAndDelete(id);
+
     if (!doc) return res.status(404).json({ message: "Package not found" });
 
-    res.json({ message: "Deleted", id: doc._id });
+    await logActivity({
+        action: "DELETE",
+        model: "Package",
+        refId: doc._id,
+        description: `Package "${doc.sector}" deleted by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    // Invalidate caches
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
+
+    res.json({ message: "Package deleted successfully" });
+});
+
+// ----------------------
+// CLONE PACKAGE (NEW)
+// ----------------------
+export const clonePackage = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const existingPackage = await Package.findById(id).lean();
+
+    if (!existingPackage) {
+        return res.status(404).json({ message: "Package not found" });
+    }
+
+    // Remove ID, timestamps and the unique packageId
+    const { _id, createdAt, updatedAt, packageId, ...cloneData } = existingPackage;
+
+    // Keep sector and title exactly same as original
+    cloneData.sector = existingPackage.sector;
+    cloneData.title = existingPackage.title;
+    
+    // Reset status and dates to be safe (or keep them, but let's keep them and just recalculate status)
+    cloneData.status = calculateStatus(cloneData.validFrom, cloneData.validTill, true);
+
+    const newPackage = await Package.create(cloneData);
+
+    await logActivity({
+        action: "CREATE",
+        model: "Package",
+        refId: newPackage._id,
+        description: `Package "${newPackage.sector}" cloned from ${existingPackage.sector} by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    // Invalidate caches
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
+
+    res.status(201).json({
+        message: "Package cloned successfully",
+        package: normalizePackageUrls(newPackage.toObject())
+    });
 });
 
 // ----------------------
@@ -834,6 +1140,19 @@ export const makeAllPopular = asyncHandler(async (req, res) => {
         {},
         { $set: { isPopular: true } }
     );
+
+    await logActivity({
+        action: "UPDATE",
+        model: "Package",
+        refId: "ALL",
+        description: `All packages marked as popular by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await Promise.all([
+        clearPattern('packages:*'),
+        clearPattern('dashboard:stats:*')
+    ]);
 
     res.json({
         message: "All packages marked as popular",

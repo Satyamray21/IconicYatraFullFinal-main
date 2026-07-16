@@ -31,7 +31,7 @@ import {
   getAllLeads,
   fetchLeadsReports,
   changeLeadStatus,
-  deleteLead
+  deleteLead,
 } from "../../../features/leads/leadSlice";
 import LeadEditForm from "./Form/LeadEditForm"; // Import the LeadEditForm component
 
@@ -46,6 +46,7 @@ const stats = [
 const LeadCard = () => {
   const navigate = useNavigate();
   const [anchorEls, setAnchorEls] = React.useState({});
+  const [searchTerm, setSearchTerm] = useState("");
 
   // State for delete confirmation dialog
   const [deleteDialog, setDeleteDialog] = useState({
@@ -162,7 +163,6 @@ const LeadCard = () => {
 
         // Refresh the leads list
         dispatch(getAllLeads());
-
       } catch (error) {
         setSnackbar({
           open: true,
@@ -209,7 +209,7 @@ const LeadCard = () => {
     }
 
     // Validate status before sending to backend
-    const validStatuses = ["Active", "Cancelled", "Confirmed"];
+    const validStatuses = ["Active", "Cancelled", "Confirmed", "Not Converted"];
     if (!validStatuses.includes(newStatus)) {
       setSnackbar({
         open: true,
@@ -223,7 +223,7 @@ const LeadCard = () => {
       .unwrap()
       .then(() => {
         dispatch(getAllLeads());
-        dispatch(fetchLeadsReports());// Refresh list after update
+        dispatch(fetchLeadsReports()); // Refresh list after update
         setSnackbar({
           open: true,
           message: `Lead status updated to ${newStatus}`,
@@ -246,24 +246,32 @@ const LeadCard = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const mappedLeads = leadList.map((lead, index) => ({
-    id: index + 1,
-    leadId: lead.leadId || "-",
-    status: lead.status || "New",
-    source: lead.officialDetail?.source || "-",
-    name: lead.personalDetails?.fullName || "-",
-    mobile: lead.personalDetails?.mobile || "-",
-    email: lead.personalDetails?.emailId || "-",
-    destination: lead.location?.city || "-",
-    arrivalDate: formatDate(lead?.tourDetails?.pickupDrop?.arrivalDate), // ✅ uses the formatter
-    priority: lead.officialDetail?.priority || "-",
-    assignTo:
-      lead.officialDetail?.assignedTo ||
-      lead.officialDetail?.assinedTo ||
-      "-",
-    originalData: lead,
-  }));
-
+  const mappedLeads = leadList
+    .map((lead, index) => ({
+      id: index + 1,
+      leadId: lead.leadId || "-",
+      status: lead.status || "New",
+      source: lead.officialDetail?.source || "-",
+      name: lead.personalDetails?.fullName || "-",
+      mobile: lead.personalDetails?.mobile || "-",
+      email: lead.personalDetails?.emailId || "-",
+      destination: lead.tourDetails?.tourDestination || "-",
+      arrivalDate: formatDate(lead?.tourDetails?.pickupDrop?.arrivalDate), // ✅ uses the formatter
+      priority: lead.officialDetail?.priority || "-",
+      assignTo:
+        lead.officialDetail?.assignedTo || lead.officialDetail?.assinedTo || "-",
+      originalData: lead,
+    }))
+    .filter((lead) => {
+      if (!searchTerm) return true;
+      const term = searchTerm.toLowerCase();
+      return (
+        lead.name.toLowerCase().includes(term) ||
+        lead.mobile.toLowerCase().includes(term) ||
+        lead.leadId.toLowerCase().includes(term) ||
+        lead.email.toLowerCase().includes(term)
+      );
+    });
 
   const columns = [
     { field: "id", headerName: "Sr No.", width: 60 },
@@ -323,6 +331,9 @@ const LeadCard = () => {
               <MenuItem onClick={() => handleStatusChange(rowId, "Cancelled")}>
                 Cancelled
               </MenuItem>
+              <MenuItem onClick={() => handleStatusChange(rowId, "Not Converted")}>
+                Not Converted
+              </MenuItem>
             </Menu>
           </Box>
         );
@@ -355,6 +366,9 @@ const LeadCard = () => {
                   <Typography variant="body2">
                     Cancelled: {item.Cancelled}
                   </Typography>
+                  <Typography variant="body2">
+                    Not Converted: {item["Not Converted"] || 0}
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -383,8 +397,10 @@ const LeadCard = () => {
           <TextField
             variant="outlined"
             size="small"
-            placeholder="Search..."
+            placeholder="Search by name, mobile, id..."
             sx={{ width: { xs: "100%", sm: 300 } }}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
@@ -407,7 +423,7 @@ const LeadCard = () => {
               rowsPerPageOptions={[7, 25, 50, 100]}
               autoHeight
               disableRowSelectionOnClick
-              loading={status === 'loading'}
+              loading={status === "loading"}
             />
           </Box>
         </Box>
@@ -419,10 +435,10 @@ const LeadCard = () => {
           maxWidth="lg"
           fullWidth
           sx={{
-            '& .MuiDialog-paper': {
-              minHeight: '80vh',
-              maxHeight: '90vh',
-            }
+            "& .MuiDialog-paper": {
+              minHeight: "80vh",
+              maxHeight: "90vh",
+            },
           }}
         >
           <DialogContent sx={{ p: 0 }}>
@@ -441,18 +457,20 @@ const LeadCard = () => {
           aria-labelledby="delete-dialog-title"
           aria-describedby="delete-dialog-description"
         >
-          <DialogTitle id="delete-dialog-title">
-            Confirm Delete
-          </DialogTitle>
+          <DialogTitle id="delete-dialog-title">Confirm Delete</DialogTitle>
           <DialogContent>
             <DialogContentText id="delete-dialog-description">
               Are you sure you want to delete lead for{" "}
-              <strong>{deleteDialog.leadName}</strong> (ID: {deleteDialog.leadId})?
-              This action cannot be undone.
+              <strong>{deleteDialog.leadName}</strong> (ID:{" "}
+              {deleteDialog.leadId})? This action cannot be undone.
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={cancelDelete} color="primary" disabled={deleteLoading}>
+            <Button
+              onClick={cancelDelete}
+              color="primary"
+              disabled={deleteLoading}
+            >
               Cancel
             </Button>
             <Button
@@ -472,12 +490,12 @@ const LeadCard = () => {
           open={snackbar.open}
           autoHideDuration={6000}
           onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
         >
           <Alert
             onClose={handleCloseSnackbar}
             severity={snackbar.severity}
-            sx={{ width: '100%' }}
+            sx={{ width: "100%" }}
           >
             {snackbar.message}
           </Alert>

@@ -4,10 +4,14 @@ import {
     login,
     getUsers,
     getUserById,
+    getCurrentProfile,
+    getMyLoginHistory,
     updateUser,
+    updateCurrentUser,
     deleteUser,
     sendResetCode,
-    changePassword
+    changePassword,
+    changeMyPassword
 } from "../controllers/user.controller.js";
 import { verifyToken, authorizeRoles } from "../middleware/user.middleware.js";
 import upload from "../middleware/fileUpload.js";
@@ -25,6 +29,10 @@ router.post("/change-password", changePassword);
 
 // CRUD (protected)
 router.get("/", verifyToken, authorizeRoles("Admin", "Superadmin"), getUsers);
+router.get("/me", verifyToken, getCurrentProfile);
+router.get("/me/login-history", verifyToken, getMyLoginHistory);
+router.put("/me", verifyToken, upload.single("profileImg"), updateCurrentUser);
+router.post("/me/change-password", verifyToken, changeMyPassword);
 router.get("/:userId", verifyToken, getUserById);
 router.put("/:userId", verifyToken, upload.single("profileImg"), updateUser);
 router.delete("/:userId", verifyToken, authorizeRoles("Admin", "Superadmin"), deleteUser);

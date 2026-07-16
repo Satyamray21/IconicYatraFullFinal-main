@@ -93,7 +93,10 @@ const StepPreviewSubmit = ({
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12, md: 6 }}>
                         <Typography>
-                            <strong>Name:</strong> {clientDetails?.customerName || "—"}
+                            <strong>Name:</strong>{" "}
+                            {clientDetails?.title
+                              ? `${clientDetails.title}. ${clientDetails.customerName}`
+                              : clientDetails?.customerName || "—"}
                         </Typography>
                     </Grid>
                     <Grid size={{ xs: 12, md: 6 }}>

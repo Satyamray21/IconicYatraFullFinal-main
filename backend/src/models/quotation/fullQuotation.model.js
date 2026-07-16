@@ -66,7 +66,22 @@ const fullQuotationSchema = new mongoose.Schema({
     quotationId: { type: String, unique: true },
     isDraft: { type: Boolean, default: true },
     isFinalized: { type: Boolean, default: false },
+    finalizeStatus: {
+        type: String,
+        enum: ["draft", "finalized", "cancelled"],
+        default: "draft",
+    },
     currentStep: { type: Number, default: 1 },
+    bookingId: {
+        type: String,
+    },
+    companyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Company",
+    },
+    companyName: {
+        type: String,
+    },
 },
     { timestamps: true })
 

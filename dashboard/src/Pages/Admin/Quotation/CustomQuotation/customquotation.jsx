@@ -39,21 +39,38 @@ const CustomQuotation = ({ onNext }) => {
     },
   });
 
-  // ✅ FIXED: Load ALL client names
+  // Filter active leads
+  const activeLeadList = leadList.filter((lead) => {
+    // 1. Check if lead is cancelled
+    if (lead.status === "Cancelled") return false;
+    
+    // 2. Check if departure date is passed
+    const departure = lead.tourDetails?.pickupDrop?.departureDate || lead.tourDetails?.departureDate || lead.tourDetails?.travelDate;
+    if (departure) {
+      const depDate = new Date(departure);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (!isNaN(depDate) && depDate < today) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // ✅ FIXED: Load ALL client names from active leads
   const clientOptions = [
     ...new Set(
-      leadList
-        .map((lead) => lead?.personalDetails?.fullName)
-        .filter(Boolean)
+      activeLeadList.map((lead) => lead?.personalDetails?.fullName).filter(Boolean),
     ),
   ];
 
-  // ✅ FIXED: Load sector based on selected client
+  // ✅ FIXED: Load sector based on selected client from active leads
   const sectorOptions = [
     ...new Set(
-      leadList
+      activeLeadList
         .filter(
-          (lead) => lead?.personalDetails?.fullName === formik.values.clientName
+          (lead) =>
+            lead?.personalDetails?.fullName === formik.values.clientName,
         )
         .flatMap((lead) => {
           const destinations = lead?.tourDetails?.tourDestination;
@@ -64,7 +81,7 @@ const CustomQuotation = ({ onNext }) => {
           if (state) return [state];
           return [];
         })
-        .filter(Boolean)
+        .filter(Boolean),
     ),
   ];
 
@@ -91,7 +108,7 @@ const CustomQuotation = ({ onNext }) => {
 
       <form onSubmit={formik.handleSubmit}>
         <Grid container spacing={2}>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
               Tour Type
             </Typography>
@@ -115,7 +132,7 @@ const CustomQuotation = ({ onNext }) => {
           </Grid>
 
           {/* Client Name Dropdown */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <TextField
               fullWidth
               select
@@ -126,12 +143,9 @@ const CustomQuotation = ({ onNext }) => {
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
               error={
-                formik.touched.clientName &&
-                Boolean(formik.errors.clientName)
+                formik.touched.clientName && Boolean(formik.errors.clientName)
               }
-              helperText={
-                formik.touched.clientName && formik.errors.clientName
-              }
+              helperText={formik.touched.clientName && formik.errors.clientName}
             >
               {clientOptions.length > 0 ? (
                 clientOptions.map((name) => (
@@ -146,7 +160,7 @@ const CustomQuotation = ({ onNext }) => {
           </Grid>
 
           {/* Sector Dropdown */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <TextField
               fullWidth
               select
@@ -172,7 +186,7 @@ const CustomQuotation = ({ onNext }) => {
           </Grid>
 
           {/* Submit Button */}
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Box textAlign="center" sx={{ mt: 3 }}>
               <Button
                 type="submit"

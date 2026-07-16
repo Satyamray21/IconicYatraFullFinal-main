@@ -1,5 +1,5 @@
 import path from "path";
-import nodemailer from "nodemailer";
+import emailQueue from "./emailQueue.js";
 
 export const sendLeadThankYou = async (leadData) => {
   try {
@@ -19,14 +19,6 @@ export const sendLeadThankYou = async (leadData) => {
     } = leadData;
 
     if (!email) return;
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.gmail,
-        pass: process.env.app_pass,
-      },
-    });
 
     const logoPath = path.join(process.cwd(), "public", "logo.png");
 
@@ -97,7 +89,7 @@ export const sendLeadThankYou = async (leadData) => {
       ],
     };
 
-    await transporter.sendMail(mailOptions);
+    await emailQueue.add('sendEmail', mailOptions);
     console.log("✅ Thank you email sent to:", email);
 
   } catch (error) {

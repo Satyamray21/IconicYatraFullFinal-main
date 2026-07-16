@@ -83,6 +83,7 @@ const InvoiceForm = () => {
             companyId: "",
             accountType: "",
             mobile: "",
+            email: "",
             billingName: "",
             billingAddress: "",
             gstin: "",
@@ -126,6 +127,7 @@ const InvoiceForm = () => {
             mobile: Yup.string()
                 .matches(/^[0-9]{10}$/, "Enter valid mobile number")
                 .required("Required"),
+            email: Yup.string().email("Invalid email"),
             billingName: Yup.string().required("Required"),
             items: Yup.array().of(
                 Yup.object().shape({
@@ -136,9 +138,11 @@ const InvoiceForm = () => {
         }),
         onSubmit: async (values, { resetForm }) => {
             try {
+                const { taxType, note, ...rest } = values;
                 const payload = {
-                    ...values,
-                    withTax: values.taxType === "withTax", // true if withTax, false if withoutTax
+                    ...rest,
+                    withTax: taxType === "withTax",
+                    additionalNote: note || "",
                 };
                 await dispatch(createInvoice(payload)).unwrap();
                 toast.success("Invoice created successfully!");
@@ -152,7 +156,7 @@ const InvoiceForm = () => {
         },
     });
 
-    const { values, handleChange, handleSubmit, setFieldValue } = formik;
+    const { values, handleChange, handleSubmit, setFieldValue, touched, errors } = formik;
 
     // === Compute Totals (withTax / withoutTax logic) ===
     const computeTotals = useCallback((itemsArr, received, taxType) => {
@@ -350,6 +354,22 @@ const InvoiceForm = () => {
                             name="mobile"
                             value={values.mobile}
                             onChange={handleChange}
+                            error={touched.mobile && Boolean(errors.mobile)}
+                            helperText={touched.mobile && errors.mobile}
+                        />
+                    </Grid>
+
+                    {/* Email */}
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                        <TextField
+                            fullWidth
+                            type="email"
+                            label="Email"
+                            name="email"
+                            value={values.email}
+                            onChange={handleChange}
+                            error={touched.email && Boolean(errors.email)}
+                            helperText={touched.email && errors.email}
                         />
                     </Grid>
 
@@ -704,19 +724,29 @@ const InvoiceForm = () => {
                             "receivedAmount",
                             "balanceAmount",
                         ].map((field) => (
-                            <Grid item xs={12} sm={3} key={field}>
+                            <Grid size={{ xs: 12, sm: 3 }} key={field}>
                                 <TextField
                                     fullWidth
                                     label={field
                                         .replace(/([A-Z])/g, " $1")
                                         .replace(/^./, (s) => s.toUpperCase())}
                                     name={field}
-                                    value={values[field]}
+                                    value={
+                                        values[field] === undefined || values[field] === null
+                                            ? ""
+                                            : values[field]
+                                    }
                                     onChange={(e) => {
                                         handleChange(e);
                                         if (field === "receivedAmount") {
                                             updateItemsAndTotals(values.items || [], e.target.value);
                                         }
+                                    }}
+                                    InputProps={{
+                                        readOnly:
+                                            field === "invoiceValuePurchase" ||
+                                            field === "totalAmount" ||
+                                            field === "balanceAmount",
                                     }}
                                 />
                             </Grid>

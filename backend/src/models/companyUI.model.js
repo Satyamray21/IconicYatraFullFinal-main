@@ -103,6 +103,18 @@ const companyUISchema = new mongoose.Schema(
     invoiceTerms: String,
     pdfFooter: String,
     currency: String,
+    headerColor: {
+      type: String,
+      default: "#1f3c65",
+    },
+    navColor: {
+      type: String,
+      default: "#ffffff",
+    },
+    footerColor: {
+      type: String,
+      default: "#1f3c65",
+    },
 
     bankIds: [
       {

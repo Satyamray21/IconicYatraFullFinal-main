@@ -65,8 +65,13 @@ const StaffCard = lazy(() => import("../Pages/Admin/Staff/StaffCard"));
 const StaffForm = lazy(() => import("../Pages/Admin/Staff/Form/StaffForm"));
 const StaffEditForm = lazy(() =>
   import("../Pages/Admin/Staff/Form/EditStaff"));
+const StaffPermissionPage = lazy(() =>
+  import("../Pages/Admin/Staff/StaffPermissionPage")
+);
 
 const CompanyWebsiteEnquiry=lazy(()=>import("../Components/CompanyWebsiteEnquiry"));
+
+const DestinationMasterForm=lazy(()=>import("../Components/DestinationMasterForm"));
 // Payments
 const PaymentsCard = lazy(() =>
   import("../Pages/Admin/Payments/PaymentsCard")
@@ -76,6 +81,14 @@ const PaymentsForm = lazy(() =>
 );
 const PaymentEdit = lazy(() =>
   import("../Pages/Admin/Payments/Form/PaymentEdit")
+);
+
+//  Expenses 
+const ExpensesCard = lazy(() =>
+  import("../Pages/Admin/Expenses/ExpensesCard")
+);
+const ExpenseForm = lazy(() =>
+  import("../Pages/Admin/Expenses/Form/ExpenseForm")
 );
 
 // Invoice
@@ -102,6 +115,9 @@ const Profile = lazy(() => import("../Pages/Admin/Profile/Profile"));
 // Quotation
 const QuotationCard = lazy(() =>
   import("../Pages/Admin/Quotation/QuotationCard")
+);
+const HotelAvailability = lazy(() => 
+  import("../Pages/Admin/Quotation/HotelAvailability/HotelAvailability")
 );
 const VehicleQuotation = lazy(() =>
   import("../Pages/Admin/Quotation/VehicleQuotation/VehicleQuotation")
@@ -150,11 +166,14 @@ const GlobalSettings = lazy(()=>
 import("../Pages/Admin/Profile/components/GlobalSettings")
 );
 
-const CompanyForm =lazy(()=>
-import("../Pages/Admin/Profile/components/CompanyForm")
+const CompanyForm = lazy(() =>
+  import("../Pages/Admin/Profile/components/CompanyForm")
 );
-const InsideCompanyList =lazy(()=>
-import("../Pages/Admin/Profile/components/InsideCompanyList")
+const InsideCompanyList = lazy(() =>
+  import("../Pages/Admin/Profile/components/InsideCompanyList")
+);
+const EmailAccounts = lazy(() =>
+  import("../Pages/Admin/Profile/components/EmailAccounts")
 );
 
 const GoogleAdsLandingForm = lazy(() =>
@@ -203,6 +222,8 @@ const MainRoute = () => {
   /* ========================== */
 
   useEffect(() => {
+    if (isAuthChecked && isAuthenticated) return; // Skip if already checked and valid
+
     const checkAuthentication = () => {
       const token = localStorage.getItem("token");
       const user = localStorage.getItem("user");
@@ -216,23 +237,18 @@ const MainRoute = () => {
 
       try {
         const tokenParts = token.split(".");
-        if (tokenParts.length !== 3) {
-          throw new Error("Invalid token format");
-        }
+        if (tokenParts.length !== 3) throw new Error("Invalid token format");
 
         setIsAuthenticated(true);
         setIsAuthChecked(true);
-
+        
         const sessionStart = Number(localStorage.getItem("sessionStart"));
-        const now = Date.now();
-
-        if (!sessionStart || now - sessionStart > 10 * 60 * 60 * 1000) {
-          localStorage.setItem("sessionStart", now.toString());
+        if (!sessionStart) {
+          localStorage.setItem("sessionStart", Date.now().toString());
         }
-
+        
         setLoading(false);
       } catch (error) {
-        console.error("Authentication error:", error);
         localStorage.clear();
         setIsAuthenticated(false);
         setIsAuthChecked(true);
@@ -241,7 +257,7 @@ const MainRoute = () => {
     };
 
     checkAuthentication();
-  }, [location]);
+  }, [isAuthChecked, isAuthenticated]); // Only run if auth state is unknown
 
   /* ========================== */
   /*      SESSION TIMER         */
@@ -364,15 +380,22 @@ const MainRoute = () => {
           <Route path="/packageform" element={<MultiStepPackageForm />} />
           <Route path="/packageform-old" element={<PackageForm />} />
           <Route path="/tourpackage/packageeditform/:id" element={<PackageEditForm />} />
+          <Route path="/associates/associateseditform/:associateId" element={<AssociatesEditFrom />} />
           <Route path="/associates" element={<AssociatesCard />} />
           <Route path="/associatesform" element={<AssociatesForm />} />
-          <Route path="/associates/associateseditform/:associateId" element={<AssociatesEditFrom />} />
           <Route path="/staff" element={<StaffCard />} />
           <Route path="/staffform" element={<StaffForm />} />
           <Route path="/staff/staffeditform/:staffId" element={<StaffEditForm />} />
+          <Route
+            path="/admin/staff/:staffId/permissions"
+            element={<StaffPermissionPage />}
+          />
           <Route path="/payments" element={<PaymentsCard />} />
           <Route path="/payments-form" element={<PaymentsForm />} />
           <Route path="/payments-form/:id" element={<PaymentEdit />} />
+          <Route path="/expenses" element={<ExpensesCard />} />
+          <Route path="/expenses-form" element={<ExpenseForm />} />
+          <Route path="/expenses-form/:id" element={<ExpenseForm />} />
           <Route path="/invoice" element={<InvoiceCard />} />
           <Route path="/invoiceform" element={<InvoiceForm />} />
           <Route path="/invoice/edit/:id" element={<InvoiceEditForm />} />
@@ -381,6 +404,7 @@ const MainRoute = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/edit" element={<EditProfile />} />
           <Route path="/quotation" element={<QuotationCard />} />
+          <Route path="/hotel-availability" element={<HotelAvailability />} />
           <Route path="/vehiclequotation" element={<VehicleQuotation />} />
           <Route path="/hotelquotation" element={<HotelQuotationMain />} />
           <Route path="/flightquotation" element={<FlightQuotation />} />
@@ -395,6 +419,7 @@ const MainRoute = () => {
           <Route path="/quickfinalize/:id" element={<QuickFinalize />} />
           <Route path="/terms&condition" element={<GlobalSettings />} />
           <Route path="/admin/inside-company" element={<InsideCompanyList />} />
+          <Route path="/email-accounts" element={<EmailAccounts />} />
 
 <Route path="/admin/inside-company/add" element={<CompanyForm />} />
 <Route path="/admin/inside-company/edit/:id" element={<CompanyForm />} />  
@@ -417,7 +442,7 @@ const MainRoute = () => {
 />
  <Route path="/setting/social-links" element={<SocialLinksForm />} />
   <Route path="/setting/hero-section" element={<HeroSectionForm />} />
-
+  <Route path="/destination-description" element={<DestinationMasterForm />} />
           <Route
             path="*"
             element={

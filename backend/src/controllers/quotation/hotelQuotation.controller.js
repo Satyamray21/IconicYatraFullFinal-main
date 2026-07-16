@@ -1,7 +1,11 @@
 import { HotelQuotation } from "../../models/quotation/hotelQuotation.model.js";
+import { Lead } from "../../models/lead.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { clearPattern } from "../../utils/cache.js";
+import { logActivity } from "../../utils/ActivityLog.js";
+import mongoose from "mongoose";
 
 // Helper to generate quotationId
 const generateQuotationId = async () => {
@@ -30,6 +34,16 @@ export const createHotelQuotation = asyncHandler(async (req, res) => {
         hotelQuotationId: quotationId,
     });
 
+    await logActivity({
+        action: "CREATE",
+        model: "HotelQuotation",
+        refId: quotationId,
+        description: `Hotel Quotation ${quotationId} (${req.body.clientDetails?.clientName || 'Guest'}) created by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
+
     return res
         .status(201)
         .json(new ApiResponse(201, newQuotation, "Hotel Quotation created"));
@@ -47,10 +61,22 @@ export const getAllHotelQuotations = asyncHandler(async (req, res) => {
 // 📌 Get single quotation by ID
 export const getHotelQuotationById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const quotation = await HotelQuotation.findOne({ hotelQuotationId: id });
+    console.log("Fetching Hotel Quotation with ID:", id);
+    let quotation;
+
+    // Try finding by MongoDB _id if it's a valid ObjectId
+    if (mongoose.Types.ObjectId.isValid(id)) {
+        quotation = await HotelQuotation.findById(id);
+    }
+
+    // If not found by _id, try finding by hotelQuotationId
+    if (!quotation) {
+        quotation = await HotelQuotation.findOne({ hotelQuotationId: id });
+    }
 
     if (!quotation) {
-        throw new ApiError(404, "Hotel Quotation not found");
+        console.error(`Hotel Quotation not found for ID: ${id}`);
+        throw new ApiError(404, `Hotel Quotation not found for ID: ${id}`);
     }
 
     return res
@@ -58,18 +84,142 @@ export const getHotelQuotationById = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, quotation, "Hotel Quotation fetched"));
 });
 
+// 📌 Update quotation
+export const updateHotelQuotation = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    let quotation;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+        quotation = await HotelQuotation.findByIdAndUpdate(
+            id,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
+    }
+
+    if (!quotation) {
+        quotation = await HotelQuotation.findOneAndUpdate(
+            { hotelQuotationId: id },
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
+    }
+
+    if (!quotation) {
+        throw new ApiError(404, "Hotel Quotation not found");
+    }
+
+    await clearPattern('dashboard:stats:*');
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, quotation, "Hotel Quotation updated successfully"));
+});
+
 // 📌 Delete quotation
 export const deleteHotelQuotation = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const deleted = await HotelQuotation.findOneAndDelete({
-        hotelQuotationId: id,
-    });
+    let deleted;
+
+    // Try deleting by MongoDB _id
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+        deleted = await HotelQuotation.findByIdAndDelete(id);
+    }
+
+    // If not found, try by hotelQuotationId
+    if (!deleted) {
+        deleted = await HotelQuotation.findOneAndDelete({
+            hotelQuotationId: id,
+        });
+    }
 
     if (!deleted) {
         throw new ApiError(404, "Hotel Quotation not found");
     }
 
+    await logActivity({
+        action: "DELETE",
+        model: "HotelQuotation",
+        refId: id,
+        description: `Hotel Quotation ${id} (${deleted.clientDetails?.clientName || 'Guest'}) deleted by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    await clearPattern('dashboard:stats:*');
+
     return res
         .status(200)
         .json(new ApiResponse(200, deleted, "Hotel Quotation deleted"));
 });
+
+export const finalizeHotelQuotation = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { companyId, companyName } = req.body || {};
+
+    let quotation;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+        quotation = await HotelQuotation.findById(id);
+    }
+    if (!quotation) {
+        quotation = await HotelQuotation.findOne({ hotelQuotationId: id });
+    }
+
+    if (!quotation) {
+        throw new ApiError(404, "Hotel Quotation not found");
+    }
+
+    // Generate bookingId if not already present
+    if (!quotation.bookingId) {
+        const selectedCompany = await resolveCompanyForEmail({
+            companyId,
+            companyName,
+        });
+        const compName = selectedCompany?.companyName || companyName || "Iconic Travel";
+        quotation.companyName = compName;
+        if (selectedCompany?._id) quotation.companyId = selectedCompany._id;
+        
+        // Lazy-load generator to avoid circular deps if any
+        const { generateBookingId } = await import("../../utils/bookingIdGenerator.js");
+        quotation.bookingId = await generateBookingId(compName);
+    }
+
+    await quotation.save();
+
+    if (quotation.clientDetails?.clientName) {
+        const lead = await Lead.findOne({ "personalDetails.fullName": quotation.clientDetails.clientName }).sort({ createdAt: -1 });
+        if (lead && lead.status !== 'Confirmed') {
+            lead.status = 'Confirmed';
+            await lead.save();
+            await clearPattern('leads:*');
+            await clearPattern(`leads:id:${lead.leadId}`);
+        }
+    }
+
+    await logActivity({
+        action: "CONFIRM",
+        model: "HotelQuotation",
+        refId: quotation.hotelQuotationId,
+        description: `Hotel Quotation ${quotation.hotelQuotationId} confirmed by ${req.user?.name || 'System'}`,
+        user: req.user?.name || "System",
+    });
+
+    return res.status(200).json(
+        new ApiResponse(200, quotation, "Hotel quotation finalized successfully")
+    );
+});
+
+const resolveCompanyForEmail = async ({ companyId, companyName }) => {
+    const Company = (await import("../../models/company.model.js")).default;
+    if (companyId) {
+        const byId = await Company.findById(companyId).lean();
+        if (byId) return byId;
+    }
+    if (companyName) {
+        const byName = await Company.findOne({
+            companyName: { $regex: `^${String(companyName).trim()}$`, $options: "i" },
+        }).lean();
+        if (byName) return byName;
+    }
+    return null;
+};

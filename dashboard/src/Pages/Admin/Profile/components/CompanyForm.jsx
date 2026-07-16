@@ -7,7 +7,7 @@ import {
   Paper,
   Alert,
   Switch,
-  FormControlLabel
+  FormControlLabel,
 } from "@mui/material";
 
 import { useDispatch, useSelector } from "react-redux";
@@ -20,17 +20,18 @@ import {
   getCompanyById,
   updateCompany,
   resetSuccess,
-  clearCompany
+  clearCompany,
 } from "../../../../features/company/InsideCompany";
 
 const CompanyForm = () => {
-
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { id } = useParams();
+  const [logoPreview, setLogoPreview] = React.useState(null);
+  const [signaturePreview, setSignaturePreview] = React.useState(null);
 
   const { loading, success, error, company } = useSelector(
-    (state) => state.company
+    (state) => state.company,
   );
 
   const isEditMode = !!id;
@@ -38,64 +39,70 @@ const CompanyForm = () => {
   /* ================= FETCH COMPANY ================= */
 
   useEffect(() => {
-
     if (isEditMode) {
       dispatch(getCompanyById(id));
     } else {
       dispatch(clearCompany());
     }
-
   }, [dispatch, id, isEditMode]);
+  useEffect(() => {
+    if (company) {
+      setLogoPreview(company.logo || null);
+      setSignaturePreview(company?.authorizedSignatory?.signatureImage || null);
+    }
+  }, [company]);
 
   /* ================= SUCCESS ================= */
 
   useEffect(() => {
-
     if (success) {
-
       alert(
         isEditMode
           ? "Company updated successfully!"
-          : "Company added successfully!"
+          : "Company added successfully!",
       );
 
       dispatch(resetSuccess());
 
       navigate("/admin/inside-company");
-
     }
-
   }, [success, dispatch, navigate, isEditMode]);
 
   /* ================= INITIAL VALUES ================= */
 
   const initialValues = {
-
     companyName: isEditMode ? company?.companyName || "" : "",
     address: isEditMode ? company?.address || "" : "",
     phone: isEditMode ? company?.phone || "" : "",
     email: isEditMode ? company?.email || "" : "",
     gstin: isEditMode ? company?.gstin || "" : "",
     stateCode: isEditMode ? company?.stateCode || "" : "",
+    companyWebsite: isEditMode ? company?.companyWebsite || "" : "",
+    authorizedSignatoryName: isEditMode
+      ? company?.authorizedSignatory?.name || ""
+      : "",
+    authorizedSignatoryDesignation: isEditMode
+      ? company?.authorizedSignatory?.designation || ""
+      : "",
     termsConditions: isEditMode ? company?.termsConditions || "" : "",
     paymentLink: isEditMode ? company?.paymentLink || "" : "",
-    isActive: isEditMode ? company?.isActive ?? true : true,
+    cancellationPolicy: isEditMode ? company?.cancellationPolicy || "" : "",
+    paymentPolicy: isEditMode ? company?.paymentPolicy || "" : "",
+    isActive: isEditMode ? (company?.isActive ?? true) : true,
     logo: null,
-    signatureImage: null
-
+    signatureImage: null,
   };
 
   /* ================= VALIDATION ================= */
 
   const validationSchema = Yup.object({
     companyName: Yup.string().required("Company name is required"),
-    address: Yup.string().required("Address is required")
+    address: Yup.string().required("Address is required"),
   });
 
   /* ================= SUBMIT ================= */
 
   const handleSubmit = (values) => {
-
     const formData = new FormData();
 
     formData.append("companyName", values.companyName);
@@ -104,16 +111,27 @@ const CompanyForm = () => {
     formData.append("email", values.email);
     formData.append("gstin", values.gstin);
     formData.append("stateCode", values.stateCode);
+    formData.append("companyWebsite", values.companyWebsite);
     formData.append("termsConditions", values.termsConditions);
+    formData.append("cancellationPolicy", values.cancellationPolicy);
+    formData.append("paymentPolicy", values.paymentPolicy);
     formData.append("paymentLink", values.paymentLink);
     formData.append("isActive", values.isActive);
+
+    formData.append(
+      "authorizedSignatory",
+      JSON.stringify({
+        name: values.authorizedSignatoryName,
+        designation: values.authorizedSignatoryDesignation,
+      }),
+    );
 
     if (values.logo) {
       formData.append("logo", values.logo);
     }
 
     if (values.signatureImage) {
-      formData.append("signatureImage", values.signatureImage);
+      formData.append("signature", values.signatureImage);
     }
 
     if (isEditMode) {
@@ -121,7 +139,6 @@ const CompanyForm = () => {
     } else {
       dispatch(createCompany(formData));
     }
-
   };
 
   /* ================= LOADING ================= */
@@ -136,7 +153,6 @@ const CompanyForm = () => {
 
   return (
     <Paper sx={{ p: 4, maxWidth: 1000, mx: "auto", mt: 4 }}>
-
       <Typography variant="h5" mb={3}>
         {isEditMode ? "Edit Company" : "Add Company"}
       </Typography>
@@ -155,13 +171,10 @@ const CompanyForm = () => {
           touched,
           handleChange,
           setFieldValue,
-          handleSubmit
+          handleSubmit,
         }) => (
-
           <form onSubmit={handleSubmit}>
-
             <Grid container spacing={3}>
-
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
@@ -238,6 +251,36 @@ const CompanyForm = () => {
                 />
               </Grid>
 
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Company Website"
+                  name="companyWebsite"
+                  value={values.companyWebsite}
+                  onChange={handleChange}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Authorized Signatory Name"
+                  name="authorizedSignatoryName"
+                  value={values.authorizedSignatoryName}
+                  onChange={handleChange}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Authorized Signatory Designation"
+                  name="authorizedSignatoryDesignation"
+                  value={values.authorizedSignatoryDesignation}
+                  onChange={handleChange}
+                />
+              </Grid>
+
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -246,6 +289,28 @@ const CompanyForm = () => {
                   multiline
                   rows={3}
                   value={values.termsConditions}
+                  onChange={handleChange}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Cancellation Policy"
+                  name="cancellationPolicy"
+                  multiline
+                  rows={3}
+                  value={values.cancellationPolicy}
+                  onChange={handleChange}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Payment Policy"
+                  name="paymentPolicy"
+                  multiline
+                  rows={3}
+                  value={values.paymentPolicy}
                   onChange={handleChange}
                 />
               </Grid>
@@ -271,9 +336,14 @@ const CompanyForm = () => {
                     hidden
                     type="file"
                     accept="image/*"
-                    onChange={(e) =>
-                      setFieldValue("logo", e.target.files[0])
-                    }
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      setFieldValue("logo", file);
+
+                      if (file) {
+                        setLogoPreview(URL.createObjectURL(file));
+                      }
+                    }}
                   />
                 </Button>
               </Grid>
@@ -285,12 +355,45 @@ const CompanyForm = () => {
                     hidden
                     type="file"
                     accept="image/*"
-                    onChange={(e) =>
-                      setFieldValue("signatureImage", e.target.files[0])
-                    }
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      setFieldValue("signatureImage", file);
+
+                      if (file) {
+                        setSignaturePreview(URL.createObjectURL(file));
+                      }
+                    }}
                   />
                 </Button>
               </Grid>
+              {logoPreview && (
+                <Grid item xs={6}>
+                  <Typography variant="body2">Logo Preview:</Typography>
+                  <img
+                    src={logoPreview}
+                    alt="logo"
+                    style={{
+                      width: "100%",
+                      maxHeight: 150,
+                      objectFit: "contain",
+                    }}
+                  />
+                </Grid>
+              )}
+              {signaturePreview && (
+                <Grid item xs={6}>
+                  <Typography variant="body2">Signature Preview:</Typography>
+                  <img
+                    src={signaturePreview}
+                    alt="signature"
+                    style={{
+                      width: "100%",
+                      maxHeight: 150,
+                      objectFit: "contain",
+                    }}
+                  />
+                </Grid>
+              )}
 
               <Grid item xs={12} md={6}>
                 <Button
@@ -312,18 +415,14 @@ const CompanyForm = () => {
                   {loading
                     ? "Saving..."
                     : isEditMode
-                    ? "Update Company"
-                    : "Save Company"}
+                      ? "Update Company"
+                      : "Save Company"}
                 </Button>
               </Grid>
-
             </Grid>
-
           </form>
-
         )}
       </Formik>
-
     </Paper>
   );
 };

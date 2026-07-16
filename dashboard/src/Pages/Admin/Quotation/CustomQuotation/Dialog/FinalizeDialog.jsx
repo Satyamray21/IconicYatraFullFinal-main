@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
     Dialog,
     DialogActions,
@@ -9,27 +9,70 @@ import {
     Typography,
     Button,
     Divider,
+    Checkbox,
+    TextField,
+    RadioGroup,
+    FormControlLabel,
     Radio,
 } from "@mui/material";
 import { Formik, Form } from "formik";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { getCompany } from "../../../../../features/companyUI/companyUISlice";
 
-const FinalizeDialog = ({ open, onClose, onConfirm }) => {
-    const [selectedOption, setSelectedOption] = useState("");
+const FINAL_PACKAGES = ["Standard", "Deluxe", "Superior"];
+
+/**
+ * @param {object} props
+ * @param {{ label: string, hotel: string, cost: string }[]} [props.packageOptionsOverride] When set (e.g. quick quotation), these options replace Redux-driven package rows.
+ * @param {string} [props.preselectedPackageLabel] Pre-select when it matches an option label.
+ */
+const FinalizeDialog = ({
+    open,
+    onClose,
+    onConfirm,
+    packageOptionsOverride,
+    preselectedPackageLabel,
+    /** Billable add-on services (amount + line tax) to add to each package total in the dialog */
+    additionalServicesSum = 0,
+    allowEditableAmount = false,
+    companyOptions = [],
+}) => {
+    const [selectedOptions, setSelectedOptions] = useState([]);
+    const [packageAmountOverrides, setPackageAmountOverrides] = useState({});
+    const [gstMode, setGstMode] = useState("with_gst");
+    const [taxPercent, setTaxPercent] = useState(5);
+    const [selectedBankId, setSelectedBankId] = useState("");
+    const [selectedCompanyId, setSelectedCompanyId] = useState("");
+
+    const dispatch = useDispatch();
+    const { data: company, status } = useSelector((state) => state.companyUI);
+
+    React.useEffect(() => {
+        if (!company && status === "idle") {
+            dispatch(getCompany());
+        }
+    }, [company, status, dispatch]);
 
     const { selectedQuotation } = useSelector(
         (state) => state.customQuotation
     );
 
     // SAFELY extract pricing
+    const adj = Number(additionalServicesSum) || 0;
+    const adjustPkg = (v) => {
+        if (typeof v !== "number" || Number.isNaN(v)) return "N/A";
+        return v + adj;
+    };
 
-    const standardCost =
+    const standardCost = adjustPkg(
         selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations
-            ?.standard?.finalTotal ?? "N/A";
+            ?.standard?.finalTotal
+    );
 
-    const deluxeCost =
+    const deluxeCost = adjustPkg(
         selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations
-            ?.deluxe?.finalTotal ?? "N/A";
+            ?.deluxe?.finalTotal
+    );
 
     // Extract hotel names
     const standardHotel =
@@ -40,138 +83,379 @@ const FinalizeDialog = ({ open, onClose, onConfirm }) => {
         selectedQuotation?.tourDetails?.quotationDetails?.destinations?.[0]
             ?.deluxeHotels?.[0] ?? "N/A";
 
-    const quotationOptions = [
-        {
-            label: "Standard",
-            hotel: standardHotel,
-            cost: `₹ ${standardCost}`,
-        },
-        {
-            label: "Deluxe",
-            hotel: deluxeHotel,
-            cost: `₹ ${deluxeCost}`,
-        },
-    ];
+    const superiorHotel =
+        selectedQuotation?.tourDetails?.quotationDetails?.destinations?.[0]
+            ?.superiorHotels?.[0] ?? "N/A";
+
+    const superiorCost = adjustPkg(
+        selectedQuotation?.tourDetails?.quotationDetails?.packageCalculations
+            ?.superior?.finalTotal
+    );
+
+    const fmtRupee = (v) =>
+        typeof v === "number" && Number.isFinite(v)
+            ? `₹ ${v.toLocaleString("en-IN")}`
+            : "—";
+
+    const quotationOptionsFromRedux = useMemo(
+        () => [
+            {
+                label: "Standard",
+                hotel: standardHotel,
+                cost: fmtRupee(standardCost),
+            },
+            {
+                label: "Deluxe",
+                hotel: deluxeHotel,
+                cost: fmtRupee(deluxeCost),
+            },
+            {
+                label: "Superior",
+                hotel: superiorHotel,
+                cost: fmtRupee(superiorCost),
+            },
+        ],
+        [
+            standardCost,
+            deluxeCost,
+            superiorCost,
+            standardHotel,
+            deluxeHotel,
+            superiorHotel,
+        ]
+    );
+
+    const quotationOptions =
+        Array.isArray(packageOptionsOverride) && packageOptionsOverride.length
+            ? packageOptionsOverride
+            : quotationOptionsFromRedux;
+
+    const parseAmountFromCost = (value) => {
+        const cleaned = String(value ?? "").replace(/[^0-9.-]/g, "");
+        const parsed = Number(cleaned);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const handlePackageToggle = (packageLabel) => {
+        setSelectedOptions((prev) => {
+            if (prev.includes(packageLabel)) {
+                return prev.filter((p) => p !== packageLabel);
+            } else {
+                return [...prev, packageLabel];
+            }
+        });
+    };
 
     const handleSubmit = (values) => {
-        onConfirm(values);
+        const selectedPackageAmounts = selectedOptions.reduce((acc, label) => {
+            const raw = Number(packageAmountOverrides[label]);
+            acc[label] = Number.isFinite(raw) ? raw : 0;
+            return acc;
+        }, {});
+        const selectedBaseAmount =
+            selectedOptions.length > 0 ? selectedPackageAmounts[selectedOptions[0]] : 0;
+        const gstPct = Math.max(0, Number(taxPercent) || 0);
+        const isWithoutGst = gstMode === "without_gst";
+        const selectedAmountWithTax = isWithoutGst
+            ? selectedBaseAmount + (selectedBaseAmount * gstPct) / 100
+            : selectedBaseAmount;
+        
+        const selectedCompany = companyOptions.find(c => c._id === selectedCompanyId);
+
+        onConfirm({
+            quotations: selectedOptions,
+            // For backward compatibility, also send single package
+            quotation: selectedOptions.length > 0 ? selectedOptions[0] : "",
+            selectedPackageAmounts,
+            selectedAmount: selectedBaseAmount,
+            selectedAmountWithTax,
+            gstMode,
+            taxPercent: gstPct,
+            selectedBank: company?.bankDetails?.find(b => b._id === selectedBankId),
+            companyId: selectedCompanyId,
+            companyName: selectedCompany?.companyName,
+        });
     };
+
+    React.useEffect(() => {
+        if (open) {
+            const initialAmounts = quotationOptions.reduce((acc, option) => {
+                acc[option.label] = parseAmountFromCost(option.cost);
+                return acc;
+            }, {});
+            setPackageAmountOverrides(initialAmounts);
+            const preselect =
+                preselectedPackageLabel != null && String(preselectedPackageLabel).trim()
+                    ? String(preselectedPackageLabel).trim()
+                    : selectedQuotation?.finalizedPackages?.[0] || selectedQuotation?.finalizedPackage;
+
+            if (preselect && FINAL_PACKAGES.includes(preselect)) {
+                setSelectedOptions([preselect]);
+            }
+        }
+        if (!open) {
+            setSelectedOptions([]);
+            setPackageAmountOverrides({});
+            setGstMode("with_gst");
+            setTaxPercent(5);
+            setSelectedBankId("");
+        }
+    }, [open, preselectedPackageLabel, selectedQuotation?.finalizedPackage, quotationOptions, company]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ fontWeight: 600, color: "#1976d2" }}>
-                Finalize Quotation
+                Finalize Quotation - Select Packages
             </DialogTitle>
 
-            <Formik initialValues={{ quotation: "" }} onSubmit={handleSubmit}>
-                {({ setFieldValue }) => (
-                    <Form>
-                        <DialogContent>
-                            <Typography
-                                variant="subtitle1"
-                                sx={{ fontWeight: 600, mb: 2 }}
-                                color="text.primary"
-                            >
-                                <span style={{ color: "red" }}>*</span> Quotation
-                            </Typography>
+            <DialogContent>
+                {/* Company Selection */}
+                <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 600, mb: 1, mt: 1 }}
+                    color="text.primary"
+                >
+                    <span style={{ color: "red" }}>*</span> Select Company
+                </Typography>
+                <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    value={selectedCompanyId}
+                    onChange={(e) => setSelectedCompanyId(e.target.value)}
+                    sx={{ mb: 3 }}
+                    SelectProps={{
+                        native: true,
+                    }}
+                >
+                    <option value="">-- Choose Company --</option>
+                    {companyOptions.map((c) => (
+                        <option key={c._id} value={c._id}>
+                            {c.companyName}
+                        </option>
+                    ))}
+                </TextField>
 
-                            <Grid container spacing={2}>
-                                {quotationOptions.map((option) => {
-                                    const isSelected = selectedOption === option.label;
+                <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 600, mb: 2, mt: 1 }}
+                    color="text.primary"
+                >
+                    <span style={{ color: "red" }}>*</span> Select one or more packages
+                </Typography>
 
-                                    return (
-                                        <Grid size={{ xs: 12, md: 4 }} key={option.label}>
-                                            <Box
-                                                onClick={() => {
-                                                    setSelectedOption(option.label);
-                                                    setFieldValue("quotation", option.label);
-                                                }}
-                                                sx={{
-                                                    border: isSelected
-                                                        ? "2px solid #ff9800"
-                                                        : "1px solid #ccc",
-                                                    borderRadius: 1,
-                                                    p: 2,
-                                                    cursor: "pointer",
-                                                    textAlign: "center",
-                                                    transition: "0.2s",
-                                                    "&:hover": { borderColor: "#1976d2" },
-                                                }}
-                                            >
-                                                <Box
-                                                    sx={{
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                    }}
-                                                >
-                                                    <Radio
-                                                        checked={isSelected}
-                                                        value={option.label}
-                                                        name="quotation"
-                                                        sx={{
-                                                            color: "#ff9800",
-                                                            "&.Mui-checked": { color: "#ff9800" },
-                                                        }}
-                                                    />
-                                                    <Typography
-                                                        variant="subtitle1"
-                                                        sx={{ color: "#ff9800", fontWeight: 600 }}
-                                                    >
-                                                        {option.label}
-                                                    </Typography>
-                                                </Box>
+                <Grid container spacing={2}>
+                    {quotationOptions.map((option) => {
+                        const isSelected = selectedOptions.includes(option.label);
 
-                                                <Divider sx={{ my: 1, borderColor: "#ff9800" }} />
+                        return (
+                            <Grid size={{ xs: 12, md: 4 }} key={option.label}>
+                                <Box
+                                    onClick={() => handlePackageToggle(option.label)}
+                                    sx={{
+                                        border: isSelected
+                                            ? "2px solid #ff9800"
+                                            : "1px solid #ccc",
+                                        borderRadius: 1,
+                                        p: 2,
+                                        cursor: "pointer",
+                                        textAlign: "center",
+                                        transition: "0.2s",
+                                        backgroundColor: isSelected ? "#fff8e1" : "transparent",
+                                        "&:hover": { borderColor: "#1976d2", backgroundColor: "#f5f5f5" },
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                        }}
+                                    >
+                                        <Checkbox
+                                            checked={isSelected}
+                                            onChange={() => handlePackageToggle(option.label)}
+                                            sx={{
+                                                color: "#ff9800",
+                                                "&.Mui-checked": { color: "#ff9800" },
+                                            }}
+                                        />
+                                        <Typography
+                                            variant="subtitle1"
+                                            sx={{ color: "#ff9800", fontWeight: 600 }}
+                                        >
+                                            {option.label}
+                                        </Typography>
+                                    </Box>
 
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{ mb: 1, color: "#1976d2" }}
-                                                >
-                                                    » {option.hotel}
-                                                </Typography>
+                                    <Divider sx={{ my: 1, borderColor: "#ff9800" }} />
 
-                                                <Typography variant="body2" color="text.secondary">
-                                                    Total Cost:{" "}
-                                                    <span style={{ fontWeight: 600 }}>{option.cost}</span>
-                                                </Typography>
-                                            </Box>
-                                        </Grid>
-                                    );
-                                })}
+                                    <Typography
+                                        variant="body2"
+                                        sx={{ mb: 1, color: "#1976d2" }}
+                                    >
+                                        » {option.hotel}
+                                    </Typography>
+
+                                    <Typography variant="body2" color="text.secondary">
+                                        Total Cost:{" "}
+                                        <span style={{ fontWeight: 600 }}>{option.cost}</span>
+                                    </Typography>
+                                    {allowEditableAmount && (
+                                        <TextField
+                                            size="small"
+                                            type="number"
+                                            label="Finalize amount"
+                                            value={packageAmountOverrides[option.label] ?? ""}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) =>
+                                                setPackageAmountOverrides((prev) => ({
+                                                    ...prev,
+                                                    [option.label]: Number(e.target.value || 0),
+                                                }))
+                                            }
+                                            inputProps={{ min: 0 }}
+                                            sx={{ mt: 1 }}
+                                            fullWidth
+                                        />
+                                    )}
+                                </Box>
                             </Grid>
-                        </DialogContent>
+                        );
+                    })}
+                </Grid>
 
-                        <DialogActions sx={{ justifyContent: "center", pb: 2 }}>
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                type="submit"
-                                disabled={!selectedOption}
-                                sx={{
-                                    textTransform: "none",
-                                    backgroundColor: selectedOption ? "#64b5f6" : "#bbdefb",
-                                    "&:hover": { backgroundColor: "#2196f3" },
-                                }}
-                            >
-                                Confirm
-                            </Button>
-
-                            <Button
-                                variant="contained"
-                                onClick={onClose}
-                                sx={{
-                                    backgroundColor: "#f57c00",
-                                    textTransform: "none",
-                                    "&:hover": { backgroundColor: "#ef6c00" },
-                                }}
-                            >
-                                Cancel
-                            </Button>
-                        </DialogActions>
-                    </Form>
+                {selectedOptions.length > 0 && (
+                    <Box sx={{ mt: 3, p: 2, backgroundColor: "#e3f2fd", borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            Selected Packages: {selectedOptions.join(", ")}
+                        </Typography>
+                    </Box>
                 )}
-            </Formik>
+
+                {allowEditableAmount && (
+                    <Box sx={{ mt: 2, p: 2, border: "1px solid #e0e0e0", borderRadius: 1 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                            Finalize Amount Type
+                        </Typography>
+                        <RadioGroup
+                            row
+                            value={gstMode}
+                            onChange={(e) => setGstMode(e.target.value)}
+                        >
+                            <FormControlLabel
+                                value="with_gst"
+                                control={<Radio />}
+                                label="With GST (amount already includes tax)"
+                            />
+                            <FormControlLabel
+                                value="without_gst"
+                                control={<Radio />}
+                                label="Without GST (add tax on top)"
+                            />
+                        </RadioGroup>
+                        {gstMode === "without_gst" && (
+                            <TextField
+                                size="small"
+                                type="number"
+                                label="Tax %"
+                                value={taxPercent}
+                                onChange={(e) => setTaxPercent(Number(e.target.value || 0))}
+                                inputProps={{ min: 0 }}
+                                sx={{ mt: 1, maxWidth: 180 }}
+                            />
+                        )}
+                    </Box>
+                )}
+
+                <Divider sx={{ my: 3 }} />
+                
+                <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 600, mb: 2 }}
+                    color="text.primary"
+                >
+                    🏦 Select Bank Account
+                </Typography>
+
+                <Grid container spacing={2}>
+                    {company?.bankDetails && company.bankDetails.length > 0 ? (
+                        company.bankDetails.map((bank) => (
+                            <Grid size={{ xs: 12, md: 6 }} key={bank._id}>
+                                <Box
+                                    onClick={() => setSelectedBankId(bank._id)}
+                                    sx={{
+                                        border: selectedBankId === bank._id
+                                            ? "2px solid #4caf50"
+                                            : "1px solid #ccc",
+                                        borderRadius: 1,
+                                        p: 2,
+                                        cursor: "pointer",
+                                        transition: "0.2s",
+                                        backgroundColor: selectedBankId === bank._id ? "#e8f5e9" : "transparent",
+                                        "&:hover": { borderColor: "#4caf50", backgroundColor: "#f1f8e9" },
+                                    }}
+                                >
+                                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                                        <Radio
+                                            checked={selectedBankId === bank._id}
+                                            sx={{
+                                                color: "#4caf50",
+                                                "&.Mui-checked": { color: "#4caf50" },
+                                            }}
+                                        />
+                                        <Box>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                                {bank.bankName} - {bank.accountHolderName}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary" display="block">
+                                                A/C: {bank.accountNumber}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                IFSC: {bank.ifscCode}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                </Box>
+                            </Grid>
+                        ))
+                    ) : (
+                        <Grid size={{ xs: 12 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                No bank details found in company settings.
+                            </Typography>
+                        </Grid>
+                    )}
+                </Grid>
+            </DialogContent>
+
+            <DialogActions sx={{ justifyContent: "center", pb: 2 }}>
+                <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleSubmit}
+                    disabled={selectedOptions.length === 0}
+                    sx={{
+                        textTransform: "none",
+                        backgroundColor: selectedOptions.length > 0 ? "#64b5f6" : "#bbdefb",
+                        "&:hover": { backgroundColor: "#2196f3" },
+                    }}
+                >
+                    Confirm
+                </Button>
+
+                <Button
+                    variant="contained"
+                    onClick={onClose}
+                    sx={{
+                        backgroundColor: "#f57c00",
+                        textTransform: "none",
+                        "&:hover": { backgroundColor: "#ef6c00" },
+                    }}
+                >
+                    Cancel
+                </Button>
+            </DialogActions>
         </Dialog>
     );
 };

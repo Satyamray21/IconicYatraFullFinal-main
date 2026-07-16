@@ -29,6 +29,8 @@ const customQuotationSchema = new mongoose.Schema(
             arrivalCity: { type: String, required: true },
             departureCity: { type: String, required: true },
             quotationTitle: { type: String, required: true },
+            /** Optional override for the “Destination : …” line on finalize / PDF */
+            destinationSummary: { type: String },
             initalNotes: { type: String },
             bannerImage: { type: String },
             transport: { type: String, enum: ["Yes", "No"] },
@@ -36,6 +38,14 @@ const customQuotationSchema = new mongoose.Schema(
             validTill: { type: String },
             arrivalDate: { type: String, required: true },
             departureDate: { type: String, required: true },
+            /** Optional display overrides edited from CustomFinalize pickup section */
+            pickupArrivalNote: { type: String },
+            pickupDepartureNote: { type: String },
+            vendorDetails: {
+                vendorType: { type: String, enum: ["single", "multiple"] },
+                hotelVendorName: { type: String },
+                vehicleVendorName: { type: String },
+            },
             itinerary: [itinerarySchema],
             vehicleDetails: vehicleDetailsSchema,
             policies: policySchema,
@@ -71,6 +81,11 @@ const customQuotationSchema = new mongoose.Schema(
 
                 },
 
+                mattress: {
+                    superiorMattressCost: { type: Number, default: 0 },
+                    deluxeMattressCost: { type: Number, default: 0 },
+                },
+
                 companyMargin: {
                     marginPercent: { type: Number, default: 0 },
                     marginAmount: { type: Number, default: 0 },
@@ -85,12 +100,29 @@ const customQuotationSchema = new mongoose.Schema(
                         default: "None",
                     },
                     applyGST: { type: Boolean, default: false },
+                    taxPercent: { type: Number, default: 0 },
                 },
                 packageCalculations: {
                     standard: packageCalculationSchema,
                     deluxe: packageCalculationSchema,
                     superior: packageCalculationSchema,
                 },
+                /** Add-on services from finalize (not merged into packageCalculations.finalTotal) */
+                additionalServices: [
+                    {
+                        included: {
+                            type: String,
+                            enum: ["yes", "no"],
+                            default: "no",
+                        },
+                        particulars: { type: String, default: "" },
+                        amount: { type: Number, default: 0 },
+                        taxRate: { type: Number, default: 0 },
+                        taxAmount: { type: Number, default: 0 },
+                        totalAmount: { type: Number, default: 0 },
+                        taxLabel: { type: String, default: "" },
+                    },
+                ],
                 signatureDetails: {
                     regardsText: { type: String, default: "Best Regards" },
                     signedBy: { type: String },
@@ -101,6 +133,94 @@ const customQuotationSchema = new mongoose.Schema(
         quotationId: {
             type: String,
             unique: true,
+        },
+
+        /** Last completed wizard step (1–6); used to resume from quotation list */
+        currentStep: {
+            type: Number,
+            default: 1,
+            min: 1,
+            max: 6,
+        },
+
+        finalizeStatus: {
+            type: String,
+            enum: ["draft", "finalized", "cancelled"],
+            default: "draft",
+        },
+        finalizedPackage: {
+            type: String,
+            enum: ["Standard", "Deluxe", "Superior"],
+        },
+        /** Multiple selected packages during finalization */
+        finalizedPackages: [
+            {
+                type: String,
+                enum: ["Standard", "Deluxe", "Superior"],
+            },
+        ],
+        /** Vendor details with amounts for each finalized vendor */
+        finalizedVendorsWithAmounts: [
+            {
+                vendorName: { type: String, required: true },
+                vendorType: { type: String, enum: ["Hotel", "Vehicle", "Other"], required: true },
+                amount: { type: Number, default: 0 },
+                remarks: { type: String, default: "" },
+            },
+        ],
+        finalizedAt: {
+            type: Date,
+        },
+        /** Confirmed hotel details for the hotel confirmation mailer */
+        confirmedHotels: [
+            {
+                hotelName: { type: String },
+                hotelAddress: { type: String },
+                city: { type: String },
+                nights: { type: Number },
+                roomType: { type: String },
+                noOfRooms: { type: String },
+                checkInDate: { type: String },
+                checkInTime: { type: String },
+                checkOutDate: { type: String },
+                checkOutTime: { type: String },
+                mealPlan: { type: String },
+                contactNo: { type: String },
+                bookingPnr: { type: String },
+            }
+        ],
+        availabilityHotels: [
+            {
+                hotelName: { type: String },
+                hotelAddress: { type: String },
+                city: { type: String },
+                nights: { type: Number },
+                roomType: { type: String },
+                noOfRooms: { type: String },
+                checkInDate: { type: String },
+                checkInTime: { type: String },
+                checkOutDate: { type: String },
+                checkOutTime: { type: String },
+                mealPlan: { type: String },
+                contactNo: { type: String },
+                bookingPnr: { type: String },
+                sharingType: { type: String },
+                roomCategory: { type: String },
+                adults: { type: Number },
+                children: { type: Number },
+                kids: { type: Number },
+                infants: { type: Number },
+            }
+        ],
+        bookingId: {
+            type: String,
+        },
+        companyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Company",
+        },
+        companyName: {
+            type: String,
         },
     },
     { timestamps: true }

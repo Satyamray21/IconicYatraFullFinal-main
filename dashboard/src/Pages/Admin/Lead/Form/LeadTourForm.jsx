@@ -75,6 +75,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
   const initialData = leadData || location.state?.leadData || {};
 
   const formik = useFormik({
+    enableReinitialize: true,
     initialValues: {
       tourType: "Domestic",
       country: "",
@@ -97,6 +98,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
       noOfRooms: "",
       noOfMattress: "0",
       noOfNights: "",
+      noOfVehicles: "0",
       requirementNote: "",
       ...initialData,
     },
@@ -123,6 +125,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
         .min(1, "At least 1 room")
         .integer("Must be a whole number"),
       noOfMattress: Yup.number().integer("Must be a whole number"),
+      noOfVehicles: Yup.number().integer("Must be a whole number").min(0, "Cannot be negative"),
       noOfNights: Yup.number().integer("Must be a whole number"),
       country: Yup.string().when("tourType", {
         is: "International",
@@ -719,6 +722,19 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
                 {renderDropdownOptions("departureLocation")}
               </TextField>
             </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                fullWidth
+                name="noOfVehicles"
+                label="No of Vehicles"
+                type="number"
+                value={values.noOfVehicles}
+                onChange={handleChange}
+                error={touched.noOfVehicles && Boolean(errors.noOfVehicles)}
+                helperText={touched.noOfVehicles && errors.noOfVehicles}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
           </Grid>
         </Box>
 
@@ -840,7 +856,7 @@ const LeadTourForm = ({ leadData, onComplete, isSubmitting, onBack }) => {
         <Box mt={2} display="flex" justifyContent="center" gap={2}>
           <Button
             variant="outlined"
-            onClick={onBack}
+            onClick={() => onBack(values)}
           >
             Back
           </Button>

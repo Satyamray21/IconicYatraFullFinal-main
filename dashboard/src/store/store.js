@@ -21,6 +21,9 @@ import galleryReducer from "../features/gallery/gallerySlice";
 import companyReducer from "../features/company/InsideCompany";
 import landingPageReducer from "../features/landingPage/landingPageSlice";
 import blogReducer from "../features/blog/blogSlice";
+import dashboardReducer from "../features/dashboard/dashboardSlice";
+import unifiedQuotationReducer from "../features/quotation/unifiedQuotationSlice";
+import expenseReducer from "../features/expense/expenseSlice";
 export const store = configureStore({
   reducer: {
     leads: LeadReducer,
@@ -45,6 +48,9 @@ export const store = configureStore({
     company: companyReducer,
     landingPages: landingPageReducer,
     blog: blogReducer,
+    dashboard: dashboardReducer,
+    unifiedQuotation: unifiedQuotationReducer,
+    expense: expenseReducer,
   },
 });
 

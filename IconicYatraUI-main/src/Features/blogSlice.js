@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import {blogsAxios} from "../Utils/axiosInstance";
 
-// Create a new blog post
+// Create a new blog  post
 export const createBlog = createAsyncThunk(
     "blog/createBlog",
     async (formData, thunkApi) => {

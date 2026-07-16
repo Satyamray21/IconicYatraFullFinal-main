@@ -7,7 +7,10 @@ import {
   Divider,
   Button,
   CircularProgress,
-  Alert
+  Alert,
+  Container,
+  useMediaQuery,
+  useTheme
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -20,6 +23,9 @@ const Yatra = () => {
   const [visibleCount, setVisibleCount] = useState(8);
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
 
   // Get yatra packages from Redux store
   const { yatra: yatraPackages, loading, error } = useSelector((state) => state.packages);
@@ -132,13 +138,14 @@ const Yatra = () => {
 
   return (
     <>
-      {/* Hero Banner */}
+      {/* Hero Banner - Fully Responsive */}
       <Box
         sx={{
-          height: { xs: 220, md: 300 },
+          height: { xs: 200, sm: 250, md: 300, lg: 350 },
           backgroundImage: `url(${bannerImg})`,
           backgroundSize: "cover",
-          backgroundPosition: "center",
+          backgroundPosition: { xs: "60% center", sm: "center" },
+          backgroundAttachment: { xs: "scroll", md: "fixed" },
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -155,65 +162,97 @@ const Yatra = () => {
             left: 0,
             width: "100%",
             height: "100%",
-            bgcolor: "rgba(0,0,0,0.5)",
+            bgcolor: "rgba(0,0,0,0.55)",
           }}
         />
         {/* Banner Text */}
-        <Box sx={{ position: "relative", zIndex: 1 }}>
+        <Box sx={{ position: "relative", zIndex: 1, px: { xs: 2, sm: 3, md: 4 } }}>
           <Typography
             variant="h3"
             fontWeight="bold"
-            sx={{ fontSize: { xs: "1.8rem", md: "2rem" } }}
+            sx={{ 
+              fontSize: { xs: "1.5rem", sm: "1.8rem", md: "2rem", lg: "2.5rem" },
+              letterSpacing: { xs: 1, md: 2 }
+            }}
           >
-            YATRA PACKAGES
+            SPIRITUAL TOUR PACKAGES
           </Typography>
           <Typography
             variant="subtitle1"
-            sx={{ fontSize: { xs: "1rem", md: "1rem" } }}
+            sx={{ 
+              fontSize: { xs: "0.875rem", sm: "1rem", md: "1.1rem" },
+              mt: { xs: 1, sm: 1.5 }
+            }}
           >
             Explore Our Spiritual Journey Packages
           </Typography>
         </Box>
       </Box>
 
-      <Box sx={{ px: { xs: 2, md: 5 }, width: "100%", py: 6 }}>
-        {/* Title */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h6" fontWeight="bold">
-            YATRA <span style={{ color: "red" }}>PACKAGES</span>
+      <Container maxWidth="xl" sx={{ px: { xs: 1, sm: 2, md: 3, lg: 4 }, py: { xs: 3, sm: 4, md: 6 } }}>
+        {/* Title Section - Fully Responsive */}
+        <Box sx={{ mb: { xs: 2, sm: 3, md: 4 } }}>
+          <Typography 
+            variant="h6" 
+            fontWeight="bold"
+            sx={{ 
+              fontSize: { xs: "1rem", sm: "1.1rem", md: "1.25rem" }
+            }}
+          >
+            SPIRITUAL TOUR <span style={{ color: "red" }}>PACKAGES</span>
           </Typography>
-          <Divider sx={{ mt: 1, borderColor: "#ccc", borderBottomWidth: 5 }} />
+          <Divider sx={{ mt: 1, borderColor: "#ccc", borderBottomWidth: { xs: 3, md: 5 } }} />
         </Box>
 
         {/* Show loading while fetching more data */}
         {loading && yatraPackages.length > 0 && (
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-            <CircularProgress size={24} />
+            <CircularProgress size={isMobile ? 20 : 24} />
           </Box>
         )}
 
         {/* Error alert */}
         {error && yatraPackages.length > 0 && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert 
+            severity="error" 
+            sx={{ 
+              mb: 2,
+              fontSize: { xs: "0.75rem", sm: "0.875rem" }
+            }}
+          >
             Error loading more packages: {error}
           </Alert>
         )}
 
-        {/* Cards Grid */}
+        {/* Cards Grid - Fully Responsive */}
         {yatraPackages.length > 0 ? (
           <Grid
             container
-            spacing={3}
-            sx={{ textAlign: "center", justifyContent: "center" }}
+            spacing={{ xs: 2, sm: 2.5, md: 3, lg: 4 }}
+            sx={{ 
+              textAlign: "center", 
+              justifyContent: "center",
+              width: "100%",
+              margin: 0
+            }}
           >
             {yatraPackages.slice(0, visibleCount).map((pkg) => (
               <Grid
-                size={{ xs: 12, sm: 6, md: 3 }}
+                size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
                 key={pkg._id}
-                sx={{ display: "flex", justifyContent: "center" }}
+                sx={{ 
+                  display: "flex", 
+                  justifyContent: "center",
+                  alignItems: "stretch"
+                }}
               >
                 <Box
-                  sx={{ width: "100%", maxWidth: 320, cursor: "pointer" }}
+                  sx={{ 
+                    width: "100%", 
+                    maxWidth: { xs: "100%", sm: 380, md: 350, lg: 320 },
+                    cursor: "pointer",
+                    margin: "0 auto"
+                  }}
                   onClick={() => navigate(`/package/${pkg._id}`)}
                 >
                   <PackageCard
@@ -228,10 +267,10 @@ const Yatra = () => {
                         : "https://via.placeholder.com/300x200?text=No+Image"
                     }
                     location={`${pkg.sector || "Unknown Sector"}, ${pkg.arrivalCity || "Unknown City"}`}
-                    // ✅ UPDATED: Duration with new logic
                     duration={formatDuration(pkg)}
-                    // ✅ UPDATED: Price with new logic
                     price={getPriceDisplay(pkg)}
+                    finalStandardCost={pkg.finalStandardCost}
+                    destinationNights={pkg.destinationNights}
                     id={pkg._id}
                   />
                 </Box>
@@ -240,31 +279,47 @@ const Yatra = () => {
           </Grid>
         ) : (
           // No packages found
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography variant="h6" color="textSecondary">
+          <Box sx={{ textAlign: 'center', py: { xs: 4, sm: 6, md: 8 } }}>
+            <Typography 
+              variant="h6" 
+              color="textSecondary"
+              sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+            >
               No yatra packages found
             </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            <Typography 
+              variant="body2" 
+              color="textSecondary" 
+              sx={{ mt: 1, fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+            >
               Check the console for detailed package data
             </Typography>
           </Box>
         )}
 
-        {/* Load More Button - Only show if there are more packages to load */}
+        {/* Load More Button - Fully Responsive */}
         {visibleCount < yatraPackages.length && (
-          <Box sx={{ mt: 4, display: "flex", justifyContent: "center" }}>
+          <Box sx={{ 
+            mt: { xs: 3, sm: 4, md: 5, lg: 6 }, 
+            display: "flex", 
+            justifyContent: "center",
+            px: { xs: 2, sm: 0 }
+          }}>
             <Button
               variant="contained"
               onClick={loadMore}
               disabled={loading}
               sx={{
-                width: { xs: "100%", sm: 300 },
+                width: { xs: "100%", sm: 280, md: 300 },
+                maxWidth: { xs: "100%", sm: 280, md: 300 },
                 backgroundColor: "#4caf50",
                 color: "#fff",
                 fontWeight: "bold",
                 textTransform: "none",
-                borderRadius: 3,
-                py: 1.5,
+                borderRadius: { xs: 2, md: 3 },
+                py: { xs: 1, sm: 1.25, md: 1.5 },
+                px: { xs: 2, sm: 3 },
+                fontSize: { xs: "0.875rem", sm: "0.9375rem", md: "1rem" },
                 "&:hover": { backgroundColor: "#43a047" },
                 "&:disabled": { backgroundColor: "#cccccc" }
               }}
@@ -273,7 +328,7 @@ const Yatra = () => {
             </Button>
           </Box>
         )}
-      </Box>
+      </Container>
     </>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -13,14 +13,19 @@ import {
   Fade,
   Chip,
   IconButton,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import PhoneIcon from '@mui/icons-material/Phone';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import SendIcon from '@mui/icons-material/Send';
+import CloseIcon from '@mui/icons-material/Close';
 import bannerImg from '../../assets/Banner/banner4.jpg';
 import { keyframes } from '@emotion/react';
 import { useSelector } from "react-redux";
+import { enquiryAxios } from "../../Utils/axiosInstance";
+import { useNavigate } from "react-router-dom";
 
 // Animation
 const floatAnimation = keyframes`
@@ -35,38 +40,62 @@ const ContactUs = () => {
     (state) => state.companyUI
   );
 
-  const loading = status === "loading";
+  const loadingCompany = status === "loading";
+  const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    mobile: '',
-    destination: '',
-    message: '',
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    mobile: "",
+    persons: "",
+    destination: "",
+    travelDate: "",
+    message: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
+    
+    setLoading(true);
+    setError("");
+    setSuccess("");
 
-    // Reset form
-    setFormData({
-      name: '',
-      email: '',
-      mobile: '',
-      destination: '',
-      message: ''
-    });
+    try {
+      await enquiryAxios.post("/enquiry/create", form);
+
+      // Reset form
+      setForm({
+        name: "",
+        email: "",
+        mobile: "",
+        persons: "",
+        destination: "",
+        travelDate: "",
+        message: "",
+      });
+
+      setSuccess("Enquiry submitted successfully!");
+      
+      // Navigate to thank you page after 2 seconds
+      setTimeout(() => {
+        navigate("/thank-you");
+      }, 2000);
+
+    } catch (error) {
+      setError(error.response?.data?.message || "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -247,7 +276,7 @@ const ContactUs = () => {
             </Fade>
           </Grid>
 
-          {/* Right Form */}
+          {/* Right Form - Updated with API Integration */}
           <Grid size={{ xs: 12, md: 7 }}>
             <Fade in timeout={1000} style={{ transitionDelay: '200ms' }}>
               <Paper elevation={4} sx={{ p: { xs: 3, md: 5 }, borderRadius: 4 }}>
@@ -256,65 +285,107 @@ const ContactUs = () => {
                   Send Us a Message
                 </Typography>
 
+                {error && (
+                  <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
+                    {error}
+                  </Alert>
+                )}
+
+                {success && (
+                  <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess("")}>
+                    {success}
+                  </Alert>
+                )}
+
                 <Box component="form" onSubmit={handleSubmit}>
                   <Grid container spacing={3}>
 
+                    {/* Name */}
                     <Grid size={{ xs: 12, md: 6 }}>
                       <TextField
                         label="Your Name*"
                         name="name"
-                        value={formData.name}
+                        value={form.name}
                         onChange={handleChange}
                         fullWidth
                         required
                       />
                     </Grid>
 
+                    {/* Email */}
                     <Grid size={{ xs: 12, md: 6 }}>
                       <TextField
                         label="Your Email*"
                         type="email"
                         name="email"
-                        value={formData.email}
+                        value={form.email}
                         onChange={handleChange}
                         fullWidth
                         required
                       />
                     </Grid>
 
-                    {/* ✅ NEW FIELD — MOBILE NUMBER */}
+                    {/* Mobile Number */}
                     <Grid size={{ xs: 12, md: 6 }}>
                       <TextField
-                        label="Mobile Number*"
+                        label="Mobile/Whatsapp No.*"
                         name="mobile"
-                        value={formData.mobile}
+                        value={form.mobile}
                         onChange={handleChange}
                         fullWidth
                         required
                       />
                     </Grid>
 
-                    {/* ✅ NEW FIELD — DESTINATION */}
+                    {/* Number of Persons */}
                     <Grid size={{ xs: 12, md: 6 }}>
                       <TextField
-                        label="Destination"
-                        name="destination"
-                        value={formData.destination}
+                        label="Number of Persons*"
+                        name="persons"
+                        type="number"
+                        value={form.persons}
                         onChange={handleChange}
                         fullWidth
+                        required
                       />
                     </Grid>
 
+                    {/* Destination */}
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        label="Destination*"
+                        name="destination"
+                        value={form.destination}
+                        onChange={handleChange}
+                        fullWidth
+                        required
+                      />
+                    </Grid>
+
+                    {/* Travel Date */}
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        label="Travel Date*"
+                        name="travelDate"
+                        type="date"
+                        value={form.travelDate}
+                        onChange={handleChange}
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                        required
+                      />
+                    </Grid>
+
+                    {/* Message */}
                     <Grid size={{ xs: 12 }}>
                       <TextField
-                        label="Your Message*"
+                        label="Your Message"
                         name="message"
-                        value={formData.message}
+                        value={form.message}
                         onChange={handleChange}
                         multiline
-                        rows={5}
+                        rows={4}
                         fullWidth
-                        required
                       />
                     </Grid>
 
@@ -322,7 +393,8 @@ const ContactUs = () => {
                       <Button
                         type="submit"
                         variant="contained"
-                        endIcon={<SendIcon />}
+                        disabled={loading}
+                        endIcon={!loading && <SendIcon />}
                         sx={{
                           px: 6,
                           py: 1.8,
@@ -330,7 +402,7 @@ const ContactUs = () => {
                           fontWeight: 'bold',
                         }}
                       >
-                        SEND MESSAGE
+                        {loading ? <CircularProgress size={24} color="inherit" /> : "SEND ENQUIRY"}
                       </Button>
                     </Grid>
 
@@ -344,7 +416,7 @@ const ContactUs = () => {
       </Box>
 
       {/* Google Map (UNCHANGED) */}
-      <Box mt={4}>
+       <Box mt={4}>
         <iframe
           title="Google Map"
           src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3502.4992636520133!2d77.37238817349676!3d28.614795131144554!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x390ce56012bbdd9b%3A0x20e3b9eb57378bd9!2s25%2C%20B%20Block%20Rd%2C%20B%20Block%2C%20Sector%2064%2C%20Noida%2C%20Uttar%20Pradesh%20201307!5e0!3m2!1sen!2sin!4v1759315939359!5m2!1sen!2sin"

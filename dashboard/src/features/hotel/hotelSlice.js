@@ -120,9 +120,9 @@ export const getHotelForEdit = createAsyncThunk(
 // Fetch All Hotels
 export const fetchHotels = createAsyncThunk(
     "hotel/fetchHotels",
-    async (_, { rejectWithValue }) => {
+    async (params = {}, { rejectWithValue }) => {
         try {
-            const res = await axios.get("/all-hotel");
+            const res = await axios.get("/all-hotel", { params });
             return res.data.data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || err.message);

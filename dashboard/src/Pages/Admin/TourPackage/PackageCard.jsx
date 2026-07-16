@@ -17,8 +17,10 @@ import { DataGrid } from "@mui/x-data-grid";
 import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchPackages, deletePackage } from "../../../features/package/packageSlice";
+import { fetchPackages, deletePackage, clonePackage } from "../../../features/package/packageSlice";
+import axios from "../../../utils/axios";
 
 const PackageDashboard = () => {
 
@@ -40,7 +42,7 @@ const PackageDashboard = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
 
   const [paginationModel, setPaginationModel] = useState({
-    pageSize: 10,
+    pageSize: 100,
     page: 0
   });
 
@@ -71,6 +73,9 @@ const PackageDashboard = () => {
 
   const handleAddClick = () => navigate("/packageform");
   const handleEditClick = (row) => navigate(`/tourpackage/packageeditform/${row._id}`);
+  const handleCloneClick = (id) => {
+    dispatch(clonePackage(id));
+  };
   const handleDeleteClick = (id) => {
     setDeleteId(id);
     setOpenDeleteDialog(true);
@@ -113,11 +118,14 @@ const PackageDashboard = () => {
     {
       field: "action",
       headerName: "Action",
-      width: 120,
+      width: 160,
       renderCell: (params) => (
         <Box display="flex" gap={1}>
           <IconButton color="primary" size="small" onClick={() => handleEditClick(params.row)}>
             <EditIcon fontSize="small" />
+          </IconButton>
+          <IconButton color="info" size="small" onClick={() => handleCloneClick(params.row._id)}>
+            <ContentCopyIcon fontSize="small" />
           </IconButton>
           <IconButton color="error" size="small" onClick={() => handleDeleteClick(params.row._id)}>
             <DeleteIcon fontSize="small" />
@@ -235,6 +243,7 @@ const PackageDashboard = () => {
             }))}
             columns={columns}
             disableRowSelectionOnClick
+            onRowClick={(params) => handleEditClick(params.row)}
             paginationModel={paginationModel}
             onPaginationModelChange={setPaginationModel}
             pageSizeOptions={[10, 25, 50, 100]}
@@ -242,7 +251,8 @@ const PackageDashboard = () => {
             paginationMode="server"
             sx={{
               "& .MuiDataGrid-columnHeaders": { backgroundColor: "#f5f5f5" },
-              "& .MuiDataGrid-columnHeaderTitle": { fontWeight: "bold" }
+              "& .MuiDataGrid-columnHeaderTitle": { fontWeight: "bold" },
+              "& .MuiDataGrid-row": { cursor: "pointer" }
             }}
           />
         )}

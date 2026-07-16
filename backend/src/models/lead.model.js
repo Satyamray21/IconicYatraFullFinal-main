@@ -108,7 +108,7 @@ const leadSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Active', 'Cancelled', 'Confirmed'],
+    enum: ['Active', 'Cancelled', 'Confirmed', 'Not Converted'],
     default: 'Active',
   },
   tourDetails: {
@@ -128,6 +128,7 @@ const leadSchema = new mongoose.Schema({
       departureDate: Date,
       departureCity: String,
       departureLocation: String,
+      noOfVehicles: { type: Number, default: 0 },
     },
     accommodation: {
       hotelType: [String],

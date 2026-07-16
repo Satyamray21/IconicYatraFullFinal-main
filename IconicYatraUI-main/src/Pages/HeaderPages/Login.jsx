@@ -11,7 +11,15 @@ import {
   Paper,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { Email, Lock, Google, Facebook, Apple, Visibility, VisibilityOff } from "@mui/icons-material";
+import {
+  Email,
+  Lock,
+  Google,
+  Facebook,
+  Apple,
+  Visibility,
+  VisibilityOff,
+} from "@mui/icons-material";
 import ArrowCircleLeftIcon from "@mui/icons-material/ArrowCircleLeft";
 import { useDispatch, useSelector } from "react-redux";
 import { loginUser } from "../../Features/authSlice";
@@ -27,28 +35,26 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  
-const handleLogin = async () => {
-  if (!email || !password) return;
+  const handleLogin = async () => {
+    if (!email || !password) return;
 
-  try {
-    const res = await dispatch(loginUser({ email, password })).unwrap();
+    try {
+      const res = await dispatch(loginUser({ email, password })).unwrap();
 
-    const token = res.token;
-    const user = res.user;
+      const token = res.token;
+      const user = res.user;
 
-    const adminUrl = import.meta.env.VITE_ADMIN_URL;
+      const adminUrl = import.meta.env.VITE_ADMIN_URL;
 
-    window.location.replace(
-      `${adminUrl}/?token=${token}&user=${encodeURIComponent(
-        JSON.stringify(user)
-      )}`
-    );
-  } catch (err) {
-    console.error(err);
-  }
-};
-
+      window.location.replace(
+        `${adminUrl}/?token=${token}&user=${encodeURIComponent(
+          JSON.stringify(user),
+        )}`,
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
@@ -63,7 +69,8 @@ const handleLogin = async () => {
         <Grid
           size={{ xs: 12, md: 6.5 }}
           sx={{
-            backgroundImage: "url('https://damoclesjournal.com/wp-content/uploads/2022/02/0x0.jpg')",
+            backgroundImage:
+              "url('https://damoclesjournal.com/wp-content/uploads/2022/02/0x0.jpg')",
             backgroundSize: "cover",
             backgroundPosition: "center",
             position: "relative",
@@ -89,7 +96,10 @@ const handleLogin = async () => {
           <Box sx={{ position: "relative", zIndex: 2 }}>
             <Typography
               variant="h3"
-              sx={{ fontFamily: "'Brush Script MT', cursive", fontWeight: "bold" }}
+              sx={{
+                fontFamily: "'Brush Script MT', cursive",
+                fontWeight: "bold",
+              }}
             >
               Iconic Yatra
             </Typography>
@@ -112,26 +122,47 @@ const handleLogin = async () => {
             bgcolor: "#fff",
           }}
         >
-          <Paper elevation={0} sx={{ width: "100%", maxWidth: 400, textAlign: "center" }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-              <Button onClick={() => navigate("/")} sx={{ minWidth: "auto", color: "#1976d2" }}>
+          <Paper
+            elevation={0}
+            sx={{ width: "100%", maxWidth: 400, textAlign: "center" }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mb: 2,
+              }}
+            >
+              <Button
+                onClick={() => navigate("/")}
+                sx={{ minWidth: "auto", color: "#1976d2" }}
+              >
                 <ArrowCircleLeftIcon fontSize="large" />
               </Button>
-              <Typography variant="h4" sx={{ fontWeight: "bold", color: "#1976d2", flexGrow: 1, textAlign: "center" }}>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: "bold",
+                  color: "#1976d2",
+                  flexGrow: 1,
+                  textAlign: "center",
+                }}
+              >
                 Welcome
               </Typography>
               <Box sx={{ width: 40 }} />
             </Box>
 
             <Typography variant="body2" sx={{ mb: 4 }}>
-              Login with Email
+              Login with email or staff username
             </Typography>
 
             <TextField
               fullWidth
               variant="outlined"
               margin="normal"
-              placeholder="Email Id"
+              placeholder="Email or staff username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={handleKeyDown} // <-- ENTER key handling
@@ -161,7 +192,10 @@ const handleLogin = async () => {
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                    <IconButton
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                    >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
@@ -173,7 +207,12 @@ const handleLogin = async () => {
 
             <Typography
               variant="body2"
-              sx={{ textAlign: "right", mt: 1, color: "text.secondary", cursor: "pointer" }}
+              sx={{
+                textAlign: "right",
+                mt: 1,
+                color: "text.secondary",
+                cursor: "pointer",
+              }}
               onClick={() => setForgotOpen(true)}
             >
               Forgot your password?
@@ -207,7 +246,10 @@ const handleLogin = async () => {
       </Grid>
 
       {/* Forgot Password Modal */}
-      <ForgotPasswordModal open={forgotOpen} handleClose={() => setForgotOpen(false)} />
+      <ForgotPasswordModal
+        open={forgotOpen}
+        handleClose={() => setForgotOpen(false)}
+      />
     </>
   );
 };

@@ -47,16 +47,19 @@ const FeaturedPackages = () => {
     };
   }, [dispatch]);
 
-  // Auto slide effect
+  // Auto slide effect — wrap back to start so cards don't disappear
   useEffect(() => {
     if (latestPackages.length === 0) return;
 
     const interval = setInterval(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollBy({
-          left: scrollRef.current.offsetWidth / cardsToShow,
-          behavior: "smooth",
-        });
+      const el = scrollRef.current;
+      if (!el) return;
+      const step = el.offsetWidth / cardsToShow;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (el.scrollLeft >= maxScroll - 8) {
+        el.scrollTo({ left: 0, behavior: "smooth" });
+      } else {
+        el.scrollBy({ left: step, behavior: "smooth" });
       }
     }, 4000);
     return () => clearInterval(interval);
@@ -175,7 +178,7 @@ const FeaturedPackages = () => {
         {/* Loading State */}
         {loading && latestPackages.length === 0 && (
           <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-            <CircularProgress sx={{ color: "white" }} />
+            <CircularProgress />
           </Box>
         )}
 
@@ -399,11 +402,11 @@ const FeaturedPackages = () => {
           ) : (
             // No packages message
             !loading && !error && (
-              <Box sx={{ textAlign: "center", py: 4, color: "white" }}>
-                <Typography variant="h6" gutterBottom>
-                  🆕 No latest packages available
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <Typography variant="h6" color="text.secondary" gutterBottom>
+                  No latest packages available
                 </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                <Typography variant="body2" color="text.secondary">
                   We're adding amazing new packages soon!
                 </Typography>
               </Box>

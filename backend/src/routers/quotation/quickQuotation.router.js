@@ -6,26 +6,51 @@ import {
     updateQuickQuotation,
     deleteQuickQuotation,
     sendQuickQuotationMail,
+    finalizeQuickQuotation,
+    previewQuickQuotationMail,
+    sendQuickQuotationEmail,
+    uploadQuickQuotationBanner,
+    uploadQuickQuotationDayImage,
+    saveQuickConfirmedHotels,
+    sendQuickHotelConfirmationMail,
+    previewQuickHotelConfirmation,
+    downloadQuickHotelConfirmationPdf,
 } from "../../controllers/quotation/quickQuotation.controller.js";
+import { upload } from "../../middleware/imageMulter.middleware.js";
+import { requirePermission } from "../../middleware/staffPermission.middleware.js";
 
 const router = express.Router();
 
-// ✅ Create a new quotation
-router.post("/", createQuickQuotation);
+router.post("/", requirePermission("canCreateQuotation"), createQuickQuotation);
+router.get("/", requirePermission("canAccessQuotations"), getAllQuickQuotations);
 
-// ✅ Get all quotations
-router.get("/", getAllQuickQuotations);
+router.post(
+    "/:id/banner",
+    requirePermission("canEditQuotation"),
+    upload.single("bannerImage"),
+    uploadQuickQuotationBanner
+);
+router.post(
+    "/:id/day-image",
+    requirePermission("canEditQuotation"),
+    upload.single("image"),
+    uploadQuickQuotationDayImage
+);
 
-// ✅ Get single quotation by ID
-router.get("/:id", getQuickQuotationById);
+router.get("/:id", requirePermission("canAccessQuotations"), getQuickQuotationById);
 
-// ✅ Update quotation
-router.put("/:id", updateQuickQuotation);
+router.patch("/:id/finalize", requirePermission("canEditQuotation"), finalizeQuickQuotation);
+router.post("/:id/save-confirmed-hotels", requirePermission("canEditQuotation"), saveQuickConfirmedHotels);
+router.get("/:id/hotel-confirmation/download", requirePermission("canAccessQuotations"), downloadQuickHotelConfirmationPdf);
+router.post("/:id/email/hotel-confirmation", requirePermission("canEditQuotation"), sendQuickHotelConfirmationMail);
+router.post("/:id/email/hotel-confirmation/preview", requirePermission("canEditQuotation"), previewQuickHotelConfirmation);
+router.post("/:id/email/preview", requirePermission("canEditQuotation"), previewQuickQuotationMail);
+router.post("/:id/email/send", requirePermission("canEditQuotation"), sendQuickQuotationEmail);
 
-// ✅ Delete quotation
-router.delete("/:id", deleteQuickQuotation);
+router.put("/:id", requirePermission("canEditQuotation"), updateQuickQuotation);
 
-// ✅ Manual email trigger
-router.post("/:id/send-mail", sendQuickQuotationMail);
+router.delete("/:id", requirePermission("canDeleteQuotation"), deleteQuickQuotation);
+
+router.post("/:id/send-mail", requirePermission("canEditQuotation"), sendQuickQuotationMail);
 
 export default router;

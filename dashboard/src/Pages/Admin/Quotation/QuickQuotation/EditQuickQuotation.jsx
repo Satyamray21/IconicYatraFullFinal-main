@@ -36,6 +36,11 @@ const EditQuickQuotation = () => {
         phone: "",
         adults: "",
         children: "",
+        kids: "",
+        infants: "",
+        roomType: "",
+        noOfRooms: "",
+        noOfMattress: "",
         transportation: "",
         pickupPoint: "",
         dropPoint: "",
@@ -57,6 +62,11 @@ const EditQuickQuotation = () => {
                 phone: currentQuotation.phone || "",
                 adults: currentQuotation.adults || "",
                 children: currentQuotation.children || "",
+                kids: currentQuotation.kids || "",
+                infants: currentQuotation.infants || "",
+                roomType: currentQuotation.roomType || currentQuotation.packageSnapshot?.quotationDetails?.roomType || "",
+                noOfRooms: currentQuotation.noOfRooms || currentQuotation.packageSnapshot?.quotationDetails?.noOfRooms || "",
+                noOfMattress: currentQuotation.noOfMattress || currentQuotation.packageSnapshot?.quotationDetails?.noOfMattress || "",
                 transportation: currentQuotation.transportation || "",
                 pickupPoint: currentQuotation.pickupPoint || "",
                 dropPoint: currentQuotation.dropPoint || "",
@@ -128,6 +138,7 @@ const EditQuickQuotation = () => {
                                     onChange={handleChange}
                                     fullWidth
                                     required
+                                    InputLabelProps={{ shrink: true }}
                                 />
                             </Grid>
 
@@ -138,6 +149,7 @@ const EditQuickQuotation = () => {
                                     value={formData.email}
                                     onChange={handleChange}
                                     fullWidth
+                                    InputLabelProps={{ shrink: true }}
                                 />
                             </Grid>
 
@@ -148,6 +160,7 @@ const EditQuickQuotation = () => {
                                     value={formData.phone}
                                     onChange={handleChange}
                                     fullWidth
+                                    InputLabelProps={{ shrink: true }}
                                 />
                             </Grid>
 
@@ -159,6 +172,7 @@ const EditQuickQuotation = () => {
                                     onChange={handleChange}
                                     fullWidth
                                     type="number"
+                                    InputLabelProps={{ shrink: true }}
                                 />
                             </Grid>
 
@@ -170,6 +184,67 @@ const EditQuickQuotation = () => {
                                     onChange={handleChange}
                                     fullWidth
                                     type="number"
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={6} sm={3}>
+                                <TextField
+                                    label="Kids (Without Mattress)"
+                                    name="kids"
+                                    value={formData.kids}
+                                    onChange={handleChange}
+                                    fullWidth
+                                    type="number"
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={6} sm={3}>
+                                <TextField
+                                    label="Infants"
+                                    name="infants"
+                                    value={formData.infants}
+                                    onChange={handleChange}
+                                    fullWidth
+                                    type="number"
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={4}>
+                                <TextField
+                                    label="Room Type"
+                                    name="roomType"
+                                    value={formData.roomType}
+                                    onChange={handleChange}
+                                    fullWidth
+                                    placeholder="e.g., Deluxe, Triple Sharing"
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={6} sm={4}>
+                                <TextField
+                                    label="Number of Rooms"
+                                    name="noOfRooms"
+                                    value={formData.noOfRooms}
+                                    onChange={handleChange}
+                                    fullWidth
+                                    type="number"
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={6} sm={4}>
+                                <TextField
+                                    label="Number of Mattress"
+                                    name="noOfMattress"
+                                    value={formData.noOfMattress}
+                                    onChange={handleChange}
+                                    fullWidth
+                                    type="number"
+                                    InputLabelProps={{ shrink: true }}
                                 />
                             </Grid>
 

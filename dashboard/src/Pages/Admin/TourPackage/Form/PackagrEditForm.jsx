@@ -35,6 +35,8 @@ import {
   LocationOn as LocationIcon,
   Edit as EditIcon,
   Save as SaveIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -46,77 +48,122 @@ import {
   updatePackageStep1,
   uploadPackageBanner,
   uploadPackageDayImage,
+  clearCurrent,
 } from "../../../../features/package/packageSlice";
+import { fetchHotels, createHotelStep1 } from "../../../../features/hotel/hotelSlice";
 import {
   fetchCountries,
   fetchStatesByCountry,
+  fetchDomesticCities,
+  fetchInternationalCities,
   clearStates,
   clearCities,
 } from "../../../../features/location/locationSlice";
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import {
+  getLeadOptions,
+  addLeadOption,
+  deleteLeadOption,
+} from "../../../../features/leads/leadSlice";
+import LeadOptionsManager from "../../../../Components/LeadOptionsManager";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import HomeWorkIcon from "@mui/icons-material/HomeWork";
+import AddIcon from "@mui/icons-material/Add";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 
 // Constants
 const TOUR_TYPES = ["Domestic", "International"];
 const PACKAGE_CATEGORIES = ["Yatra", "Holidays", "Special", "Latest"];
 const DOMESTIC_TOUR_TYPES = ["Domestic"];
 
+const createInitialPackageState = () => ({
+  // Step 1 Fields
+  tourType: "Domestic",
+  packageCategory: "",
+  packageSubType: [],
+  destinationCountry: "India",
+  sector: "",
+  stayLocations: [],
+
+  // Step 2 Fields
+  title: "",
+  arrivalCity: "",
+  departureCity: "",
+  notes:
+    "This is only tentative schedule for sightseeing and travel. Actual sightseeing may get affected due to weather, road conditions, local authority notices, shortage of timing, or off days.",
+  bannerImage: "",
+  validFrom: null,
+  validTill: null,
+  days: [],
+  perPerson: 1,
+  numberOfRooms: 1,
+  transportationCostPerDay: 0,
+  transportationDays: 0,
+  manualCostMargin: 0,
+  mealPlan: {
+    planType: "",
+    description: "",
+  },
+  destinationNights: [],
+
+  // Policy Fields
+  policy: {
+    inclusionPolicy: "",
+    exclusionPolicy: "",
+    paymentPolicy: "",
+    cancellationPolicy: "",
+    termsAndConditions: "",
+  },
+
+  // Status
+  status: "deactive",
+  _id: null,
+});
+
 const PackageEditView = () => {
   const { id } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { current, loading } = useSelector((state) => state.packages || {});
-  const { countries = [], states = [] } = useSelector((state) => state.location || {});
+  const { countries = [], states = [] } = useSelector(
+    (state) => state.location || {},
+  );
 
   // State with safe default values
-  const [pkg, setPkg] = useState({
-    // Step 1 Fields
-    tourType: "Domestic",
-    packageCategory: "",
-    packageSubType: [],
-    destinationCountry: "India",
-    sector: "",
-    stayLocations: [],
-    
-    // Step 2 Fields
-    title: "",
-    arrivalCity: "",
-    departureCity: "",
-    notes: "This is only tentative schedule for sightseeing and travel. Actual sightseeing may get affected due to weather, road conditions, local authority notices, shortage of timing, or off days.",
-    bannerImage: "",
-    validFrom: null,
-    validTill: null,
-    days: [],
-    perPerson: 1,
-    mealPlan: {
-      planType: "",
-      description: "",
-    },
-    destinationNights: [],
-    
-    // Policy Fields
-    policy: {
-      inclusionPolicy: "",
-      exclusionPolicy: "",
-      paymentPolicy: "",
-      cancellationPolicy: "",
-      termsAndConditions: ""
-    },
-    
-    // Status
-    status: "deactive",
-    _id: null
-  });
+  const [pkg, setPkg] = useState(createInitialPackageState);
 
   // UI State
   const [selectedCountry, setSelectedCountry] = useState("India");
-  const [groupedStayLocations, setGroupedStayLocations] = useState({});
   const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState(null);
+  const [allCities, setAllCities] = useState([]);
+  const [locationList, setLocationList] = useState([]);
+  const [searchText, setSearchText] = useState("");
+  const [currentState, setCurrentState] = useState("");
+  const [openLocationDialog, setOpenLocationDialog] = useState(false);
+  const [newLocation, setNewLocation] = useState("");
+  const [openDialog, setOpenDialog] = useState(false);
+  const [currentField, setCurrentField] = useState("");
+  const [addMore, setAddMore] = useState("");
+  const [currentHotelCategory, setCurrentHotelCategory] = useState("");
+  const [hotelDialogOpen, setHotelDialogOpen] = useState(false);
+
+  const { options = [] } = useSelector((state) => state.leads || {});
+  const { hotels, loading: hotelsLoading } = useSelector((state) => state.hotel || {});
+  const BOX_HEIGHT = 220;
 
   useEffect(() => {
     if (id) {
       console.log("Fetching package with ID:", id);
+      setInitialized(false);
+      setError(null);
+      setSelectedCountry("India");
+      setPkg(createInitialPackageState());
+      dispatch(clearCurrent());
       dispatch(fetchPackageById(id))
         .unwrap()
         .catch((err) => {
@@ -128,16 +175,22 @@ const PackageEditView = () => {
   }, [id, dispatch]);
 
   useEffect(() => {
+    if (!current || initialized) return;
+    if (String(current._id || "") !== String(id || "")) return;
+
     if (current && !initialized) {
       console.log("Current package data received:", current);
-      
+
       try {
         // Safe data extraction with fallbacks
         const safeCurrent = current || {};
-        
+
         // Calculate hotel costs safely
         let hotelCosts = { Standard: 0, Deluxe: 0, Superior: 0 };
-        if (safeCurrent.destinationNights?.length > 0 && safeCurrent.destinationNights[0]?.hotels) {
+        if (
+          safeCurrent.destinationNights?.length > 0 &&
+          safeCurrent.destinationNights[0]?.hotels
+        ) {
           safeCurrent.destinationNights[0].hotels.forEach((hotel) => {
             if (hotel?.category?.toLowerCase() === "standard")
               hotelCosts.Standard = hotel.pricePerPerson || 0;
@@ -150,33 +203,52 @@ const PackageEditView = () => {
 
         // Policy Data Conversion with safety
         const getPolicyContent = (policyArray) => {
-          if (!policyArray || !Array.isArray(policyArray) || policyArray.length === 0) return "";
-          if (policyArray[0] && (policyArray[0].includes('<p>') || policyArray[0].includes('<h'))) {
+          if (
+            !policyArray ||
+            !Array.isArray(policyArray) ||
+            policyArray.length === 0
+          )
+            return "";
+          if (
+            policyArray[0] &&
+            (policyArray[0].includes("<p>") || policyArray[0].includes("<h"))
+          ) {
             return policyArray[0];
           }
-          return policyArray.map(item => item ? `<p>${item}</p>` : '').join('');
+          return policyArray
+            .map((item) => (item ? `<p>${item}</p>` : ""))
+            .join("");
         };
 
         // Initialize days safely
-        const initializedDays = (safeCurrent.days || []).map((d) => ({
-          title: d?.title || "",
-          notes: d?.notes || "",
-          aboutCity: d?.aboutCity || "",
-          dayImage: d?.dayImage || "",
-          sightseeing: Array.isArray(d?.sightseeing) ? d.sightseeing : [],
-          selectedSightseeing: Array.isArray(d?.selectedSightseeing) ? d.selectedSightseeing : [],
-        }));
+        const initializedDays = (safeCurrent.days || []).map((d) => {
+          const sight = Array.isArray(d?.sightseeing) ? d.sightseeing : [];
+          const sel = Array.isArray(d?.selectedSightseeing) ? d.selectedSightseeing : [];
+          return {
+            title: d?.title || "",
+            notes: d?.notes || "",
+            aboutCity: d?.aboutCity || "",
+            dayImage: d?.dayImage || "",
+            sightseeing: sight,
+            selectedSightseeing: sel.length ? sel : [...sight],
+          };
+        });
 
         // Initialize stayLocations safely
-        const initializedStayLocations = (safeCurrent.stayLocations || []).map((location) => ({
-          city: location?.city || "",
-          nights: location?.nights || 1,
-          state: location?.state || safeCurrent.sector || "",
-          country: location?.country || safeCurrent.destinationCountry || "India"
-        }));
+        const initializedStayLocations = (safeCurrent.stayLocations || []).map(
+          (location) => ({
+            city: location?.city || "",
+            nights: location?.nights || 1,
+            state: location?.state || safeCurrent.sector || "",
+            country:
+              location?.country || safeCurrent.destinationCountry || "India",
+          }),
+        );
 
         // Initialize destinationNights safely - FIXED: Properly initialize all fields
-        const initializedDestinationNights = (safeCurrent.destinationNights || []).map((dest) => {
+        const initializedDestinationNights = (
+          safeCurrent.destinationNights || []
+        ).map((dest) => {
           // Ensure hotels array exists and has 3 items
           let hotels = [];
           if (Array.isArray(dest?.hotels) && dest.hotels.length > 0) {
@@ -188,70 +260,111 @@ const PackageEditView = () => {
               { category: "superior", hotelName: "", pricePerPerson: 0 },
             ];
           }
-          
+
           return {
             destination: dest?.destination || "",
-            nights: dest?.nights || 1,  // Changed default to 1 instead of 0
-            hotels: hotels
+            nights: dest?.nights || 1, // Changed default to 1 instead of 0
+            hotels: hotels,
           };
         });
 
-        // Group stay locations by state
-        const grouped = {};
-        initializedStayLocations.forEach(item => {
-          const stateKey = item?.state || "Unknown";
-          if (!grouped[stateKey]) {
-            grouped[stateKey] = [];
-          }
-          grouped[stateKey].push(item);
-        });
 
-        setGroupedStayLocations(grouped);
-        
         setPkg({
           // Step 1 Fields
           tourType: safeCurrent.tourType || "Domestic",
           packageCategory: safeCurrent.packageCategory || "",
-          packageSubType: Array.isArray(safeCurrent.packageSubType) ? safeCurrent.packageSubType : 
-                         (safeCurrent.packageSubType ? [safeCurrent.packageSubType] : []),
+          packageSubType: Array.isArray(safeCurrent.packageSubType)
+            ? safeCurrent.packageSubType
+            : safeCurrent.packageSubType
+              ? [safeCurrent.packageSubType]
+              : [],
           destinationCountry: safeCurrent.destinationCountry || "India",
           sector: safeCurrent.sector || "",
           stayLocations: initializedStayLocations,
-          
+
           // Step 2 Fields
           title: safeCurrent.title || "",
           arrivalCity: safeCurrent.arrivalCity || "",
           departureCity: safeCurrent.departureCity || "",
-          notes: safeCurrent.notes || "This is only tentative schedule for sightseeing and travel. Actual sightseeing may get affected due to weather, road conditions, local authority notices, shortage of timing, or off days.",
+          notes:
+            safeCurrent.notes ||
+            "This is only tentative schedule for sightseeing and travel. Actual sightseeing may get affected due to weather, road conditions, local authority notices, shortage of timing, or off days.",
           bannerImage: safeCurrent.bannerImage || "",
           validFrom: safeCurrent.validFrom || null,
           validTill: safeCurrent.validTill || null,
           days: initializedDays,
           perPerson: safeCurrent.perPerson || 1,
+          numberOfRooms: Number(safeCurrent.numberOfRooms) || 1,
+          transportationCostPerDay:
+            Number(safeCurrent.transportationCostPerDay) || 0,
+          transportationDays:
+            Number(safeCurrent.transportationDays) ||
+            safeCurrent.days?.length ||
+            0,
+          manualCostMargin: Number(safeCurrent.manualCostMargin) || 0,
           mealPlan: safeCurrent.mealPlan || { planType: "", description: "" },
           destinationNights: initializedDestinationNights,
-          
+
           // Policy Fields
           policy: {
-            inclusionPolicy: getPolicyContent(safeCurrent.policy?.inclusionPolicy),
-            exclusionPolicy: getPolicyContent(safeCurrent.policy?.exclusionPolicy),
+            inclusionPolicy: getPolicyContent(
+              safeCurrent.policy?.inclusionPolicy,
+            ),
+            exclusionPolicy: getPolicyContent(
+              safeCurrent.policy?.exclusionPolicy,
+            ),
             paymentPolicy: getPolicyContent(safeCurrent.policy?.paymentPolicy),
-            cancellationPolicy: getPolicyContent(safeCurrent.policy?.cancellationPolicy),
-            termsAndConditions: getPolicyContent(safeCurrent.policy?.termsAndConditions)
+            cancellationPolicy: getPolicyContent(
+              safeCurrent.policy?.cancellationPolicy,
+            ),
+            termsAndConditions: getPolicyContent(
+              safeCurrent.policy?.termsAndConditions,
+            ),
           },
-          
+
           // Status
           status: safeCurrent.status || "deactive",
-          _id: safeCurrent._id || id
+          _id: safeCurrent._id || id,
         });
 
         setSelectedCountry(safeCurrent.destinationCountry || "India");
+        setCurrentState(safeCurrent.sector || "");
         setInitialized(true);
         setError(null);
 
         // Fetch states for the country
         if (safeCurrent.destinationCountry) {
           dispatch(fetchStatesByCountry(safeCurrent.destinationCountry));
+        }
+
+        // Fetch cities for the initial sector/state
+        if (safeCurrent.sector) {
+          if (DOMESTIC_TOUR_TYPES.includes(safeCurrent.tourType || "Domestic")) {
+            dispatch(fetchDomesticCities(safeCurrent.sector))
+              .unwrap()
+              .then((cityList) => {
+                const apiCities = cityList.map((c) => c.name || c.city || c);
+                const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+                const combinedCities = [...new Set([...apiCities, ...customCities])];
+                setAllCities(combinedCities);
+                setLocationList(combinedCities);
+              });
+          } else {
+            dispatch(
+              fetchInternationalCities({
+                countryName: safeCurrent.destinationCountry || "India",
+                stateName: safeCurrent.sector,
+              }),
+            )
+              .unwrap()
+              .then((cityList) => {
+                const apiCities = cityList.map((c) => c.name || c.city || c);
+                const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+                const combinedCities = [...new Set([...apiCities, ...customCities])];
+                setAllCities(combinedCities);
+                setLocationList(combinedCities);
+              });
+          }
         }
       } catch (err) {
         console.error("Error initializing package data:", err);
@@ -260,10 +373,80 @@ const PackageEditView = () => {
     }
   }, [current, initialized, id, dispatch]);
 
+  // Sync destinationNights with stayLocations
+  useEffect(() => {
+    if (!initialized || !pkg.stayLocations) return;
+
+    setPkg((prev) => {
+      const currentDestinations = prev.destinationNights || [];
+      const newStayLocations = prev.stayLocations || [];
+
+      // Create a map of existing destination data to preserve hotel info
+      // We use a map to quickly look up by city name
+      const destinationMap = {};
+      currentDestinations.forEach((dest) => {
+        if (dest.destination) {
+          destinationMap[dest.destination] = dest;
+        }
+      });
+
+      // Build new destinationNights based on stayLocations
+      const updatedDestinationNights = newStayLocations.map((stay) => {
+        const cityName = stay.city || "";
+        const existing = destinationMap[cityName];
+        
+        return {
+          destination: cityName,
+          nights: parseInt(stay.nights) || 1,
+          hotels: existing?.hotels || [
+            { category: "standard", hotelName: "TBD", pricePerPerson: 0 },
+            { category: "deluxe", hotelName: "TBD", pricePerPerson: 0 },
+            { category: "superior", hotelName: "TBD", pricePerPerson: 0 },
+          ],
+        };
+      });
+
+      // Only update if there's a real change to avoid infinite loops
+      // We check length and destination/nights values
+      const hasChanged = 
+        updatedDestinationNights.length !== currentDestinations.length ||
+        updatedDestinationNights.some((dest, i) => {
+          const oldDest = currentDestinations[i];
+          return !oldDest || 
+                 dest.destination !== oldDest.destination || 
+                 dest.nights !== oldDest.nights;
+        });
+
+      if (hasChanged) {
+        console.log("Syncing destinationNights with stayLocations:", updatedDestinationNights);
+        return { ...prev, destinationNights: updatedDestinationNights };
+      }
+      return prev;
+    });
+  }, [pkg.stayLocations, initialized]);
+
+  // Hotel Options Manager Logic
+  const selectedCities = React.useMemo(() => {
+    return pkg.stayLocations?.map((location) => location.city) || [];
+  }, [pkg.stayLocations]);
+
+  useEffect(() => {
+    if (selectedCities.length > 0) {
+      dispatch(fetchHotels());
+    }
+  }, [selectedCities, dispatch]);
+
   // Loading state
   if (loading && !initialized) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+        }}
+      >
         <CircularProgress />
         <Typography sx={{ ml: 2 }}>Loading package data...</Typography>
       </Box>
@@ -301,17 +484,20 @@ const PackageEditView = () => {
   // Handlers with safety checks
   const handleTourTypeChange = (e) => {
     const selectedType = e?.target?.value || "Domestic";
-    setPkg(prev => ({
-      ...prev,
-      tourType: selectedType,
-      destinationCountry: DOMESTIC_TOUR_TYPES.includes(selectedType) ? "India" : prev.destinationCountry,
-      sector: "",
-      packageCategory: "",
-      packageSubType: [],
-      stayLocations: []
-    }));
-    setSelectedCountry(DOMESTIC_TOUR_TYPES.includes(selectedType) ? "India" : "");
-    setGroupedStayLocations({});
+    setPkg((prev) => {
+      return {
+        ...prev,
+        tourType: selectedType,
+        destinationCountry: DOMESTIC_TOUR_TYPES.includes(selectedType) ? "India" : prev.destinationCountry,
+        sector: "",
+        packageCategory: "",
+        packageSubType: [],
+        stayLocations: []
+      };
+    });
+    
+    const country = DOMESTIC_TOUR_TYPES.includes(selectedType) ? "India" : "";
+    setSelectedCountry(country);
     dispatch(clearStates());
     dispatch(clearCities());
 
@@ -323,86 +509,344 @@ const PackageEditView = () => {
   const handleCountryChange = (countryName) => {
     if (!countryName) return;
     setSelectedCountry(countryName);
-    setPkg(prev => ({
-      ...prev,
-      destinationCountry: countryName,
-      sector: "",
-      packageCategory: "",
-      packageSubType: [],
-      stayLocations: []
-    }));
-    setGroupedStayLocations({});
+    setPkg((prev) => {
+      return {
+        ...prev,
+        destinationCountry: countryName,
+        sector: "",
+        packageCategory: "",
+        packageSubType: [],
+        stayLocations: []
+      };
+    });
     dispatch(clearStates());
     dispatch(clearCities());
     dispatch(fetchStatesByCountry(countryName));
   };
 
   const handleSectorChange = (selectedStateName) => {
-    setPkg(prev => ({ ...prev, sector: selectedStateName || "" }));
+    setPkg((prev) => ({ ...prev, sector: selectedStateName || "" }));
+    setCurrentState(selectedStateName);
+
+    if (DOMESTIC_TOUR_TYPES.includes(pkg.tourType)) {
+      dispatch(fetchDomesticCities(selectedStateName))
+        .unwrap()
+        .then((cityList) => {
+          const apiCities = cityList.map((c) => c.name || c.city || c);
+          const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+          const combinedCities = [...new Set([...apiCities, ...customCities])];
+          setAllCities(combinedCities);
+          setLocationList(combinedCities);
+          setSearchText("");
+        });
+    } else {
+      dispatch(
+        fetchInternationalCities({
+          countryName: selectedCountry,
+          stateName: selectedStateName,
+        }),
+      )
+        .unwrap()
+        .then((cityList) => {
+          const apiCities = cityList.map((c) => c.name || c.city || c);
+          const customCities = options?.filter(opt => opt.fieldName === "city").map(opt => opt.value) || [];
+          const combinedCities = [...new Set([...apiCities, ...customCities])];
+          setAllCities(combinedCities);
+          setLocationList(combinedCities);
+          setSearchText("");
+        });
+    }
+  };
+
+  const handleSearch = (e) => {
+    const value = e.target.value.toLowerCase();
+    setSearchText(value);
+    if (!value) {
+      setLocationList(allCities);
+    } else {
+      setLocationList(allCities.filter((c) => c.toLowerCase().includes(value)));
+    }
+  };
+
+  const handleSelectCity = (city) => {
+    const cityWithState = {
+      city,
+      state: currentState,
+      country:
+        selectedCountry ||
+        (DOMESTIC_TOUR_TYPES.includes(pkg.tourType) ? "India" : ""),
+      nights: 1,
+    };
+
+    if (
+      !pkg.stayLocations.find(
+        (item) => item.city === city && item.state === currentState,
+      )
+    ) {
+      const updated = [...pkg.stayLocations, cityWithState];
+      setPkg({ ...pkg, stayLocations: updated });
+    }
+  };
+
+  // Add New Location Logic removed as we use LeadOptionsManager
+
+  const handleDeleteLocation = (locationToDelete, e) => {
+    e.stopPropagation();
+    setAllCities((prev) => prev.filter((loc) => loc !== locationToDelete));
+    setLocationList((prev) => prev.filter((loc) => loc !== locationToDelete));
+  };
+
+  // Lead Options Manager Logic
+  // Hotel Options Manager Logic
+  const getHotelsForDestination = (destinationCity) => {
+    if (!destinationCity) return { standard: [], deluxe: [], superior: [] };
+    if (!hotels || hotels.length === 0) return { standard: [], deluxe: [], superior: [] };
+
+    const destinationHotels = hotels.filter((hotel) => {
+      const hotelCity = hotel.location?.city?.toLowerCase() || "";
+      const hotelName = hotel.hotelName?.toLowerCase() || "";
+      const searchCity = destinationCity.toLowerCase().trim();
+
+      const exactMatch = hotelCity === searchCity;
+      const partialMatch =
+        hotelCity.includes(searchCity) ||
+        searchCity.includes(hotelCity) ||
+        hotelName.includes(searchCity) ||
+        hotelCity.includes(searchCity.split(" ")[0]) ||
+        searchCity.includes(hotelCity.split(" ")[0]);
+
+      return exactMatch || partialMatch;
+    });
+
+    const organized = { standard: [], deluxe: [], superior: [] };
+    destinationHotels.forEach((hotel) => {
+      const category = hotel.category?.toLowerCase() || "standard";
+      const hotelName = hotel.hotelName?.trim();
+      if (hotelName && organized[category] && !organized[category].includes(hotelName)) {
+        organized[category].push(hotelName);
+      }
+    });
+    return organized;
+  };
+
+  const getHotelOptionsForCategory = (category, destinationCity = "") => {
+    const destinationHotels = getHotelsForDestination(destinationCity);
+    const baseOptions = destinationHotels[category] || [];
+    const allOptions = [...new Set([...baseOptions])];
+    return [...allOptions, { value: "__add_new", label: "+ Add New" }];
+  };
+
+  const renderHotelOption = (props, option, category) => {
+    if (option === "__add_new") {
+      return (
+        <li
+          {...props}
+          key="add_new"
+          style={{
+            color: "#1976d2",
+            fontWeight: 600,
+            backgroundColor: "#f0f7ff",
+            borderBottom: "2px solid #1976d2",
+          }}
+        >
+          + Add New Hotel
+        </li>
+      );
+    }
+
+    return (
+      <li {...props} key={typeof option === "object" ? option.value : option}>
+        {typeof option === "object" ? option.label : option}
+      </li>
+    );
+  };
+
+  const handleAddNewHotel = async () => {
+    if (!addMore.trim()) {
+      alert("Please enter a name");
+      return;
+    }
+
+    try {
+      const newValue = addMore.trim();
+      const destIndex = sessionStorage.getItem("currentDestIndex");
+      let destinationCity = "";
+      let destinationState = "";
+      let destinationCountry = selectedCountry || "India";
+
+      if (destIndex !== null && pkg.destinationNights[destIndex]) {
+        destinationCity = pkg.destinationNights[destIndex].destination;
+        const matchedLocation = pkg.stayLocations?.find((loc) => loc.city === destinationCity);
+        if (matchedLocation) {
+          destinationState = matchedLocation.state || "";
+          destinationCountry = matchedLocation.country || destinationCountry;
+        } else {
+          destinationState = destinationCountry === "India" ? (currentState || "") : "";
+        }
+      }
+
+      const hotelFormData = new FormData();
+      const locationData = {
+        country: destinationCountry,
+        state: destinationState,
+        city: destinationCity,
+        address: "",
+        pincode: "",
+      };
+      hotelFormData.append("location", JSON.stringify(locationData));
+      hotelFormData.append("hotelName", newValue);
+      hotelFormData.append("category", currentHotelCategory);
+
+      await dispatch(createHotelStep1(hotelFormData)).unwrap();
+      
+      if (destinationCity) {
+        dispatch(fetchHotels());
+      }
+      
+      setHotelDialogOpen(false);
+      setCurrentHotelCategory("");
+      sessionStorage.removeItem("currentDestIndex");
+    } catch (hotelErr) {
+      alert("Failed to create hotel: " + (hotelErr.message || "Unknown error"));
+    }
+  };
+
+  const handleOpenDialog = (field) => {
+    setCurrentField(field);
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    dispatch(getLeadOptions());
+  };
+
+  const handleOptionAdd = (newValue) => {
+    if (currentField === "city") {
+      setAllCities((prev) => prev.includes(newValue) ? prev : [...prev, newValue]);
+      setLocationList((prev) => prev.includes(newValue) ? prev : [...prev, newValue]);
+      return;
+    }
+
+    if (Array.isArray(pkg[currentField])) {
+      if (!pkg[currentField].includes(newValue)) {
+        setPkg({
+          ...pkg,
+          [currentField]: [...pkg[currentField], newValue],
+        });
+      }
+    } else {
+      setPkg({ ...pkg, [currentField]: newValue });
+    }
+  };
+
+  const getOptionsForField = (fieldName) => {
+    const filteredOptions = options
+      ?.filter((opt) => opt.fieldName === fieldName)
+      .map((opt) => ({ value: opt.value, label: opt.value }));
+
+    return [
+      ...(filteredOptions || []),
+      { value: "__add_new", label: "+ Add New" },
+    ];
   };
 
   const handleStayChange = (index, field, value) => {
-    if (!pkg.stayLocations || index < 0 || index >= pkg.stayLocations.length) return;
-    
+    if (!pkg.stayLocations || index < 0 || index >= pkg.stayLocations.length)
+      return;
+
     const updated = [...pkg.stayLocations];
+    const oldNights = parseInt(updated[index].nights) || 1;
+    const newNights = field === "nights" ? parseInt(value) || 0 : oldNights;
+
     if (field === "nights") {
       updated[index] = {
         ...updated[index],
-        [field]: parseInt(value) || 0
+        [field]: newNights,
       };
+
+      // Adjust itinerary days if nights changed
+      if (newNights !== oldNights) {
+        const diff = newNights - oldNights;
+        const newDays = [...(pkg.days || [])];
+
+        // Find the split point (after this city's current block)
+        let splitPoint = 0;
+        for (let i = 0; i <= index; i++) {
+          splitPoint += parseInt(pkg.stayLocations[i].nights) || 1;
+        }
+
+        if (diff > 0) {
+          // Add days
+          const newDayEntries = Array(diff)
+            .fill(null)
+            .map(() => ({
+              title: "",
+              notes: "",
+              aboutCity: "",
+              dayImage: null,
+              sightseeing: [],
+              selectedSightseeing: [],
+            }));
+          newDays.splice(splitPoint, 0, ...newDayEntries);
+        } else if (diff < 0) {
+          // Remove days (from the end of this city's block)
+          newDays.splice(splitPoint + diff, Math.abs(diff));
+        }
+
+        setPkg({ ...pkg, stayLocations: updated, days: newDays });
+        return;
+      }
     } else {
       updated[index] = {
         ...updated[index],
-        [field]: value || ""
+        [field]: value || "",
       };
     }
     setPkg({ ...pkg, stayLocations: updated });
-
-    // Update grouped display
-    const grouped = {};
-    updated.forEach(item => {
-      const stateKey = item?.state || "Unknown";
-      if (!grouped[stateKey]) {
-        grouped[stateKey] = [];
-      }
-      grouped[stateKey].push(item);
-    });
-    setGroupedStayLocations(grouped);
   };
 
   const handleRemoveCity = (cityToRemove) => {
     if (!cityToRemove || !pkg.stayLocations) return;
-    
-    const updated = pkg.stayLocations.filter((item) =>
-      !(item?.city === cityToRemove.city && item?.state === cityToRemove.state)
+
+    const index = pkg.stayLocations.findIndex(
+      (item) =>
+        item?.city === cityToRemove.city && item?.state === cityToRemove.state,
     );
-    setPkg({ ...pkg, stayLocations: updated });
-    
-    // Update grouped display
-    const grouped = {};
-    updated.forEach(item => {
-      const stateKey = item?.state || "Unknown";
-      if (!grouped[stateKey]) {
-        grouped[stateKey] = [];
+
+    if (index !== -1) {
+      const nights = parseInt(pkg.stayLocations[index].nights) || 1;
+      const newDays = [...(pkg.days || [])];
+
+      // Calculate start index of days for this city
+      let startDayIndex = 0;
+      for (let i = 0; i < index; i++) {
+        startDayIndex += parseInt(pkg.stayLocations[i].nights) || 1;
       }
-      grouped[stateKey].push(item);
-    });
-    setGroupedStayLocations(grouped);
+
+      // Remove corresponding days
+      newDays.splice(startDayIndex, nights);
+
+      const updated = pkg.stayLocations.filter((_, i) => i !== index);
+      setPkg({ ...pkg, stayLocations: updated, days: newDays });
+    }
   };
 
   const handleDayChange = (index, field, value) => {
     if (!pkg.days || index < 0 || index >= pkg.days.length) return;
-    
+
     const updated = [...pkg.days];
     if (field === "selectedSightseeing") {
+      const arr = Array.isArray(value) ? value : [];
       updated[index] = {
         ...updated[index],
-        [field]: Array.isArray(value) ? value : []
+        selectedSightseeing: arr,
+        sightseeing: arr,
       };
     } else {
       updated[index] = {
         ...updated[index],
-        [field]: value
+        [field]: value,
       };
     }
     setPkg({ ...pkg, days: updated });
@@ -434,104 +878,152 @@ const PackageEditView = () => {
   };
 
   const handleAddSightseeing = (dayIndex, e) => {
-    if (!e || !e.key || !pkg.days || dayIndex < 0 || dayIndex >= pkg.days.length) return;
-    
-    if (e.key === "Enter" && e.target.value?.trim() !== "") {
-      e.preventDefault();
-      const updatedDays = [...pkg.days];
-      const newSight = e.target.value.trim();
-      
-      if (!updatedDays[dayIndex].sightseeing) {
-        updatedDays[dayIndex].sightseeing = [];
-      }
-      if (!updatedDays[dayIndex].selectedSightseeing) {
-        updatedDays[dayIndex].selectedSightseeing = [];
-      }
-      
-      updatedDays[dayIndex].sightseeing.push(newSight);
-      updatedDays[dayIndex].selectedSightseeing.push(newSight);
-      
-      setPkg({ ...pkg, days: updatedDays });
-      e.target.value = "";
+    if (!e?.key || !pkg.days || dayIndex < 0 || dayIndex >= pkg.days.length) {
+      return;
     }
+
+    if (e.key !== "Enter") return;
+
+    const raw = typeof e.target.value === "string" ? e.target.value : "";
+    const newSight = raw.trim();
+    if (!newSight) return;
+
+    e.preventDefault();
+
+    setPkg((prev) => {
+      if (!prev.days || dayIndex < 0 || dayIndex >= prev.days.length) return prev;
+      const updatedDays = prev.days.map((d, i) => {
+        if (i !== dayIndex) return d;
+        const prevSight = Array.isArray(d.sightseeing) ? d.sightseeing : [];
+        const prevSel = Array.isArray(d.selectedSightseeing)
+          ? d.selectedSightseeing
+          : [];
+        return {
+          ...d,
+          sightseeing: [...prevSight, newSight],
+          selectedSightseeing: [...prevSel, newSight],
+        };
+      });
+      return { ...prev, days: updatedDays };
+    });
+
+    e.target.value = "";
   };
 
   // NEW: Handler for destination nights change
 
-const handleDestinationNightsChange = (destIndex, value) => {
-  if (!pkg.destinationNights || destIndex < 0 || destIndex >= pkg.destinationNights.length) return;
-  
-  const updatedNights = [...pkg.destinationNights];
-  updatedNights[destIndex].nights = parseInt(value) || 0;
-  
-  setPkg({ ...pkg, destinationNights: updatedNights });
-  console.log(`Updated nights for destination ${destIndex}:`, value);
-};
+  const handleDestinationNightsChange = (destIndex, value) => {
+    if (
+      !pkg.destinationNights ||
+      destIndex < 0 ||
+      destIndex >= pkg.destinationNights.length
+    )
+      return;
 
-// Hotel name change handler
-const handleHotelChange = (destIndex, category, hotelName) => {
-  if (!pkg.destinationNights || destIndex < 0 || destIndex >= pkg.destinationNights.length) return;
-  
-  const updatedNights = [...pkg.destinationNights];
-  const catIndex = ["standard", "deluxe", "superior"].indexOf(category);
-  
-  // Ensure hotels array exists
-  if (!updatedNights[destIndex].hotels) {
-    updatedNights[destIndex].hotels = [
-      { category: "standard", hotelName: "", pricePerPerson: 0 },
-      { category: "deluxe", hotelName: "", pricePerPerson: 0 },
-      { category: "superior", hotelName: "", pricePerPerson: 0 },
-    ];
-  }
-  
-  // Ensure the specific hotel object exists
-  if (!updatedNights[destIndex].hotels[catIndex]) {
-    updatedNights[destIndex].hotels[catIndex] = { category, hotelName: "", pricePerPerson: 0 };
-  }
-  
-  // Update the hotel name
-  updatedNights[destIndex].hotels[catIndex] = {
-    ...updatedNights[destIndex].hotels[catIndex],
-    category,
-    hotelName: hotelName,
-  };
-  
-  setPkg({ ...pkg, destinationNights: updatedNights });
-  console.log(`Updated ${category} hotel for destination ${destIndex}:`, hotelName);
-};
+    const updatedNights = [...pkg.destinationNights];
+    updatedNights[destIndex].nights = parseInt(value) || 0;
 
-// Price change handler
-const handlePriceChange = (destIndex, category, price) => {
-  if (!pkg.destinationNights || destIndex < 0 || destIndex >= pkg.destinationNights.length) return;
-  
-  const updatedNights = [...pkg.destinationNights];
-  const catIndex = ["standard", "deluxe", "superior"].indexOf(category);
-  const priceValue = price === "" ? 0 : Number(price);
-  
-  // Ensure hotels array exists
-  if (!updatedNights[destIndex].hotels) {
-    updatedNights[destIndex].hotels = [
-      { category: "standard", hotelName: "", pricePerPerson: 0 },
-      { category: "deluxe", hotelName: "", pricePerPerson: 0 },
-      { category: "superior", hotelName: "", pricePerPerson: 0 },
-    ];
-  }
-  
-  // Ensure the specific hotel object exists
-  if (!updatedNights[destIndex].hotels[catIndex]) {
-    updatedNights[destIndex].hotels[catIndex] = { category, hotelName: "", pricePerPerson: 0 };
-  }
-  
-  // Update the price
-  updatedNights[destIndex].hotels[catIndex] = {
-    ...updatedNights[destIndex].hotels[catIndex],
-    category,
-    pricePerPerson: priceValue,
+    setPkg({ ...pkg, destinationNights: updatedNights });
+    console.log(`Updated nights for destination ${destIndex}:`, value);
   };
-  
-  setPkg({ ...pkg, destinationNights: updatedNights });
-  console.log(`Updated ${category} price for destination ${destIndex}:`, priceValue);
-};
+
+  // Hotel name change handler
+  const handleHotelChange = (destIndex, category, hotelName) => {
+    if (hotelName === "__add_new") {
+      setCurrentHotelCategory(category);
+      setCurrentField(`hotel_${category}`);
+      setAddMore("");
+      setHotelDialogOpen(true);
+      sessionStorage.setItem("currentDestIndex", destIndex);
+      return;
+    }
+
+    if (
+      !pkg.destinationNights ||
+      destIndex < 0 ||
+      destIndex >= pkg.destinationNights.length
+    )
+      return;
+
+    const updatedNights = [...pkg.destinationNights];
+    const catIndex = ["standard", "deluxe", "superior"].indexOf(category);
+
+    // Ensure hotels array exists
+    if (!updatedNights[destIndex].hotels) {
+      updatedNights[destIndex].hotels = [
+        { category: "standard", hotelName: "", pricePerPerson: 0 },
+        { category: "deluxe", hotelName: "", pricePerPerson: 0 },
+        { category: "superior", hotelName: "", pricePerPerson: 0 },
+      ];
+    }
+
+    // Ensure the specific hotel object exists
+    if (!updatedNights[destIndex].hotels[catIndex]) {
+      updatedNights[destIndex].hotels[catIndex] = {
+        category,
+        hotelName: "",
+        pricePerPerson: 0,
+      };
+    }
+
+    // Update the hotel name
+    updatedNights[destIndex].hotels[catIndex] = {
+      ...updatedNights[destIndex].hotels[catIndex],
+      category,
+      hotelName: hotelName,
+    };
+
+    setPkg({ ...pkg, destinationNights: updatedNights });
+    console.log(
+      `Updated ${category} hotel for destination ${destIndex}:`,
+      hotelName,
+    );
+  };
+
+  // Price change handler
+  const handlePriceChange = (destIndex, category, price) => {
+    if (
+      !pkg.destinationNights ||
+      destIndex < 0 ||
+      destIndex >= pkg.destinationNights.length
+    )
+      return;
+
+    const updatedNights = [...pkg.destinationNights];
+    const catIndex = ["standard", "deluxe", "superior"].indexOf(category);
+    const priceValue = price === "" ? 0 : Number(price);
+
+    // Ensure hotels array exists
+    if (!updatedNights[destIndex].hotels) {
+      updatedNights[destIndex].hotels = [
+        { category: "standard", hotelName: "", pricePerPerson: 0 },
+        { category: "deluxe", hotelName: "", pricePerPerson: 0 },
+        { category: "superior", hotelName: "", pricePerPerson: 0 },
+      ];
+    }
+
+    // Ensure the specific hotel object exists
+    if (!updatedNights[destIndex].hotels[catIndex]) {
+      updatedNights[destIndex].hotels[catIndex] = {
+        category,
+        hotelName: "",
+        pricePerPerson: 0,
+      };
+    }
+
+    // Update the price
+    updatedNights[destIndex].hotels[catIndex] = {
+      ...updatedNights[destIndex].hotels[catIndex],
+      category,
+      pricePerPerson: priceValue,
+    };
+
+    setPkg({ ...pkg, destinationNights: updatedNights });
+    console.log(
+      `Updated ${category} price for destination ${destIndex}:`,
+      priceValue,
+    );
+  };
 
   // Banner Upload Handler
   const handleBannerUpload = (file) => {
@@ -544,10 +1036,13 @@ const handlePriceChange = (destIndex, category, price) => {
       .unwrap()
       .then((response) => {
         if (response?.package?.bannerImage) {
-          setPkg(prev => ({ ...prev, bannerImage: response.package.bannerImage }));
+          setPkg((prev) => ({
+            ...prev,
+            bannerImage: response.package.bannerImage,
+          }));
           alert("✅ Banner updated successfully");
         } else if (response?.bannerImage) {
-          setPkg(prev => ({ ...prev, bannerImage: response.bannerImage }));
+          setPkg((prev) => ({ ...prev, bannerImage: response.bannerImage }));
           alert("✅ Banner updated successfully");
         } else {
           dispatch(fetchPackageById(pkg._id));
@@ -556,7 +1051,9 @@ const handlePriceChange = (destIndex, category, price) => {
       })
       .catch((error) => {
         console.error("❌ Error uploading banner:", error);
-        alert("❌ Failed to update banner: " + (error.message || "Unknown error"));
+        alert(
+          "❌ Failed to update banner: " + (error.message || "Unknown error"),
+        );
       });
   };
 
@@ -567,20 +1064,22 @@ const handlePriceChange = (destIndex, category, price) => {
       return;
     }
 
-    dispatch(uploadPackageDayImage({
-      id: pkg._id,
-      dayIndex: dayIndex,
-      file: file
-    }))
+    dispatch(
+      uploadPackageDayImage({
+        id: pkg._id,
+        dayIndex: dayIndex,
+        file: file,
+      }),
+    )
       .unwrap()
       .then((response) => {
         if (response?.package?.days?.[dayIndex]?.dayImage) {
           const updatedDays = [...pkg.days];
           updatedDays[dayIndex] = {
             ...updatedDays[dayIndex],
-            dayImage: response.package.days[dayIndex].dayImage
+            dayImage: response.package.days[dayIndex].dayImage,
           };
-          setPkg(prev => ({ ...prev, days: updatedDays }));
+          setPkg((prev) => ({ ...prev, days: updatedDays }));
           alert("✅ Day image updated successfully");
         } else {
           dispatch(fetchPackageById(pkg._id));
@@ -589,7 +1088,10 @@ const handlePriceChange = (destIndex, category, price) => {
       })
       .catch((error) => {
         console.error("❌ Error uploading day image:", error);
-        alert("❌ Failed to update day image: " + (error.message || "Unknown error"));
+        alert(
+          "❌ Failed to update day image: " +
+          (error.message || "Unknown error"),
+        );
       });
   };
 
@@ -602,41 +1104,47 @@ const handlePriceChange = (destIndex, category, price) => {
     try {
       // Convert HTML back to array format for backend
       const convertHtmlToArray = (htmlString) => {
-        if (!htmlString || htmlString.trim() === '') return [];
+        if (!htmlString || htmlString.trim() === "") return [];
         return [htmlString];
       };
 
       // Validate stayLocations
-      const validatedStayLocations = (pkg.stayLocations || []).map((location, index) => ({
-        city: location?.city?.trim() || `City ${index + 1}`,
-        nights: parseInt(location?.nights) || 1,
-        state: location?.state || pkg.sector || "",
-        country: location?.country || pkg.destinationCountry || "India"
-      }));
+      const validatedStayLocations = (pkg.stayLocations || []).map(
+        (location, index) => ({
+          city: location?.city?.trim() || `City ${index + 1}`,
+          nights: parseInt(location?.nights) || 1,
+          state: location?.state || pkg.sector || "",
+          country: location?.country || pkg.destinationCountry || "India",
+        }),
+      );
 
       // Validate destinationNights - FIXED: Preserve all edited data including nights
-      const validatedDestinationNights = (pkg.destinationNights || []).map(dest => ({
-        destination: dest.destination || "",
-        nights: parseInt(dest.nights) || 1,
-        hotels: (dest.hotels || []).map(hotel => ({
-          category: hotel.category || "",
-          hotelName: hotel.hotelName || "",
-          pricePerPerson: hotel.pricePerPerson || 0
-        }))
-      }));
-const perPersonValue = parseInt(pkg.perPerson) || 1;
-    
-    console.log("Saving perPerson value:", perPersonValue);
-    console.log("Original pkg.perPerson:", pkg.perPerson);
+      const validatedDestinationNights = (pkg.destinationNights || []).map(
+        (dest) => ({
+          destination: dest.destination || "",
+          nights: parseInt(dest.nights) || 1,
+          hotels: (dest.hotels || []).map((hotel) => ({
+            category: hotel.category || "",
+            hotelName: hotel.hotelName || "",
+            pricePerPerson: hotel.pricePerPerson || 0,
+          })),
+        }),
+      );
+      const perPersonValue = parseInt(pkg.perPerson) || 1;
+
+      console.log("Saving perPerson value:", perPersonValue);
+      console.log("Original pkg.perPerson:", pkg.perPerson);
       const transformedData = {
         // Step 1 Fields
         tourType: pkg.tourType || "Domestic",
         destinationCountry: pkg.destinationCountry || "India",
         sector: pkg.sector || "",
         packageCategory: pkg.packageCategory || "",
-        packageSubType: Array.isArray(pkg.packageSubType) ? pkg.packageSubType : [pkg.packageSubType || ""],
+        packageSubType: Array.isArray(pkg.packageSubType)
+          ? pkg.packageSubType
+          : [pkg.packageSubType || ""],
         stayLocations: validatedStayLocations,
-        
+
         // Step 2 Fields
         title: pkg.title || "",
         arrivalCity: pkg.arrivalCity || "",
@@ -645,30 +1153,50 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
         bannerImage: pkg.bannerImage || "",
         validFrom: pkg.validFrom || null,
         validTill: pkg.validTill || null,
-        days: (pkg.days || []).map(day => ({
+        days: (pkg.days || []).map((day) => ({
           title: day?.title || "",
           notes: day?.notes || "",
           aboutCity: day?.aboutCity || "",
           sightseeing: Array.isArray(day?.sightseeing) ? day.sightseeing : [],
-          selectedSightseeing: Array.isArray(day?.selectedSightseeing) ? day.selectedSightseeing : [],
+          selectedSightseeing: Array.isArray(day?.selectedSightseeing)
+            ? day.selectedSightseeing
+            : [],
           dayImage: typeof day?.dayImage === "string" ? day.dayImage : "",
         })),
-        
-    perPerson: perPersonValue, 
+
+        perPerson: perPersonValue,
+        numberOfRooms: Number(pkg.numberOfRooms) || 1,
+        transportationCostPerDay: Number(pkg.transportationCostPerDay) || 0,
+        transportationDays: Number(pkg.transportationDays) || 0,
+        transportationTotalCost,
+        hotelTotalCost,
+        standardHotelTotalCost,
+        deluxeHotelTotalCost,
+        superiorHotelTotalCost,
+        calculatedTotalCost,
+        finalStandardCost,
+        finalDeluxeCost,
+        finalSuperiorCost,
+        manualCostMargin: Number(pkg.manualCostMargin) || 0,
+        totalCost: finalTotalCost,
         mealPlan: pkg.mealPlan || { planType: "", description: "" },
         destinationNights: validatedDestinationNights,
-        
+
         // Policy Fields
         policy: {
           inclusionPolicy: convertHtmlToArray(pkg.policy?.inclusionPolicy),
           exclusionPolicy: convertHtmlToArray(pkg.policy?.exclusionPolicy),
           paymentPolicy: convertHtmlToArray(pkg.policy?.paymentPolicy),
-          cancellationPolicy: convertHtmlToArray(pkg.policy?.cancellationPolicy),
-          termsAndConditions: convertHtmlToArray(pkg.policy?.termsAndConditions)
+          cancellationPolicy: convertHtmlToArray(
+            pkg.policy?.cancellationPolicy,
+          ),
+          termsAndConditions: convertHtmlToArray(
+            pkg.policy?.termsAndConditions,
+          ),
         },
-        
+
         // Status
-        status: pkg.status || "deactive"
+        status: pkg.status || "deactive",
       };
 
       console.log("Saving package data:", transformedData);
@@ -681,7 +1209,10 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
         })
         .catch((err) => {
           console.error("❌ Error updating package:", err);
-          alert("❌ Failed to update package: " + (err.message || "Please try again"));
+          alert(
+            "❌ Failed to update package: " +
+            (err.message || "Please try again"),
+          );
         });
     } catch (err) {
       console.error("Error preparing data for save:", err);
@@ -690,14 +1221,90 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
   };
 
   const getStayLocationsByState = () => {
-    return groupedStayLocations || {};
+    const grouped = {};
+    (pkg.stayLocations || []).forEach((item) => {
+      const stateKey = item?.state || "Unknown";
+      if (!grouped[stateKey]) {
+        grouped[stateKey] = [];
+      }
+      grouped[stateKey].push(item);
+    });
+    return grouped;
   };
+
+  const rooms = Number(pkg.numberOfRooms) || 1;
+
+  const hotelTotalCost = (pkg.destinationNights || []).reduce(
+    (destTotal, dest) => {
+      const nights = Number(dest?.nights) || 0;
+      const hotelRatePerNight = (dest?.hotels || []).reduce(
+        (rateTotal, hotel) => rateTotal + (Number(hotel?.pricePerPerson) || 0),
+        0,
+      );
+      return destTotal + nights * hotelRatePerNight * rooms;
+    },
+    0,
+  );
+
+  const {
+    standardHotelTotalCost,
+    deluxeHotelTotalCost,
+    superiorHotelTotalCost,
+  } = (pkg.destinationNights || []).reduce(
+    (acc, dest) => {
+      const nights = Number(dest?.nights) || 0;
+      const hotels = dest?.hotels || [];
+      const standardRate =
+        Number(
+          hotels.find((hotel) => hotel?.category === "standard")
+            ?.pricePerPerson,
+        ) || 0;
+      const deluxeRate =
+        Number(
+          hotels.find((hotel) => hotel?.category === "deluxe")?.pricePerPerson,
+        ) || 0;
+      const superiorRate =
+        Number(
+          hotels.find((hotel) => hotel?.category === "superior")
+            ?.pricePerPerson,
+        ) || 0;
+
+      acc.standardHotelTotalCost += nights * standardRate * rooms;
+      acc.deluxeHotelTotalCost += nights * deluxeRate * rooms;
+      acc.superiorHotelTotalCost += nights * superiorRate * rooms;
+      return acc;
+    },
+    {
+      standardHotelTotalCost: 0,
+      deluxeHotelTotalCost: 0,
+      superiorHotelTotalCost: 0,
+    },
+  );
+
+  const transportationTotalCost =
+    (Number(pkg.transportationCostPerDay) || 0) *
+    (Number(pkg.transportationDays) || 0);
+
+  const margin = Number(pkg.manualCostMargin) || 0;
+  const calculatedTotalCost = hotelTotalCost + transportationTotalCost;
+  const finalStandardCost = standardHotelTotalCost + transportationTotalCost + margin;
+  const finalDeluxeCost = deluxeHotelTotalCost + transportationTotalCost + margin;
+  const finalSuperiorCost = superiorHotelTotalCost + transportationTotalCost + margin;
+
+  const finalTotalCost = calculatedTotalCost + margin;
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box sx={{ p: 3, backgroundColor: "#eef3f8", minHeight: "100vh" }}>
         {/* Header */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 3,
+          }}
+        >
           <Typography variant="h4" fontWeight="bold" color="primary">
             ✈️ Edit Package
           </Typography>
@@ -721,21 +1328,34 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
 
         <Grid container spacing={3}>
           {/* Main Form */}
-          <Grid size={{xs:12, md:8}}>
-            <Paper elevation={4} sx={{ p: 3, borderRadius: 3, background: "white" }}>
-              <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center" }}>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Paper
+              elevation={4}
+              sx={{ p: 3, borderRadius: 3, background: "white" }}
+            >
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ display: "flex", alignItems: "center" }}
+              >
                 <EditIcon sx={{ mr: 1 }} /> Package Details
               </Typography>
               <Divider sx={{ mb: 3 }} />
 
               {/* ===== STEP 1 FIELDS ===== */}
-              <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom sx={{ mt: 2 }}>
+              <Typography
+                variant="subtitle1"
+                fontWeight="bold"
+                color="primary"
+                gutterBottom
+                sx={{ mt: 2 }}
+              >
                 📍 Step 1: Basic Information
               </Typography>
 
               {/* Tour Type */}
               <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <FormControl component="fieldset" fullWidth>
                     <FormLabel>Tour Type *</FormLabel>
                     <RadioGroup
@@ -758,10 +1378,14 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
 
                 {/* Destination Country - Only for International */}
                 {pkg.tourType === "International" && (
-                  <Grid size={{xs:12, md:6}}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Autocomplete
                       fullWidth
-                      options={Array.isArray(countries) ? countries.map((c) => c?.name || "") : []}
+                      options={
+                        Array.isArray(countries)
+                          ? countries.map((c) => c?.name || "")
+                          : []
+                      }
                       value={pkg.destinationCountry || ""}
                       onChange={(e, newValue) => {
                         if (newValue) {
@@ -776,10 +1400,14 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
                 )}
 
                 {/* Sector/State */}
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Autocomplete
                     fullWidth
-                    options={Array.isArray(states) ? states.map((state) => state?.name || "") : []}
+                    options={
+                      Array.isArray(states)
+                        ? states.map((state) => state?.name || "")
+                        : []
+                    }
                     value={pkg.sector || ""}
                     onChange={(e, newValue) => {
                       handleSectorChange(newValue || "");
@@ -787,14 +1415,18 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
                     renderInput={(params) => (
                       <TextField
                         {...params}
-                        label={DOMESTIC_TOUR_TYPES.includes(pkg.tourType) ? "State *" : "State/Province *"}
+                        label={
+                          DOMESTIC_TOUR_TYPES.includes(pkg.tourType)
+                            ? "State *"
+                            : "State/Province *"
+                        }
                       />
                     )}
                   />
                 </Grid>
 
                 {/* Package Category */}
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Autocomplete
                     fullWidth
                     options={PACKAGE_CATEGORIES}
@@ -809,128 +1441,467 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
                 </Grid>
 
                 {/* Package Sub Type */}
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Autocomplete
                     multiple
-                    freeSolo
                     fullWidth
-                    options={[]}
+                    options={getOptionsForField("packageSubType").map(
+                      (opt) => opt.value,
+                    )}
                     value={pkg.packageSubType || []}
                     onChange={(e, newValue) => {
-                      setPkg({ ...pkg, packageSubType: newValue || [] });
+                      if (newValue.includes("__add_new")) {
+                        const filtered = newValue.filter(
+                          (v) => v !== "__add_new",
+                        );
+                        setPkg({ ...pkg, packageSubType: filtered });
+                        handleOpenDialog("packageSubType");
+                      } else {
+                        setPkg({ ...pkg, packageSubType: newValue });
+                      }
                     }}
                     renderInput={(params) => (
                       <TextField {...params} label="Package Sub Type *" />
                     )}
+                    renderOption={(props, option) => {
+                      if (option === "__add_new") {
+                        return (
+                          <li
+                            {...props}
+                            key="add_new"
+                            style={{ color: "#1976d2", fontWeight: 500 }}
+                          >
+                            + Add New
+                          </li>
+                        );
+                      }
+
+                      const optData = options.find(
+                        (o) =>
+                          o.fieldName === "packageSubType" &&
+                          o.value === option,
+                      );
+
+                      return (
+                        <li
+                          {...props}
+                          key={option}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span>{option}</span>
+                          {optData && (
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete "${option}"?`)) {
+                                  dispatch(deleteLeadOption(optData._id));
+                                }
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </li>
+                      );
+                    }}
                   />
                 </Grid>
               </Grid>
 
-              {/* Stay Locations */}
-              <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
-                🏨 Stay Locations
-              </Typography>
-              <Paper sx={{ p: 2, mb: 3, backgroundColor: "#f8f9fa" }}>
-                {Object.entries(getStayLocationsByState()).length > 0 ? (
-                  Object.entries(getStayLocationsByState()).map(([state, cities]) => (
-                    <Box key={state} sx={{ mb: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main', mb: 1 }}>
-                        {state}
-                      </Typography>
-                      {Array.isArray(cities) && cities.map((item, index) => {
-                        const globalIndex = pkg.stayLocations?.findIndex(
-                          stayItem => stayItem?.city === item?.city && stayItem?.state === item?.state
-                        );
-
-                        if (globalIndex === -1 || globalIndex === undefined) return null;
-
-                        return (
-                          <Paper
-                            key={`${item?.city}-${item?.state}-${index}`}
+              {/* Location List + Stay Locations */}
+              <Grid container spacing={2} sx={{ mt: 2, mb: 4 }}>
+                {/* Available Locations */}
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontWeight: "bold",
+                      }}
+                      color="primary"
+                    >
+                      <LocationOnIcon sx={{ mr: 1, color: "red" }} />
+                      Available Locations {currentState && `- ${currentState}`}
+                    </Typography>
+                    <Button
+                      startIcon={<AddIcon />}
+                      size="small"
+                      variant="outlined"
+                      onClick={() => handleOpenDialog("city")}
+                      disabled={!pkg.sector}
+                    >
+                      Add Location
+                    </Button>
+                  </Box>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search city..."
+                    value={searchText}
+                    onChange={handleSearch}
+                    sx={{ mt: 1 }}
+                    disabled={!pkg.sector}
+                  />
+                  <Box
+                    sx={{
+                      border: "1px solid #ccc",
+                      height: BOX_HEIGHT,
+                      overflowY: "auto",
+                      mt: 1,
+                      p: 1,
+                      borderRadius: 2,
+                      background: "#fafafa",
+                    }}
+                  >
+                    {locationList.length > 0 ? (
+                      locationList.map((city, i) => (
+                        <Box
+                          key={i}
+                          sx={{
+                            p: 1,
+                            mb: 1,
+                            borderRadius: 1,
+                            background: "#f5f5f5",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            "&:hover": { background: "#e0f7fa" },
+                          }}
+                          onClick={() => handleSelectCity(city)}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center" }}>
+                            <LocationOnIcon
+                              fontSize="small"
+                              sx={{ mr: 1, color: "grey.600" }}
+                            />
+                            {city}
+                            <Chip
+                              label={currentState}
+                              size="small"
+                              sx={{ ml: 1, height: 20 }}
+                              color="primary"
+                              variant="outlined"
+                            />
+                          </Box>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={(e) => handleDeleteLocation(city, e)}
                             sx={{
-                              p: 2,
-                              mb: 2,
-                              backgroundColor: "#e3f2fd",
-                              borderRadius: 2
+                              "&:hover": {
+                                backgroundColor: "rgba(211, 47, 47, 0.04)",
+                              },
                             }}
                           >
-                            <Grid container spacing={2} alignItems="center">
-                              <Grid size={{xs:12, md:5}}>
-                                <TextField
-                                  label="City"
-                                  fullWidth
-                                  size="small"
-                                  value={item?.city || ""}
-                                  onChange={(e) => handleStayChange(globalIndex, "city", e.target.value)}
-                                />
-                              </Grid>
-                              <Grid size={{xs:12, md:3}}>
-                                <TextField
-                                  label="Nights"
-                                  type="number"
-                                  fullWidth
-                                  size="small"
-                                  value={item?.nights || 1}
-                                  onChange={(e) => handleStayChange(globalIndex, "nights", e.target.value)}
-                                  inputProps={{ min: 1 }}
-                                />
-                              </Grid>
-                              <Grid size={{xs:12, md:4}}>
-                                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                                  <IconButton
-                                    size="small"
-                                    disabled={globalIndex === 0}
-                                    onClick={() => {
-                                      const newList = [...pkg.stayLocations];
-                                      const [moved] = newList.splice(globalIndex, 1);
-                                      newList.splice(globalIndex - 1, 0, moved);
-                                      setPkg({ ...pkg, stayLocations: newList });
-                                    }}
-                                  >
-                                    ⬆️
-                                  </IconButton>
-                                  <IconButton
-                                    size="small"
-                                    disabled={globalIndex === pkg.stayLocations.length - 1}
-                                    onClick={() => {
-                                      const newList = [...pkg.stayLocations];
-                                      const [moved] = newList.splice(globalIndex, 1);
-                                      newList.splice(globalIndex + 1, 0, moved);
-                                      setPkg({ ...pkg, stayLocations: newList });
-                                    }}
-                                  >
-                                    ⬇️
-                                  </IconButton>
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleRemoveCity(item)}
-                                  >
-                                    <DeleteIcon fontSize="small" />
-                                  </IconButton>
-                                </Box>
-                              </Grid>
-                            </Grid>
-                          </Paper>
-                        );
-                      })}
-                    </Box>
-                  ))
-                ) : (
-                  <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
-                    No stay locations added yet
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        textAlign="center"
+                        py={2}
+                      >
+                        {pkg.sector
+                          ? "No cities found"
+                          : "Select a state to see cities"}
+                      </Typography>
+                    )}
+                  </Box>
+                </Grid>
+
+                {/* Stay Locations */}
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      fontWeight: "bold",
+                    }}
+                    color="primary"
+                  >
+                    <HomeWorkIcon sx={{ mr: 1, color: "#1976d2" }} />
+                    Stay Locations ({pkg.stayLocations?.length || 0})
                   </Typography>
-                )}
-              </Paper>
+                  <Box
+                    sx={{
+                      border: "1px solid #ccc",
+                      height: 270,
+                      overflowY: "auto",
+                      mt: 1,
+                      p: 1,
+                      borderRadius: 2,
+                      background: "#f0f8ff",
+                    }}
+                  >
+                    {Object.entries(getStayLocationsByState()).length > 0 ? (
+                      Object.entries(getStayLocationsByState()).map(
+                        ([state, cities]) => (
+                          <Box key={state} sx={{ mb: 2 }}>
+                            <Typography
+                              variant="subtitle2"
+                              sx={{
+                                fontWeight: "bold",
+                                color: "primary.main",
+                                mb: 1,
+                              }}
+                            >
+                              {state}
+                            </Typography>
+                            {cities.map((item, i) => {
+                              const globalIndex = pkg.stayLocations.findIndex(
+                                (stayItem) =>
+                                  stayItem.city === item.city &&
+                                  stayItem.state === item.state,
+                              );
+
+                              return (
+                                <Box
+                                  key={`${item.city}-${item.state}`}
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "flex-start",
+                                    p: 1,
+                                    mb: 1,
+                                    borderRadius: 1,
+                                    background: "#e3f2fd",
+                                    flexDirection: "column",
+                                  }}
+                                >
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                      width: "100%",
+                                    }}
+                                  >
+                                    <Box
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                      }}
+                                    >
+                                      <HomeWorkIcon
+                                        fontSize="small"
+                                        sx={{ mr: 1, color: "#1976d2" }}
+                                      />
+                                      {item.city}
+                                    </Box>
+                                    <Box>
+                                      <IconButton
+                                        size="small"
+                                        disabled={globalIndex === 0}
+                                        onClick={() => {
+                                          const newList = [
+                                            ...pkg.stayLocations,
+                                          ];
+                                          const oldDays = [
+                                            ...(pkg.days || []),
+                                          ];
+
+                                          // Calculate day blocks
+                                          let currentDay = 0;
+                                          const blocks = newList.map(
+                                            (stay) => {
+                                              const nights =
+                                                parseInt(stay.nights) || 1;
+                                              const block = oldDays.slice(
+                                                currentDay,
+                                                currentDay + nights,
+                                              );
+                                              currentDay += nights;
+                                              return block;
+                                            },
+                                          );
+                                          const remaining =
+                                            oldDays.slice(currentDay);
+
+                                          // Swap locations
+                                          const [movedLoc] = newList.splice(
+                                            globalIndex,
+                                            1,
+                                          );
+                                          newList.splice(
+                                            globalIndex - 1,
+                                            0,
+                                            movedLoc,
+                                          );
+
+                                          // Swap blocks
+                                          const [movedBlock] = blocks.splice(
+                                            globalIndex,
+                                            1,
+                                          );
+                                          blocks.splice(
+                                            globalIndex - 1,
+                                            0,
+                                            movedBlock,
+                                          );
+
+                                          setPkg({
+                                            ...pkg,
+                                            stayLocations: newList,
+                                            days: [
+                                              ...blocks.flat(),
+                                              ...remaining,
+                                            ],
+                                          });
+                                        }}
+                                      >
+                                        ⬆️
+                                      </IconButton>
+                                      <IconButton
+                                        size="small"
+                                        disabled={
+                                          globalIndex ===
+                                          pkg.stayLocations.length - 1
+                                        }
+                                        onClick={() => {
+                                          const newList = [
+                                            ...pkg.stayLocations,
+                                          ];
+                                          const oldDays = [
+                                            ...(pkg.days || []),
+                                          ];
+
+                                          // Calculate day blocks
+                                          let currentDay = 0;
+                                          const blocks = newList.map(
+                                            (stay) => {
+                                              const nights =
+                                                parseInt(stay.nights) || 1;
+                                              const block = oldDays.slice(
+                                                currentDay,
+                                                currentDay + nights,
+                                              );
+                                              currentDay += nights;
+                                              return block;
+                                            },
+                                          );
+                                          const remaining =
+                                            oldDays.slice(currentDay);
+
+                                          // Swap locations
+                                          const [movedLoc] = newList.splice(
+                                            globalIndex,
+                                            1,
+                                          );
+                                          newList.splice(
+                                            globalIndex + 1,
+                                            0,
+                                            movedLoc,
+                                          );
+
+                                          // Swap blocks
+                                          const [movedBlock] = blocks.splice(
+                                            globalIndex,
+                                            1,
+                                          );
+                                          blocks.splice(
+                                            globalIndex + 1,
+                                            0,
+                                            movedBlock,
+                                          );
+
+                                          setPkg({
+                                            ...pkg,
+                                            stayLocations: newList,
+                                            days: [
+                                              ...blocks.flat(),
+                                              ...remaining,
+                                            ],
+                                          });
+                                        }}
+                                      >
+                                        ⬇️
+                                      </IconButton>
+                                      <IconButton
+                                        size="small"
+                                        color="error"
+                                        onClick={() => handleRemoveCity(item)}
+                                      >
+                                        <DeleteIcon fontSize="small" />
+                                      </IconButton>
+                                    </Box>
+                                  </Box>
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      mt: 1,
+                                      width: "100%",
+                                    }}
+                                  >
+                                    <TextField
+                                      label="Nights"
+                                      type="number"
+                                      size="small"
+                                      sx={{ width: 100 }}
+                                      value={item.nights || 1}
+                                      onChange={(e) =>
+                                        handleStayChange(
+                                          globalIndex,
+                                          "nights",
+                                          e.target.value,
+                                        )
+                                      }
+                                      inputProps={{ min: 1 }}
+                                    />
+                                  </Box>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        ),
+                      )
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        textAlign="center"
+                        py={2}
+                      >
+                        Select a state to see cities
+                      </Typography>
+                    )}
+                  </Box>
+                </Grid>
+              </Grid>
 
               {/* ===== STEP 2 FIELDS ===== */}
-              <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom sx={{ mt: 4 }}>
+              <Typography
+                variant="subtitle1"
+                fontWeight="bold"
+                color="primary"
+                gutterBottom
+                sx={{ mt: 4 }}
+              >
                 📅 Step 2: Tour Details
               </Typography>
 
               {/* Basic Info */}
               <Grid container spacing={2}>
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <TextField
                     label="Package Title"
                     fullWidth
@@ -938,23 +1909,27 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
                     onChange={(e) => setPkg({ ...pkg, title: e.target.value })}
                   />
                 </Grid>
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <TextField
                     label="Arrival City"
                     fullWidth
                     value={pkg.arrivalCity || ""}
-                    onChange={(e) => setPkg({ ...pkg, arrivalCity: e.target.value })}
+                    onChange={(e) =>
+                      setPkg({ ...pkg, arrivalCity: e.target.value })
+                    }
                   />
                 </Grid>
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <TextField
                     label="Departure City"
                     fullWidth
                     value={pkg.departureCity || ""}
-                    onChange={(e) => setPkg({ ...pkg, departureCity: e.target.value })}
+                    onChange={(e) =>
+                      setPkg({ ...pkg, departureCity: e.target.value })
+                    }
                   />
                 </Grid>
-                <Grid size={{xs:12}}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     fullWidth
                     multiline
@@ -967,51 +1942,89 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
               </Grid>
 
               {/* Validity */}
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ mt: 3 }}>
+              <Typography
+                variant="subtitle1"
+                fontWeight="bold"
+                gutterBottom
+                sx={{ mt: 3 }}
+              >
                 Package Validity
               </Typography>
               <Grid container spacing={2}>
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <DatePicker
                     label="Valid From"
                     value={pkg.validFrom ? new Date(pkg.validFrom) : null}
-                    onChange={(newValue) => setPkg({ ...pkg, validFrom: newValue })}
+                    onChange={(newValue) =>
+                      setPkg({ ...pkg, validFrom: newValue })
+                    }
                     slotProps={{ textField: { fullWidth: true } }}
                   />
                 </Grid>
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <DatePicker
                     label="Valid Till"
                     value={pkg.validTill ? new Date(pkg.validTill) : null}
-                    onChange={(newValue) => setPkg({ ...pkg, validTill: newValue })}
+                    onChange={(newValue) =>
+                      setPkg({ ...pkg, validTill: newValue })
+                    }
                     slotProps={{ textField: { fullWidth: true } }}
                   />
                 </Grid>
               </Grid>
 
               {/* Banner Image */}
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ mt: 3 }}>
+              <Typography
+                variant="subtitle1"
+                fontWeight="bold"
+                gutterBottom
+                sx={{ mt: 3 }}
+              >
                 Banner Image
               </Typography>
-              <Box sx={{ textAlign: "center", p: 2, borderRadius: 2, backgroundColor: "#f5f5f5", mb: 3 }}>
+              <Box
+                sx={{
+                  textAlign: "center",
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: "#f5f5f5",
+                  mb: 3,
+                }}
+              >
                 {pkg.bannerImage ? (
-                  <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden", height: 200 }}>
+                  <Box
+                    sx={{
+                      position: "relative",
+                      borderRadius: 2,
+                      overflow: "hidden",
+                      height: 200,
+                    }}
+                  >
                     <img
                       src={pkg.bannerImage}
                       alt="Banner"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
                     />
                   </Box>
                 ) : (
-                  <Box sx={{ height: 150, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Typography color="text.secondary">No banner image</Typography>
+                  <Box
+                    sx={{
+                      height: 150,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Typography color="text.secondary">
+                      No banner image
+                    </Typography>
                   </Box>
                 )}
-                <Button
-                  variant="contained"
-                  component="label"
-                  sx={{ mt: 2 }}
-                >
+                <Button variant="contained" component="label" sx={{ mt: 2 }}>
                   Upload Banner
                   <input
                     type="file"
@@ -1027,134 +2040,238 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
               </Box>
 
               {/* Days Section */}
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ mt: 3 }}>
+              <Typography
+                variant="subtitle1"
+                fontWeight="bold"
+                gutterBottom
+                sx={{ mt: 3 }}
+              >
                 Itinerary Days
               </Typography>
 
-              {Array.isArray(pkg.days) && pkg.days.map((day, index) => (
-                <Paper key={index} sx={{ p: 2, mb: 3, border: "1px solid #ccc" }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography fontWeight="bold">Day {index + 1}</Typography>
-                    {index > 0 && (
-                      <IconButton color="error" onClick={() => handleRemoveDay(index)}>
-                        <DeleteIcon />
-                      </IconButton>
-                    )}
-                  </Box>
-
-                  <Grid container spacing={2} sx={{ mt: 1 }}>
-                    <Grid size={{xs:12, md:6}}>
-                      <TextField
-                        fullWidth
-                        label="Day Title"
-                        value={day?.title || ""}
-                        onChange={(e) => handleDayChange(index, "title", e.target.value)}
-                      />
-                    </Grid>
-                    <Grid size={{xs:12, md:6}}>
-                      <TextField
-                        fullWidth
-                        label="Day Notes"
-                        value={day?.notes || ""}
-                        onChange={(e) => handleDayChange(index, "notes", e.target.value)}
-                      />
-                    </Grid>
-                    <Grid size={{xs:12}}>
-                      <TextField
-                        fullWidth
-                        multiline
-                        rows={5}
-                        label="About City"
-                        value={day?.aboutCity || ""}
-                        onChange={(e) => handleDayChange(index, "aboutCity", e.target.value)}
-                      />
-                    </Grid>
-                    
-                    {/* Day Image */}
-                    <Grid size={{xs:12, md:6}}>
-                      <Box sx={{ border: "1px dashed #ccc", p: 1, borderRadius: 1, textAlign: "center" }}>
-                        {day?.dayImage ? (
-                          <img src={day.dayImage} alt={`Day ${index + 1}`} style={{ maxHeight: 100, maxWidth: "100%" }} />
-                        ) : (
-                          <Typography variant="caption">No image</Typography>
-                        )}
-                        <Button
-                          variant="outlined"
-                          component="label"
+              {Array.isArray(pkg.days) &&
+                pkg.days.map((day, index) => (
+                  <Paper
+                    key={index}
+                    sx={{ p: 2, mb: 3, border: "1px solid #ccc" }}
+                  >
+                    <Box
+                      display="flex"
+                      justifyContent="space-between"
+                      alignItems="center"
+                    >
+                      <Typography fontWeight="bold">Day {index + 1}</Typography>
+                      <Box>
+                        <IconButton
                           size="small"
-                          fullWidth
-                          sx={{ mt: 1 }}
+                          disabled={index === 0}
+                          onClick={() => {
+                            const newList = [...pkg.days];
+                            [newList[index - 1], newList[index]] = [
+                              newList[index],
+                              newList[index - 1],
+                            ];
+                            setPkg({ ...pkg, days: newList });
+                          }}
+                          title="Move Up"
                         >
-                          {day?.dayImage ? "Change" : "Upload"} Image
-                          <input
-                            hidden
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              if (e.target.files?.[0]) {
-                                handleDayImageUpload(index, e.target.files[0]);
-                              }
-                            }}
-                          />
-                        </Button>
+                          <ArrowUpwardIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          disabled={index === pkg.days.length - 1}
+                          onClick={() => {
+                            const newList = [...pkg.days];
+                            [newList[index + 1], newList[index]] = [
+                              newList[index],
+                              newList[index + 1],
+                            ];
+                            setPkg({ ...pkg, days: newList });
+                          }}
+                          title="Move Down"
+                        >
+                          <ArrowDownwardIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          size="small"
+                          onClick={() => handleRemoveDay(index)}
+                          title="Delete Day"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
                       </Box>
-                    </Grid>
+                    </Box>
 
-                    {/* Sightseeing */}
-                    <Grid size={{xs:12, md:6}}>
-                      <TextField
-                        fullWidth
-                        placeholder="Add Sightseeing (press Enter)"
-                        onKeyDown={(e) => handleAddSightseeing(index, e)}
-                      />
-                      <Box sx={{ mt: 1, maxHeight: 150, overflowY: "auto" }}>
-                        {Array.isArray(day?.selectedSightseeing) && day.selectedSightseeing.map((s, i) => (
-                          <Chip
-                            key={i}
-                            label={s}
-                            onDelete={() => {
-                              const newSelected = [...(day.selectedSightseeing || [])];
-                              newSelected.splice(i, 1);
-                              handleDayChange(index, "selectedSightseeing", newSelected);
-                            }}
+                    <Grid container spacing={2} sx={{ mt: 1 }}>
+                      <Grid size={{ xs: 12, md: 12 }}>
+                        <TextField
+                          fullWidth
+                          label="Day Title"
+                          value={day?.title || ""}
+                          onChange={(e) =>
+                            handleDayChange(index, "title", e.target.value)
+                          }
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 12 }}>
+                        <TextField
+                          fullWidth
+                          multiline
+                          rows={10}
+                          label="Day Notes"
+                          value={day?.notes || ""}
+                          onChange={(e) =>
+                            handleDayChange(index, "notes", e.target.value)
+                          }
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12 }}>
+                        <TextField
+                          fullWidth
+                          multiline
+                          rows={5}
+                          label="About City"
+                          value={day?.aboutCity || ""}
+                          onChange={(e) =>
+                            handleDayChange(index, "aboutCity", e.target.value)
+                          }
+                        />
+                      </Grid>
+
+                      {/* Day Image */}
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <Box
+                          sx={{
+                            border: "1px dashed #ccc",
+                            p: 1,
+                            borderRadius: 1,
+                            textAlign: "center",
+                          }}
+                        >
+                          {day?.dayImage ? (
+                            <img
+                              src={day.dayImage}
+                              alt={`Day ${index + 1}`}
+                              style={{ maxHeight: 100, maxWidth: "100%" }}
+                            />
+                          ) : (
+                            <Typography variant="caption">No image</Typography>
+                          )}
+                          <Button
+                            variant="outlined"
+                            component="label"
                             size="small"
-                            sx={{ m: 0.5 }}
-                          />
-                        ))}
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Paper>
-              ))}
+                            fullWidth
+                            sx={{ mt: 1 }}
+                          >
+                            {day?.dayImage ? "Change" : "Upload"} Image
+                            <input
+                              hidden
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                if (e.target.files?.[0]) {
+                                  handleDayImageUpload(
+                                    index,
+                                    e.target.files[0],
+                                  );
+                                }
+                              }}
+                            />
+                          </Button>
+                        </Box>
+                      </Grid>
 
-              <Button variant="contained" sx={{ mt: 2, mb: 3 }} onClick={handleAddDay}>
+                      {/* Sightseeing */}
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField
+                          fullWidth
+                          placeholder="Add Sightseeing (press Enter)"
+                          onKeyDown={(e) => handleAddSightseeing(index, e)}
+                        />
+                        <Box sx={{ mt: 1, maxHeight: 150, overflowY: "auto" }}>
+                          {Array.isArray(day?.selectedSightseeing) &&
+                            day.selectedSightseeing.map((s, i) => (
+                              <Chip
+                                key={`${index}-${i}-${String(s)}`}
+                                label={s}
+                                onDelete={() => {
+                                  const newSelected = [
+                                    ...(day.selectedSightseeing || []),
+                                  ];
+                                  newSelected.splice(i, 1);
+                                  handleDayChange(
+                                    index,
+                                    "selectedSightseeing",
+                                    newSelected,
+                                  );
+                                }}
+                                size="small"
+                                sx={{ m: 0.5 }}
+                              />
+                            ))}
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                ))}
+
+              <Button
+                variant="contained"
+                sx={{ mt: 2, mb: 3 }}
+                onClick={handleAddDay}
+              >
                 + Add Day
               </Button>
 
               {/* Meal Plan & Per Person */}
               <Grid container spacing={2} sx={{ mb: 3 }}>
-               <Grid size={{xs:12, md:6}}>
-  <TextField
-    fullWidth
-    type="number"
-    label="Number of Persons"
-    value={pkg.perPerson || 1}
-    onChange={(e) => {
-      const value = e.target.value === "" ? 1 : Number(e.target.value);
-      setPkg({ ...pkg, perPerson: value });
-    }}
-    inputProps={{ min: 1 }}
-  />
-</Grid>
-                <Grid size={{xs:12, md:6}}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Number of Persons"
+                    value={pkg.perPerson || 1}
+                    onChange={(e) => {
+                      const value =
+                        e.target.value === "" ? 1 : Number(e.target.value);
+                      setPkg({ ...pkg, perPerson: value });
+                    }}
+                    inputProps={{ min: 1 }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Number of Rooms"
+                    value={pkg.numberOfRooms || 1}
+                    onChange={(e) => {
+                      const value =
+                        e.target.value === ""
+                          ? 1
+                          : Math.max(1, Number(e.target.value));
+                      setPkg({ ...pkg, numberOfRooms: value });
+                    }}
+                    inputProps={{ min: 1 }}
+                    helperText="Applied in all hotel category totals"
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <TextField
                     select
                     label="Meal Plan"
                     value={pkg.mealPlan?.planType || ""}
-                    onChange={(e) => setPkg({
-                      ...pkg,
-                      mealPlan: { ...(pkg.mealPlan || {}), planType: e.target.value }
-                    })}
+                    onChange={(e) =>
+                      setPkg({
+                        ...pkg,
+                        mealPlan: {
+                          ...(pkg.mealPlan || {}),
+                          planType: e.target.value,
+                        },
+                      })
+                    }
                     fullWidth
                   >
                     <MenuItem value="AP">AP (All meals)</MenuItem>
@@ -1164,270 +2281,415 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
                   </TextField>
                 </Grid>
               </Grid>
-{/* Hotels Table - Fully Editable */}
-<Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-  🏨 Hotel Selection & Pricing
-</Typography>
+              {/* Hotels Table - Fully Editable */}
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                🏨 Hotel Selection & Pricing
+              </Typography>
 
-<Table sx={{ mb: 3 }}>
-  <TableHead>
-    <TableRow>
-      <TableCell>Destination</TableCell>
-      <TableCell>Nights</TableCell>
-      <TableCell>Standard Hotel</TableCell>
-      <TableCell>Deluxe Hotel</TableCell>
-      <TableCell>Superior Hotel</TableCell>
-    </TableRow>
-  </TableHead>
+              <Table sx={{ mb: 3 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Destination</TableCell>
+                    <TableCell>Nights</TableCell>
+                    <TableCell>Standard Hotel</TableCell>
+                    <TableCell>Deluxe Hotel</TableCell>
+                    <TableCell>Superior Hotel</TableCell>
+                  </TableRow>
+                </TableHead>
 
-  <TableBody>
-    {Array.isArray(pkg.destinationNights) && pkg.destinationNights.length > 0 ? (
-      pkg.destinationNights.map((dest, index) => {
-        // Ensure hotels array exists with proper structure
-        const hotels = dest.hotels && dest.hotels.length === 3 ? dest.hotels : [
-          { category: "standard", hotelName: "", pricePerPerson: 0 },
-          { category: "deluxe", hotelName: "", pricePerPerson: 0 },
-          { category: "superior", hotelName: "", pricePerPerson: 0 },
-        ];
+                <TableBody>
+                  {Array.isArray(pkg.destinationNights) &&
+                    pkg.destinationNights.length > 0 ? (
+                    pkg.destinationNights.map((dest, index) => {
+                      // Ensure hotels array exists with proper structure
+                      const hotels =
+                        dest.hotels && dest.hotels.length === 3
+                          ? dest.hotels
+                          : [
+                            {
+                              category: "standard",
+                              hotelName: "",
+                              pricePerPerson: 0,
+                            },
+                            {
+                              category: "deluxe",
+                              hotelName: "",
+                              pricePerPerson: 0,
+                            },
+                            {
+                              category: "superior",
+                              hotelName: "",
+                              pricePerPerson: 0,
+                            },
+                          ];
 
-        return (
-          <TableRow key={index}>
-            {/* Destination */}
-            <TableCell>
-              <TextField
-                size="small"
-                value={dest.destination || ""}
-                onChange={(e) => {
-                  const updated = [...pkg.destinationNights];
-                  updated[index] = {
-                    ...updated[index],
-                    destination: e.target.value
-                  };
-                  setPkg({ ...pkg, destinationNights: updated });
-                }}
-                fullWidth
-              />
-            </TableCell>
+                      return (
+                        <TableRow key={index}>
+                          {/* Destination */}
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              value={dest.destination || ""}
+                              onChange={(e) => {
+                                const updated = [...pkg.destinationNights];
+                                updated[index] = {
+                                  ...updated[index],
+                                  destination: e.target.value,
+                                };
+                                setPkg({ ...pkg, destinationNights: updated });
+                              }}
+                              fullWidth
+                            />
+                          </TableCell>
 
-            {/* Nights */}
-            <TableCell>
-              <TextField
-                type="number"
-                size="small"
-                value={dest.nights || 1}
-                onChange={(e) => {
-                  const updated = [...pkg.destinationNights];
-                  updated[index] = {
-                    ...updated[index],
-                    nights: parseInt(e.target.value) || 1
-                  };
-                  setPkg({ ...pkg, destinationNights: updated });
-                }}
-                inputProps={{ min: 1 }}
-                fullWidth
-              />
-            </TableCell>
+                          {/* Nights */}
+                          <TableCell>
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={dest.nights || 1}
+                              onChange={(e) => {
+                                const updated = [...pkg.destinationNights];
+                                updated[index] = {
+                                  ...updated[index],
+                                  nights: parseInt(e.target.value) || 1,
+                                };
+                                setPkg({ ...pkg, destinationNights: updated });
+                              }}
+                              inputProps={{ min: 1 }}
+                              fullWidth
+                            />
+                          </TableCell>
 
-            {/* Standard */}
-            <TableCell>
-              <Box sx={{ mb: 1 }}>
-                <TextField
-                  size="small"
-                  value={hotels[0]?.hotelName || ""}
-                  onChange={(e) => {
-                    const updated = [...pkg.destinationNights];
-                    if (!updated[index].hotels) {
-                      updated[index].hotels = [
-                        { category: "standard", hotelName: "", pricePerPerson: 0 },
-                        { category: "deluxe", hotelName: "", pricePerPerson: 0 },
-                        { category: "superior", hotelName: "", pricePerPerson: 0 },
-                      ];
-                    } else {
-                      updated[index].hotels = [...updated[index].hotels];
+                          {/* Standard */}
+                          <TableCell>
+                            <Box sx={{ mb: 1 }}>
+                               <Autocomplete
+                                options={getHotelOptionsForCategory("standard", dest.destination).map((opt) => typeof opt === "object" ? opt.value : opt)}
+                                value={hotels[0]?.hotelName || ""}
+                                onChange={(e, newValue) => handleHotelChange(index, "standard", newValue)}
+                                renderInput={(params) => (
+                                  <TextField
+                                    {...params}
+                                    size="small"
+                                    placeholder="Select standard hotel"
+                                    helperText={`${getHotelsForDestination(dest.destination).standard.length} from API`}
+                                  />
+                                )}
+                                renderOption={(props, option) => {
+                                  sessionStorage.setItem("currentDestIndex", index);
+                                  return renderHotelOption(props, option, "standard");
+                                }}
+                                loading={hotelsLoading}
+                              />
+                            </Box>
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={hotels[0]?.pricePerPerson || ""}
+                              onChange={(e) => {
+                                const updated = [...pkg.destinationNights];
+                                if (!updated[index].hotels) {
+                                  updated[index].hotels = [
+                                    {
+                                      category: "standard",
+                                      hotelName: "",
+                                      pricePerPerson: 0,
+                                    },
+                                    {
+                                      category: "deluxe",
+                                      hotelName: "",
+                                      pricePerPerson: 0,
+                                    },
+                                    {
+                                      category: "superior",
+                                      hotelName: "",
+                                      pricePerPerson: 0,
+                                    },
+                                  ];
+                                } else {
+                                  updated[index].hotels = [
+                                    ...updated[index].hotels,
+                                  ];
+                                }
+                                updated[index].hotels[0] = {
+                                  ...updated[index].hotels[0],
+                                  category: "standard",
+                                  pricePerPerson:
+                                    e.target.value === ""
+                                      ? 0
+                                      : Number(e.target.value),
+                                };
+                                setPkg({ ...pkg, destinationNights: updated });
+                              }}
+                              placeholder="Price"
+                              fullWidth
+                              InputProps={{
+                                startAdornment: (
+                                  <InputAdornment position="start">
+                                    ₹
+                                  </InputAdornment>
+                                ),
+                              }}
+                            />
+                          </TableCell>
+
+                          {/* Deluxe */}
+                          <TableCell>
+                            <Box sx={{ mb: 1 }}>
+                               <Autocomplete
+                                options={getHotelOptionsForCategory("deluxe", dest.destination).map((opt) => typeof opt === "object" ? opt.value : opt)}
+                                value={hotels[1]?.hotelName || ""}
+                                onChange={(e, newValue) => handleHotelChange(index, "deluxe", newValue)}
+                                renderInput={(params) => (
+                                  <TextField
+                                    {...params}
+                                    size="small"
+                                    placeholder="Select deluxe hotel"
+                                    helperText={`${getHotelsForDestination(dest.destination).deluxe.length} from API`}
+                                  />
+                                )}
+                                renderOption={(props, option) => {
+                                  sessionStorage.setItem("currentDestIndex", index);
+                                  return renderHotelOption(props, option, "deluxe");
+                                }}
+                                loading={hotelsLoading}
+                              />
+                            </Box>
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={hotels[1]?.pricePerPerson || ""}
+                              onChange={(e) => {
+                                const updated = [...pkg.destinationNights];
+                                if (!updated[index].hotels) {
+                                  updated[index].hotels = [
+                                    {
+                                      category: "standard",
+                                      hotelName: "",
+                                      pricePerPerson: 0,
+                                    },
+                                    {
+                                      category: "deluxe",
+                                      hotelName: "",
+                                      pricePerPerson: 0,
+                                    },
+                                    {
+                                      category: "superior",
+                                      hotelName: "",
+                                      pricePerPerson: 0,
+                                    },
+                                  ];
+                                } else {
+                                  updated[index].hotels = [
+                                    ...updated[index].hotels,
+                                  ];
+                                }
+                                updated[index].hotels[1] = {
+                                  ...updated[index].hotels[1],
+                                  category: "deluxe",
+                                  pricePerPerson:
+                                    e.target.value === ""
+                                      ? 0
+                                      : Number(e.target.value),
+                                };
+                                setPkg({ ...pkg, destinationNights: updated });
+                              }}
+                              placeholder="Price"
+                              fullWidth
+                              InputProps={{
+                                startAdornment: (
+                                  <InputAdornment position="start">
+                                    ₹
+                                  </InputAdornment>
+                                ),
+                              }}
+                            />
+                          </TableCell>
+
+                          {/* Superior */}
+                          <TableCell>
+                            <Box sx={{ mb: 1 }}>
+                               <Autocomplete
+                                options={getHotelOptionsForCategory("superior", dest.destination).map((opt) => typeof opt === "object" ? opt.value : opt)}
+                                value={hotels[2]?.hotelName || ""}
+                                onChange={(e, newValue) => handleHotelChange(index, "superior", newValue)}
+                                renderInput={(params) => (
+                                  <TextField
+                                    {...params}
+                                    size="small"
+                                    placeholder="Select superior hotel"
+                                    helperText={`${getHotelsForDestination(dest.destination).superior.length} from API`}
+                                  />
+                                )}
+                                renderOption={(props, option) => {
+                                  sessionStorage.setItem("currentDestIndex", index);
+                                  return renderHotelOption(props, option, "superior");
+                                }}
+                                loading={hotelsLoading}
+                              />
+                            </Box>
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={hotels[2]?.pricePerPerson || ""}
+                              onChange={(e) => {
+                                const updated = [...pkg.destinationNights];
+                                if (!updated[index].hotels) {
+                                  updated[index].hotels = [
+                                    {
+                                      category: "standard",
+                                      hotelName: "",
+                                      pricePerPerson: 0,
+                                    },
+                                    {
+                                      category: "deluxe",
+                                      hotelName: "",
+                                      pricePerPerson: 0,
+                                    },
+                                    {
+                                      category: "superior",
+                                      hotelName: "",
+                                      pricePerPerson: 0,
+                                    },
+                                  ];
+                                } else {
+                                  updated[index].hotels = [
+                                    ...updated[index].hotels,
+                                  ];
+                                }
+                                updated[index].hotels[2] = {
+                                  ...updated[index].hotels[2],
+                                  category: "superior",
+                                  pricePerPerson:
+                                    e.target.value === ""
+                                      ? 0
+                                      : Number(e.target.value),
+                                };
+                                setPkg({ ...pkg, destinationNights: updated });
+                              }}
+                              placeholder="Price"
+                              fullWidth
+                              InputProps={{
+                                startAdornment: (
+                                  <InputAdornment position="start">
+                                    ₹
+                                  </InputAdornment>
+                                ),
+                              }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center">
+                        <Typography color="text.secondary">
+                          No destinations found
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                🚐 Transportation & Total Cost
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Transportation Cost / Day"
+                    value={
+                      Number(pkg.transportationCostPerDay) === 0
+                        ? ""
+                        : pkg.transportationCostPerDay
                     }
-                    updated[index].hotels[0] = {
-                      ...updated[index].hotels[0],
-                      category: "standard",
-                      hotelName: e.target.value
-                    };
-                    setPkg({ ...pkg, destinationNights: updated });
-                  }}
-                  placeholder="Standard Hotel"
-                  fullWidth
-                />
-              </Box>
-              <TextField
-                type="number"
-                size="small"
-                value={hotels[0]?.pricePerPerson || ""}
-                onChange={(e) => {
-                  const updated = [...pkg.destinationNights];
-                  if (!updated[index].hotels) {
-                    updated[index].hotels = [
-                      { category: "standard", hotelName: "", pricePerPerson: 0 },
-                      { category: "deluxe", hotelName: "", pricePerPerson: 0 },
-                      { category: "superior", hotelName: "", pricePerPerson: 0 },
-                    ];
-                  } else {
-                    updated[index].hotels = [...updated[index].hotels];
-                  }
-                  updated[index].hotels[0] = {
-                    ...updated[index].hotels[0],
-                    category: "standard",
-                    pricePerPerson: e.target.value === "" ? 0 : Number(e.target.value)
-                  };
-                  setPkg({ ...pkg, destinationNights: updated });
-                }}
-                placeholder="Price"
-                fullWidth
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">₹</InputAdornment>
-                  ),
-                }}
-              />
-            </TableCell>
-
-            {/* Deluxe */}
-            <TableCell>
-              <Box sx={{ mb: 1 }}>
-                <TextField
-                  size="small"
-                  value={hotels[1]?.hotelName || ""}
-                  onChange={(e) => {
-                    const updated = [...pkg.destinationNights];
-                    if (!updated[index].hotels) {
-                      updated[index].hotels = [
-                        { category: "standard", hotelName: "", pricePerPerson: 0 },
-                        { category: "deluxe", hotelName: "", pricePerPerson: 0 },
-                        { category: "superior", hotelName: "", pricePerPerson: 0 },
-                      ];
-                    } else {
-                      updated[index].hotels = [...updated[index].hotels];
+                    onChange={(e) =>
+                      setPkg({
+                        ...pkg,
+                        transportationCostPerDay:
+                          e.target.value === "" ? 0 : Number(e.target.value),
+                      })
                     }
-                    updated[index].hotels[1] = {
-                      ...updated[index].hotels[1],
-                      category: "deluxe",
-                      hotelName: e.target.value
-                    };
-                    setPkg({ ...pkg, destinationNights: updated });
-                  }}
-                  placeholder="Deluxe Hotel"
-                  fullWidth
-                />
-              </Box>
-              <TextField
-                type="number"
-                size="small"
-                value={hotels[1]?.pricePerPerson || ""}
-                onChange={(e) => {
-                    const updated = [...pkg.destinationNights];
-                  if (!updated[index].hotels) {
-                    updated[index].hotels = [
-                      { category: "standard", hotelName: "", pricePerPerson: 0 },
-                      { category: "deluxe", hotelName: "", pricePerPerson: 0 },
-                      { category: "superior", hotelName: "", pricePerPerson: 0 },
-                    ];
-                  } else {
-                    updated[index].hotels = [...updated[index].hotels];
-                  }
-                  updated[index].hotels[1] = {
-                    ...updated[index].hotels[1],
-                    category: "deluxe",
-                    pricePerPerson: e.target.value === "" ? 0 : Number(e.target.value)
-                  };
-                  setPkg({ ...pkg, destinationNights: updated });
-                }}
-                placeholder="Price"
-                fullWidth
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">₹</InputAdornment>
-                  ),
-                }}
-              />
-            </TableCell>
-
-            {/* Superior */}
-            <TableCell>
-              <Box sx={{ mb: 1 }}>
-                <TextField
-                  size="small"
-                  value={hotels[2]?.hotelName || ""}
-                  onChange={(e) => {
-                    const updated = [...pkg.destinationNights];
-                    if (!updated[index].hotels) {
-                      updated[index].hotels = [
-                        { category: "standard", hotelName: "", pricePerPerson: 0 },
-                        { category: "deluxe", hotelName: "", pricePerPerson: 0 },
-                        { category: "superior", hotelName: "", pricePerPerson: 0 },
-                      ];
-                    } else {
-                      updated[index].hotels = [...updated[index].hotels];
+                    inputProps={{ min: 0 }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Transportation Days"
+                    value={
+                      Number(pkg.transportationDays) === 0
+                        ? ""
+                        : pkg.transportationDays
                     }
-                    updated[index].hotels[2] = {
-                      ...updated[index].hotels[2],
-                      category: "superior",
-                      hotelName: e.target.value
-                    };
-                    setPkg({ ...pkg, destinationNights: updated });
-                  }}
-                  placeholder="Superior Hotel"
-                  fullWidth
-                />
-              </Box>
-              <TextField
-                type="number"
-                size="small"
-                value={hotels[2]?.pricePerPerson || ""}
-                onChange={(e) => {
-                  const updated = [...pkg.destinationNights];
-                  if (!updated[index].hotels) {
-                    updated[index].hotels = [
-                      { category: "standard", hotelName: "", pricePerPerson: 0 },
-                      { category: "deluxe", hotelName: "", pricePerPerson: 0 },
-                      { category: "superior", hotelName: "", pricePerPerson: 0 },
-                    ];
-                  } else {
-                    updated[index].hotels = [...updated[index].hotels];
-                  }
-                  updated[index].hotels[2] = {
-                    ...updated[index].hotels[2],
-                    category: "superior",
-                    pricePerPerson: e.target.value === "" ? 0 : Number(e.target.value)
-                  };
-                  setPkg({ ...pkg, destinationNights: updated });
-                }}
-                placeholder="Price"
-                fullWidth
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">₹</InputAdornment>
-                  ),
-                }}
-              />
-            </TableCell>
-          </TableRow>
-        );
-      })
-    ) : (
-      <TableRow>
-        <TableCell colSpan={5} align="center">
-          <Typography color="text.secondary">
-            No destinations found
-          </Typography>
-        </TableCell>
-      </TableRow>
-    )}
-  </TableBody>
-</Table>
+                    onChange={(e) =>
+                      setPkg({
+                        ...pkg,
+                        transportationDays:
+                          e.target.value === "" ? 0 : Number(e.target.value),
+                      })
+                    }
+                    inputProps={{ min: 0 }}
+                    helperText="Usually itinerary days"
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Margin (add to each tier)"
+                    value={Number(pkg.manualCostMargin) === 0 ? "" : pkg.manualCostMargin}
+                    onChange={(e) =>
+                      setPkg({
+                        ...pkg,
+                        manualCostMargin:
+                          e.target.value === "" ? 0 : Number(e.target.value),
+                      })
+                    }
+                    inputProps={{ min: 0 }}
+                    helperText="Added to Standard, Deluxe & Superior costs"
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{ p: 2, backgroundColor: "#fafafa" }}
+                  >
+                    {/* <Typography variant="body2">
+        Hotel Total = sum of (destination nights x selected hotel rates): <strong>Rs. {hotelTotalCost}</strong>
+      </Typography> */}
+                    <Typography variant="body2">
+                      Final Standard Cost:{" "}
+                      <strong>Rs. {finalStandardCost}</strong>
+                    </Typography>
+                    <Typography variant="body2">
+                      Final Deluxe Cost: <strong>Rs. {finalDeluxeCost}</strong>
+                    </Typography>
+                    <Typography variant="body2">
+                      Final Superior Cost:{" "}
+                      <strong>Rs. {finalSuperiorCost}</strong>
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
 
               {/* Status */}
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ mt: 3 }}>
+              <Typography
+                variant="subtitle1"
+                fontWeight="bold"
+                gutterBottom
+                sx={{ mt: 3 }}
+              >
                 Status
               </Typography>
               <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid size={{xs:12, md:4}}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <TextField
                     select
                     label="Package Status"
@@ -1442,55 +2704,97 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
               </Grid>
 
               {/* Policy Section */}
-              <Typography variant="h6" fontWeight="bold" color="primary" sx={{ mt: 4, mb: 3 }}>
+              <Typography
+                variant="h6"
+                fontWeight="bold"
+                color="primary"
+                sx={{ mt: 4, mb: 3 }}
+              >
                 📋 Package Policies
               </Typography>
 
               <Grid container spacing={3}>
                 {[
-                  { key: 'inclusionPolicy', label: '✅ Inclusion Policy', helper: 'What is included in the package' },
-                  { key: 'exclusionPolicy', label: '❌ Exclusion Policy', helper: 'What is not included' },
-                  { key: 'paymentPolicy', label: '💰 Payment Policy', helper: 'Payment terms' },
-                  { key: 'cancellationPolicy', label: '⏰ Cancellation Policy', helper: 'Cancellation rules' },
-                  { key: 'termsAndConditions', label: '📄 Terms & Conditions', helper: 'General terms' }
+                  {
+                    key: "inclusionPolicy",
+                    label: "✅ Inclusion Policy",
+                    helper: "What is included in the package",
+                  },
+                  {
+                    key: "exclusionPolicy",
+                    label: "❌ Exclusion Policy",
+                    helper: "What is not included",
+                  },
+                  {
+                    key: "paymentPolicy",
+                    label: "💰 Payment Policy",
+                    helper: "Payment terms",
+                  },
+                  {
+                    key: "cancellationPolicy",
+                    label: "⏰ Cancellation Policy",
+                    helper: "Cancellation rules",
+                  },
+                  {
+                    key: "termsAndConditions",
+                    label: "📄 Terms & Conditions",
+                    helper: "General terms",
+                  },
                 ].map((policy) => (
-                  <Grid size={{xs:12}} key={policy.key}>
+                  <Grid size={{ xs: 12 }} key={policy.key}>
                     <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
                       <Typography variant="h6" gutterBottom color="primary">
                         {policy.label}
                       </Typography>
 
-                      <Box sx={{
-                        border: '1px solid #ccc',
-                        borderRadius: 1,
-                        overflow: 'hidden',
-                        '& .ql-toolbar': { borderBottom: '1px solid #ccc', backgroundColor: '#f8f9fa' },
-                        '& .ql-container': { minHeight: '200px', fontSize: '14px' },
-                        '& .ql-editor': { minHeight: '200px' }
-                      }}>
+                      <Box
+                        sx={{
+                          border: "1px solid #ccc",
+                          borderRadius: 1,
+                          overflow: "hidden",
+                          "& .ql-toolbar": {
+                            borderBottom: "1px solid #ccc",
+                            backgroundColor: "#f8f9fa",
+                          },
+                          "& .ql-container": {
+                            minHeight: "200px",
+                            fontSize: "14px",
+                          },
+                          "& .ql-editor": { minHeight: "200px" },
+                        }}
+                      >
                         <ReactQuill
                           value={pkg.policy?.[policy.key] || ""}
-                          onChange={(content) => setPkg(prev => ({
-                            ...prev,
-                            policy: { ...(prev.policy || {}), [policy.key]: content }
-                          }))}
+                          onChange={(content) =>
+                            setPkg((prev) => ({
+                              ...prev,
+                              policy: {
+                                ...(prev.policy || {}),
+                                [policy.key]: content,
+                              },
+                            }))
+                          }
                           modules={{
                             toolbar: [
-                              [{ 'font': [] }, { 'size': [] }],
-                              ['bold', 'italic', 'underline', 'strike'],
-                              [{ 'color': [] }, { 'background': [] }],
-                              [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                              [{ 'indent': '-1' }, { 'indent': '+1' }],
-                              [{ 'align': [] }],
-                              [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                              ['blockquote', 'code-block'],
-                              ['link', 'image', 'video'],
-                              ['clean']
-                            ]
+                              [{ font: [] }, { size: [] }],
+                              ["bold", "italic", "underline", "strike"],
+                              [{ color: [] }, { background: [] }],
+                              [{ list: "ordered" }, { list: "bullet" }],
+                              [{ indent: "-1" }, { indent: "+1" }],
+                              [{ align: [] }],
+                              [{ header: [1, 2, 3, 4, 5, 6, false] }],
+                              ["blockquote", "code-block"],
+                              ["link", "image", "video"],
+                              ["clean"],
+                            ],
                           }}
                         />
                       </Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ mt: 1, display: "block" }}
+                      >
                         💡 {policy.helper}
                       </Typography>
                     </Paper>
@@ -1516,45 +2820,88 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
           </Grid>
 
           {/* Right Info Panel */}
-          <Grid size={{xs:12, md:4}}>
+          <Grid size={{ xs: 12, md: 4 }}>
             {/* Package Information Card */}
-            <Paper elevation={6} sx={{ p: 3, borderRadius: 4, mb: 3, background: "#f5f7fa" }}>
+            <Paper
+              elevation={6}
+              sx={{ p: 3, borderRadius: 4, mb: 3, background: "#f5f7fa" }}
+            >
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                 📋 Package Information
               </Typography>
               <Divider sx={{ mb: 2 }} />
 
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Tour Type</Typography>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Tour Type
+                </Typography>
                 <Typography variant="body1">{pkg.tourType || "--"}</Typography>
               </Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Country</Typography>
-                <Typography variant="body1">{pkg.destinationCountry || "--"}</Typography>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Country
+                </Typography>
+                <Typography variant="body1">
+                  {pkg.destinationCountry || "--"}
+                </Typography>
               </Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Sector</Typography>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Sector
+                </Typography>
                 <Typography variant="body1">{pkg.sector || "--"}</Typography>
               </Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Category</Typography>
-                <Typography variant="body1">{pkg.packageCategory || "--"}</Typography>
-              </Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Sub Type</Typography>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Category
+                </Typography>
                 <Typography variant="body1">
-                  {Array.isArray(pkg.packageSubType) ? pkg.packageSubType.join(", ") : pkg.packageSubType || "--"}
+                  {pkg.packageCategory || "--"}
+                </Typography>
+              </Box>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Sub Type
+                </Typography>
+                <Typography variant="body1">
+                  {Array.isArray(pkg.packageSubType)
+                    ? pkg.packageSubType.join(", ")
+                    : pkg.packageSubType || "--"}
                 </Typography>
               </Box>
               <Divider sx={{ my: 2 }} />
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Validity</Typography>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Validity
+                </Typography>
                 <Typography variant="body1">
-                  {pkg.validFrom ? new Date(pkg.validFrom).toLocaleDateString() : "--"} to {pkg.validTill ? new Date(pkg.validTill).toLocaleDateString() : "--"}
+                  {pkg.validFrom
+                    ? new Date(pkg.validFrom).toLocaleDateString()
+                    : "--"}{" "}
+                  to{" "}
+                  {pkg.validTill
+                    ? new Date(pkg.validTill).toLocaleDateString()
+                    : "--"}
                 </Typography>
               </Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Status</Typography>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Status
+                </Typography>
                 <Chip
                   label={pkg.status?.toUpperCase() || "DEACTIVE"}
                   color={pkg.status === "active" ? "success" : "default"}
@@ -1562,41 +2909,146 @@ const perPersonValue = parseInt(pkg.perPerson) || 1;
                 />
               </Box>
               <Divider sx={{ my: 2 }} />
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Stay Locations</Typography>
-                <Typography variant="body1">{pkg.stayLocations?.length || 0}</Typography>
-              </Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Total Nights</Typography>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Stay Locations
+                </Typography>
                 <Typography variant="body1">
-                  {(pkg.stayLocations || []).reduce((sum, loc) => sum + (loc?.nights || 0), 0)}
+                  {pkg.stayLocations?.length || 0}
                 </Typography>
               </Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="body2" color="textSecondary">Days in Itinerary</Typography>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Total Nights
+                </Typography>
+                <Typography variant="body1">
+                  {(pkg.stayLocations || []).reduce(
+                    (sum, loc) => sum + (loc?.nights || 0),
+                    0,
+                  )}
+                </Typography>
+              </Box>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
+              >
+                <Typography variant="body2" color="textSecondary">
+                  Days in Itinerary
+                </Typography>
                 <Typography variant="body1">{pkg.days?.length || 0}</Typography>
               </Box>
             </Paper>
 
             {/* Quick Actions Card */}
-            <Paper elevation={6} sx={{ p: 3, borderRadius: 4, background: "#f5f7fa" }}>
+            <Paper
+              elevation={6}
+              sx={{ p: 3, borderRadius: 4, background: "#f5f7fa" }}
+            >
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                 ⚡ Quick Actions
               </Typography>
               <Divider sx={{ mb: 2 }} />
-              <Button variant="contained" fullWidth sx={{ mb: 2, borderRadius: 3 }} startIcon={<DownloadIcon />}>
+              <Button
+                variant="contained"
+                fullWidth
+                sx={{ mb: 2, borderRadius: 3 }}
+                startIcon={<DownloadIcon />}
+              >
                 Download PDF
               </Button>
-              <Button variant="contained" fullWidth sx={{ mb: 2, borderRadius: 3, backgroundColor: "#9c27b0" }} startIcon={<DescriptionIcon />}>
+              <Button
+                variant="contained"
+                fullWidth
+                sx={{ mb: 2, borderRadius: 3, backgroundColor: "#9c27b0" }}
+                startIcon={<DescriptionIcon />}
+                onClick={() => {
+                  const totalNights = pkg.destinationNights?.reduce((sum, dest) => sum + (Number(dest.nights) || 0), 0) || 0;
+                  navigate("/quickquotation", {
+                    state: {
+                      convertPackageId: pkg._id,
+                      convertSector: pkg.sector || pkg.destinationCountry,
+                      convertNights: totalNights
+                    },
+                  });
+                }}
+              >
                 Convert to Quotation
               </Button>
-              <Button variant="contained" fullWidth sx={{ borderRadius: 3, backgroundColor: "#d32f2f" }} startIcon={<DeleteIcon />}>
+              <Button
+                variant="contained"
+                fullWidth
+                sx={{ borderRadius: 3, backgroundColor: "#d32f2f" }}
+                startIcon={<DeleteIcon />}
+              >
                 Delete Package
               </Button>
             </Paper>
           </Grid>
         </Grid>
       </Box>
+      {/* Dialog for adding new locations removed */}
+
+      {/* Lead Options Manager Dialog */}
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Manage Options</DialogTitle>
+        <DialogContent>
+          <LeadOptionsManager
+            fieldName={currentField}
+            onAdd={handleOptionAdd}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Hotel Add New Dialog */}
+      <Dialog
+        open={hotelDialogOpen}
+        onClose={() => {
+          setHotelDialogOpen(false);
+          setCurrentHotelCategory("");
+          sessionStorage.removeItem("currentDestIndex");
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Add New {currentHotelCategory.charAt(0).toUpperCase() + currentHotelCategory.slice(1)} Hotel
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <TextField
+              autoFocus
+              fullWidth
+              label="Hotel Name"
+              value={addMore}
+              onChange={(e) => setAddMore(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") handleAddNewHotel();
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHotelDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleAddNewHotel}
+            variant="contained"
+            color="primary"
+          >
+            Add
+          </Button>
+        </DialogActions>
+      </Dialog>
     </LocalizationProvider>
   );
 };

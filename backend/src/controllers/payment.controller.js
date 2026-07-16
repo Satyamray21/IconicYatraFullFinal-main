@@ -1,8 +1,11 @@
 import ReceivedVoucher from "../models/payment.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import Company from "../models/company.model.js";
-// @desc    Create a new voucher
+import { logActivity } from "../utils/ActivityLog.js";
+import { clearPattern } from "../utils/cache.js";
+import { buildPaymentReceiptPdf } from "../utils/paymentReceiptPdf.js";
 
+// @desc    Create a new voucher
 export const createVoucher = asyncHandler(async (req, res) => {
   const {
     paymentType,
@@ -15,6 +18,7 @@ export const createVoucher = asyncHandler(async (req, res) => {
     amount,
     invoice,
     companyId,
+    quotationRef,
   } = req.body;
 
   if (!date || !accountType || !partyName || !paymentMode || !particulars || !amount) {
@@ -26,7 +30,7 @@ export const createVoucher = asyncHandler(async (req, res) => {
 
   // ✅ Month + Year
   const month = voucherDate.getMonth() + 1; // 1-12
-const year = voucherDate.getFullYear();
+  const year = voucherDate.getFullYear();
 
   // ✅ Find last voucher for SAME company + month + year
   const lastVoucher = await ReceivedVoucher.findOne({
@@ -67,7 +71,17 @@ const invoiceId = `${monthNames[month-1]}/${year}/${formattedNumber}`;
       companyId,
       month,
       year,
+      quotationRef: quotationRef || undefined,
     });
+
+    await logActivity({
+      action: "CREATE",
+      model: "Payment",
+      refId: invoiceId,
+      description: `Payment voucher ${invoiceId} for ₹${amount} (${partyName}) created by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+      user: req.user?.name || req.user?.staffUserId || "System",
+    });
+
   } catch (err) {
     // ✅ HANDLE DUPLICATE SAFELY
     if (err.code === 11000) {
@@ -81,10 +95,31 @@ const invoiceId = `${monthNames[month-1]}/${year}/${formattedNumber}`;
     message: "Voucher created successfully",
     data: voucher,
   });
+  await clearPattern('dashboard:stats:*');
 });
 
-
-
+// @desc    List vouchers linked to a quotation reference (e.g. custom quotation id)
+export const getVouchersByQuotationRef = asyncHandler(async (req, res) => {
+  const { quotationRef } = req.params;
+  if (!quotationRef) {
+    res.status(400);
+    throw new Error("quotationRef is required");
+  }
+  const vouchers = await ReceivedVoucher.find({
+    $or: [
+      { quotationRef: quotationRef },
+      { quotationId: quotationRef } // Some legacy records might use this
+    ]
+  }).sort({
+    date: -1,
+    createdAt: -1,
+  });
+  res.status(200).json({
+    success: true,
+    count: vouchers.length,
+    data: vouchers,
+  });
+});
 
 // @desc    Get all vouchers
 export const getAllVouchers = asyncHandler(async (req, res) => {
@@ -122,17 +157,40 @@ export const updateVoucher = asyncHandler(async (req, res) => {
         res.status(404);
         throw new Error("Voucher not found");
     }
+
+    await logActivity({
+      action: "UPDATE",
+      model: "Payment",
+      refId: updatedVoucher.invoiceId,
+      description: `Payment voucher ${updatedVoucher.invoiceId} updated by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+      user: req.user?.name || req.user?.staffUserId || "System",
+    });
+
     res.status(200).json({ success: true, message: "Voucher updated", data: updatedVoucher });
+    await clearPattern('dashboard:stats:*');
 });
 
 // @desc    Delete voucher
 export const deleteVoucher = asyncHandler(async (req, res) => {
+    const voucher = await ReceivedVoucher.findById(req.params.id);
     const deleted = await ReceivedVoucher.findByIdAndDelete(req.params.id);
     if (!deleted) {
         res.status(404);
         throw new Error("Voucher not found");
     }
+
+    if (voucher) {
+      await logActivity({
+        action: "DELETE",
+        model: "Payment",
+        refId: voucher.invoiceId,
+        description: `Payment voucher ${voucher.invoiceId} for ₹${voucher.amount} (${voucher.partyName}) deleted by ${req.user?.name || req.user?.staffUserId || 'System'}`,
+        user: req.user?.name || req.user?.staffUserId || "System",
+      });
+    }
+
     res.status(200).json({ success: true, message: "Voucher deleted" });
+    await clearPattern('dashboard:stats:*');
 });
 
 // @desc Get total payment received per company
@@ -167,4 +225,21 @@ export const getCompanyTotalPayments = asyncHandler(async (req, res) => {
         success: true,
         data: result
     });
+});
+
+// @desc    Generate and download payment receipt PDF
+export const generateReceiptPdf = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const voucher = await ReceivedVoucher.findById(id).populate("companyId");
+    
+    if (!voucher) {
+        res.status(404);
+        throw new Error("Voucher not found");
+    }
+
+    const pdfBuffer = await buildPaymentReceiptPdf(voucher, voucher.companyId || {});
+    
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=Receipt_${voucher.invoiceId || id}.pdf`);
+    res.send(pdfBuffer);
 });

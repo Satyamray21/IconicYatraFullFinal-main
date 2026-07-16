@@ -46,30 +46,36 @@ import ScheduleIcon from "@mui/icons-material/Schedule";
 import CancelIcon from "@mui/icons-material/Cancel";
 import ShareIcon from "@mui/icons-material/Share";
 
-import { getAllVehicleQuotations } from "../../../features/quotation/vehicleQuotationSlice";
-import { getAllFlightQuotations } from "../../../features/quotation/flightQuotationSlice";
-import { fetchHotelQuotations } from "../../../features/quotation/hotelQuotation";
+import { getAllVehicleQuotations, deleteVehicleQuotation, updateVehicleQuotation } from "../../../features/quotation/vehicleQuotationSlice";
+import { getAllFlightQuotations, deleteFlightQuotationById, updateFlightQuotationById } from "../../../features/quotation/flightQuotationSlice";
+import { fetchHotelQuotations, deleteHotelQuotation, updateHotelQuotation } from "../../../features/quotation/hotelQuotation";
 import {
   fetchQuickQuotations,
   sendQuickQuotationMail,
-  deleteQuickQuotation
+  deleteQuickQuotation,
+  updateQuickQuotation,
 } from "../../../features/quotation/quickQuotationSlice";
-// Add Full and Custom Quotation imports
-import { getAllQuotations as getAllFullQuotations } from "../../../features/quotation/fullQuotationSlice";
-import { getAllCustomQuotations } from "../../../features/quotation/customQuotationSlice";
+import { getAllQuotations as getAllFullQuotations, updateFullQuotation } from "../../../features/quotation/fullQuotationSlice";
+import {
+  getAllCustomQuotations,
+  deleteCustomQuotation,
+  updateCustomQuotation,
+} from "../../../features/quotation/customQuotationSlice";
+import {
+  inferLastCompletedCustomStep,
+  formatCustomQuotationListStatus,
+  formatQuickQuotationListStatus,
+} from "../../../utils/inferCustomQuotationStep";
+import { fetchUnifiedQuotationStats } from "../../../features/quotation/unifiedQuotationSlice";
 
-const stats = [
-  { title: "Today's", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
-  { title: "This Month", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
-  { title: "Last 3 Months", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
-  { title: "Last 6 Months", confirmed: 0, inProcess: 0, cancelledIncomplete: 0 },
-  { title: "Last 12 Months", confirmed: 15, inProcess: 0, cancelledIncomplete: 0 },
-];
+// Removed hardcoded stats array
 
 const QuotationCard = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const theme = useTheme();
+
+  const { stats: dynamicStats, loading: statsLoading } = useSelector((state) => state.unifiedQuotation);
 
   const {
     list: vehicleList,
@@ -105,6 +111,7 @@ const QuotationCard = () => {
   const [filterType, setFilterType] = useState("all");
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, quotationId: null, quotationType: "" });
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     dispatch(getAllVehicleQuotations());
@@ -114,6 +121,7 @@ const QuotationCard = () => {
     // Add Full and Custom Quotation fetches
     dispatch(getAllFullQuotations());
     dispatch(getAllCustomQuotations());
+    dispatch(fetchUnifiedQuotationStats());
   }, [dispatch]);
 
   useEffect(() => {
@@ -139,6 +147,14 @@ const QuotationCard = () => {
   }, [quickError]);
 
   const handleDeleteClick = (quotationId, quotationType) => {
+    if (!quotationId) {
+      setSnackbar({
+        open: true,
+        message: "Unable to delete: quotation id missing.",
+        severity: "error"
+      });
+      return;
+    }
     setDeleteConfirm({
       open: true,
       quotationId,
@@ -150,15 +166,46 @@ const QuotationCard = () => {
     const { quotationId, quotationType } = deleteConfirm;
 
     try {
-      if (quotationType === "Quick") {
-        await dispatch(deleteQuickQuotation(quotationId)).unwrap();
-        setSnackbar({
-          open: true,
-          message: "Quotation deleted successfully!",
-          severity: "success"
-        });
+      setDeleteLoading(true);
+      switch (quotationType) {
+        case "Quick":
+          await dispatch(deleteQuickQuotation(quotationId)).unwrap();
+          await dispatch(fetchQuickQuotations()).unwrap();
+          break;
+        case "Vehicle":
+          await dispatch(deleteVehicleQuotation(quotationId)).unwrap();
+          await dispatch(getAllVehicleQuotations()).unwrap();
+          break;
+        case "Flight":
+          await dispatch(deleteFlightQuotationById(quotationId)).unwrap();
+          await dispatch(getAllFlightQuotations()).unwrap();
+          break;
+        case "Hotel":
+          await dispatch(deleteHotelQuotation(quotationId)).unwrap();
+          await dispatch(fetchHotelQuotations()).unwrap();
+          break;
+        case "Custom":
+          await dispatch(deleteCustomQuotation(quotationId)).unwrap();
+          await dispatch(getAllCustomQuotations()).unwrap();
+          break;
+        case "Full":
+          setSnackbar({
+            open: true,
+            message: "Delete for Full quotation is not available yet.",
+            severity: "warning"
+          });
+          setDeleteConfirm({ open: false, quotationId: null, quotationType: "" });
+          setDeleteLoading(false);
+          return;
+        default:
+          throw new Error("Unsupported quotation type");
       }
-      // Add other quotation type deletions here as needed
+
+      setSnackbar({
+        open: true,
+        message: `${quotationType} quotation deleted successfully!`,
+        severity: "success"
+      });
 
       setDeleteConfirm({ open: false, quotationId: null, quotationType: "" });
     } catch (error) {
@@ -167,6 +214,8 @@ const QuotationCard = () => {
         message: error || "Failed to delete quotation",
         severity: "error"
       });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -227,24 +276,70 @@ const QuotationCard = () => {
   // Format Date Safely
   const formatDate = (date) => {
     if (!date) return "N/A";
+    if (typeof date === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+      return date;
+    }
     try {
-      return new Date(date).toLocaleDateString("en-IN");
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "N/A";
+      return d.toLocaleDateString("en-IN");
     } catch {
       return "N/A";
     }
   };
 
+  const getFirstValue = (...values) => {
+    for (const value of values) {
+      if (value === 0) return value;
+      if (value !== undefined && value !== null && value !== "") return value;
+    }
+    return undefined;
+  };
+
+  const navigateToCustomQuotation = (row) => {
+    const raw = row?.rawData;
+    const qid = row?.quoteId;
+    if (!raw || !qid) return;
+    const fs = String(raw.finalizeStatus || "").toLowerCase();
+    const rowStatus = String(raw.status || "").toLowerCase();
+    if (fs === "finalized") {
+      navigate(`/customfinalize/${qid}`, {
+        state: { quotationData: raw },
+      });
+      return;
+    }
+    if (rowStatus === "confirmed" || rowStatus === "completed") {
+      navigate(`/customfinalize/${qid}`, {
+        state: { quotationData: raw },
+      });
+      return;
+    }
+    const lastCompleted = inferLastCompletedCustomStep(raw);
+    if (lastCompleted >= 6) {
+      navigate(`/customfinalize/${qid}`, {
+        state: { quotationData: raw },
+      });
+      return;
+    }
+    const nextStep = Math.min(lastCompleted + 1, 6);
+    navigate("/customquotation", {
+      state: { resumeQuotationId: qid, resumeStep: nextStep },
+    });
+  };
+
   // Get Status Chip Color
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    const s = String(status || "").toLowerCase();
+    if (s.startsWith("draft")) return "warning";
+    switch (s) {
       case "confirmed":
+      case "finalized":
+      case "completed":
         return "success";
       case "pending":
         return "warning";
       case "cancelled":
         return "error";
-      case "completed":
-        return "info";
       case "draft":
         return "default";
       default:
@@ -275,6 +370,7 @@ const QuotationCard = () => {
   // Table Columns
   const columns = [
     { field: "id", headerName: "Sr No.", width: 80 },
+    { field: "bookingId", headerName: "Booking ID", width: 150 },
     { field: "quoteId", headerName: "Quote ID", width: 140 },
     { field: "clientName", headerName: "Client Name", width: 200 },
     { field: "arrival", headerName: "Arrival", width: 120 },
@@ -298,12 +394,13 @@ const QuotationCard = () => {
     {
       field: "quotationStatus",
       headerName: "Status",
-      width: 140,
+      width: 200,
       renderCell: (params) => (
         <Chip
           label={params.value}
           size="small"
           color={getStatusColor(params.value)}
+          sx={{ maxWidth: 220, "& .MuiChip-label": { whiteSpace: "normal" } }}
         />
       )
     },
@@ -334,6 +431,64 @@ const QuotationCard = () => {
             </IconButton>
           )}
 
+          {/* ❌ CANCEL – For ALL */}
+          {params.row.quotationStatus.toLowerCase() !== "cancelled" && (
+            <IconButton
+              color="error"
+              size="small"
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (window.confirm("Are you sure you want to cancel this quotation?")) {
+                  const id = params.row.originalId;
+                  const type = params.row.type;
+                  const payload = { finalizeStatus: "cancelled" };
+                  try {
+                    switch (type) {
+                      case "Quick":
+                        await dispatch(updateQuickQuotation({ id, formData: payload })).unwrap();
+                        dispatch(fetchQuickQuotations());
+                        break;
+                      case "Custom":
+                        await dispatch(updateCustomQuotation({ id, formData: payload })).unwrap();
+                        dispatch(getAllCustomQuotations());
+                        break;
+                      case "Vehicle":
+                        await dispatch(updateVehicleQuotation({ vehicleQuotationId: id, data: payload })).unwrap();
+                        dispatch(getAllVehicleQuotations());
+                        break;
+                      case "Flight":
+                        await dispatch(updateFlightQuotationById({ flightQuotationId: id, formData: payload })).unwrap();
+                        dispatch(getAllFlightQuotations());
+                        break;
+                      case "Hotel":
+                        await dispatch(updateHotelQuotation({ id, formData: payload })).unwrap();
+                        dispatch(fetchHotelQuotations());
+                        break;
+                      case "Full":
+                        await dispatch(updateFullQuotation({ id, formData: payload })).unwrap();
+                        dispatch(getAllFullQuotations());
+                        break;
+                      default:
+                        break;
+                    }
+                    dispatch(fetchUnifiedQuotationStats());
+                    setSnackbar({ open: true, message: "Quotation cancelled successfully", severity: "success" });
+                  } catch (err) {
+                    setSnackbar({ open: true, message: err || "Failed to cancel quotation", severity: "error" });
+                  }
+                }
+              }}
+              sx={{
+                backgroundColor: alpha(theme.palette.error.main, 0.1),
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.error.main, 0.2),
+                }
+              }}
+            >
+              <CancelIcon fontSize="small" />
+            </IconButton>
+          )}
+
           {/* ✏️ EDIT – For ALL (including Quick) */}
           <IconButton
             color="primary"
@@ -358,7 +513,7 @@ const QuotationCard = () => {
                   navigate(`/hotelquotation/edit/${params.row.originalId}`);
                   break;
                 case "Custom":
-                  navigate(`/customquotation/edit/${params.row.originalId}`);
+                  navigateToCustomQuotation(params.row);
                   break;
                 default:
                   break;
@@ -380,12 +535,16 @@ const QuotationCard = () => {
             size="small"
             onClick={(e) => {
               e.stopPropagation();
+              const idToDelete =
+                params.row.type === "Quick"
+                  ? params.row.originalId
+                  : (params.row.originalId || params.row.id);
               handleDeleteClick(
-                params.row.originalId || params.row.id,
+                idToDelete,
                 params.row.type
               );
             }}
-            disabled={quickLoading}
+            disabled={deleteLoading}
             sx={{
               backgroundColor: alpha(theme.palette.error.main, 0.1),
               '&:hover': {
@@ -396,7 +555,7 @@ const QuotationCard = () => {
               }
             }}
           >
-            {quickLoading ? (
+            {deleteLoading ? (
               <CircularProgress size={16} />
             ) : (
               <DeleteIcon fontSize="small" />
@@ -413,7 +572,8 @@ const QuotationCard = () => {
   const combinedList = [
     ...(vehicleList || []).map((item, index) => ({
       id: `V-${index + 1}`,
-      originalId: item?._id,
+      originalId: item?.vehicleQuotationId || item?._id,
+      bookingId: item?.bookingId || "-",
       quoteId: item?.vehicleQuotationId || "N/A",
       clientName: item?.basicsDetails?.clientName || "N/A",
       arrival: formatDate(item?.pickupDropDetails?.pickupDate),
@@ -426,14 +586,18 @@ const QuotationCard = () => {
       noOfNight: item?.basicsDetails?.noOfDays || "-",
       tourType: item?.basicsDetails?.tripType || "-",
       type: "Vehicle",
-      quotationStatus: item?.status || "Pending",
+      quotationStatus:
+        item?.finalizeStatus === "cancelled"
+          ? "Cancelled"
+          : (item?.status || (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending")),
       formStatus: "Completed",
       businessType: "Travel",
     })),
 
     ...(flightList || []).map((item, index) => ({
       id: `F-${index + 1}`,
-      originalId: item?._id,
+      originalId: item?.flightQuotationId || item?._id,
+      bookingId: item?.bookingId || "-",
       quoteId: item?.flightQuotationId || "N/A",
       clientName: item?.clientDetails?.clientName || "N/A",
       arrival: formatDate(item?.flightDetails?.[0]?.departureDate),
@@ -447,7 +611,10 @@ const QuotationCard = () => {
       noOfNight: "-",
       tourType: item?.tripType || "-",
       type: "Flight",
-      quotationStatus: item?.status || "Pending",
+      quotationStatus:
+        item?.finalizeStatus === "cancelled" || item?.status === "Cancelled"
+          ? "Cancelled"
+          : (item?.status || (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending")),
       formStatus: "Completed",
       businessType: "Travel",
     })),
@@ -463,6 +630,7 @@ const QuotationCard = () => {
       return {
         id: `H-${index + 1}`,
         originalId: item?._id,
+        bookingId: item?.bookingId || "-",
         quoteId: item?.hotelQuotationId || "N/A",
         clientName: item?.clientDetails?.clientName || "N/A",
         arrival: formatDate(item?.pickupDrop?.arrivalDate),
@@ -472,34 +640,70 @@ const QuotationCard = () => {
         noOfNight: item?.pickupDrop?.nights || "-",
         tourType: item?.clientDetails?.tourType || "-",
         type: "Hotel",
-        quotationStatus: item?.status ? item.status : "Pending",
+        quotationStatus:
+          item?.finalizeStatus === "cancelled" || item?.status === "Cancelled"
+            ? "Cancelled"
+            : (item?.status || (item?.finalizeStatus === "finalized" ? "Finalized" : "Pending")),
         formStatus: "Completed",
         businessType: "Travel",
       };
     }),
 
     // Add Quick Quotations
-    ...(quickList || []).map((item, index) => ({
-      id: `Q-${index + 1}`,
-      originalId: item?._id, // For API calls
-      quoteId: `QT-${item?._id?.slice(-6) || "N/A"}`,
-      clientName: item?.customerName || "N/A",
-      arrival: formatDate(item?.createdAt),
-      departure: "-",
-      sector: item?.packageSnapshot?.tourType || "N/A",
-      title: "Quick Quotation",
-      noOfNight: item?.packageSnapshot?.nights || "-",
-      tourType: item?.packageSnapshot?.tourType || "-",
-      type: "Quick",
-      quotationStatus: item?.status || "Draft",
-      formStatus: "Completed",
-      businessType: "Travel",
-    })),
+    ...(quickList || []).map((item, index) => {
+      const quickArrival = getFirstValue(
+        item?.quotationDetails?.arrivalDate,
+        item?.packageSnapshot?.quotationDetails?.arrivalDate,
+        item?.packageSnapshot?.arrivalDate,
+      );
+      const quickDeparture = getFirstValue(
+        item?.quotationDetails?.departureDate,
+        item?.packageSnapshot?.quotationDetails?.departureDate,
+        item?.packageSnapshot?.departureDate,
+      );
+      const quickSector = getFirstValue(
+        item?.packageSnapshot?.sector,
+        item?.sector,
+        item?.clientLocation,
+      );
+      const quickNights = getFirstValue(
+        item?.packageSnapshot?.nights,
+        item?.nights,
+        item?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+        item?.packageSnapshot?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+      );
+
+      return {
+        id: `Q-${index + 1}`,
+        originalId: item?._id, // For API calls
+        bookingId: item?.bookingId || "-",
+        quoteId: `QT-${item?._id?.slice(-6) || "N/A"}`,
+        clientName: item?.customerName || "N/A",
+        arrival: formatDate(quickArrival),
+        departure: formatDate(quickDeparture),
+        sector: quickSector || "N/A",
+        title: item?.packageSnapshot?.title || "Quick Quotation",
+        noOfNight: getFirstValue(quickNights, "-"),
+        tourType: item?.packageSnapshot?.tourType || "-",
+        type: "Quick",
+        quotationStatus: formatQuickQuotationListStatus(item),
+        formStatus: "Completed",
+        businessType: "Travel",
+        rawData: item,
+      };
+    }),
 
     // Add Full Quotations
     ...(fullList || []).map((item, index) => ({
       id: `FU-${index + 1}`,
       originalId: item?._id,
+      bookingId: item?.bookingId || "-",
       quoteId: item?.quotationId || "N/A",
       clientName: item?.clientDetails?.clientName || "N/A",
       arrival: formatDate(item?.pickupDrop?.arrivalDate),
@@ -509,28 +713,69 @@ const QuotationCard = () => {
       noOfNight: item?.pickupDrop?.nights || "-",
       tourType: item?.clientDetails?.tourType || "-",
       type: "Full",
-      quotationStatus: item?.status || "Draft",
+      quotationStatus:
+        item?.finalizeStatus === "cancelled"
+          ? "Cancelled"
+          : (item?.status || (item?.finalizeStatus === "finalized" ? "Confirmed" : "Draft")),
       formStatus: "Completed",
       businessType: "Travel",
+      rawData: item,
     })),
 
     // Add Custom Quotations
-    ...(customList || []).map((item, index) => ({
-      id: `C-${index + 1}`,
-      originalId: item?._id,
-      quoteId: item?.quotationId || `CUST-${item?._id?.slice(-6) || "N/A"}`,
-      clientName: item?.clientDetails?.clientName || "N/A",
-      arrival: formatDate(item?.travelDates?.startDate),
-      departure: formatDate(item?.travelDates?.endDate),
-      sector: item?.destination || "N/A",
-      title: item?.quotationTitle || "Custom Package",
-      noOfNight: item?.duration?.nights || "-",
-      tourType: item?.tourType || "-",
-      type: "Custom",
-      quotationStatus: item?.status || "Draft",
-      formStatus: "Completed",
-      businessType: "Travel",
-    })),
+    ...(customList || []).map((item, index) => {
+      const customArrival = getFirstValue(
+        item?.tourDetails?.arrivalDate,
+        item?.pickupDrop?.[0]?.arrivalDate,
+        item?.travelDates?.startDate,
+      );
+      const customDeparture = getFirstValue(
+        item?.tourDetails?.departureDate,
+        item?.pickupDrop?.[0]?.departureDate,
+        item?.travelDates?.endDate,
+      );
+      const customSector = getFirstValue(
+        item?.clientDetails?.sector,
+        item?.destination,
+      );
+      const customNights = getFirstValue(
+        item?.tourDetails?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+        item?.quotationDetails?.destinations?.reduce(
+          (sum, d) => sum + Number(d?.nights || 0),
+          0,
+        ),
+        item?.pickupDrop?.reduce((sum, d) => sum + Number(d?.nights || 0), 0),
+        item?.tourDetails?.days
+          ? Number(item.tourDetails.days) - 1
+          : undefined,
+        item?.days
+          ? Number(item.days) - 1
+          : undefined,
+        item?.duration?.nights,
+      );
+
+      return {
+        id: `C-${index + 1}`,
+        originalId: item?._id,
+        bookingId: item?.bookingId || "-",
+        quoteId: item?.quotationId || `CUST-${item?._id?.slice(-6) || "N/A"}`,
+        clientName: item?.clientDetails?.clientName || "N/A",
+        arrival: formatDate(customArrival),
+        departure: formatDate(customDeparture),
+        sector: customSector || "N/A",
+        title: item?.tourDetails?.quotationTitle || item?.quotationTitle || "Custom Package",
+        noOfNight: getFirstValue(customNights, "-"),
+        tourType: item?.clientDetails?.tourType || item?.tourType || "-",
+        type: "Custom",
+        quotationStatus: formatCustomQuotationListStatus(item),
+        formStatus: "Completed",
+        businessType: "Travel",
+        rawData: item,
+      };
+    }),
   ];
 
   // Filter by type
@@ -579,12 +824,18 @@ const QuotationCard = () => {
         navigate(`/vehiclefinalize/${params.row.quoteId}`);
         break;
       case "Custom":
-        navigate(`/customfinalize/${params.row.quoteId}`, {
-          state: { quotationData: params.row.rawData },
-        });
+        navigateToCustomQuotation(params.row);
         break;
       case "Quick":
-        navigate(`/quickfinalize/${params.row.quoteId}`);
+        // Must use Mongo _id — quoteId is only a display label (QT-xxxxxx)
+        if (params.row.originalId) {
+          navigate(`/quickfinalize/${params.row.originalId}`);
+        }
+        break;
+      case "Hotel":
+        if (params.row.originalId) {
+          navigate(`/hotelfinalize/${params.row.originalId}`);
+        }
         break;
       default:
         break;
@@ -610,40 +861,59 @@ const QuotationCard = () => {
 
       {/* Enhanced Stat Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {stats.map((item, index) => (
-          <Grid key={index} size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-            <Card
-              sx={{
-                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-                color: "white",
-                height: "100%",
-                transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
-                '&:hover': {
-                  transform: "translateY(-4px)",
-                  boxShadow: theme.shadows[8],
-                }
-              }}
-            >
-              <CardContent sx={{ p: 2.5 }}>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                  {item.title}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <TrendingUpIcon sx={{ fontSize: 16, mr: 1 }} />
-                  <Typography variant="body2">Confirmed: {item.confirmed}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <ScheduleIcon sx={{ fontSize: 16, mr: 1 }} />
-                  <Typography variant="body2">In Process: {item.inProcess}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <CancelIcon sx={{ fontSize: 16, mr: 1 }} />
-                  <Typography variant="body2">Cancelled: {item.cancelledIncomplete}</Typography>
-                </Box>
-              </CardContent>
-            </Card>
+        {statsLoading ? (
+          // Skeleton loaders while data is fetching
+          Array.from(new Array(5)).map((_, index) => (
+            <Grid key={index} size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
+              <Card sx={{ height: "100%", background: alpha(theme.palette.primary.main, 0.05) }}>
+                <CardContent sx={{ p: 2.5 }}>
+                  <CircularProgress size={20} sx={{ mb: 1 }} />
+                  <Typography variant="body2" color="textSecondary">Loading Stats...</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))
+        ) : (dynamicStats && dynamicStats.length > 0) ? (
+          dynamicStats.map((item, index) => (
+            <Grid key={index} size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
+              <Card
+                sx={{
+                  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                  color: "white",
+                  height: "100%",
+                  transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
+                  '&:hover': {
+                    transform: "translateY(-4px)",
+                    boxShadow: theme.shadows[8],
+                  }
+                }}
+              >
+                <CardContent sx={{ p: 2.5 }}>
+                  <Typography variant="h6" fontWeight="bold" gutterBottom>
+                    {item.title}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <TrendingUpIcon sx={{ fontSize: 16, mr: 1 }} />
+                    <Typography variant="body2">Confirmed: {item.confirmed}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <ScheduleIcon sx={{ fontSize: 16, mr: 1 }} />
+                    <Typography variant="body2">In Process: {item.inProcess}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <CancelIcon sx={{ fontSize: 16, mr: 1 }} />
+                    <Typography variant="body2">Cancelled: {item.cancelledIncomplete}</Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))
+        ) : (
+          // Fallback if no data is returned
+          <Grid size={{ xs: 12 }}>
+            <Alert severity="info">No live stats available yet. Create some quotations to see your business performance!</Alert>
           </Grid>
-        ))}
+        )}
       </Grid>
 
       {/* Actions Section */}
@@ -914,9 +1184,9 @@ const QuotationCard = () => {
             onClick={handleConfirmDelete}
             variant="contained"
             color="error"
-            disabled={quickLoading}
+            disabled={deleteLoading}
           >
-            {quickLoading ? <CircularProgress size={24} /> : "Delete"}
+            {deleteLoading ? <CircularProgress size={24} /> : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>

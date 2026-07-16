@@ -28,7 +28,7 @@ const Header = () => {
       <AppBar
         position="static"
         sx={{
-          bgcolor: "#1f3c65",
+          background: company?.company?.headerColor || "#1f3c65",
           height: { xs: "45px", sm: "35px" },
           justifyContent: "center",
           py: { xs: 0, md: 1 }

@@ -50,12 +50,29 @@ const flightQuotationSchema = mongoose.Schema({
     pnrList: [{ type: String }],   // ✅ PNR per flight
     finalFareList: [{ type: Number }], // 🆕 NEW: Fare per flight
 
+    baseFare: { type: Number, default: null },
+    gstType: { type: String, enum: ["Included", "Excluded"], default: "Included" },
+    gstPercentage: { type: Number, default: 0 },
+    gstAmount: { type: Number, default: 0 },
     finalFare: { type: Number, default: null },
+
+    policies: {
+        inclusionPolicy: [{ type: String, trim: true }],
+        exclusionPolicy: [{ type: String, trim: true }],
+        paymentPolicy: [{ type: String, trim: true }],
+        cancellationPolicy: [{ type: String, trim: true }],
+        termsAndConditions: [{ type: String, trim: true }],
+    },
 
     status: {
         type: String,
-        enum: ['In Progress', 'Completed', 'Confirmed', 'New'],
+        enum: ['In Progress', 'Completed', 'Confirmed', 'New', 'Cancelled'],
         default: 'New'
+    },
+    finalizeStatus: {
+        type: String,
+        enum: ["draft", "finalized", "cancelled"],
+        default: "draft",
     },
 
     flightQuotationId: {
@@ -66,6 +83,16 @@ const flightQuotationSchema = mongoose.Schema({
     Quotation_type: {
         type: String,
         default: 'Flight_Quotation'
+    },
+    companyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Company'
+    },
+    companyName: {
+        type: String
+    },
+    bookingId: {
+        type: String,
     }
 }, { timestamps: true });
 

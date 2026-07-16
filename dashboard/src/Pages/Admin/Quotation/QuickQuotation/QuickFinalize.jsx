@@ -1,1684 +1,4794 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useParams, useNavigate } from "react-router-dom";
 import {
-    Box,
-    Grid,
-    Typography,
-    Button,
-    Card,
-    CardContent,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TextField,
-    TableHead,
-    TableRow,
-    Paper,
-    List,
-    ListItem,
-    ListItemText,
-    Chip,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    IconButton,
-    CircularProgress,
-    Snackbar,
-    Alert,
-    Divider,
+  Box,
+  Grid,
+  Typography,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TextField,
+  TableHead,
+  TableRow,
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  Chip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  IconButton,
+  CircularProgress,
+  Snackbar,
+  Alert,
+  Divider,
+  Autocomplete,
 } from "@mui/material";
 import {
-    FormatQuote as FormatQuoteIcon,
-    Payment,
-    Phone,
-    AlternateEmail,
-    CreditCard,
-    Description,
-    Person,
-    LocationOn,
-    CalendarToday,
-    CheckCircle,
-    Cancel,
-    Warning,
-    Business,
-    Language,
-    ExpandMore,
-    Edit,
-    Group,
-    Receipt,
-    Route,
-    Route as RouteIcon,
-    Visibility,
-    AddCircleOutline,
-    Image as ImageIcon,
-    FormatQuote,
-    Delete,
-    Add,
-    Download,
-    Error,
+  FormatQuote as FormatQuoteIcon,
+  Payment,
+  Phone,
+  AlternateEmail,
+  CreditCard,
+  Description,
+  Person,
+  LocationOn,
+  CalendarToday,
+  CheckCircle,
+  Cancel,
+  Warning,
+  Business,
+  Language,
+  ExpandMore,
+  Edit,
+  Group,
+  Receipt,
+  Route,
+  Route as RouteIcon,
+  Visibility,
+  AddCircleOutline,
+  Image as ImageIcon,
+  FormatQuote,
+  Delete,
+  Add,
+  Download,
+  Error,
+  Calculate,
+  ArrowUpward,
+  ArrowDownward,
 } from "@mui/icons-material";
 
 import EmailQuotationDialog from "../VehicleQuotation/Dialog/EmailQuotationDialog";
-import MakePaymentDialog from "../VehicleQuotation/Dialog/MakePaymentDialog";
-import FinalizeDialog from "./Dialog/FinalizeDialog";
-import HotelVendorDialog from "./Dialog/HotelVendor";
+import FinalizeDialog from "../CustomQuotation/Dialog/FinalizeDialog";
+import CostingEditDialog from "../CustomQuotation/Dialog/CostingEditDialog";
+import FinalizeVehicleDialog from "../CustomQuotation/Dialog/FinalizeVehicleDialog";
+import FinalizeHotelsPricingDialog from "../CustomQuotation/Dialog/FinalizeHotelsPricingDialog";
+import HotelVendorDialog from "../CustomQuotation/Dialog/HotelVendor";
+import {
+  quickToHotelsFormData,
+  quickToCostingQuotation,
+  finalizeHotelsFormDataToQuickUpdate,
+  vehicleStepPayloadToQuickUpdate,
+  costingBodyToQuickUpdate,
+} from "../../../../utils/quickQuotationFinalizeAdapters";
+import {
+  fetchQuickQuotationById,
+  updateQuickQuotation,
+  finalizeQuickQuotation,
+} from "../../../../features/quotation/quickQuotationSlice";
+import { getLeadOptions } from "../../../../features/leads/leadSlice";
+import axios from "../../../../utils/axios";
 import AddBankDialog from "../VehicleQuotation/Dialog/AddBankDialog";
 import EditDialog from "../VehicleQuotation/Dialog/EditDialog";
 import AddServiceDialog from "../VehicleQuotation/Dialog/AddServiceDialog";
 import AddFlightDialog from "../HotelQuotation/Dialog/FlightDialog";
+import QuickEditAllDialog from "./Dialog/QuickEditAllDialog";
 import InvoicePDF from "./Dialog/PDF/Invoice";
 import QuotationPDFDialog from "./Dialog/PDF/PreviewPdf";
+import HotelConfirmationDialog from "../CustomQuotation/Dialog/HotelConfirmationDialog";
+import ReceiptPreviewDialog from "../../../../Components/ReceiptPreviewDialog";
+import InvoiceView from "../../../../Components/InvoiceView";
+import html2pdf from "html2pdf.js";
+import {
+  effectiveQuickPayableTotal,
 
-// Transaction Summary Dialog Component
-const TransactionSummaryDialog = ({ open, onClose }) => {
-    const tableHeaders = [
-        "Sr No.",
-        "Receipt",
-        "Invoice",
-        "Party Name",
-        "Transaction Remark",
-        "Transaction...",
-        "Dr/Cr",
-        "Amount",
-    ];
+  mapApiAdditionalServicesToState,
+  serializeAdditionalServicesForApi,
+  sumBillableAdditionalServices,
+} from "../../../../utils/quotationAdditionalServices";
 
-    return (
-        <Dialog
-            open={open}
-            onClose={onClose}
-            maxWidth="lg"
-            fullWidth
-            PaperProps={{ sx: { minHeight: "400px" } }}
-        >
-            <DialogTitle>
-                <Typography variant="h6" component="div" fontWeight="bold">
-                    Transaction Summary
-                </Typography>
-            </DialogTitle>
-            <DialogContent>
-                <TableContainer
-                    component={Paper}
-                    variant="outlined"
-                    sx={{ border: "1px solid #e0e0e0" }}
-                >
-                    <Table sx={{ minWidth: 800 }} aria-label="transaction summary table">
-                        <TableHead>
-                            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                                {tableHeaders.map((header, index) => (
-                                    <TableCell
-                                        key={index}
-                                        sx={{
-                                            fontWeight: "bold",
-                                            borderRight:
-                                                index < tableHeaders.length - 1
-                                                    ? "1px solid #e0e0e0"
-                                                    : "none",
-                                        }}
-                                    >
-                                        {header}
-                                    </TableCell>
-                                ))}
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            <TableRow>
-                                <TableCell
-                                    colSpan={tableHeaders.length}
-                                    align="center"
-                                    sx={{
-                                        height: 120,
-                                        color: "text.secondary",
-                                        fontStyle: "italic",
-                                    }}
-                                >
-                                    No data
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            </DialogContent>
-        </Dialog>
+function setQuotationValueByPath(prev, path, value) {
+  const parts = path.split(".");
+  if (parts.length === 1) {
+    return { ...prev, [path]: value };
+  }
+  const next = { ...prev };
+  let cur = next;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const p = parts[i];
+    cur[p] = cur[p] && typeof cur[p] === "object" ? { ...cur[p] } : {};
+    cur = cur[p];
+  }
+  cur[parts[parts.length - 1]] = value;
+  return next;
+}
+
+function linesToPolicyArray(v) {
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v === "string") {
+    return v
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [String(v)];
+}
+
+function buildQuickMongoSetFromEditDialog(editDialog, newValue) {
+  const parseDateTimeFromText = (value) => {
+    const raw = String(value || "");
+    // Updated regex to support AM/PM
+    const m = raw.match(
+      /\((\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+at\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?\)/i,
     );
+    if (!m) return { dateIso: "", time: "" };
+
+    const dd = String(m[1]).padStart(2, "0");
+    const mm = String(m[2]).padStart(2, "0");
+    const yyyy = String(m[3]).length === 2 ? `20${m[3]}` : String(m[3]);
+    let hhNum = m[4] ? parseInt(m[4], 10) : null;
+    const min = m[5] ? String(m[5]).padStart(2, "0") : "";
+    const ampm = m[6] ? m[6].toUpperCase() : null;
+
+    // Convert AM/PM to 24h for storage
+    if (hhNum !== null && ampm) {
+      if (ampm === "PM" && hhNum < 12) hhNum += 12;
+      if (ampm === "AM" && hhNum === 12) hhNum = 0;
+    }
+
+    const hh = hhNum !== null ? String(hhNum).padStart(2, "0") : "";
+    const dateIso = `${yyyy}-${mm}-${dd}T00:00:00.000Z`;
+
+    return {
+      dateIso: Number.isNaN(new Date(dateIso).getTime()) ? "" : dateIso,
+      time: hh && min ? `${hh}:${min}` : "",
+    };
+  };
+  const cleanPoint = (value) =>
+    String(value || "")
+      .replace(/\(([^)]*)\)/g, "")
+      .replace(/^((arrival|departure)\s*:\s*)+/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  if (editDialog.field === "pickup" && editDialog.nestedKey === "arrival") {
+    const parsed = parseDateTimeFromText(newValue);
+    return {
+      pickupPoint: cleanPoint(newValue),
+      packageSnapshot: {
+        quotationDetails: {
+          ...(parsed.dateIso ? { arrivalDate: parsed.dateIso } : {}),
+          ...(parsed.time ? { pickupTime: parsed.time } : {}),
+        },
+      },
+    };
+  }
+  if (editDialog.field === "pickup" && editDialog.nestedKey === "departure") {
+    const parsed = parseDateTimeFromText(newValue);
+    return {
+      dropPoint: cleanPoint(newValue),
+      packageSnapshot: {
+        quotationDetails: {
+          ...(parsed.dateIso ? { departureDate: parsed.dateIso } : {}),
+          ...(parsed.time ? { dropTime: parsed.time } : {}),
+        },
+      },
+    };
+  }
+  switch (editDialog.field) {
+    case "policies.inclusions":
+      return { "policy.inclusionPolicy": linesToPolicyArray(newValue) };
+    case "policies.exclusions":
+      return { "policy.exclusionPolicy": linesToPolicyArray(newValue) };
+    case "policies.paymentPolicy":
+      return { "policy.paymentPolicy": linesToPolicyArray(newValue) };
+    case "policies.cancellationPolicy":
+      return { "policy.cancellationPolicy": linesToPolicyArray(newValue) };
+    case "policies.terms":
+      return { "policy.termsAndConditions": linesToPolicyArray(newValue) };
+    case "hotel.itinerary":
+      return { message: String(newValue) };
+    case "customer.name":
+      return { customerName: String(newValue) };
+    case "customer.email":
+      return { email: String(newValue) };
+    case "customer.location":
+      return { packageSnapshot: { clientLocation: String(newValue) } };
+    case "footer.contact":
+      return {
+        packageSnapshot: {
+          quotationDetails: {
+            signatureDetails: { signedBy: String(newValue) },
+          },
+        },
+      };
+    case "quotationHeaderTitle":
+      return { packageSnapshot: { displayTitle: String(newValue) } };
+    case "destinationLine":
+      return { packageSnapshot: { displayDestination: String(newValue) } };
+    default:
+      return null;
+  }
+}
+
+function summarizeVoucherAmounts(vouchers) {
+  let receivedFromClient = 0;
+  let paidToVendor = 0;
+  (vouchers || []).forEach((v) => {
+    const n = Number(v.amount) || 0;
+    const isReceive = v.drCr === "Cr" || v.paymentType === "Receive Voucher";
+    const isPayment = v.drCr === "Dr" || v.paymentType === "Payment Voucher";
+    if (isReceive) receivedFromClient += n;
+    else if (isPayment) paidToVendor += n;
+  });
+  return {
+    receivedFromClient,
+    paidToVendor,
+    net: receivedFromClient - paidToVendor,
+    cr: receivedFromClient,
+    dr: paidToVendor,
+  };
+}
+
+const normalizePolicyForEditor = (value) => {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "";
+    return value
+      .join("\n")
+      .trim()
+      .replace(/<[^>]*>/g, "");
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed.replace(/<[^>]*>/g, "") : "";
+  }
+  return "";
+};
+
+const normalizePolicyState = (source = {}) => {
+  const policySource = source?.policy || source || {};
+  return {
+    inclusionPolicy: normalizePolicyForEditor(
+      policySource?.inclusionPolicy ?? policySource?.inclusions,
+    ),
+    exclusionPolicy: normalizePolicyForEditor(
+      policySource?.exclusionPolicy ?? policySource?.exclusions,
+    ),
+    paymentPolicy: normalizePolicyForEditor(policySource?.paymentPolicy),
+    cancellationPolicy: normalizePolicyForEditor(
+      policySource?.cancellationPolicy,
+    ),
+    termsAndConditions: normalizePolicyForEditor(
+      policySource?.termsAndConditions,
+    ),
+  };
+};
+
+const TransactionSummaryDialog = ({
+  open,
+  onClose,
+  loading,
+  rows,
+  quotationRef,
+  onPreview,
+}) => {
+  const totals = summarizeVoucherAmounts(rows);
+
+  const tableHeaders = [
+    "Sr.",
+    "Receipt #",
+    "Voucher id",
+    "Type",
+    "Party",
+    "Particulars",
+    "Payment Bank",
+    "Dr/Cr",
+    "Amount",
+    "Actions",
+  ];
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      PaperProps={{ sx: { minHeight: "400px" } }}
+    >
+      <DialogTitle>
+        <Typography variant="h6" component="div" fontWeight="bold">
+          Payment history{quotationRef ? ` — ${quotationRef}` : ""}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Receive vouchers count as money from the client; payment vouchers
+          count as money paid to vendors.
+        </Typography>
+      </DialogTitle>
+      <DialogContent>
+        {!loading && rows?.length > 0 && (
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 2,
+              mb: 2,
+            }}
+          >
+            <Paper
+              variant="outlined"
+              sx={{
+                flex: "1 1 200px",
+                p: 2,
+                borderLeft: "4px solid",
+                borderColor: "success.main",
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                Received from client
+              </Typography>
+              <Typography variant="h6" color="success.main" fontWeight="bold">
+                ₹{totals.receivedFromClient.toLocaleString("en-IN")}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Receive vouchers (Cr)
+              </Typography>
+            </Paper>
+            <Paper
+              variant="outlined"
+              sx={{
+                flex: "1 1 200px",
+                p: 2,
+                borderLeft: "4px solid",
+                borderColor: "warning.main",
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                Paid to vendors
+              </Typography>
+              <Typography variant="h6" color="warning.main" fontWeight="bold">
+                ₹{totals.paidToVendor.toLocaleString("en-IN")}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Payment vouchers (Dr)
+              </Typography>
+            </Paper>
+            <Paper
+              variant="outlined"
+              sx={{
+                flex: "1 1 200px",
+                p: 2,
+                borderLeft: "4px solid",
+                borderColor: "info.main",
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                Net (client in − vendor out)
+              </Typography>
+              <Typography variant="h6" fontWeight="bold">
+                ₹{totals.net.toLocaleString("en-IN")}
+              </Typography>
+            </Paper>
+          </Box>
+        )}
+        <TableContainer
+          component={Paper}
+          variant="outlined"
+          sx={{ border: "1px solid #e0e0e0" }}
+        >
+          <Table sx={{ minWidth: 800 }} aria-label="transaction summary table">
+            <TableHead>
+              <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                {tableHeaders.map((header, index) => (
+                  <TableCell
+                    key={index}
+                    sx={{
+                      fontWeight: "bold",
+                      borderRight:
+                        index < tableHeaders.length - 1
+                          ? "1px solid #e0e0e0"
+                          : "none",
+                    }}
+                  >
+                    {header}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={tableHeaders.length}
+                    align="center"
+                    sx={{ py: 4 }}
+                  >
+                    <CircularProgress size={32} />
+                  </TableCell>
+                </TableRow>
+              ) : rows?.length ? (
+                rows.map((v, index) => (
+                  <TableRow 
+                    key={v._id || index} 
+                    hover
+                    onClick={() => window.open(`/invoice-view/${v._id}`, '_blank')}
+                    sx={{ cursor: "pointer" }}
+                  >
+                    <TableCell>{index + 1}</TableCell>
+                    <TableCell>{v.receiptNumber}</TableCell>
+                    <TableCell>{v.invoiceId}</TableCell>
+                    <TableCell>{v.paymentType}</TableCell>
+                    <TableCell>{v.partyName}</TableCell>
+                    <TableCell sx={{ maxWidth: 220 }}>
+                      {v.particulars}
+                    </TableCell>
+                    <TableCell>{v.paymentMode}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={v.drCr || "—"}
+                        color={
+                          v.drCr === "Cr"
+                            ? "success"
+                            : v.drCr === "Dr"
+                              ? "warning"
+                              : "default"
+                        }
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      ₹{(Number(v.amount) || 0).toLocaleString("en-IN")}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                        <IconButton 
+                          size="small" 
+                          color="primary" 
+                          onClick={() => onPreview(v)}
+                          title="Preview Receipt"
+                        >
+                          <Visibility fontSize="small" />
+                        </IconButton>
+                        <IconButton 
+                          size="small" 
+                          color="info" 
+                          onClick={() => window.open(`/payments-form/${v._id}`, '_blank')}
+                          title="Edit Payment"
+                        >
+                          <Edit fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={tableHeaders.length}
+                    align="center"
+                    sx={{
+                      height: 120,
+                      color: "text.secondary",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    No vouchers linked to this quotation yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
 };
 
 // Invoice PDF Dialog Component
 const InvoicePdfDialog = ({ open, onClose, quotation, invoiceData }) => {
-    const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-    const handleDownload = () => {
-        const element = document.createElement("a");
-        const file = new Blob([document.getElementById('invoice-content').innerHTML], { type: 'text/html' });
-        element.href = URL.createObjectURL(file);
-        element.download = `invoice-${quotation.reference}.html`;
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
-    };
-
-    const handlePrint = () => {
-        window.print();
-    };
-
-    return (
-        <Dialog
-            open={open}
-            onClose={onClose}
-            maxWidth="lg"
-            fullWidth
-            PaperProps={{ sx: { minHeight: "80vh", width: "90vw" } }}
-        >
-            <DialogTitle>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="h6" component="div" fontWeight="bold">
-                        Invoice - {quotation.reference}
-                    </Typography>
-                    <Box display="flex" gap={1}>
-                        <Button
-                            variant="outlined"
-                            color="primary"
-                            onClick={handlePrint}
-                            startIcon={<Visibility />}
-                        >
-                            Print
-                        </Button>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={handleDownload}
-                            startIcon={<Download />}
-                        >
-                            Download
-                        </Button>
-                    </Box>
-                </Box>
-            </DialogTitle>
-            <DialogContent sx={{ p: 0, position: 'relative' }}>
-                {loading && (
-                    <Box
-                        display="flex"
-                        justifyContent="center"
-                        alignItems="center"
-                        height="100%"
-                        position="absolute"
-                        top={0}
-                        left={0}
-                        right={0}
-                        bottom={0}
-                        bgcolor="rgba(255,255,255,0.8)"
-                        zIndex={1}
-                    >
-                        <Box textAlign="center">
-                            <CircularProgress size={40} />
-                            <Typography variant="body2" sx={{ mt: 1 }}>
-                                Loading invoice...
-                            </Typography>
-                        </Box>
-                    </Box>
-                )}
-
-                <Box sx={{ height: "70vh", width: "100%", overflow: 'auto' }} id="invoice-content">
-                    <InvoicePDF invoiceData={invoiceData} />
-                </Box>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Close</Button>
-            </DialogActions>
-        </Dialog>
+  const handleDownload = () => {
+    const element = document.createElement("a");
+    const file = new Blob(
+      [document.getElementById("invoice-content").innerHTML],
+      { type: "text/html" },
     );
+    element.href = URL.createObjectURL(file);
+    element.download = `invoice-${quotation.reference}.html`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      PaperProps={{ sx: { minHeight: "80vh", width: "90vw" } }}
+    >
+      <DialogTitle>
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Typography variant="h6" component="div" fontWeight="bold">
+            Invoice - {quotation.reference}
+          </Typography>
+          <Box display="flex" gap={1}>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handlePrint}
+              startIcon={<Visibility />}
+            >
+              Print
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleDownload}
+              startIcon={<Download />}
+            >
+              Download
+            </Button>
+          </Box>
+        </Box>
+      </DialogTitle>
+      <DialogContent sx={{ p: 0, position: "relative" }}>
+        {loading && (
+          <Box
+            display="flex"
+            justifyContent="center"
+            alignItems="center"
+            height="100%"
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            bgcolor="rgba(255,255,255,0.8)"
+            zIndex={1}
+          >
+            <Box textAlign="center">
+              <CircularProgress size={40} />
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Loading invoice...
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
+        <Box
+          sx={{ height: "70vh", width: "100%", overflow: "auto" }}
+          id="invoice-content"
+        >
+          <InvoicePDF invoiceData={invoiceData} />
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
 };
 
+const formatDate = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-IN");
+};
+
+const formatSequentialDayDate = (startDateValue, index) => {
+  const base = new Date(startDateValue);
+  if (Number.isNaN(base.getTime())) return "";
+  base.setDate(base.getDate() + (Number(index) || 0));
+  return base.toLocaleDateString("en-IN");
+};
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  
+  let hh = date.getHours();
+  const ampm = hh >= 12 ? "PM" : "AM";
+  hh = hh % 12;
+  hh = hh ? hh : 12; // the hour '0' should be '12'
+  const hhStr = String(hh).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+
+  return `${dd}/${mm}/${yyyy} at ${hhStr}:${min} ${ampm}`;
+};
+
+const formatDateWithOptionalTime = (dateValue, timeValue) => {
+  const baseDate = new Date(dateValue);
+  if (Number.isNaN(baseDate.getTime())) return "";
+
+  const rawTime = String(timeValue || "").trim();
+  if (!rawTime) return formatDate(dateValue);
+
+  const timeAsDate = new Date(rawTime);
+  if (!Number.isNaN(timeAsDate.getTime())) {
+    baseDate.setHours(timeAsDate.getHours(), timeAsDate.getMinutes(), 0, 0);
+    return formatDateTime(baseDate.toISOString());
+  }
+
+  const match = rawTime.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return formatDate(dateValue);
+  const hh = Math.min(Math.max(Number(match[1]) || 0, 0), 23);
+  const mm = Math.min(Math.max(Number(match[2]) || 0, 0), 59);
+  baseDate.setHours(hh, mm, 0, 0);
+  return formatDateTime(baseDate.toISOString());
+};
+
+const normalizePointLabel = (text) => {
+  const raw = String(text || "").trim();
+  if (!raw) return "—";
+  
+  // Basic cleanup: remove Arrival/Departure prefix and everything in parentheses
+  let clean = raw
+    .replace(/\(([^)]*)\)/g, "")
+    .replace(/^((arrival|departure)\s*:\s*)+/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!clean) return "—";
+
+  // Deduplicate: "Srinagar - Srinagar - At Airport" -> "Srinagar - At Airport"
+  const parts = clean.split("-").map(p => p.trim()).filter(Boolean);
+  const uniqueParts = [];
+  for (let i = 0; i < parts.length; i++) {
+    const current = parts[i];
+    const next = parts[i + 1];
+    if (next && current.toLowerCase() === next.toLowerCase()) continue;
+    uniqueParts.push(current);
+  }
+  
+  return uniqueParts.join(" - ") || "—";
+};
+
+const editablePickupDropPoint = (value) => {
+  // Don't use normalizePointLabel here because it strips parentheses
+  // which contain the date/time the user needs to edit.
+  return String(value || "")
+    .replace(/^((arrival|departure)\s*:\s*)+/i, "")
+    .trim();
+};
+
+/** True when `days` is a list of day objects (not a night-count number from snapshot). */
+function isQuickPackageDayObjectArray(days) {
+  return (
+    Array.isArray(days) &&
+    days.length > 0 &&
+    typeof days[0] === "object" &&
+    days[0] !== null
+  );
+}
+
+/** Merge snapshot with populated package so hotel rows work when snapshot omits destinationNights. */
+function mergeQuickPackageForDisplay(apiData) {
+  const snap =
+    apiData?.packageSnapshot && typeof apiData.packageSnapshot === "object"
+      ? apiData.packageSnapshot
+      : {};
+  const pid =
+    apiData?.packageId &&
+      typeof apiData.packageId === "object" &&
+      !Array.isArray(apiData.packageId)
+      ? apiData.packageId
+      : {};
+  const snapDays = snap.days;
+  const pidDays = pid.days;
+  const mergedDayObjects = isQuickPackageDayObjectArray(snapDays)
+    ? snapDays
+    : isQuickPackageDayObjectArray(pidDays)
+      ? pidDays
+      : [];
+  return {
+    ...pid,
+    ...snap,
+    destinationNights:
+      Array.isArray(snap.destinationNights) && snap.destinationNights.length
+        ? snap.destinationNights
+        : pid.destinationNights,
+    stayLocations:
+      Array.isArray(snap.stayLocations) && snap.stayLocations.length
+        ? snap.stayLocations
+        : pid.stayLocations,
+    // Snapshot often stores `days` as a night count (number); do not let it wipe populated package `days`.
+    days: mergedDayObjects,
+  };
+}
+
+/** e.g. "2N Gangtok, 2N Pelling, 2N Darjeeling" from destinationNights or stayLocations */
+function buildQuickDestinationLine(pkg) {
+  if (!pkg || typeof pkg !== "object") return "";
+  const disp = String(pkg.displayDestination || "").trim();
+  if (disp) return disp;
+  const dn = pkg.destinationNights;
+  if (Array.isArray(dn) && dn.length) {
+    const parts = dn
+      .map((d) => {
+        const n = Number(d.nights) || 0;
+        const city = String(d.destination || "").trim();
+        return city ? `${n}N ${city}` : "";
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join(", ");
+  }
+  const sl = pkg.stayLocations;
+  if (Array.isArray(sl) && sl.length) {
+    const parts = sl
+      .map((l) => {
+        const n = Number(l.nights) || 0;
+        const city = String(l.city || "").trim();
+        return city ? `${n}N ${city}` : "";
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join(", ");
+  }
+  return (
+    String(pkg.sector || "").trim() ||
+    String(pkg.destinationCountry || "").trim() ||
+    ""
+  );
+}
+
+function titleCaseWords(s) {
+  return String(s || "")
+    .trim()
+    .split(/\s+/)
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
+    .join(" ");
+}
+
+function getQuickMealPlanRaw(apiData) {
+  if (!apiData) return "";
+  const pkg = mergeQuickPackageForDisplay(apiData);
+  const qd = pkg?.quotationDetails || {};
+  const fromQd =
+    typeof qd.mealPlan === "string"
+      ? qd.mealPlan.trim()
+      : qd.mealPlan && typeof qd.mealPlan === "object"
+        ? String(qd.mealPlan.planType || "").trim()
+        : "";
+  return fromQd || String(pkg?.mealPlan?.planType || "").trim();
+}
+
+function mealPlanForEditor(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  return s.replace(/\s+plan$/i, "").trim() || s;
+}
+
+function formatQuickMealPlan(pkg) {
+  const qd = pkg?.quotationDetails || {};
+  const fromQd =
+    typeof qd.mealPlan === "string"
+      ? qd.mealPlan.trim()
+      : qd.mealPlan && typeof qd.mealPlan === "object"
+        ? String(qd.mealPlan.planType || "").trim()
+        : "";
+  const raw = fromQd || String(pkg?.mealPlan?.planType || "").trim();
+  if (!raw) return "—";
+  if (/plan\b/i.test(raw)) return raw;
+  return `${raw} Plan`;
+}
+
+function formatQuickRooms(pkg) {
+  const qd = pkg?.quotationDetails || {};
+  const r = qd.rooms;
+  const n =
+    r?.numberOfRooms != null && r.numberOfRooms !== ""
+      ? r.numberOfRooms
+      : qd.noOfRooms != null && qd.noOfRooms !== ""
+        ? qd.noOfRooms
+        : qd.numberOfRooms != null && qd.numberOfRooms !== ""
+          ? qd.numberOfRooms
+          : pkg.noOfRooms != null && pkg.noOfRooms !== ""
+            ? pkg.noOfRooms
+            : pkg.numberOfRooms != null && pkg.numberOfRooms !== ""
+              ? pkg.numberOfRooms
+              : 1;
+  const sharingRaw =
+    String(
+      r?.sharingType || qd.roomType || qd.sharingType || pkg.roomType || pkg.sharingType || "Double sharing",
+    ).trim() || "Double sharing";
+  const mattresses =
+    r?.numberOfMattress != null && r.numberOfMattress !== ""
+      ? r.numberOfMattress
+      : qd.noOfMattress != null && qd.noOfMattress !== ""
+        ? qd.noOfMattress
+        : pkg.noOfMattress != null && pkg.noOfMattress !== ""
+          ? pkg.noOfMattress
+          : 0;
+
+  let line = `${n} Room(s) (${titleCaseWords(sharingRaw)})`;
+  if (Number(mattresses) > 0) {
+    line += ` + ${mattresses} Extra Mattress(es)`;
+  }
+  return line;
+}
+
+/** Matches requested copy: "2 Guests (2 Adults, 0 Children ,0 Kids , 0 Infants)" */
+function formatQuickGuestsLine(adults, children, kids, infants) {
+  const a = Number(adults) || 0;
+  const c = Number(children) || 0;
+  const k = Number(kids) || 0;
+  const inf = Number(infants) || 0;
+  const total = a + c + k + inf;
+  return `${total} Guests (${a} Adults, ${c} Children ,${k} Kids , ${inf} Infants)`;
+}
+
+function inclusionPolicyTextBlob(pkg, policy) {
+  const pol = policy && typeof policy === "object" ? policy : {};
+  const pkgPol =
+    pkg?.policy && typeof pkg.policy === "object" ? pkg.policy : {};
+  const chunks = [
+    ...(Array.isArray(pol.inclusionPolicy) ? pol.inclusionPolicy : []),
+    ...(Array.isArray(pkgPol.inclusionPolicy) ? pkgPol.inclusionPolicy : []),
+  ];
+  return chunks.map((x) => String(x || "").toLowerCase()).join(" ");
+}
+
+/** When quotation has no hotelType, infer e.g. "3 star" from standard wording in inclusions. */
+function inferQuickHotelType(pkg, policy) {
+  const explicit = String(
+    pkg?.quotationDetails?.hotelType ||
+    pkg?.hotelType ||
+    pkg?.packageDetails?.hotelType ||
+    "",
+  ).trim();
+  if (explicit) return explicit;
+  const blob = inclusionPolicyTextBlob(pkg, policy);
+  if (!blob) return "—";
+  if (/\b5\s*[\s-]?\s*star\b|\bfive\s*star\b|5\s*★/.test(blob)) return "5 star";
+  if (/\b4\s*[\s-]?\s*star\b|\bfour\s*star\b|4\s*★/.test(blob)) return "4 star";
+  if (/\b3\s*[\s-]?\s*star\b|\bthree\s*star\b|3\s*★/.test(blob))
+    return "3 star";
+  if (
+    /hotel\s+category\s+standard|standard\s+type\s+or\s+similar|standard\s+category/.test(
+      blob,
+    )
+  ) {
+    return "3 star";
+  }
+  if (/hotel\s+category\s+deluxe|deluxe\s+type/.test(blob)) return "4 star";
+  if (/superior|luxury\s+hotel/.test(blob)) return "5 star";
+  return "—";
+}
+
+function transformQuickApiToDisplay(apiData, company) {
+  if (!apiData) return null;
+  const pkg = mergeQuickPackageForDisplay(apiData);
+  const policy = apiData.policy || {};
+  const qd = pkg.quotationDetails || {};
+  const adults = Number(apiData.adults) || 0;
+  const children = Number(apiData.children) || 0;
+  const kids = Number(apiData.kids) || Number(qd.kids) || 0;
+  const infants = Number(apiData.infants) || Number(qd.infants) || 0;
+  const totalGuests = adults + children + kids + infants;
+  const totalCost = effectiveQuickPayableTotal(
+    apiData,
+    apiData?.packageSnapshot?.quotationDetails?.additionalServices || [],
+  );
+  const pricingSource = pkg?.quotationDetails || {};
+  const transportationCost = Number(
+    pricingSource.transportationCost ??
+    pkg.transportationCost ??
+    pkg.transportationTotalCost ??
+    0,
+  );
+  const hotelTotalCost = Number(
+    pricingSource.hotelTotalCost ?? pkg.hotelTotalCost ?? 0,
+  );
+  const standardTotalCost = Number(
+    pricingSource.standardCost ?? pkg.finalStandardCost ?? pkg.totalCost ?? 0,
+  );
+  const deluxeTotalCost = Number(
+    pricingSource.deluxeCost ?? pkg.finalDeluxeCost ?? 0,
+  );
+  const superiorTotalCost = Number(
+    pricingSource.superiorCost ?? pkg.finalSuperiorCost ?? 0,
+  );
+  const destLine = buildQuickDestinationLine(pkg) || "—";
+
+  const pickHotel = (nightBlock, cat) => {
+    const c = String(cat).toLowerCase();
+    const hotelNameOf = (x) =>
+      (x && (x.hotelName || x.name || x.hotel || "").trim()) || "";
+    const h = (nightBlock?.hotels || []).find((x) => {
+      const nm = hotelNameOf(x);
+      return (
+        String(x.category || "")
+          .toLowerCase()
+          .trim() === c &&
+        nm &&
+        !/^TBD$/i.test(nm)
+      );
+    });
+    const nm = hotelNameOf(h);
+    return nm || "—";
+  };
+
+  let hotelPricingData = [];
+  if (Array.isArray(pkg.destinationNights) && pkg.destinationNights.length) {
+    hotelPricingData = pkg.destinationNights.map((d) => ({
+      destination: d.destination || "—",
+      nights: `${d.nights || 0} N`,
+      standard: pickHotel(d, "standard"),
+      deluxe: pickHotel(d, "deluxe"),
+      superior: pickHotel(d, "superior"),
+    }));
+  } else if (Array.isArray(pkg.stayLocations) && pkg.stayLocations.length) {
+    hotelPricingData = pkg.stayLocations.map((l) => ({
+      destination: l.city || "—",
+      nights: `${l.nights || 0} N`,
+      standard: "—",
+      deluxe: "—",
+      superior: "—",
+    }));
+  }
+  if (transportationCost > 0) {
+    hotelPricingData.push({
+      destination: "Transportation cost",
+      nights: "-",
+      standard: `₹ ${Math.round(transportationCost).toLocaleString("en-IN")}`,
+      deluxe: `₹ ${Math.round(transportationCost).toLocaleString("en-IN")}`,
+      superior: `₹ ${Math.round(transportationCost).toLocaleString("en-IN")}`,
+    });
+  }
+  if (hotelTotalCost > 0) {
+    hotelPricingData.push({
+      destination: "Hotel total cost",
+      nights: "-",
+      standard: `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`,
+      deluxe: `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`,
+      superior: `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`,
+    });
+  } else if (
+    transportationCost > 0 &&
+    (standardTotalCost > 0 || deluxeTotalCost > 0 || superiorTotalCost > 0)
+  ) {
+    const hotelStd = Math.max(0, standardTotalCost - transportationCost);
+    const hotelDel = Math.max(0, deluxeTotalCost - transportationCost);
+    const hotelSup = Math.max(0, superiorTotalCost - transportationCost);
+    if (hotelStd > 0 || hotelDel > 0 || hotelSup > 0) {
+      hotelPricingData.push({
+        destination: "Hotel cost",
+        nights: "-",
+        standard:
+          hotelStd > 0
+            ? `₹ ${Math.round(hotelStd).toLocaleString("en-IN")}`
+            : "—",
+        deluxe:
+          hotelDel > 0
+            ? `₹ ${Math.round(hotelDel).toLocaleString("en-IN")}`
+            : "—",
+        superior:
+          hotelSup > 0
+            ? `₹ ${Math.round(hotelSup).toLocaleString("en-IN")}`
+            : "—",
+      });
+    }
+  }
+  if (standardTotalCost > 0 || deluxeTotalCost > 0 || superiorTotalCost > 0) {
+    hotelPricingData.push({
+      destination: "Final package totals",
+      nights: "-",
+      standard:
+        standardTotalCost > 0
+          ? `₹ ${Math.round(standardTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      deluxe:
+        deluxeTotalCost > 0
+          ? `₹ ${Math.round(deluxeTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      superior:
+        superiorTotalCost > 0
+          ? `₹ ${Math.round(superiorTotalCost).toLocaleString("en-IN")}`
+          : "—",
+    });
+  }
+  if (totalCost > 0) {
+    const finalizedTier = String(apiData?.finalizedPackage || "")
+      .trim()
+      .toLowerCase();
+    const totalQuotationValue = `₹ ${Math.round(totalCost).toLocaleString("en-IN")}`;
+    hotelPricingData.push({
+      destination: "Total quotation cost",
+      nights: "-",
+      standard:
+        !finalizedTier || finalizedTier === "standard" ? totalQuotationValue : "—",
+      deluxe: finalizedTier === "deluxe" ? totalQuotationValue : "—",
+      superior: finalizedTier === "superior" ? totalQuotationValue : "—",
+    });
+  }
+
+  const itineraryDays = (() => {
+    const itineraryStartDate =
+      apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
+      apiData?.packageSnapshot?.arrivalDate ||
+      apiData?.createdAt;
+    if (isQuickPackageDayObjectArray(pkg.days)) {
+      return pkg.days.map((day, index) => ({
+        id: index + 1,
+        date: formatSequentialDayDate(itineraryStartDate, index),
+        title: day.title || `Day ${index + 1}`,
+        description: day.notes || day.aboutCity || "",
+        image: day.dayImage
+          ? {
+            preview: day.dayImage,
+            url: day.dayImage,
+            name: "Itinerary",
+          }
+          : null,
+      }));
+    }
+    const itin = Array.isArray(pkg.itinerary) ? pkg.itinerary : [];
+    if (itin.length) {
+      return itin.map((row, index) => ({
+        id: index + 1,
+        date: formatSequentialDayDate(itineraryStartDate, index),
+        title: row.title || `Day ${index + 1}`,
+        description: [row.description, row.activities].filter(Boolean).join("\n\n"),
+        image: null,
+      }));
+    }
+    return [];
+  })();
+
+  return {
+    _id: apiData._id,
+    quickQuotationId: apiData.quickQuotationId,
+    bookingId: apiData.bookingId,
+    date: formatDate(
+      apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
+      apiData?.packageSnapshot?.arrivalDate ||
+      apiData.createdAt,
+    ),
+    reference: String(apiData.quickQuotationId || apiData._id || ""),
+    actions: [
+      "Finalize",
+      "Add Service",
+      "Email Quotation",
+      "Preview PDF",
+      "Make Payment",
+      "Add Flight",
+      "Transaction",
+    ],
+    bannerImage: pkg.bannerImage || "",
+    customer: {
+      name: apiData.customerName || "",
+      location: apiData.packageSnapshot.clientLocation || "",
+      phone: apiData.phone || "",
+      email: apiData.email || "",
+    },
+    pickup: {
+      arrival: (() => {
+        const arrivalRawDate =
+          apiData?.packageSnapshot?.quotationDetails?.arrivalDate ||
+          apiData?.packageSnapshot?.arrivalDate ||
+          apiData?.createdAt;
+        const arrivalRawTime =
+          apiData?.packageSnapshot?.quotationDetails?.pickupTime ||
+          apiData?.packageSnapshot?.quotationDetails?.arrivalTime ||
+          apiData?.packageSnapshot?.pickupTime ||
+          apiData?.packageSnapshot?.arrivalTime ||
+          apiData?.pickupTime;
+        const dt = formatDateWithOptionalTime(arrivalRawDate, arrivalRawTime);
+        const rawPoint = String(apiData.pickupPoint || "").trim();
+        const city = String(
+          apiData?.packageSnapshot?.arrivalCity ||
+            apiData?.packageSnapshot?.stayLocations?.[0]?.city ||
+            "",
+        ).trim();
+
+        const point = (() => {
+          const base = normalizePointLabel(rawPoint);
+          if (!city || base === "—") return base;
+          
+          const lowerBase = base.toLowerCase();
+          const lowerCity = city.toLowerCase();
+          
+          // If the base already contains a dash, assume the user has provided their own "City - Point" format
+          // and we should not override or prepend anything.
+          if (base.includes(" - ")) return base;
+
+          const firstPart = base.split("-")[0].trim().toLowerCase();
+          if (
+            lowerBase.includes(lowerCity) || 
+            lowerCity.includes(firstPart) ||
+            firstPart.includes(lowerCity)
+          ) {
+            return base;
+          }
+          return `${city} - ${base}`;
+        })();
+
+        return dt ? `Arrival: ${point} (${dt})` : `Arrival: ${point}`;
+      })(),
+      departure: (() => {
+        const departureRawDate =
+          apiData?.packageSnapshot?.quotationDetails?.departureDate ||
+          apiData?.packageSnapshot?.departureDate ||
+          apiData?.createdAt;
+        const departureRawTime =
+          apiData?.packageSnapshot?.quotationDetails?.dropTime ||
+          apiData?.packageSnapshot?.quotationDetails?.departureTime ||
+          apiData?.packageSnapshot?.dropTime ||
+          apiData?.packageSnapshot?.departureTime ||
+          apiData?.dropTime;
+        const dt = formatDateWithOptionalTime(
+          departureRawDate,
+          departureRawTime,
+        );
+        const rawPoint = String(apiData.dropPoint || "").trim();
+        const city = String(
+          apiData?.packageSnapshot?.departureCity ||
+            apiData?.packageSnapshot?.stayLocations?.[
+              apiData?.packageSnapshot?.stayLocations?.length - 1
+            ]?.city ||
+            "",
+        ).trim();
+
+        const point = (() => {
+          const base = normalizePointLabel(rawPoint);
+          if (!city || base === "—") return base;
+          
+          const lowerBase = base.toLowerCase();
+          const lowerCity = city.toLowerCase();
+          
+          // If the base already contains a dash, assume the user has provided their own "City - Point" format
+          if (base.includes(" - ")) return base;
+
+          const firstPart = base.split("-")[0].trim().toLowerCase();
+          if (
+            lowerBase.includes(lowerCity) || 
+            lowerCity.includes(firstPart) ||
+            firstPart.includes(lowerCity)
+          ) {
+            return base;
+          }
+          return `${city} - ${base}`;
+        })();
+
+        return dt ? `Departure: ${point} (${dt})` : `Departure: ${point}`;
+      })(),
+      vehicleType: apiData.transportation || apiData?.packageSnapshot?.transportMode || "",
+    },
+    quotationTitle: pkg.displayTitle || pkg.title || "",
+    destinationSummary: destLine,
+    hotel: {
+      guests: formatQuickGuestsLine(adults, children, kids, infants),
+      rooms: formatQuickRooms(pkg),
+      mealPlan: formatQuickMealPlan(pkg),
+      hotelType: inferQuickHotelType(pkg, policy),
+      destination: destLine,
+      itinerary:
+        apiData.message ||
+        "This is only a tentative schedule for sightseeing and travel...",
+    },
+    finalizedVendorDetails: {
+      vendorType: apiData.vendorDetails?.vendorType || "",
+      hotelVendorName: apiData.vendorDetails?.hotelVendorName || "",
+      vehicleVendorName: apiData.vendorDetails?.vehicleVendorName || "",
+    },
+    finalizedVendorsWithAmounts: apiData.finalizedVendorsWithAmounts || [],
+    vehicles: [],
+    pricing: {
+      discount: "—",
+      gst: "—",
+      transportation:
+        transportationCost > 0
+          ? `₹ ${Math.round(transportationCost).toLocaleString("en-IN")}`
+          : "—",
+      hotel:
+        hotelTotalCost > 0
+          ? `₹ ${Math.round(hotelTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      standard:
+        standardTotalCost > 0
+          ? `₹ ${Math.round(standardTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      deluxe:
+        deluxeTotalCost > 0
+          ? `₹ ${Math.round(deluxeTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      superior:
+        superiorTotalCost > 0
+          ? `₹ ${Math.round(superiorTotalCost).toLocaleString("en-IN")}`
+          : "—",
+      total:
+        totalCost > 0
+          ? `₹ ${Math.round(totalCost).toLocaleString("en-IN")}`
+          : "—",
+    },
+    policies: {
+      inclusions: policy.inclusionPolicy || [],
+      exclusions:
+        (policy.exclusionPolicy || []).join("\n") || "No exclusions specified",
+      paymentPolicy:
+        (policy.paymentPolicy || []).join("\n") ||
+        "No payment policy specified",
+      cancellationPolicy:
+        (policy.cancellationPolicy || []).join("\n") ||
+        "No cancellation policy specified",
+      terms:
+        (policy.termsAndConditions || []).join("\n") ||
+        "No terms and conditions specified",
+    },
+    additionalServices:
+      apiData?.packageSnapshot?.quotationDetails?.additionalServices || [],
+    footer: {
+      contact:
+        pkg.quotationDetails?.signatureDetails?.signedBy ||
+        company?.company?.contactPerson ||
+        "",
+      phone: company?.company?.phone || apiData.phone || "",
+      email: company?.company?.email || apiData.email || "",
+      received: "₹ 0",
+      balance: "₹ 0",
+      company: company?.company?.companyName || "Iconic Yatra",
+      address: company?.company?.address || "",
+      website: company?.company?.website || "",
+      gst: company?.company?.gst || "",
+    },
+    hotelPricingData,
+    days: itineraryDays,
+  };
+}
+
 const QuickFinalize = () => {
-    // State
-    const [activeInfo, setActiveInfo] = useState(null);
-    const [openFinalize, setOpenFinalize] = useState(false);
-    const [openAddFlight, setOpenAddFlight] = useState(false);
-    const [vendor, setVendor] = useState("");
-    const [isFinalized, setIsFinalized] = useState(false);
-    const [invoiceGenerated, setInvoiceGenerated] = useState(false);
-    const [openInvoiceDialog, setOpenInvoiceDialog] = useState(false);
-    const [openPdfDialog, setOpenPdfDialog] = useState(false);
-    const [snackbar, setSnackbar] = useState({
-        open: false,
-        message: "",
-        severity: "success"
-    });
-    const [itineraryDialog, setItineraryDialog] = useState({
-        open: false,
-        mode: 'add',
-        day: null,
-        title: "",
-        description: "",
-        id: null
-    });
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const { data: company } = useSelector((state) => state.companyUI);
+  const { options: leadOptions = [] } = useSelector((state) => state.leads);
+  const { currentQuotation, loading: reduxLoading } = useSelector(
+    (state) => state.quickQuotation,
+  );
 
-    const [quotation, setQuotation] = useState({
-        date: "27/08/2025",
-        reference: "41",
-        actions: ["Finalize", "Add Service", "Email Quotation", "Preview PDF", "Make Payment", "Add Flight", "Transaction"],
-        bannerImage: "",
-        customer: {
-            name: "Amit Jaiswal",
-            location: "Andhya Pradesh",
-            phone: "+91 7053900957",
-            email: "amit.jaiswal@example.com",
-        },
-        pickup: {
-            arrival: "Arrival: Lucknow (22/08/2025) at Airport, 3:35PM",
-            departure: "Departure: Delhi (06/09/2025) from Local Address, 6:36PM",
-        },
-        hotel: {
-            guests: "6 Adults",
-            rooms: "3 Bedroom",
-            mealPlan: "CP, AP, EP",
-            destination: "3N Borong, 2N Damthang",
-            itinerary: "This is only tentative schedule for sightseeing and travel...",
-        },
-        vehicles: [
-            {
-                pickup: { date: "22/08/2025", time: "3:35PM" },
-                drop: { date: "06/09/2025", time: "6:36PM" },
-            },
-        ],
-        pricing: { discount: "₹ 200", gst: "₹ 140", total: "₹ 3,340" },
-        policies: {
-            inclusions: [
-                "All transfers tours in a Private AC cab.",
-                "Parking, Toll charges, Fuel and Driver expenses.",
-                "Hotel Taxes.",
-                "Car AC off during hill stations.",
-            ],
-            exclusions: "1. Any Cost change...",
-            paymentPolicy: "50% amount to pay at confirmation, balance before 10 days.",
-            cancellationPolicy: "1. Before 15 days: 50%. 2. Within 7 days: 100%.",
-            terms: "1. This is only a Quote. Availability is checked only on confirmation...",
-        },
-        footer: {
-            contact: "Amit Jaiswal | +91 7053900957 (Noida)",
-            phone: "+91 7053900957",
-            email: "amit.jaiswal@example.com",
-            received: "₹ 1,500",
-            balance: "₹ 1,840",
-            company: "Iconic Yatra",
-            address: "Office No 15, Bhawani Market Sec 27, Noida, Uttar Pradesh – 201301",
-            website: "https://www.iconicyatra.com",
-        },
-        hotelPricingData: [
-            {
-                destination: "Borong",
-                nights: "3 N",
-                standard: "Tempo Heritage Resort",
-                deluxe: "Tempo Heritage Resort",
-                superior: "Yovage The Aryan Regency",
-            },
-            {
-                destination: "Damthang",
-                nights: "2 N",
-                standard: "Tempo Heritage Resort",
-                deluxe: "Tempo Heritage Resort",
-                superior: "Yovage The Aryan Regency",
-            },
-            {
-                destination: "Quotation Cost",
-                nights: "-",
-                standard: "₹ 40,366",
-                deluxe: "₹ 440,829",
-                superior: "₹ 92,358",
-            },
-            {
-                destination: "IGST",
-                nights: "-",
-                standard: "₹ 2,018.3",
-                deluxe: "₹ 22,041.4",
-                superior: "₹ 4,617.9",
-            },
-            {
-                destination: "Total Quotation Cost",
-                nights: "5 N",
-                standard: "₹ 42,384",
-                deluxe: "₹ 462,870",
-                superior: "₹ 96,976",
-            },
-        ],
-        days: [
-            { id: 1, date: "11/09/2025", title: "About Day 1", description: "Arrival and check-in process" },
-        ],
-    });
+  /** Canonical Mongo id for APIs (payments, PATCH). URL may still be QT-xxxxxx until backend resolves. */
+  const apiEntityId = useMemo(() => {
+    if (currentQuotation?._id) return String(currentQuotation._id);
+    if (id && /^[a-f\d]{24}$/i.test(String(id))) return String(id);
+    return id;
+  }, [currentQuotation?._id, id]);
 
-    const [invoiceData, setInvoiceData] = useState(null);
+  const costingQuotation = useMemo(
+    () => (currentQuotation ? quickToCostingQuotation(currentQuotation) : null),
+    [currentQuotation],
+  );
 
-    const [editDialog, setEditDialog] = useState({
-        open: false,
-        field: "",
-        value: "",
-        title: "",
-        nested: false,
-        nestedKey: "",
-    });
-    const [openAddService, setOpenAddService] = useState(false);
-    const [services, setServices] = useState([]);
-    const [currentService, setCurrentService] = useState({
-        included: "no",
-        particulars: "",
-        amount: "",
-        taxType: "",
-    });
-    const [openEmailDialog, setOpenEmailDialog] = useState(false);
-    const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
-    const [openBankDialog, setOpenBankDialog] = useState(false);
-    const [flights, setFlights] = useState([]);
-    const [openAddBankDialog, setOpenAddBankDialog] = useState(false);
-    const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
-    const [days, setDays] = useState([
-        { id: 1, date: "11/09/2025", title: "About Day 1", image: null },
-    ]);
-    const [accountType, setAccountType] = useState("company");
-    const [accountName, setAccountName] = useState("Iconic Yatra");
-    const [accountNumber, setAccountNumber] = useState("");
-    const [ifscCode, setIfscCode] = useState("");
-    const [bankName, setBankName] = useState("");
-    const [branchName, setBranchName] = useState("");
-    const [newBankDetails, setNewBankDetails] = useState({
-        bankName: "",
-        branchName: "",
-        accountHolderName: "",
-        accountNumber: "",
-        ifscCode: "",
-        openingBalance: "",
-    });
-    const [accountOptions, setAccountOptions] = useState([
-        { value: "Cash", label: "Cash" },
-        { value: "KOTAK Bank", label: "KOTAK Bank" },
-        { value: "YES Bank", label: "YES Bank" },
-    ]);
+  const hotelsDialogQuotation = useMemo(
+    () => (currentQuotation ? quickToHotelsFormData(currentQuotation) : null),
+    [currentQuotation],
+  );
 
-    const taxOptions = [
-        { value: "gst5", label: "GST 5%", rate: 5 },
-        { value: "gst18", label: "GST 18%", rate: 18 },
-        { value: "non", label: "Non", rate: 0 },
+  const [activeInfo, setActiveInfo] = useState(null);
+  const [openFinalize, setOpenFinalize] = useState(false);
+  const [openAddFlight, setOpenAddFlight] = useState(false);
+  const [isFinalized, setIsFinalized] = useState(false);
+  const [invoiceGenerated, setInvoiceGenerated] = useState(false);
+  const [openInvoiceDialog, setOpenInvoiceDialog] = useState(false);
+  const [openPdfDialog, setOpenPdfDialog] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+  const [openHotelConfirmation, setOpenHotelConfirmation] = useState(false);
+  const [downloadingHotelPdf, setDownloadingHotelPdf] = useState(false);
+
+  const handleDownloadHotelConfirmation = async () => {
+    if (!id) return;
+    setDownloadingHotelPdf(true);
+    try {
+      const response = await axios.get(`/quickQT/${id}/hotel-confirmation/download`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Hotel_Confirmation_${quotation?.reference || "Voucher"}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setSnackbar({
+        open: true,
+        message: "Hotel confirmation PDF downloaded successfully!",
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Failed to download hotel confirmation PDF:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to download hotel confirmation PDF. Please try again.",
+        severity: "error",
+      });
+    } finally {
+      setDownloadingHotelPdf(false);
+    }
+  };
+  const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState(null);
+  const [openReceiptPreview, setOpenReceiptPreview] = useState(false);
+  const [selectedReceiptIdForPdf, setSelectedReceiptIdForPdf] = useState("");
+
+  const handleOpenReceiptPreview = (voucher) => {
+    setSelectedVoucherForPreview(voucher);
+    setOpenReceiptPreview(true);
+  };
+  const [itineraryDialog, setItineraryDialog] = useState({
+    open: false,
+    mode: "add",
+    day: null,
+    title: "",
+    description: "",
+    id: null,
+  });
+
+  const [quotation, setQuotation] = useState({
+    date: "",
+    reference: "",
+    actions: [
+      "Finalize",
+      "Add Service",
+      "Email Quotation",
+      "Preview PDF",
+      "Make Payment",
+      "Add Flight",
+      "Transaction",
+    ],
+    bannerImage: "",
+    quotationTitle: "",
+    destinationSummary: "",
+    customer: { name: "", location: "", phone: "", email: "" },
+    pickup: { arrival: "", departure: "" },
+    hotel: {
+      guests: "",
+      rooms: "",
+      mealPlan: "",
+      hotelType: "",
+      destination: "",
+      itinerary: "",
+    },
+    finalizedVendorDetails: {
+      vendorType: "",
+      hotelVendorName: "",
+      vehicleVendorName: "",
+    },
+    finalizedVendorsWithAmounts: [],
+    vehicles: [],
+    pricing: { discount: "", gst: "", total: "" },
+    policies: {
+      inclusions: [],
+      exclusions: "",
+      paymentPolicy: "",
+      cancellationPolicy: "",
+      terms: "",
+    },
+    footer: {
+      contact: "",
+      phone: "",
+      email: "",
+      received: "₹ 0",
+      balance: "₹ 0",
+      company: "Iconic Yatra",
+      address: "",
+      website: "",
+      gst: "",
+    },
+    hotelPricingData: [],
+    days: [],
+  });
+
+  const [invoiceData, setInvoiceData] = useState(null);
+
+  const [editDialog, setEditDialog] = useState({
+    open: false,
+    field: "",
+    value: "",
+    title: "",
+    nested: false,
+    nestedKey: "",
+  });
+  const [openAddService, setOpenAddService] = useState(false);
+  const [services, setServices] = useState([]);
+  const [currentService, setCurrentService] = useState({
+    included: "no",
+    particulars: "",
+    amount: "",
+    taxType: "",
+  });
+  const [editingServiceId, setEditingServiceId] = useState(null);
+  const [openEmailDialog, setOpenEmailDialog] = useState(false);
+  const [emailTemplateType, setEmailTemplateType] = useState("normal");
+  const [emailTemplateBodies, setEmailTemplateBodies] = useState({
+    normal: { subject: "", message: "" },
+    booking: { subject: "", message: "" },
+  });
+  const [mailCompanies, setMailCompanies] = useState([]);
+  const [emailAccounts, setEmailAccounts] = useState([]);
+  const [pdfAttachmentForMail, setPdfAttachmentForMail] = useState(null);
+  const [previewPdfModeForMail, setPreviewPdfModeForMail] = useState(false);
+  const [policyInputs, setPolicyInputs] = useState({
+    inclusionPolicy: "",
+    exclusionPolicy: "",
+    paymentPolicy: "",
+    cancellationPolicy: "",
+    termsAndConditions: "",
+  });
+  const [openBankDialog, setOpenBankDialog] = useState(false);
+  const [flights, setFlights] = useState([]);
+  const [openAddBankDialog, setOpenAddBankDialog] = useState(false);
+  const [openTransactionDialog, setOpenTransactionDialog] = useState(false);
+  const [openQuickEditAll, setOpenQuickEditAll] = useState(false);
+  const [guestCountsDialog, setGuestCountsDialog] = useState({
+    open: false,
+    adults: 0,
+    children: 0,
+    kids: 0,
+    infants: 0,
+  });
+  const [roomDetailsDialog, setRoomDetailsDialog] = useState({
+    open: false,
+    noOfRooms: 1,
+    noOfMattress: 0,
+    roomType: "Double sharing",
+  });
+  const [mealPlanDialog, setMealPlanDialog] = useState({
+    open: false,
+    mealPlan: "",
+  });
+
+  const mealPlanOptions = useMemo(() => {
+    const fromApi = (leadOptions || [])
+      .filter((opt) => opt.fieldName === "mealPlan")
+      .map((opt) => opt.value)
+      .filter(Boolean);
+    const current = mealPlanForEditor(getQuickMealPlanRaw(currentQuotation));
+    return [...new Set([current, ...fromApi, "CP", "MAP", "AP", "EP"].filter(Boolean))];
+  }, [leadOptions, currentQuotation]);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [itinerarySaving, setItinerarySaving] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
+  const [days, setDays] = useState([
+    { id: 1, date: "11/09/2025", title: "About Day 1", image: null },
+  ]);
+
+  /** Keep PDF preview aligned with the itinerary editor (`days` may update before `quotation` is refreshed). */
+  const quotationForPdf = useMemo(() => {
+    let payableStandard = effectiveQuickPayableTotal(currentQuotation, services);
+    let payableDeluxe = null;
+    let payableSuperior = null;
+
+    const rootCalc = currentQuotation?.calculationMethod || currentQuotation?.packageSnapshot?.calculationMethod || "package";
+
+    if (rootCalc === "perPerson") {
+      const qd = currentQuotation?.packageSnapshot || {};
+      const adults = Number(currentQuotation?.adults) || 1;
+      const children = Number(currentQuotation?.children) || 0;
+      const mattresses = Number(currentQuotation?.noOfMattress) || 0;
+      
+      const calcTier = (adultCost, childCost, mattressCost) => {
+        if (!adultCost && !childCost) return null;
+        return (Number(adultCost || 0) * adults) + (Number(childCost || 0) * children) + (Number(mattressCost || 0) * mattresses);
+      };
+
+      const addOn = sumBillableAdditionalServices(services);
+      const sTotal = calcTier(qd.standardAdultCost || qd.perPersonAdultCost, qd.standardChildCost || qd.perPersonChildCost, qd.standardMattressCost || qd.perPersonMattressCost);
+      const dTotal = calcTier(qd.deluxeAdultCost, qd.deluxeChildCost, qd.deluxeMattressCost);
+      const supTotal = calcTier(qd.superiorAdultCost, qd.superiorChildCost, qd.superiorMattressCost);
+
+      if (sTotal > 0) payableStandard = sTotal + addOn;
+      if (dTotal > 0) payableDeluxe = dTotal + addOn;
+      if (supTotal > 0) payableSuperior = supTotal + addOn;
+    } else {
+      const qd = currentQuotation?.packageSnapshot?.quotationDetails || {};
+      const addOn = sumBillableAdditionalServices(services);
+      if (qd.deluxeCost > 0) payableDeluxe = Number(qd.deluxeCost) + addOn;
+      if (qd.superiorCost > 0) payableSuperior = Number(qd.superiorCost) + addOn;
+    }
+
+    const base = {
+      ...quotation,
+      days,
+      additionalServices: serializeAdditionalServicesForApi(services),
+    };
+    if (!Number.isFinite(payableStandard) || payableStandard <= 0) return base;
+    const hpd = [...(base.hotelPricingData || [])];
+    const indicesToUpdate = hpd.reduce((acc, r, i) => {
+      const label = String(r?.destination || "").toLowerCase();
+      if (
+        label.includes("total quotation cost") ||
+        label.includes("total package cost") ||
+        label.includes("final package totals")
+      ) {
+        acc.push(i);
+      }
+      return acc;
+    }, []);
+
+    indicesToUpdate.forEach((idx) => {
+      hpd[idx] = {
+        ...hpd[idx],
+        standard: `₹ ${Math.round(payableStandard).toLocaleString("en-IN")}`,
+        ...(payableDeluxe ? { deluxe: `₹ ${Math.round(payableDeluxe).toLocaleString("en-IN")}` } : {}),
+        ...(payableSuperior ? { superior: `₹ ${Math.round(payableSuperior).toLocaleString("en-IN")}` } : {}),
+      };
+    });
+    return {
+      ...base,
+      pricing: {
+        ...base.pricing,
+        total: `₹ ${Math.round(payableStandard).toLocaleString("en-IN")}`,
+      },
+      hotelPricingData: hpd,
+    };
+  }, [quotation, days, currentQuotation, services]);
+
+  const [accountType, setAccountType] = useState("company");
+  const [accountName, setAccountName] = useState("Iconic Yatra");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [ifscCode, setIfscCode] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [branchName, setBranchName] = useState("");
+  const [newBankDetails, setNewBankDetails] = useState({
+    bankName: "",
+    branchName: "",
+    accountHolderName: "",
+    accountNumber: "",
+    ifscCode: "",
+    openingBalance: "",
+  });
+  const [accountOptions, setAccountOptions] = useState([
+    { value: "Cash", label: "Cash" },
+    { value: "KOTAK Bank", label: "KOTAK Bank" },
+    { value: "YES Bank", label: "YES Bank" },
+  ]);
+
+  const taxOptions = [
+    { value: "gst5", label: "GST 5%", rate: 5 },
+    { value: "gst18", label: "GST 18%", rate: 18 },
+    { value: "non", label: "Non", rate: 0 },
+  ];
+
+  const loadPaymentHistory = useCallback(async () => {
+    if (!apiEntityId) return;
+    setPaymentHistoryLoading(true);
+    try {
+      const res = await axios.get(
+        `/payment/by-quotation/${encodeURIComponent(apiEntityId)}`,
+      );
+      setPaymentHistory(res.data?.data || []);
+    } catch (e) {
+      console.error(e);
+      setPaymentHistory([]);
+    } finally {
+      setPaymentHistoryLoading(false);
+    }
+  }, [apiEntityId]);
+
+  const refreshQuotationFromApi = async () => {
+    if (!id) return;
+    const refreshed = await dispatch(fetchQuickQuotationById(id)).unwrap();
+    const t = transformQuickApiToDisplay(refreshed, company);
+    if (t) {
+      setQuotation(t);
+      setDays(t.days?.length ? t.days : []);
+      setPolicyInputs(normalizePolicyState(refreshed));
+    }
+  };
+
+  const persistItineraryForDays = async (nextDays) => {
+    if (!apiEntityId || !Array.isArray(nextDays)) return;
+    const pkgDays = nextDays.map((d) => ({
+      title: d.title || "",
+      notes: d.description || d.notes || "",
+      aboutCity: "",
+      dayImage:
+        typeof d.image?.url === "string" && d.image.url
+          ? d.image.url
+          : typeof d.image === "string"
+            ? d.image
+            : "",
+    }));
+    setItinerarySaving(true);
+    try {
+      await dispatch(
+        updateQuickQuotation({
+          id: apiEntityId,
+          formData: { packageSnapshot: { days: pkgDays } },
+        }),
+      ).unwrap();
+      await refreshQuotationFromApi();
+      setSnackbar({
+        open: true,
+        message: "Itinerary saved",
+        severity: "success",
+      });
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: String(e?.message || e || "Failed to save itinerary"),
+        severity: "error",
+      });
+    } finally {
+      setItinerarySaving(false);
+    }
+  };
+
+  const openGuestCountsDialog = () => {
+    const q = currentQuotation;
+    if (!q) return;
+    const qd = q.packageSnapshot?.quotationDetails;
+    setGuestCountsDialog({
+      open: true,
+      adults: Number(q.adults) || 0,
+      children: Number(q.children) || 0,
+      kids: Number(q.kids) || Number(qd?.kids) || 0,
+      infants: Number(q.infants) || Number(qd?.infants) || 0,
+    });
+  };
+
+  const handleSaveGuestCounts = async () => {
+    const { adults, children, kids, infants } = guestCountsDialog;
+    const a = Math.max(0, Number(adults) || 0);
+    const c = Math.max(0, Number(children) || 0);
+    const k = Math.max(0, Number(kids) || 0);
+    const inf = Math.max(0, Number(infants) || 0);
+    if (!apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Missing quotation id",
+        severity: "error",
+      });
+      return;
+    }
+    setGuestCountsDialog((s) => ({ ...s, open: false }));
+    try {
+      await dispatch(
+        updateQuickQuotation({
+          id: apiEntityId,
+          formData: {
+            adults: a,
+            children: c,
+            kids: k,
+            infants: inf,
+            packageSnapshot: {
+              quotationDetails: { kids: k, infants: inf },
+            },
+          },
+        }),
+      ).unwrap();
+      await refreshQuotationFromApi();
+      setSnackbar({
+        open: true,
+        message: "Guest counts saved",
+        severity: "success",
+      });
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: String(e?.message || e || "Save failed"),
+        severity: "error",
+      });
+    }
+  };
+
+  const openRoomDetailsDialog = () => {
+    const q = currentQuotation;
+    if (!q) return;
+    const qd = q.packageSnapshot?.quotationDetails;
+    setRoomDetailsDialog({
+      open: true,
+      noOfRooms: Number(q.noOfRooms) || Number(qd?.noOfRooms) || Number(qd?.rooms?.numberOfRooms) || 1,
+      noOfMattress: Number(q.noOfMattress) || Number(qd?.noOfMattress) || Number(qd?.rooms?.numberOfMattress) || 0,
+      roomType: q.roomType || qd?.roomType || qd?.rooms?.sharingType || "Double sharing",
+    });
+  };
+
+  const openMealPlanDialog = () => {
+    const q = currentQuotation;
+    if (!q) return;
+    setMealPlanDialog({
+      open: true,
+      mealPlan: mealPlanForEditor(getQuickMealPlanRaw(q)),
+    });
+  };
+
+  const handleSaveMealPlan = async () => {
+    const mealPlan = String(mealPlanDialog.mealPlan || "").trim();
+    if (!mealPlan) {
+      setSnackbar({
+        open: true,
+        message: "Meal plan is required",
+        severity: "warning",
+      });
+      return;
+    }
+    if (!apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Missing quotation id",
+        severity: "error",
+      });
+      return;
+    }
+    setMealPlanDialog((s) => ({ ...s, open: false }));
+    try {
+      const existingMealPlan = currentQuotation?.packageSnapshot?.mealPlan;
+      await dispatch(
+        updateQuickQuotation({
+          id: apiEntityId,
+          formData: {
+            packageSnapshot: {
+              mealPlan:
+                existingMealPlan && typeof existingMealPlan === "object"
+                  ? { ...existingMealPlan, planType: mealPlan }
+                  : { planType: mealPlan },
+              quotationDetails: {
+                mealPlan,
+              },
+            },
+          },
+        }),
+      ).unwrap();
+      await refreshQuotationFromApi();
+      setSnackbar({
+        open: true,
+        message: "Meal plan saved",
+        severity: "success",
+      });
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: String(e?.message || e || "Save failed"),
+        severity: "error",
+      });
+    }
+  };
+
+  const handleSaveRoomDetails = async () => {
+    const { noOfRooms, noOfMattress, roomType } = roomDetailsDialog;
+    const rCount = Math.max(1, Number(noOfRooms) || 1);
+    const mCount = Math.max(0, Number(noOfMattress) || 0);
+    const rType = String(roomType || "Double sharing").trim();
+
+    if (!apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Missing quotation id",
+        severity: "error",
+      });
+      return;
+    }
+    setRoomDetailsDialog((s) => ({ ...s, open: false }));
+    try {
+      await dispatch(
+        updateQuickQuotation({
+          id: apiEntityId,
+          formData: {
+            noOfRooms: rCount,
+            noOfMattress: mCount,
+            roomType: rType,
+            packageSnapshot: {
+              quotationDetails: {
+                noOfRooms: rCount,
+                noOfMattress: mCount,
+                roomType: rType,
+                rooms: {
+                  numberOfRooms: rCount,
+                  sharingType: rType,
+                  numberOfMattress: mCount,
+                }
+              },
+            },
+          },
+        }),
+      ).unwrap();
+      await refreshQuotationFromApi();
+      setSnackbar({
+        open: true,
+        message: "Room details saved",
+        severity: "success",
+      });
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: String(e?.message || e || "Save failed"),
+        severity: "error",
+      });
+    }
+  };
+
+  const handleBannerFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Cannot upload: no quotation id",
+        severity: "error",
+      });
+      return;
+    }
+    setBannerUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("bannerImage", file);
+      await axios.post(
+        `/quickQT/${encodeURIComponent(apiEntityId)}/banner`,
+        fd,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      await refreshQuotationFromApi();
+      setSnackbar({
+        open: true,
+        message: "Banner image uploaded",
+        severity: "success",
+      });
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message:
+          err?.response?.data?.message ||
+          err?.message ||
+          "Banner upload failed",
+        severity: "error",
+      });
+    } finally {
+      setBannerUploading(false);
+    }
+  };
+
+  useEffect(() => {
+    const loadCompanies = async () => {
+      try {
+        const res = await axios.get("/company");
+        const list = res?.data?.data || [];
+        setMailCompanies(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.error(err);
+        setMailCompanies([]);
+      }
+    };
+    const loadEmailAccounts = async () => {
+      try {
+        const res = await axios.get("/email-accounts");
+        const list = res?.data?.data || [];
+        setEmailAccounts(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.error("Failed to load email accounts:", err);
+        setEmailAccounts([]);
+      }
+    };
+    loadCompanies();
+    loadEmailAccounts();
+  }, []);
+
+  useEffect(() => {
+    const loadGlobal = async () => {
+      try {
+        const res = await axios.get("/global-settings");
+        const settings = normalizePolicyState(res.data);
+        setPolicyInputs((prev) => ({
+          inclusionPolicy: prev.inclusionPolicy || settings.inclusionPolicy,
+          exclusionPolicy: prev.exclusionPolicy || settings.exclusionPolicy,
+          paymentPolicy: prev.paymentPolicy || settings.paymentPolicy,
+          cancellationPolicy:
+            prev.cancellationPolicy || settings.cancellationPolicy,
+          termsAndConditions:
+            prev.termsAndConditions || settings.termsAndConditions,
+        }));
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    loadGlobal();
+    dispatch(getLeadOptions());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!id) {
+      setSnackbar({
+        open: true,
+        message: "No quotation ID in URL",
+        severity: "error",
+      });
+      return;
+    }
+    dispatch(fetchQuickQuotationById(id))
+      .unwrap()
+      .catch((err) => {
+        setSnackbar({
+          open: true,
+          message: err || "Failed to load quotation",
+          severity: "error",
+        });
+      });
+  }, [dispatch, id]);
+
+  useEffect(() => {
+    if (!currentQuotation) return;
+    const t = transformQuickApiToDisplay(currentQuotation, company);
+    if (t) {
+      setQuotation(t);
+      setDays(t.days?.length ? t.days : []);
+      setPolicyInputs(normalizePolicyState(currentQuotation));
+    }
+    setIsFinalized(currentQuotation.finalizeStatus === "finalized");
+  }, [currentQuotation, company]);
+
+  useEffect(() => {
+    if (!currentQuotation) return;
+    setServices(
+      mapApiAdditionalServicesToState(
+        currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices,
+      ),
+    );
+  }, [
+    currentQuotation?._id,
+    JSON.stringify(
+      currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices ||
+      [],
+    ),
+  ]);
+
+  // Ensure Received/Balance is hydrated as soon as quotation data is available,
+  // without waiting for Transaction dialog open.
+  useEffect(() => {
+    if (!currentQuotation?._id) return;
+    loadPaymentHistory();
+  }, [currentQuotation?._id, loadPaymentHistory]);
+
+  useEffect(() => {
+    loadPaymentHistory();
+  }, [loadPaymentHistory]);
+
+  const packageTotalForFooter = useMemo(() => {
+    const n = effectiveQuickPayableTotal(currentQuotation, services);
+    return Number.isFinite(n) ? n : null;
+  }, [currentQuotation, services]);
+  const { receivedFromClient, paidToVendor } = useMemo(() => summarizeVoucherAmounts(paymentHistory), [paymentHistory]);
+  const paymentReceivedDisplay = `₹ ${receivedFromClient.toLocaleString("en-IN")}`;
+  const paymentBalanceDisplay = packageTotalForFooter != null 
+    ? `₹ ${Math.max(0, packageTotalForFooter - receivedFromClient).toLocaleString("en-IN")}` 
+    : "₹ 0";
+
+  const finalizedVendors = React.useMemo(() => {
+    const vendorAmountRows = Array.isArray(quotation?.finalizedVendorsWithAmounts)
+      ? quotation.finalizedVendorsWithAmounts
+        .map((v) => ({
+          name: String(v?.vendorName || "").trim(),
+          amount: Number(v?.amount) || 0,
+        }))
+        .filter((v) => Boolean(v.name))
+      : [];
+    const savedNames = [
+      quotation?.finalizedVendorDetails?.hotelVendorName,
+      quotation?.finalizedVendorDetails?.vehicleVendorName,
+    ]
+      .map((n) => String(n || "").trim())
+      .filter(Boolean);
+    const rows = paymentHistory || [];
+    const paymentNames = rows
+      .filter((v) => v?.paymentType === "Payment Voucher" || v?.drCr === "Dr")
+      .map((v) => String(v?.partyName || "").trim())
+      .filter(Boolean);
+    const mergedNames = Array.from(new Set([...savedNames, ...paymentNames]));
+    const mergedRows = mergedNames.map((name) => {
+      const found = vendorAmountRows.find((row) => row.name === name);
+      return found || { name, amount: null };
+    });
+    vendorAmountRows.forEach((row) => {
+      if (!mergedRows.some((x) => x.name === row.name)) mergedRows.push(row);
+    });
+    return mergedRows;
+  }, [
+    paymentHistory,
+    quotation?.finalizedVendorDetails,
+    quotation?.finalizedVendorsWithAmounts,
+  ]);
+
+  const finalizePackageOptions = useMemo(() => {
+    const pkg =
+      currentQuotation?.packageSnapshot || currentQuotation?.packageId || {};
+    const title = pkg.packageName || pkg.title || "Package";
+    const qd = currentQuotation?.packageSnapshot?.quotationDetails || {};
+    
+    const localSvc = sumBillableAdditionalServices(services);
+    const apiSvc = sumBillableAdditionalServices(qd.additionalServices || []);
+    const hasLocal = Array.isArray(services) && services.length > 0;
+    const addOns = hasLocal ? localSvc : apiSvc;
+
+    const fmt = (n) =>
+      n > 0 ? `₹ ${Math.round(n).toLocaleString("en-IN")}` : "—";
+      
+    const tierPayable = (tierBase) => {
+      if (!tierBase || tierBase <= 0) return 0;
+      return tierBase + addOns;
+    };
+
+    // If manual per-person breakdown is used, calculate totals dynamically
+    if (
+      currentQuotation?.calculationMethod === "perPerson" || 
+      currentQuotation?.perPersonAdultCost > 0 ||
+      currentQuotation?.perPersonChildCost > 0 ||
+      currentQuotation?.perPersonMattressCost > 0
+    ) {
+      const adults = Number(currentQuotation?.adults) || 1;
+      const children = Number(currentQuotation?.children) || 0;
+      const mattresses = Number(currentQuotation?.noOfMattress) || 0;
+      
+      const calcTier = (adultCost, childCost, mattressCost) => {
+        return (Number(adultCost || 0) * adults) + (Number(childCost || 0) * children) + (Number(mattressCost || 0) * mattresses);
+      };
+
+      const sTotal = calcTier(currentQuotation.standardAdultCost || currentQuotation.perPersonAdultCost, currentQuotation.standardChildCost || currentQuotation.perPersonChildCost, currentQuotation.standardMattressCost || currentQuotation.perPersonMattressCost);
+      const dTotal = calcTier(currentQuotation.deluxeAdultCost, currentQuotation.deluxeChildCost, currentQuotation.deluxeMattressCost);
+      const supTotal = calcTier(currentQuotation.superiorAdultCost, currentQuotation.superiorChildCost, currentQuotation.superiorMattressCost);
+
+      const opts = [];
+      if (sTotal > 0) opts.push({ label: "Standard", hotel: String(title), cost: fmt(tierPayable(sTotal)) });
+      if (dTotal > 0) opts.push({ label: "Deluxe", hotel: String(title), cost: fmt(tierPayable(dTotal)) });
+      if (supTotal > 0) opts.push({ label: "Superior", hotel: String(title), cost: fmt(tierPayable(supTotal)) });
+
+      if (opts.length > 0) return opts;
+    }
+
+    const std = Number(qd.standardCost ?? pkg.standardCost ?? 0) || 0;
+    const del = Number(qd.deluxeCost ?? pkg.deluxeCost ?? 0) || 0;
+    const sup = Number(qd.superiorCost ?? pkg.superiorCost ?? 0) || 0;
+
+    const opts = [
+      { label: "Standard", hotel: String(title), cost: fmt(tierPayable(std)) },
+      { label: "Deluxe", hotel: String(title), cost: fmt(tierPayable(del)) },
+      { label: "Superior", hotel: String(title), cost: fmt(tierPayable(sup)) },
     ];
 
-    // Generate invoice data
-    const generateInvoiceData = () => {
+    return opts;
+  }, [currentQuotation, services]);
+
+  const generateInvoiceData = () => {
+    const total = effectiveQuickPayableTotal(currentQuotation, services) || 0;
+    const { receivedFromClient } = summarizeVoucherAmounts(paymentHistory);
+    const balance = Math.max(0, total - receivedFromClient);
+    return {
+      company: {
+        name: quotation.footer.company,
+        address: quotation.footer.address,
+        phone: quotation.footer.phone,
+        email: quotation.footer.email,
+        state: "9 - Uttar Pradesh",
+        gstin: quotation.footer.gst || "09EYCPK8832C1ZC",
+      },
+      customer: {
+        name: quotation.customer.name,
+        mobile: quotation.customer.phone,
+        email: quotation.customer.email,
+        state: "",
+        gstin: "",
+      },
+      invoice: {
+        number: `INV-${quotation.reference}`,
+        date: new Date().toLocaleDateString("en-IN"),
+        dueDate: new Date(
+          Date.now() + 15 * 24 * 60 * 60 * 1000,
+        ).toLocaleDateString("en-IN"),
+        placeOfSupply: "9 - Uttar Pradesh",
+      },
+      items: [
+        {
+          id: 1,
+          particulars: `Package — ${quotation.hotel.destination}`,
+          hsnSac: "998314",
+          price: total,
+          amount: total,
+        },
+      ],
+      summary: {
+        subTotal: total,
+        total,
+        received: receivedFromClient,
+        balance,
+      },
+      description: `Travel services for ${quotation.hotel.destination} - ${quotation.hotel.guests}`,
+      terms: "Payment due within 15 days. Thanks for choosing our services.",
+    };
+  };
+
+  const emailInitialValues = useMemo(() => {
+    const type = emailTemplateType === "booking" ? "booking" : "normal";
+    const tpl = emailTemplateBodies[type];
+    // Prefer the company chosen during finalization so the user doesn't have to re-select
+    const defaultCompanyId = currentQuotation?.companyId || company?._id || mailCompanies?.[0]?._id || "";
+    return {
+      to: currentQuotation?.email || quotation.customer?.email || "",
+      cc: "",
+      recipientName:
+        currentQuotation?.customerName || quotation.customer?.name || "",
+      salutation: "Dear",
+      subject: tpl?.subject || "",
+      greetLine: "Please find below details:",
+      message: tpl?.message || "",
+      signature: "",
+      mailType: type,
+      senderAccount: "",
+      companyId: defaultCompanyId,
+      nextPayableAmount: "",
+      paymentDueDate: "",
+    };
+  }, [
+    currentQuotation,
+    quotation.customer?.name,
+    quotation.customer?.email,
+    emailTemplateType,
+    emailTemplateBodies,
+    mailCompanies,
+  ]);
+  const additionalServiceLinesForInclusions = useMemo(() => {
+    const source =
+      Array.isArray(services) && services.length
+        ? services
+        : mapApiAdditionalServicesToState(
+          currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices,
+        );
+    return source
+      .map((s) => {
+        const particulars = String(s?.particulars || "").trim();
+        if (!particulars) return "";
+        const included = String(s?.included || "").toLowerCase() === "yes";
+        return included
+          ? `${particulars} (Additional Service Included)`
+          : `${particulars} (Additional Service - Extra Charge)`;
+      })
+      .filter(Boolean);
+  }, [services, currentQuotation?.packageSnapshot?.quotationDetails?.additionalServices]);
+
+  if (reduxLoading && !currentQuotation) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
+        <CircularProgress />
+        <Typography variant="h6" sx={{ ml: 2 }}>
+          Loading quotation data...
+        </Typography>
+      </Box>
+    );
+  }
+
+  const refreshEmailTemplates = async (companyId) => {
+    const selectedCompany = mailCompanies.find((c) => c?._id === companyId);
+    const res = await axios.post(
+      `/quickQT/${encodeURIComponent(apiEntityId)}/email/preview`,
+      {
+        companyId: companyId || undefined,
+        companyName: selectedCompany?.companyName || undefined,
+      },
+    );
+    const data = res?.data?.data || {};
+    const nextTemplates = {
+      normal: {
+        subject: data?.normal?.subject || "",
+        message: data?.normal?.body || "",
+      },
+      booking: {
+        subject: data?.booking?.subject || "",
+        message: data?.booking?.body || "",
+      },
+    };
+    setEmailTemplateBodies(nextTemplates);
+    return nextTemplates;
+  };
+
+  const handleEmailOpen = async () => {
+    if (!apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Missing quotation reference",
+        severity: "error",
+      });
+      return;
+    }
+    setEmailTemplateType("normal");
+    // Prefer the company chosen at finalization
+    const defaultCompanyId = currentQuotation?.companyId || company?._id || mailCompanies?.[0]?._id;
+    try {
+      await refreshEmailTemplates(defaultCompanyId);
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: e?.response?.data?.message || "Failed to load email templates",
+        severity: "warning",
+      });
+    }
+    setOpenEmailDialog(true);
+  };
+  const handleEmailClose = () => {
+    setOpenEmailDialog(false);
+    setPdfAttachmentForMail(null);
+    setPreviewPdfModeForMail(false);
+  };
+
+  const handleEmailSend = async (values) => {
+    try {
+      const isBookingMail = values?.mailType === "booking";
+      const selectedCompany =
+        mailCompanies.find((c) => c?._id === values?.companyId) || null;
+
+      const payload = {
+        to: String(values?.to || "").trim(),
+        cc: String(values?.cc || "").trim() || undefined,
+        type: isBookingMail ? "booking" : "normal",
+        subject: values?.subject || undefined,
+        bodyHtml: isBookingMail ? undefined : values?.message || undefined,
+        senderAccount: values?.senderAccount || "gmail1",
+        companyId: values?.companyId || undefined,
+        companyName: selectedCompany?.companyName || undefined,
+        customText: {
+          signature: values?.signature || undefined,
+          normal: { signature: values?.signature || undefined },
+          booking: {
+            signature: values?.signature || undefined,
+            ...(values?.nextPayableAmount
+              ? { nextPayableAmount: Number(values.nextPayableAmount) }
+              : {}),
+            ...(values?.paymentDueDate ? { dueDate: values.paymentDueDate } : {}),
+          },
+        },
+        ...(pdfAttachmentForMail?.contentBase64
+          ? { pdfAttachment: pdfAttachmentForMail }
+          : {}),
+        previewPdfMode:
+          !isBookingMail &&
+          !!pdfAttachmentForMail?.contentBase64 &&
+          previewPdfModeForMail,
+      };
+
+      // Handle Payment Receipt Attachment for Booking Mails
+      if (values.selectedReceiptId && isBookingMail) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        const element = document.getElementById("hidden-receipt-container");
+        if (element) {
+          try {
+            const opt = {
+              margin: 0.2,
+              filename: `Receipt_${values.selectedReceiptId}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 1.5, useCORS: true, logging: false },
+              jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+            };
+            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf("blob");
+            if (pdfBlob && pdfBlob.size >= 100) {
+              const reader = new FileReader();
+              const receiptAttachment = await new Promise((resolve, reject) => {
+                reader.onloadend = () =>
+                  resolve({
+                    filename: "Payment_Receipt.pdf",
+                    contentBase64: reader.result.split(",")[1],
+                    mimeType: "application/pdf",
+                  });
+                reader.onerror = reject;
+                reader.readAsDataURL(pdfBlob);
+              });
+              payload.receiptPdf = receiptAttachment;
+              payload.paymentVoucherId = values.selectedReceiptId;
+            }
+          } catch (captureErr) {
+            console.error("Failed to capture receipt PDF:", captureErr);
+          }
+        }
+      }
+
+      await axios.post(
+        `/quickQT/${encodeURIComponent(apiEntityId)}/email/send`,
+        payload,
+      );
+
+      setSnackbar({
+        open: true,
+        message: "Email sent successfully",
+        severity: "success",
+      });
+      setPdfAttachmentForMail(null);
+      setPreviewPdfModeForMail(false);
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: e?.response?.data?.message || "Failed to send email",
+        severity: "error",
+      });
+    }
+  };
+
+  const handlePaymentOpen = () => {
+    if (!apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Missing quotation reference",
+        severity: "error",
+      });
+      return;
+    }
+    const clientName =
+      quotation.customer?.name?.trim() ||
+      currentQuotation?.customerName?.trim() ||
+      "";
+    try {
+      sessionStorage.setItem(
+        "paymentFormPartyPrefill",
+        JSON.stringify({
+          quotationRef: apiEntityId,
+          partyName: clientName,
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+    const party = encodeURIComponent(clientName);
+    navigate(
+      `/payments-form?quotationRef=${encodeURIComponent(apiEntityId)}&party=${party}`,
+    );
+  };
+
+  const handleFinalizeOpen = () => setOpenFinalize(true);
+  const handleFinalizeClose = () => setOpenFinalize(false);
+
+  const handleAddServiceOpen = () => setOpenAddService(true);
+  const handleAddServiceClose = () => {
+    setOpenAddService(false);
+    setEditingServiceId(null);
+    setCurrentService({
+      included: "no",
+      particulars: "",
+      amount: "",
+      taxType: "",
+    });
+  };
+
+
+  const handleAddFlightOpen = () => setOpenAddFlight(true);
+  const handleAddFlightClose = () => setOpenAddFlight(false);
+
+  const handleEditOpen = (
+    field,
+    value,
+    title,
+    nested = false,
+    nestedKey = "",
+  ) => {
+    setEditDialog({ open: true, field, value, title, nested, nestedKey });
+  };
+
+  const handleEditClose = () => {
+    setEditDialog({
+      open: false,
+      field: "",
+      value: "",
+      title: "",
+      nested: false,
+      nestedKey: "",
+    });
+  };
+
+  const handleEditSave = async () => {
+    let newValue = editDialog.value;
+
+    if (editDialog.field === "policies.inclusions") {
+      try {
+        const parsed = JSON.parse(editDialog.value);
+        newValue = Array.isArray(parsed) ? parsed : [String(parsed)];
+      } catch {
+        newValue = linesToPolicyArray(editDialog.value);
+      }
+    } else if (editDialog.field.startsWith("policies.")) {
+      newValue = linesToPolicyArray(editDialog.value);
+    }
+
+    if (editDialog.field === "quotationHeaderTitle") {
+      const t = String(newValue).trim();
+      const name =
+        currentQuotation?.customerName || quotation.customer?.name || "Guest";
+      newValue = t || `Quick Quotation For ${name}`;
+    }
+
+    setQuotation((prev) => {
+      if (editDialog.field === "quotationHeaderTitle") {
+        return { ...prev, quotationTitle: newValue };
+      }
+      if (editDialog.field === "destinationLine") {
         return {
-            company: {
-                name: quotation.footer.company,
-                address: quotation.footer.address,
-                phone: quotation.footer.phone,
-                email: quotation.footer.email,
-                state: "9 - Uttar Pradesh",
-                gstin: "09EYCPK8832C1ZC",
-            },
-            customer: {
-                name: quotation.customer.name,
-                mobile: quotation.customer.phone,
-                email: quotation.customer.email,
-                state: "28 - Andhra Pradesh (Old)",
-                gstin: "28ABCDE1234F1Z2",
-            },
-            invoice: {
-                number: `INV-${quotation.reference}`,
-                date: new Date().toLocaleDateString("en-IN"),
-                dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN"),
-                placeOfSupply: "9 - Uttar Pradesh",
-            },
-            items: [
-                {
-                    id: 1,
-                    particulars: "Hotel Booking Services",
-                    hsnSac: "998314",
-                    price: 2500,
-                    amount: 2500,
-                },
-                {
-                    id: 2,
-                    particulars: "Transportation Services",
-                    hsnSac: "996411",
-                    price: 840,
-                    amount: 840,
-                },
-            ],
-            summary: {
-                subTotal: 3340,
-                total: 3340,
-                received: 1500,
-                balance: 1840,
-            },
-            description: `Travel services for ${quotation.hotel.destination} - ${quotation.hotel.guests}`,
-            terms: "Payment due within 15 days. Thanks for choosing our services.",
+          ...prev,
+          destinationSummary: newValue,
+          hotel: { ...prev.hotel, destination: newValue },
         };
-    };
-
-    // Dialog handlers
-    const handleEmailOpen = () => setOpenEmailDialog(true);
-    const handleEmailClose = () => setOpenEmailDialog(false);
-
-    const handlePaymentOpen = () => setOpenPaymentDialog(true);
-    const handlePaymentClose = () => setOpenPaymentDialog(false);
-
-    const handleFinalizeOpen = () => setOpenFinalize(true);
-    const handleFinalizeClose = () => setOpenFinalize(false);
-
-    const handleAddServiceOpen = () => setOpenAddService(true);
-    const handleAddServiceClose = () => {
-        setOpenAddService(false);
-        setCurrentService({
-            included: "yes",
-            particulars: "",
-            amount: "",
-            taxType: "",
-        });
-    };
-
-    const handleAddFlightOpen = () => setOpenAddFlight(true);
-    const handleAddFlightClose = () => setOpenAddFlight(false);
-
-    const handleEditOpen = (
-        field,
-        value,
-        title,
-        nested = false,
-        nestedKey = ""
-    ) => {
-        setEditDialog({ open: true, field, value, title, nested, nestedKey });
-    };
-
-    const handleEditClose = () => {
-        setEditDialog({
-            open: false,
-            field: "",
-            value: "",
-            title: "",
-            nested: false,
-            nestedKey: "",
-        });
-    };
-
-    const handleEditSave = () => {
-        setQuotation((prev) => ({
-            ...prev,
-            [editDialog.field]: editDialog.nested
-                ? {
-                    ...prev[editDialog.field],
-                    [editDialog.nestedKey]: editDialog.value,
-                }
-                : editDialog.value,
-        }));
-        handleEditClose();
-    };
-
-    const handleEditValueChange = (e) => {
-        setEditDialog({ ...editDialog, value: e.target.value });
-    };
-
-    const handleConfirm = () => {
-        setIsFinalized(true);
-        setOpenFinalize(false);
-        setOpenBankDialog(true);
-    };
-
-    const handleBankDialogClose = () => {
-        setOpenBankDialog(false);
-        setAccountType("company");
-        setAccountName("Iconic Yatra");
-        setAccountNumber("");
-        setIfscCode("");
-        setBankName("");
-        setBranchName("");
-    };
-
-    const handleBankConfirm = () => {
-        console.log("Bank details:", {
-            accountType,
-            accountName,
-            accountNumber,
-            ifscCode,
-            bankName,
-            branchName,
-        });
-        setInvoiceGenerated(true);
-        handleBankDialogClose();
-    };
-
-    // Add New Bank Functions
-    const handleAddBankOpen = () => {
-        setOpenAddBankDialog(true);
-    };
-
-    const handleAddBankClose = () => {
-        setOpenAddBankDialog(false);
-        setNewBankDetails({
-            bankName: "",
-            branchName: "",
-            accountHolderName: "",
-            accountNumber: "",
-            ifscCode: "",
-            openingBalance: "",
-        });
-    };
-
-    const handleNewBankChange = (field, value) => {
-        setNewBankDetails((prev) => ({
-            ...prev,
-            [field]: value,
-        }));
-    };
-
-    const handleAddBank = () => {
-        if (
-            !newBankDetails.bankName ||
-            !newBankDetails.accountHolderName ||
-            !newBankDetails.accountNumber
-        ) {
-            alert("Please fill in all required fields");
-            return;
-        }
-
-        const newAccount = {
-            value: newBankDetails.bankName,
-            label: `${newBankDetails.bankName} - ${newBankDetails.accountHolderName}`,
+      }
+      if (editDialog.field === "customer.location") {
+        return {
+          ...prev,
+          customer: { ...prev.customer, location: newValue },
         };
+      }
+      if (editDialog.field === "footer.contact") {
+        return {
+          ...prev,
+          footer: { ...prev.footer, contact: newValue },
+        };
+      }
+      if (editDialog.nested && editDialog.nestedKey) {
+        return {
+          ...prev,
+          [editDialog.field]: {
+            ...prev[editDialog.field],
+            [editDialog.nestedKey]: newValue,
+          },
+        };
+      }
+      return setQuotationValueByPath(prev, editDialog.field, newValue);
+    });
 
-        setAccountOptions((prev) => [...prev, newAccount]);
-        setAccountName(newAccount.value);
-        handleAddBankClose();
-    };
+    const mongoSet = buildQuickMongoSetFromEditDialog(editDialog, newValue);
+    if (mongoSet && apiEntityId) {
+      try {
+        await dispatch(
+          updateQuickQuotation({ id: apiEntityId, formData: mongoSet }),
+        ).unwrap();
+        await refreshQuotationFromApi();
+        setSnackbar({
+          open: true,
+          message: "Saved to server",
+          severity: "success",
+        });
+      } catch (e) {
+        setSnackbar({
+          open: true,
+          message:
+            typeof e === "string"
+              ? e
+              : e?.message || "Saved locally; server update failed",
+          severity: "warning",
+        });
+      }
+    } else if (mongoSet && !apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Cannot sync: no quotation id in URL",
+        severity: "warning",
+      });
+    }
 
-    // Add Service Functions
-    const handleServiceChange = (field, value) => {
-        setCurrentService((prev) => ({
-            ...prev,
-            [field]: value,
-        }));
-    };
+    handleEditClose();
+  };
 
-    const handleAddService = () => {
-        if (
-            !currentService.particulars ||
-            (currentService.included === "no" && !currentService.amount)
-        ) {
-            alert("Please fill in all required fields");
-            return;
+  const handleEditValueChange = (e) => {
+    setEditDialog({ ...editDialog, value: e.target.value });
+  };
+
+  const handleConfirm = async (values) => {
+    const pkg = values?.quotation;
+    if (!pkg || !apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Confirm package selection to finalize",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      const selectedBaseAmount = Number(values?.selectedAmount) || 0;
+      const selectedAmountWithTax =
+        Number(values?.selectedAmountWithTax) || selectedBaseAmount;
+      const taxPercent = Math.max(0, Number(values?.taxPercent) || 0);
+      const gstMode = values?.gstMode === "without_gst" ? "without_gst" : "with_gst";
+      const isWithoutGst = gstMode === "without_gst";
+      const selectedPackageKey = String(pkg).toLowerCase();
+      const qd = currentQuotation?.packageSnapshot?.quotationDetails || {};
+      const existingCalc =
+        qd.packageCalculations && typeof qd.packageCalculations === "object"
+          ? qd.packageCalculations
+          : {};
+      const beforeTaxAmount = selectedBaseAmount;
+      const gstAmount = Math.max(0, selectedAmountWithTax - selectedBaseAmount);
+      const nextCalc = {
+        ...existingCalc,
+        [selectedPackageKey]: {
+          ...(existingCalc?.[selectedPackageKey] || {}),
+          afterDiscount: beforeTaxAmount,
+          gstAmount,
+          gstPercentage: taxPercent,
+          finalTotal: selectedAmountWithTax,
+        },
+      };
+
+      if (selectedAmountWithTax > 0) {
+        await dispatch(
+          updateQuickQuotation({
+            id: apiEntityId,
+            formData: {
+              totalCost: selectedAmountWithTax,
+              packageSnapshot: {
+                quotationDetails: {
+                  taxes: {
+                    ...(qd?.taxes || {}),
+                    applyGST: true,
+                    gstOn: "Full",
+                    taxPercent,
+                    gstIncludedInFinalAmount: !isWithoutGst,
+                  },
+                  packageCalculations: nextCalc,
+                  // Also update the flat cost fields to stay in sync with the finalized amount
+                  standardCost:
+                    selectedPackageKey === "standard"
+                      ? selectedAmountWithTax
+                      : qd.standardCost,
+                  deluxeCost:
+                    selectedPackageKey === "deluxe"
+                      ? selectedAmountWithTax
+                      : qd.deluxeCost,
+                  superiorCost:
+                    selectedPackageKey === "superior"
+                      ? selectedAmountWithTax
+                      : qd.superiorCost,
+                },
+                // Update root final costs as well
+                finalStandardCost:
+                  selectedPackageKey === "standard"
+                    ? selectedAmountWithTax
+                    : snap.finalStandardCost,
+                finalDeluxeCost:
+                  selectedPackageKey === "deluxe"
+                    ? selectedAmountWithTax
+                    : snap.finalDeluxeCost,
+                finalSuperiorCost:
+                  selectedPackageKey === "superior"
+                    ? selectedAmountWithTax
+                    : snap.finalSuperiorCost,
+              },
+            },
+          }),
+        ).unwrap();
+      }
+      await dispatch(
+        finalizeQuickQuotation({
+          id: apiEntityId,
+          finalizedPackage: pkg,
+          companyId: values.companyId,
+          companyName: values.companyName,
+        }),
+      ).unwrap();
+      await dispatch(fetchQuickQuotationById(id)).unwrap();
+      setIsFinalized(true);
+      setOpenFinalize(false);
+      setOpenBankDialog(true);
+      setSnackbar({
+        open: true,
+        message: "Quotation finalized",
+        severity: "success",
+      });
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: e || "Could not finalize quotation",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleBankDialogClose = () => {
+    setOpenBankDialog(false);
+    setAccountType("company");
+    setAccountName("Iconic Yatra");
+    setAccountNumber("");
+    setIfscCode("");
+    setBankName("");
+    setBranchName("");
+  };
+
+  const handleBankConfirm = async (vendorPayload = {}) => {
+    if (apiEntityId) {
+      try {
+        const vendorRows = Array.isArray(vendorPayload?.finalizedVendorsWithAmounts)
+          ? vendorPayload.finalizedVendorsWithAmounts
+          : [];
+        const hotelVendorNamesFromRows = vendorRows
+          .filter((v) => String(v?.vendorType || "").toLowerCase() === "hotel")
+          .map((v) => String(v?.vendorName || "").trim())
+          .filter(Boolean);
+
+        if (vendorRows.length > 0) {
+          await dispatch(
+            finalizeQuickQuotation({
+              id: apiEntityId,
+              finalizedVendorsWithAmounts: vendorRows,
+            }),
+          ).unwrap();
         }
+        await dispatch(
+          updateQuickQuotation({
+            id: apiEntityId,
+            formData: {
+              vendorDetails: {
+                vendorType: vendorPayload.vendorType || "",
+                hotelVendorName:
+                  vendorPayload.hotelVendorName ||
+                  hotelVendorNamesFromRows.join(", ") ||
+                  "",
+                vehicleVendorName: vendorPayload.vehicleVendorName || "",
+              },
+            },
+          }),
+        ).unwrap();
+        await refreshQuotationFromApi();
+      } catch (e) {
+        setSnackbar({
+          open: true,
+          message:
+            typeof e === "string"
+              ? e
+              : e?.message || "Vendor details save failed",
+          severity: "warning",
+        });
+      }
+    }
+    setInvoiceGenerated(true);
+    handleBankDialogClose();
+  };
 
+  // Add New Bank Functions
+  const handleAddBankOpen = () => {
+    setOpenAddBankDialog(true);
+  };
+
+  const handleAddBankClose = () => {
+    setOpenAddBankDialog(false);
+    setNewBankDetails({
+      bankName: "",
+      branchName: "",
+      accountHolderName: "",
+      accountNumber: "",
+      ifscCode: "",
+      openingBalance: "",
+    });
+  };
+
+  const handleNewBankChange = (field, value) => {
+    setNewBankDetails((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleAddBank = () => {
+    if (
+      !newBankDetails.bankName ||
+      !newBankDetails.accountHolderName ||
+      !newBankDetails.accountNumber
+    ) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    const newAccount = {
+      value: newBankDetails.bankName,
+      label: `${newBankDetails.bankName} - ${newBankDetails.accountHolderName}`,
+    };
+
+    setAccountOptions((prev) => [...prev, newAccount]);
+    setAccountName(newAccount.value);
+    handleAddBankClose();
+  };
+
+  // Add Service Functions
+  const handleServiceChange = (field, value) => {
+    setCurrentService((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleAddService = () => {
+    if (
+      !currentService.particulars ||
+      (currentService.included === "no" &&
+        (!currentService.amount || !currentService.taxType))
+    ) {
+      alert(
+        "Please fill in all required fields (amount and tax for extra service)",
+      );
+      return;
+    }
+
+    const selectedTax = taxOptions.find(
+      (option) => option.value === currentService.taxType,
+    );
+    const taxRate = selectedTax ? selectedTax.rate : 0;
+
+    const amount =
+      currentService.included === "no" ? parseFloat(currentService.amount) : 0;
+    const taxAmount = amount * (taxRate / 100) || 0;
+
+    const newService = {
+      ...currentService,
+      id: editingServiceId || Date.now(),
+      amount: amount,
+      taxRate,
+      taxAmount,
+      totalAmount: amount + taxAmount,
+      taxLabel: selectedTax ? selectedTax.label : "Non",
+    };
+
+    setServices((prev) =>
+      editingServiceId
+        ? prev.map((service) =>
+          service.id === editingServiceId ? newService : service,
+        )
+        : [...prev, newService],
+    );
+    setEditingServiceId(null);
+    setCurrentService({
+      included: "no",
+      particulars: "",
+      amount: "",
+      taxType: "",
+    });
+  };
+
+  const handleClearService = () => {
+    setEditingServiceId(null);
+    setCurrentService({
+      included: "no",
+      particulars: "",
+      amount: "",
+      taxType: "",
+    });
+  };
+
+  const handleEditService = (serviceId) => {
+    const row = services.find((service) => service.id === serviceId);
+    if (!row) return;
+    setEditingServiceId(serviceId);
+    setCurrentService({
+      included: String(row.included || "no").toLowerCase() === "yes" ? "yes" : "no",
+      particulars: row.particulars || "",
+      amount: row.included === "no" ? String(row.amount ?? "") : "",
+      taxType:
+        row.taxType ||
+        (row.taxRate === 5 ? "gst5" : row.taxRate === 18 ? "gst18" : "non"),
+    });
+  };
+
+  const handleRemoveService = (id) => {
+    setServices((prev) => prev.filter((service) => service.id !== id));
+    if (editingServiceId === id) {
+      handleClearService();
+    }
+  };
+
+  const handleSaveServices = async () => {
+    if (!apiEntityId || !currentQuotation) {
+      alert("Quotation not loaded");
+      return;
+    }
+    const hasDraft =
+      String(currentService?.particulars || "").trim().length > 0 &&
+      (currentService.included !== "no" ||
+        (String(currentService.amount || "").trim() &&
+          String(currentService.taxType || "").trim()));
+
+    const servicesToSave = hasDraft
+      ? (() => {
         const selectedTax = taxOptions.find(
-            (option) => option.value === currentService.taxType
+          (option) => option.value === currentService.taxType,
         );
         const taxRate = selectedTax ? selectedTax.rate : 0;
-
         const amount =
-            currentService.included === "yes" ? 0 : parseFloat(currentService.amount);
+          currentService.included === "no"
+            ? Number.parseFloat(currentService.amount || 0)
+            : 0;
         const taxAmount = amount * (taxRate / 100) || 0;
-
-        const newService = {
+        return [
+          ...services,
+          {
             ...currentService,
             id: Date.now(),
-            amount: amount,
+            amount,
             taxRate,
             taxAmount,
             totalAmount: amount + taxAmount,
             taxLabel: selectedTax ? selectedTax.label : "Non",
-        };
+          },
+        ];
+      })()
+      : services;
 
-        setServices((prev) => [...prev, newService]);
-        setCurrentService({
-            included: "yes",
-            particulars: "",
-            amount: "",
-            taxType: "",
-        });
-    };
-
-    const handleClearService = () => {
-        setCurrentService({
-            included: "yes",
-            particulars: "",
-            amount: "",
-            taxType: "",
-        });
-    };
-
-    const handleRemoveService = (id) => {
-        setServices((prev) => prev.filter((service) => service.id !== id));
-    };
-
-    const handleSaveServices = () => {
-        console.log("Services saved:", services);
-        handleAddServiceClose();
-    };
-
-    const handleAddFlight = (flightDetails) => {
-        setFlights((prev) => [...prev, { ...flightDetails, id: Date.now() }]);
-        console.log("Flight added:", flightDetails);
-        handleAddFlightClose();
-    };
-
-    const handleDayImageUpload = (dayId, file) => {
-        if (file) {
-            setDays((prev) =>
-                prev.map((day) =>
-                    day.id === dayId
-                        ? {
-                            ...day,
-                            image: {
-                                file,
-                                preview: URL.createObjectURL(file),
-                                name: file.name,
-                            },
-                        }
-                        : day
-                )
-            );
-            console.log(`Image uploaded for Day ${dayId}:`, file.name);
-        }
-    };
-
-    const handleAddDay = () => {
-        const newDayId = days.length + 1;
-        setDays((prev) => [
-            ...prev,
-            {
-                id: newDayId,
-                date: "12/09/2025",
-                title: `About Day ${newDayId}`,
-                image: null,
+    const payload = serializeAdditionalServicesForApi(servicesToSave);
+    try {
+      await dispatch(
+        updateQuickQuotation({
+          id: apiEntityId,
+          formData: {
+            packageSnapshot: {
+              quotationDetails: {
+                additionalServices: payload,
+              },
             },
-        ]);
-    };
+          },
+        }),
+      ).unwrap();
+      await dispatch(fetchQuickQuotationById(id)).unwrap();
+      setServices(mapApiAdditionalServicesToState(payload));
+      setSnackbar({
+        open: true,
+        message: "Services saved",
+        severity: "success",
+      });
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: String(e?.message || e || "Failed to save services"),
+        severity: "error",
+      });
+    }
+    handleAddServiceClose();
+  };
 
-    const handleRemoveDay = (dayId) => {
-        if (days.length > 1) {
-            setDays((prev) => prev.filter((day) => day.id !== dayId));
-        } else {
-            alert("At least one day is required");
+  const handleAddFlight = (flightDetails) => {
+    setFlights((prev) => [...prev, { ...flightDetails, id: Date.now() }]);
+    console.log("Flight added:", flightDetails);
+    handleAddFlightClose();
+  };
+
+  const handleDayImageUpload = async (dayId, file) => {
+    if (!file) {
+      const next = days.map((day) =>
+        day.id === dayId ? { ...day, image: null } : day,
+      );
+      setDays(next);
+      await persistItineraryForDays(next);
+      return;
+    }
+    if (!apiEntityId) {
+      setSnackbar({
+        open: true,
+        message: "Cannot upload: no quotation id",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const { data } = await axios.post(
+        `/quickQT/${encodeURIComponent(apiEntityId)}/day-image`,
+        fd,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      const url = data?.url;
+      if (!url) throw new Error("No image URL returned");
+      const next = days.map((day) =>
+        day.id === dayId
+          ? {
+            ...day,
+            image: {
+              preview: url,
+              url,
+              name: file.name,
+            },
+          }
+          : day,
+      );
+      setDays(next);
+      await persistItineraryForDays(next);
+    } catch (e) {
+      setSnackbar({
+        open: true,
+        message: String(e?.message || e || "Upload failed"),
+        severity: "error",
+      });
+    }
+  };
+
+  const handleAddDay = () => {
+    const newDayId = days.length + 1;
+    setDays((prev) => [
+      ...prev,
+      {
+        id: newDayId,
+        date: "12/09/2025",
+        title: `About Day ${newDayId}`,
+        image: null,
+      },
+    ]);
+  };
+
+  const handleRemoveDay = async (dayId) => {
+    if (days.length <= 1) {
+      alert("At least one day is required");
+      return;
+    }
+    const next = days.filter((day) => day.id !== dayId);
+    setDays(next);
+    await persistItineraryForDays(next);
+  };
+
+  const handleMoveDestination = async (index, direction) => {
+    const destinations = snap.destinationNights || [];
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= destinations.length) return;
+
+    setItinerarySaving(true);
+    try {
+      const nextDestinations = [...destinations];
+      const [movedDest] = nextDestinations.splice(index, 1);
+      nextDestinations.splice(nextIndex, 0, movedDest);
+
+      const nextDays = [...days];
+      const getDayRange = (idx) => {
+        let start = 0;
+        for (let i = 0; i < idx; i++) {
+          start += Number(destinations[i].nights) || 0;
         }
-    };
+        return { start, count: Number(destinations[idx].nights) || 0 };
+      };
 
-    // PDF Dialog Handlers - FIXED VERSION
-    const handlePreviewPdf = () => {
-        console.log("Opening PDF dialog...");
-        setOpenPdfDialog(true);
-    };
+      const range1 = getDayRange(index);
+      const range2 = getDayRange(nextIndex);
 
-    const handleClosePdfDialog = () => {
-        console.log("Closing PDF dialog...");
-        setOpenPdfDialog(false);
-    };
+      if (direction === 1) {
+        const block1 = nextDays.splice(range1.start, range1.count);
+        nextDays.splice(range1.start + range2.count, 0, ...block1);
+      } else {
+        const block2 = nextDays.splice(range2.start, range2.count);
+        nextDays.splice(range2.start + range1.count, 0, ...block2);
+      }
 
-    const handleViewInvoice = () => {
-        setOpenInvoiceDialog(true);
-    };
+      setDays(nextDays);
 
-    // Generate Invoice Function
-    const handleGenerateInvoice = () => {
-        console.log("Generating invoice...");
+      const pkgDays = nextDays.map((d) => ({
+        title: d.title || "",
+        notes: d.description || d.notes || "",
+        aboutCity: "",
+        dayImage: d.image?.url || d.image?.preview || "",
+      }));
 
-        setSnackbar({
-            open: true,
-            message: "Generating invoice...",
-            severity: "info"
-        });
+      await dispatch(
+        updateQuickQuotation({
+          id: apiEntityId,
+          formData: {
+            packageSnapshot: {
+              ...currentQuotation.packageSnapshot,
+              destinationNights: nextDestinations,
+              days: pkgDays,
+            },
+          },
+        }),
+      ).unwrap();
 
-        const generatedInvoiceData = generateInvoiceData();
-        setInvoiceData(generatedInvoiceData);
+      await refreshQuotationFromApi();
+      setSnackbar({ open: true, message: "Destinations reordered", severity: "success" });
+    } catch (e) {
+      console.error(e);
+      setSnackbar({ open: true, message: "Failed to reorder", severity: "error" });
+    } finally {
+      setItinerarySaving(false);
+    }
+  };
 
-        setTimeout(() => {
-            setInvoiceGenerated(true);
-            setOpenInvoiceDialog(true);
-            setSnackbar({
-                open: true,
-                message: "Invoice generated successfully!",
-                severity: "success"
-            });
-        }, 1500);
-    };
+  // PDF Dialog Handlers - FIXED VERSION
+  const handlePreviewPdf = () => {
+    console.log("Opening PDF dialog...");
+    setOpenPdfDialog(true);
+  };
 
-    const handleActionClick = (action) => {
-        console.log("Action clicked:", action);
-        switch (action) {
-            case "Finalize":
-                handleFinalizeOpen();
-                break;
-            case "Add Service":
-                handleAddServiceOpen();
-                break;
-            case "Email Quotation":
-                handleEmailOpen();
-                break;
-            case "Preview PDF":
-                handlePreviewPdf();
-                break;
-            case "Make Payment":
-                handlePaymentOpen();
-                break;
-            case "Add Flight":
-                handleAddFlightOpen();
-                break;
-            case "Transaction":
-                setOpenTransactionDialog(true);
-                break;
-            default:
-                console.log("Unknown action:", action);
-        }
-    };
+  const handleClosePdfDialog = () => {
+    console.log("Closing PDF dialog...");
+    setOpenPdfDialog(false);
+  };
 
-    const handleAddItinerary = () => {
-        const currentDays = days.length;
-        setItineraryDialog({
-            open: true,
-            mode: 'add',
-            day: currentDays + 1,
-            title: `Day ${currentDays + 1}`,
-            description: "",
-            id: null
-        });
-    };
+  const handleViewInvoice = () => {
+    setOpenInvoiceDialog(true);
+  };
 
-    const handleEditItinerary = (day, index) => {
-        setItineraryDialog({
-            open: true,
-            mode: 'edit',
-            day: index + 1,
-            title: day.title || `Day ${index + 1}`,
-            description: day.description || "",
-            id: day.id
-        });
-    };
+  // Generate Invoice Function
+  const handleGenerateInvoice = () => {
+    console.log("Generating invoice...");
 
-    const handleSaveItinerary = async () => {
-        const { mode, title, description, id } = itineraryDialog;
+    setSnackbar({
+      open: true,
+      message: "Generating invoice...",
+      severity: "info",
+    });
 
-        if (!title.trim() || !description.trim()) {
-            setSnackbar({
-                open: true,
-                message: "Please fill in both title and description",
-                severity: "error"
-            });
-            return;
-        }
+    const generatedInvoiceData = generateInvoiceData();
+    setInvoiceData(generatedInvoiceData);
 
-        try {
-            if (mode === 'add') {
-                const newDay = {
-                    id: Date.now(),
-                    date: new Date().toLocaleDateString(),
-                    title,
-                    description,
-                    image: null
-                };
+    setTimeout(() => {
+      setInvoiceGenerated(true);
+      setOpenInvoiceDialog(true);
+      setSnackbar({
+        open: true,
+        message: "Invoice generated successfully!",
+        severity: "success",
+      });
+    }, 1500);
+  };
 
-                setDays(prev => [...prev, newDay]);
-            } else if (mode === 'edit') {
-                setDays(prev =>
-                    prev.map(day =>
-                        day.id === id ? { ...day, title, description } : day
-                    )
-                );
-            }
+  const handleActionClick = (action) => {
+    console.log("Action clicked:", action);
+    switch (action) {
+      case "Finalize":
+        handleFinalizeOpen();
+        break;
+      case "Add Service":
+        handleAddServiceOpen();
+        break;
+      case "Email Quotation":
+        handleEmailOpen();
+        break;
+      case "Preview PDF":
+        handlePreviewPdf();
+        break;
+      case "Make Payment":
+        handlePaymentOpen();
+        break;
+      case "Add Flight":
+        handleAddFlightOpen();
+        break;
+      case "Transaction":
+        loadPaymentHistory();
+        setOpenTransactionDialog(true);
+        break;
+      default:
+        console.log("Unknown action:", action);
+    }
+  };
 
-            setItineraryDialog({ open: false, mode: 'add', day: null, title: "", description: "", id: null });
+  const handleAddItinerary = () => {
+    const currentDays = days.length;
+    setItineraryDialog({
+      open: true,
+      mode: "add",
+      day: currentDays + 1,
+      title: `Day ${currentDays + 1}`,
+      description: "",
+      id: null,
+    });
+  };
 
-            setSnackbar({
-                open: true,
-                message: `Itinerary ${mode === 'add' ? 'added' : 'updated'} successfully`,
-                severity: "success"
-            });
+  const handleEditItinerary = (day, index) => {
+    setItineraryDialog({
+      open: true,
+      mode: "edit",
+      day: index + 1,
+      title: day.title || `Day ${index + 1}`,
+      description: day.description || "",
+      id: day.id,
+    });
+  };
 
-        } catch (error) {
-            setSnackbar({
-                open: true,
-                message: "Failed to save itinerary",
-                severity: "error"
-            });
-        }
-    };
+  const handleSaveItinerary = async () => {
+    const { mode, title, description, id } = itineraryDialog;
 
-    const handleCloseItineraryDialog = () => {
-        setItineraryDialog({ open: false, mode: 'add', day: null, title: "", description: "", id: null });
-    };
+    if (!title.trim() || !description.trim()) {
+      setSnackbar({
+        open: true,
+        message: "Please fill in both title and description",
+        severity: "error",
+      });
+      return;
+    }
 
-    const handleCloseSnackbar = () => {
-        setSnackbar({ ...snackbar, open: false });
-    };
+    let nextDays;
+    if (mode === "add") {
+      const newDay = {
+        id: Date.now(),
+        date: new Date().toLocaleDateString(),
+        title,
+        description,
+        image: null,
+      };
+      nextDays = [...days, newDay];
+      setDays(nextDays);
+    } else if (mode === "edit") {
+      nextDays = days.map((day) =>
+        day.id === id ? { ...day, title, description } : day,
+      );
+      setDays(nextDays);
+    } else {
+      return;
+    }
 
-    const handleCloseInvoiceDialog = () => {
-        setOpenInvoiceDialog(false);
-    };
+    setItineraryDialog({
+      open: false,
+      mode: "add",
+      day: null,
+      title: "",
+      description: "",
+      id: null,
+    });
 
-    // UI Data
-    const infoMap = {
-        call: `📞 ${quotation.footer.phone}`,
-        email: `✉️ ${quotation.footer.email}`,
-        payment: `Received: ${quotation.footer.received}\n Balance: ${quotation.footer.balance}`,
-        quotation: `Total Quotation Cost: ${quotation.pricing.total}`,
-        guest: `No. of Guests: ${quotation.hotel.guests}`,
-    };
+    await persistItineraryForDays(nextDays);
+  };
 
-    const infoChips = [
-        { k: "call", icon: <Phone /> },
-        { k: "email", icon: <AlternateEmail /> },
-        { k: "payment", icon: <CreditCard /> },
-        { k: "quotation", icon: <Description /> },
-        { k: "guest", icon: <Person /> },
-    ];
+  const handleCloseItineraryDialog = () => {
+    setItineraryDialog({
+      open: false,
+      mode: "add",
+      day: null,
+      title: "",
+      description: "",
+      id: null,
+    });
+  };
 
-    const Accordions = [
-        { title: "Hotel Details" },
-        { title: "Vehicle Details" },
-        { title: "Company Margin" },
-        { title: "Agent Margin" },
-    ];
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
 
-    const Policies = [
-        {
-            title: "Inclusion Policy",
-            icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
-            content: (
-                <List dense>
-                    {quotation.policies.inclusions.map((i, k) => (
-                        <ListItem key={k}>
-                            <ListItemText primary={i} />
-                        </ListItem>
-                    ))}
-                </List>
-            ),
-            field: "policies.inclusions",
-            isArray: true,
-        },
-        {
-            title: "Exclusion Policy",
-            icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
-            content: quotation.policies.exclusions,
-            field: "policies.exclusions",
-        },
-        {
-            title: "Payment Policy",
-            icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
-            content: quotation.policies.paymentPolicy,
-            field: "policies.paymentPolicy",
-        },
-        {
-            title: "Cancellation & Refund",
-            icon: <Warning sx={{ mr: 0.5, color: "warning.main" }} />,
-            content: quotation.policies.cancellationPolicy,
-            field: "policies.cancellationPolicy",
-        },
-    ];
+  const handleCloseInvoiceDialog = () => {
+    setOpenInvoiceDialog(false);
+  };
 
-    const pickupDetails = [
-        {
-            icon: (
-                <CheckCircle sx={{ fontSize: 16, mr: 0.5, color: "success.main" }} />
-            ),
-            text: quotation.pickup.arrival,
-            editable: true,
-            field: "pickup",
-            nestedKey: "arrival",
-        },
-        {
-            icon: <Cancel sx={{ fontSize: 16, mr: 0.5, color: "error.main" }} />,
-            text: quotation.pickup.departure,
-            editable: true,
-            field: "pickup",
-            nestedKey: "departure",
-        },
-        {
-            icon: <Group sx={{ fontSize: 16, mr: 0.5 }} />,
-            text: `No of Guest: ${quotation.hotel.guests}`,
-            editable: true,
-            field: "hotel.guests",
-        },
-    ];
+  const handleStep5Or6Saved = async () => {
+    await refreshQuotationFromApi();
+    setSnackbar({
+      open: true,
+      message: "Saved",
+      severity: "success",
+    });
+  };
 
+  // UI Data
+  const infoMap = {
+    call: `📞 ${quotation.footer.phone}`,
+    email: `✉️ ${quotation.customer?.email}`,
+    payment: `Received: ${paymentReceivedDisplay}\n Balance: ${paymentBalanceDisplay}`,
+    quotation: `Total Quotation Cost: ${quotation.pricing.total}`,
+    guest: `Guests: ${quotation.hotel.guests}`,
+  };
+
+  const infoChips = [
+    { k: "call", icon: <Phone /> },
+    { k: "email", icon: <AlternateEmail /> },
+    { k: "payment", icon: <CreditCard /> },
+    { k: "quotation", icon: <Description /> },
+    { k: "guest", icon: <Person /> },
+  ];
+
+  const snap = currentQuotation
+    ? mergeQuickPackageForDisplay(currentQuotation)
+    : {};
+  const qdSnap = snap.quotationDetails || {};
+  const vehicleSnap = snap.vehicleDetails;
+  const quickPricingRows = Array.isArray(quotation.hotelPricingData)
+    ? quotation.hotelPricingData
+    : [];
+  const isSummaryRow = (row) => {
+    const label = String(row?.destination || "").toLowerCase();
     return (
-        <Box sx={{ backgroundColor: 'white', minHeight: '100vh' }}>
-            {/* Action Buttons */}
-            <Box
-                display="flex"
-                justifyContent="flex-end"
-                gap={1}
-                mb={2}
-                flexWrap="wrap"
-            >
-                {quotation.actions
-                    .filter(
-                        (a) =>
-                            !(a === "Finalize" && isFinalized) &&
-                            !(a === "Transaction" && !isFinalized)
-                    )
-                    .map((a, i) => (
-                        <Button key={i} variant="contained" onClick={() => handleActionClick(a)}>
-                            {a}
-                        </Button>
-                    ))}
-                {isFinalized && !invoiceGenerated && (
-                    <Button
-                        variant="contained"
-                        color="success"
-                        startIcon={<Receipt />}
-                        onClick={handleGenerateInvoice}
-                    >
-                        Generate Invoice
-                    </Button>
-                )}
-                {invoiceGenerated && (
-                    <Button
-                        variant="contained"
-                        color="info"
-                        startIcon={<Visibility />}
-                        onClick={handleViewInvoice}
-                    >
-                        View Invoice
-                    </Button>
-                )}
-            </Box>
-
-            <Grid container spacing={2}>
-                {/* Sidebar */}
-                <Grid size={{ xs: 12, md: 3 }}>
-                    <Box sx={{ position: "sticky", top: 0 }}>
-                        <Card>
-                            <CardContent>
-                                <Box display="flex" alignItems="center" mb={1}>
-                                    <Person color="primary" sx={{ mr: 1 }} />
-                                    <Typography variant="h6">
-                                        {quotation.customer.name}
-                                    </Typography>
-                                </Box>
-                                <Box display="flex" alignItems="center" mb={2}>
-                                    <LocationOn
-                                        sx={{ fontSize: 18, mr: 0.5, color: "text.secondary" }}
-                                    />
-                                    <Typography variant="body2" color="text.secondary">
-                                        {quotation.customer.location}
-                                    </Typography>
-                                </Box>
-                                <Box display="flex" gap={1} sx={{ flexWrap: "wrap", mb: 2 }}>
-                                    {infoChips.map(({ k, icon }) => (
-                                        <Chip
-                                            key={k}
-                                            icon={icon}
-                                            label={k}
-                                            size="small"
-                                            variant="outlined"
-                                            onClick={() => setActiveInfo(k)}
-                                        />
-                                    ))}
-                                </Box>
-                                {activeInfo && (
-                                    <Typography variant="body2" whiteSpace="pre-line">
-                                        {infoMap[activeInfo]}
-                                    </Typography>
-                                )}
-                                <Typography
-                                    variant="subtitle1"
-                                    fontWeight="bold"
-                                    color="warning.main"
-                                    mt={8}
-                                    textAlign="center"
-                                >
-                                    Margin & Taxes (B2C)
-                                </Typography>
-                                {Accordions.map((a, i) => (
-                                    <Accordion key={i}>
-                                        <AccordionSummary expandIcon={<ExpandMore />}>
-                                            <Typography color="primary" fontWeight="bold">
-                                                {a.title}
-                                            </Typography>
-                                        </AccordionSummary>
-                                        <AccordionDetails>
-                                            <Typography variant="body2">Details go here.</Typography>
-                                        </AccordionDetails>
-                                    </Accordion>
-                                ))}
-                            </CardContent>
-                        </Card>
-                    </Box>
-                </Grid>
-
-                {/* Main Content */}
-                <Grid size={{ xs: 12, md: 9 }}>
-                    <Card>
-                        <CardContent>
-                            <Box
-                                display="flex"
-                                justifyContent="space-between"
-                                alignItems="center"
-                            >
-                                <Box display="flex" alignItems="center">
-                                    <CalendarToday sx={{ fontSize: 18, mr: 0.5 }} />
-                                    <Typography variant="body2" fontWeight="bold">
-                                        Date: {quotation.date}
-                                    </Typography>
-                                </Box>
-                                {isFinalized && (
-                                    <Typography
-                                        variant="h6"
-                                        color="success.main"
-                                        fontWeight="bold"
-                                        display="flex"
-                                        alignItems="center"
-                                    >
-                                        <CheckCircle sx={{ mr: 1 }} />
-                                        Confirmation Voucher
-                                    </Typography>
-                                )}
-                            </Box>
-
-                            <Box display="flex" alignItems="center" mt={1}>
-                                <Description sx={{ fontSize: 18, mr: 0.5 }} />
-                                <Typography variant="body2" fontWeight="bold">
-                                    Ref: {quotation.reference}
-                                </Typography>
-                            </Box>
-
-                            <Box display="flex" alignItems="center" mt={2}>
-                                <Person sx={{ fontSize: 18, mr: 0.5 }} />
-                                <Typography variant="subtitle1" fontWeight="bold">
-                                    Kind Attention: {quotation.customer.name}
-                                </Typography>
-                            </Box>
-
-                            {/* Pickup/Drop Details */}
-                            <Box
-                                mt={2}
-                                p={2}
-                                sx={{ backgroundColor: "grey.50", borderRadius: 1 }}
-                            >
-                                <Box
-                                    display="flex"
-                                    alignItems="center"
-                                    justifyContent="space-between"
-                                    mb={1}
-                                >
-                                    <Typography
-                                        variant="subtitle2"
-                                        fontWeight="bold"
-                                        display="flex"
-                                        alignItems="center"
-                                        sx={{ fontSize: "0.875rem" }}
-                                    >
-                                        <RouteIcon sx={{ mr: 0.5 }} />
-                                        Pickup/Drop Details
-                                    </Typography>
-                                </Box>
-                                {pickupDetails.map((i, k) => (
-                                    <Box key={k} display="flex" alignItems="center" mb={0.5}>
-                                        {i.icon}
-                                        <Typography variant="body2" sx={{ mr: 1 }}>
-                                            {i.text}
-                                        </Typography>
-                                        {i.editable && (
-                                            <IconButton
-                                                size="small"
-                                                onClick={() =>
-                                                    handleEditOpen(
-                                                        i.field,
-                                                        i.text,
-                                                        i.nestedKey || i.field,
-                                                        !!i.nestedKey,
-                                                        i.nestedKey
-                                                    )
-                                                }
-                                            >
-                                                <Edit fontSize="small" />
-                                            </IconButton>
-                                        )}
-                                    </Box>
-                                ))}
-                            </Box>
-
-                            {/* Quotation Details */}
-                            <Box mt={3}>
-                                <Box display="flex" alignItems="center">
-                                    <FormatQuoteIcon sx={{ mr: 1 }} />
-                                    <Typography
-                                        variant="h6"
-                                        fontWeight="bold"
-                                        color="warning.main"
-                                    >
-                                        Quick Quotation For {quotation.customer.name}
-                                    </Typography>
-                                </Box>
-
-                                <Box display="flex" alignItems="center" mt={1}>
-                                    <Route sx={{ mr: 0.5 }} />
-                                    <Typography variant="subtitle2">
-                                        Destination : {quotation.hotel.destination}
-                                    </Typography>
-                                </Box>
-
-                                <Box display="flex" alignItems="center" mt={1}>
-                                    <ImageIcon sx={{ mr: 0.5 }} />
-                                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
-                                        Add Banner Image
-                                    </Typography>
-                                    <Button component="label" sx={{ textTransform: "none" }}>
-                                        <AddCircleOutline />
-                                        <input
-                                            type="file"
-                                            hidden
-                                            accept="image/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files[0];
-                                                if (file) {
-                                                    setQuotation((prev) => ({
-                                                        ...prev,
-                                                        bannerImage: file.name,
-                                                    }));
-                                                    console.log("Selected file:", file);
-                                                }
-                                            }}
-                                        />
-                                    </Button>
-                                    {quotation.bannerImage && (
-                                        <Typography
-                                            variant="body2"
-                                            sx={{ ml: 2, fontStyle: "italic" }}
-                                        >
-                                            Selected: {quotation.bannerImage}
-                                        </Typography>
-                                    )}
-                                </Box>
-
-                                {/* Itinerary */}
-                                <Box display="flex" flexDirection="column" mt={2}>
-                                    <Box display="flex" alignItems="center" mb={1}>
-                                        <Warning sx={{ mr: 1, color: "warning.main" }} />
-                                        <Typography
-                                            variant="h6"
-                                            fontWeight="bold"
-                                            color="warning.main"
-                                        >
-                                            Day Wise Itinerary
-                                        </Typography>
-                                    </Box>
-                                    <Box
-                                        display="flex"
-                                        alignItems="center"
-                                        justifyContent="space-between"
-                                    >
-                                        <Typography variant="body2" sx={{ flex: 1, mr: 2 }}>
-                                            {quotation.hotel.itinerary}
-                                        </Typography>
-                                        <IconButton
-                                            size="small"
-                                            onClick={() =>
-                                                handleEditOpen(
-                                                    "hotel.itinerary",
-                                                    quotation.hotel.itinerary,
-                                                    "Itinerary Note"
-                                                )
-                                            }
-                                        >
-                                            <Edit fontSize="small" />
-                                        </IconButton>
-                                    </Box>
-                                </Box>
-
-                                {/* Itinerary Days Section */}
-                                <Box mt={2}>
-                                    <Card variant="outlined">
-                                        <CardContent>
-                                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                                                <Typography variant="h6">Itinerary Details</Typography>
-                                                <Button
-                                                    variant="outlined"
-                                                    size="small"
-                                                    onClick={handleAddItinerary}
-                                                    startIcon={<Add />}
-                                                >
-                                                    Add Day
-                                                </Button>
-                                            </Box>
-
-                                            {days.length > 0 ? (
-                                                days.map((day, index) => (
-                                                    <Box key={day.id} mb={2} p={1} sx={{ border: '1px dashed #ddd', borderRadius: 1 }}>
-                                                        <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                                            <Typography variant="subtitle1" fontWeight="bold">
-                                                                {day.title}
-                                                            </Typography>
-                                                            <Box>
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleEditItinerary(day, index)}
-                                                                >
-                                                                    <Edit fontSize="small" />
-                                                                </IconButton>
-                                                                {days.length > 1 && (
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        color="error"
-                                                                        onClick={() => handleRemoveDay(day.id)}
-                                                                    >
-                                                                        <Delete />
-                                                                    </IconButton>
-                                                                )}
-                                                            </Box>
-                                                        </Box>
-                                                        <Typography variant="body2" sx={{ mt: 1 }}>
-                                                            {day.description || "No description added."}
-                                                        </Typography>
-
-                                                        {/* Image Section */}
-                                                        <Box display="flex" alignItems="center" gap={2} mt={2}>
-                                                            <ImageIcon sx={{ color: "primary.main" }} />
-                                                            <Typography variant="body1">Add Image</Typography>
-                                                            <Button
-                                                                component="label"
-                                                                variant="outlined"
-                                                                size="small"
-                                                                startIcon={<AddCircleOutline />}
-                                                            >
-                                                                Upload Image
-                                                                <input
-                                                                    type="file"
-                                                                    hidden
-                                                                    accept="image/*"
-                                                                    onChange={(e) =>
-                                                                        handleDayImageUpload(day.id, e.target.files[0])
-                                                                    }
-                                                                />
-                                                            </Button>
-                                                        </Box>
-
-                                                        {day.image && (
-                                                            <Box mt={2} display="flex" alignItems="center" gap={2}>
-                                                                <Box
-                                                                    component="img"
-                                                                    src={day.image.preview}
-                                                                    alt={`Day ${day.id}`}
-                                                                    sx={{
-                                                                        width: 100,
-                                                                        height: 100,
-                                                                        objectFit: "cover",
-                                                                        borderRadius: 1,
-                                                                        border: "1px solid #e0e0e0",
-                                                                    }}
-                                                                />
-                                                                <Box>
-                                                                    <Typography variant="body2" fontWeight="medium">
-                                                                        {day.image.name}
-                                                                    </Typography>
-                                                                    <Button
-                                                                        size="small"
-                                                                        color="error"
-                                                                        onClick={() => handleDayImageUpload(day.id, null)}
-                                                                    >
-                                                                        Remove
-                                                                    </Button>
-                                                                </Box>
-                                                            </Box>
-                                                        )}
-                                                    </Box>
-                                                ))
-                                            ) : (
-                                                <Typography variant="body2" color="textSecondary" textAlign="center" py={2}>
-                                                    No itinerary added yet. Click "Add Day" to create your itinerary.
-                                                </Typography>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                </Box>
-                            </Box>
-
-                            {/* Quotation Details */}
-                            <Box display="flex" flexDirection="column" mt={2}>
-                                <Box display="flex" alignItems="center" mb={1}>
-                                    <FormatQuote sx={{ mr: 1, color: "warning.main" }} />
-                                    <Typography
-                                        variant="h6"
-                                        fontWeight="bold"
-                                        color="warning.main"
-                                    >
-                                        Quotation Details
-                                    </Typography>
-                                </Box>
-                                <Box>
-                                    <Typography variant="body2" sx={{ flex: 1, mr: 2 }}>
-                                        No of Guest : {quotation.hotel.guests}
-                                    </Typography>
-                                    <Typography variant="body2" sx={{ flex: 1, mr: 2 }}>
-                                        No of Rooms : {quotation.hotel.rooms}
-                                    </Typography>
-                                    <Typography variant="body2" sx={{ flex: 1, mr: 2 }}>
-                                        Meal Plan : {quotation.hotel.mealPlan}
-                                    </Typography>
-                                </Box>
-                            </Box>
-
-                            {/* Hotel Pricing Table */}
-                            <Box mt={3}>
-                                <TableContainer component={Paper} variant="outlined">
-                                    <Table>
-                                        <TableHead sx={{ backgroundColor: "primary.light" }}>
-                                            <TableRow>
-                                                {[
-                                                    "Destination",
-                                                    "Nights",
-                                                    "Standard",
-                                                    "Deluxe",
-                                                    "Superior",
-                                                ].map((h) => (
-                                                    <TableCell
-                                                        key={h}
-                                                        sx={{ color: "white", fontWeight: "bold" }}
-                                                    >
-                                                        {h}
-                                                    </TableCell>
-                                                ))}
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {quotation.hotelPricingData.map((row, index) => (
-                                                <TableRow
-                                                    key={index}
-                                                    sx={{
-                                                        backgroundColor:
-                                                            index >= quotation.hotelPricingData.length - 2
-                                                                ? "grey.50"
-                                                                : "inherit",
-                                                        fontWeight:
-                                                            index === quotation.hotelPricingData.length - 1
-                                                                ? "bold"
-                                                                : "normal",
-                                                    }}
-                                                >
-                                                    <TableCell>{row.destination}</TableCell>
-                                                    <TableCell>{row.nights}</TableCell>
-                                                    <TableCell>{row.standard}</TableCell>
-                                                    <TableCell>{row.deluxe}</TableCell>
-                                                    <TableCell>{row.superior}</TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
-                            </Box>
-
-                            {/* Policies */}
-                            <Grid container spacing={2} mt={1}>
-                                {Policies.map((p, i) => (
-                                    <Grid size={{ xs: 12 }} key={i}>
-                                        <Card variant="outlined">
-                                            <CardContent>
-                                                <Box
-                                                    display="flex"
-                                                    alignItems="center"
-                                                    justifyContent="space-between"
-                                                >
-                                                    <Typography
-                                                        variant="subtitle2"
-                                                        gutterBottom
-                                                        display="flex"
-                                                        alignItems="center"
-                                                        sx={{ fontSize: "0.875rem" }}
-                                                    >
-                                                        {p.icon}
-                                                        {p.title}
-                                                    </Typography>
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() =>
-                                                            handleEditOpen(
-                                                                p.field,
-                                                                p.isArray
-                                                                    ? JSON.stringify(p.content)
-                                                                    : p.content,
-                                                                p.title
-                                                            )
-                                                        }
-                                                    >
-                                                        <Edit fontSize="small" />
-                                                    </IconButton>
-                                                </Box>
-                                                <Typography variant="body2">{p.content}</Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                ))}
-                            </Grid>
-
-                            {/* Terms & Conditions */}
-                            <Box mt={2}>
-                                <Card variant="outlined">
-                                    <CardContent>
-                                        <Box
-                                            display="flex"
-                                            alignItems="center"
-                                            justifyContent="space-between"
-                                        >
-                                            <Typography
-                                                variant="subtitle2"
-                                                gutterBottom
-                                                display="flex"
-                                                alignItems="center"
-                                                sx={{ fontSize: "0.875rem" }}
-                                            >
-                                                <Description sx={{ mr: 0.5 }} />
-                                                Terms & Condition
-                                            </Typography>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() =>
-                                                    handleEditOpen(
-                                                        "policies.terms",
-                                                        quotation.policies.terms,
-                                                        "Terms & Conditions"
-                                                    )
-                                                }
-                                            >
-                                                <Edit fontSize="small" />
-                                            </IconButton>
-                                        </Box>
-                                        <Typography variant="body2">
-                                            {quotation.policies.terms}
-                                        </Typography>
-                                    </CardContent>
-                                </Card>
-                            </Box>
-
-                            {/* Footer */}
-                            <Box
-                                mt={4}
-                                p={2}
-                                sx={{
-                                    backgroundColor: "primary.light",
-                                    borderRadius: 1,
-                                    color: "white",
-                                }}
-                            >
-                                <Box
-                                    display="flex"
-                                    alignItems="center"
-                                    justifyContent="space-between"
-                                >
-                                    <Typography variant="body2">
-                                        Thanks & Regards,
-                                        <br />
-                                        <Person sx={{ mr: 0.5, fontSize: 18 }} />
-                                        {quotation.footer.contact}
-                                    </Typography>
-                                    <IconButton
-                                        size="small"
-                                        sx={{ color: "white" }}
-                                        onClick={() =>
-                                            handleEditOpen(
-                                                "footer.contact",
-                                                quotation.footer.contact,
-                                                "Footer Contact",
-                                                false
-                                            )
-                                        }
-                                    >
-                                        <Edit fontSize="small" />
-                                    </IconButton>
-                                </Box>
-                                <Typography
-                                    variant="subtitle1"
-                                    sx={{ mt: 1, fontWeight: "bold" }}
-                                >
-                                    {quotation.footer.company}
-                                </Typography>
-                                <Box display="flex" alignItems="center" mt={0.5}>
-                                    <Business sx={{ mr: 0.5, fontSize: 18 }} />
-                                    {quotation.footer.address}
-                                </Box>
-                                <Box display="flex" alignItems="center" mt={0.5}>
-                                    <Language sx={{ mr: 0.5, fontSize: 18 }} />
-                                    <a
-                                        href={quotation.footer.website}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        style={{ color: "white", textDecoration: "underline" }}
-                                    >
-                                        {quotation.footer.website}
-                                    </a>
-                                    <Typography variant="subtitle1" sx={{ ml: 2 }}>
-                                        GST : 09EYCPK8832C1ZC
-                                    </Typography>
-                                </Box>
-                            </Box>
-                        </CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
-
-            {/* Snackbar for notifications */}
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={3000}
-                onClose={handleCloseSnackbar}
-                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-            >
-                <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
-
-            {/* Dialogs */}
-            <FinalizeDialog
-                open={openFinalize}
-                onClose={handleFinalizeClose}
-                vendor={vendor}
-                setVendor={setVendor}
-                onConfirm={handleConfirm}
-            />
-            <HotelVendorDialog
-                open={openBankDialog}
-                onClose={handleBankDialogClose}
-                accountType={accountType}
-                setAccountType={setAccountType}
-                accountName={accountName}
-                setAccountName={accountName}
-                accountOptions={accountOptions}
-                onAddBankOpen={handleAddBankOpen}
-                onConfirm={handleBankConfirm}
-            />
-            <AddBankDialog
-                open={openAddBankDialog}
-                onClose={handleAddBankClose}
-                newBankDetails={newBankDetails}
-                onNewBankChange={handleNewBankChange}
-                onAddBank={handleAddBank}
-            />
-            <EditDialog
-                open={editDialog.open}
-                onClose={handleEditClose}
-                title={editDialog.title}
-                value={editDialog.value}
-                onValueChange={handleEditValueChange}
-                onSave={handleEditSave}
-            />
-            <AddServiceDialog
-                open={openAddService}
-                onClose={handleAddServiceClose}
-                currentService={currentService}
-                onServiceChange={handleServiceChange}
-                services={services}
-                onAddService={handleAddService}
-                onClearService={handleClearService}
-                onRemoveService={handleRemoveService}
-                onSaveServices={handleSaveServices}
-                taxOptions={taxOptions}
-            />
-            <AddFlightDialog
-                open={openAddFlight}
-                onClose={handleAddFlightClose}
-                onSave={handleAddFlight}
-            />
-            <EmailQuotationDialog
-                open={openEmailDialog}
-                onClose={handleEmailClose}
-                customer={quotation.customer}
-            />
-            <MakePaymentDialog
-                open={openPaymentDialog}
-                onClose={handlePaymentClose}
-            />
-            <TransactionSummaryDialog
-                open={openTransactionDialog}
-                onClose={() => setOpenTransactionDialog(false)}
-            />
-
-            {/* Invoice PDF Dialog */}
-            <InvoicePdfDialog
-                open={openInvoiceDialog}
-                onClose={handleCloseInvoiceDialog}
-                quotation={quotation}
-                invoiceData={invoiceData}
-            />
-
-            {/* Preview PDF Dialog - Using imported component */}
-            {QuotationPDFDialog && (
-                <QuotationPDFDialog
-                    open={openPdfDialog}
-                    onClose={handleClosePdfDialog}
-                    quotation={quotation}
-                />
-            )}
-
-            {/* Itinerary Dialog */}
-            <Dialog open={itineraryDialog.open} onClose={handleCloseItineraryDialog} maxWidth="md" fullWidth>
-                <DialogTitle>
-                    {itineraryDialog.mode === 'add' ? 'Add' : 'Edit'} Itinerary - Day {itineraryDialog.day}
-                </DialogTitle>
-                <DialogContent>
-                    <TextField
-                        autoFocus
-                        margin="dense"
-                        label="Title"
-                        fullWidth
-                        variant="outlined"
-                        value={itineraryDialog.title}
-                        onChange={(e) => setItineraryDialog({ ...itineraryDialog, title: e.target.value })}
-                        sx={{ mb: 2 }}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Description"
-                        fullWidth
-                        variant="outlined"
-                        multiline
-                        rows={4}
-                        value={itineraryDialog.description}
-                        onChange={(e) => setItineraryDialog({ ...itineraryDialog, description: e.target.value })}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseItineraryDialog}>Cancel</Button>
-                    <Button onClick={handleSaveItinerary} variant="contained">
-                        {itineraryDialog.mode === 'add' ? 'Add' : 'Save'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Box>
+      label.includes("final package totals") ||
+      label.includes("total quotation cost") ||
+      label.includes("total package cost") ||
+      label.includes("transportation cost") ||
+      label.includes("hotel total cost") ||
+      label.includes("igst")
     );
+  };
+  const hasDisplayHotelName = (value) => {
+    const text = String(value || "").trim();
+    if (!text || text === "-" || text === "—") return false;
+    if (/^tbd$/i.test(text)) return false;
+    if (text.startsWith("₹")) return false;
+    return true;
+  };
+  const detailRows = quickPricingRows.filter((row) => !isSummaryRow(row));
+  const showStandardCol = detailRows.some((row) =>
+    hasDisplayHotelName(row?.standard),
+  );
+  const showDeluxeCol = detailRows.some((row) => hasDisplayHotelName(row?.deluxe));
+  const showSuperiorCol = detailRows.some((row) =>
+    hasDisplayHotelName(row?.superior),
+  );
+  const Accordions = [
+    { title: "Hotel Details" },
+    { title: "Vehicle Details" },
+    { title: "Company Margin" },
+    { title: "Agent Margin" },
+  ];
+
+  const Policies = [
+    {
+      title: "Inclusion Policy",
+      icon: <CheckCircle sx={{ mr: 0.5, color: "success.main" }} />,
+      content: policyInputs.inclusionPolicy,
+      field: "policies.inclusions",
+      isArray: true,
+    },
+    {
+      title: "Exclusion Policy",
+      icon: <Cancel sx={{ mr: 0.5, color: "error.main" }} />,
+      content: policyInputs.exclusionPolicy,
+      field: "policies.exclusions",
+    },
+    {
+      title: "Payment Policy",
+      icon: <Payment sx={{ mr: 0.5, color: "primary.main" }} />,
+      content: policyInputs.paymentPolicy,
+      field: "policies.paymentPolicy",
+    },
+    {
+      title: "Cancellation & Refund",
+      icon: <Warning sx={{ mr: 0.5, color: "warning.main" }} />,
+      content: policyInputs.cancellationPolicy,
+      field: "policies.cancellationPolicy",
+    },
+  ];
+
+  const pickupDetails = [
+    {
+      icon: (
+        <CheckCircle sx={{ fontSize: 16, mr: 0.5, color: "success.main" }} />
+      ),
+      text: quotation.pickup.arrival,
+      editable: true,
+      field: "pickup",
+      nestedKey: "arrival",
+    },
+    {
+      icon: <Cancel sx={{ fontSize: 16, mr: 0.5, color: "error.main" }} />,
+      text: quotation.pickup.departure,
+      editable: true,
+      field: "pickup",
+      nestedKey: "departure",
+    },
+    ...(quotation.pickup.vehicleType
+      ? [
+          {
+            icon: <RouteIcon sx={{ fontSize: 16, mr: 0.5, color: "info.main" }} />,
+            text: `Vehicle Type: ${quotation.pickup.vehicleType}`,
+            editable: false,
+          },
+        ]
+      : []),
+    {
+      icon: <Group sx={{ fontSize: 16, mr: 0.5 }} />,
+      text: `Guests: ${quotation.hotel.guests}`,
+      editable: true,
+      editGuestCounts: true,
+    },
+    {
+      icon: <Business sx={{ fontSize: 16, mr: 0.5 }} />,
+      text: `Rooms: ${quotation.hotel.rooms}`,
+      editable: true,
+      editRoomsDetails: true,
+    },
+  ];
+
+  return (
+    <Box sx={{ backgroundColor: "white", minHeight: "100vh" }}>
+      {/* Action Buttons */}
+      <Box
+        display="flex"
+        justifyContent="flex-end"
+        gap={1}
+        mb={2}
+        flexWrap="wrap"
+      >
+        {quotation.actions
+          .filter(
+            (a) =>
+              !(a === "Finalize" && isFinalized && quotation.bookingId) &&
+              !(a === "Transaction" && !isFinalized),
+          )
+          .map((a, i) => (
+            <Button
+              key={i}
+              variant="contained"
+              onClick={() => handleActionClick(a)}
+            >
+              {a}
+            </Button>
+          ))}
+        <Button
+          variant="outlined"
+          color="secondary"
+          startIcon={<Edit />}
+          disabled={!currentQuotation}
+          onClick={() => setOpenQuickEditAll(true)}
+        >
+          Edit Quotation
+        </Button>
+        {isFinalized && !invoiceGenerated && (
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<Receipt />}
+            onClick={handleGenerateInvoice}
+          >
+            Generate Invoice
+          </Button>
+        )}
+        {invoiceGenerated && (
+          <Button
+            variant="contained"
+            color="info"
+            startIcon={<Visibility />}
+            onClick={handleViewInvoice}
+          >
+            View Invoice
+          </Button>
+        )}
+      </Box>
+
+      <Grid container spacing={2}>
+        {/* Sidebar */}
+        <Grid size={{ xs: 12, md: 3 }}>
+          <Box sx={{ position: "sticky", top: 0 }}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" mb={1}>
+                  <Person color="primary" sx={{ mr: 1 }} />
+                  <Typography variant="h6">
+                    {quotation.customer.name}
+                  </Typography>
+                </Box>
+                <Box display="flex" alignItems="center" mb={2}>
+                  <LocationOn
+                    sx={{ fontSize: 18, mr: 0.5, color: "text.secondary" }}
+                  />
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ flex: 1 }}
+                  >
+                    {quotation.customer.location || "—"}
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={() =>
+                      handleEditOpen(
+                        "customer.location",
+                        quotation.customer.location || "",
+                        "Customer location",
+                      )
+                    }
+                  >
+                    <Edit fontSize="small" />
+                  </IconButton>
+                </Box>
+                <Box display="flex" gap={1} sx={{ flexWrap: "wrap", mb: 2 }}>
+                  {infoChips.map(({ k, icon }) => (
+                    <Chip
+                      key={k}
+                      icon={icon}
+                      label={k}
+                      size="small"
+                      variant="outlined"
+                      onClick={() => setActiveInfo(k)}
+                    />
+                  ))}
+                </Box>
+                {activeInfo && (
+                  <Typography variant="body2" whiteSpace="pre-line">
+                    {infoMap[activeInfo]}
+                  </Typography>
+                )}
+
+                {/* Display Per Person Costs if available */}
+                {quotation?.perPersonAdultCost > 0 && (
+                  <Typography variant="body2" mt={2}>
+                    <strong>Adult Cost (PP):</strong> ₹
+                    {quotation.perPersonAdultCost.toLocaleString("en-IN")}
+                  </Typography>
+                )}
+                {quotation?.perPersonChildCost > 0 && (
+                  <Typography variant="body2">
+                    <strong>Child Cost (PP):</strong> ₹
+                    {quotation.perPersonChildCost.toLocaleString("en-IN")}
+                  </Typography>
+                )}
+                {quotation?.perPersonMattressCost > 0 && (
+                  <Typography variant="body2">
+                    <strong>Mattress Cost (PP):</strong> ₹
+                    {quotation.perPersonMattressCost.toLocaleString("en-IN")}
+                  </Typography>
+                )}
+
+                <Typography
+                  variant="subtitle1"
+                  fontWeight="bold"
+                  color="warning.main"
+                  mt={4}
+                  textAlign="center"
+                >
+                  Margin & Taxes (B2C)
+                </Typography>
+                {Accordions.map((a, i) => (
+                  <Accordion key={i}>
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Typography color="primary" fontWeight="bold">
+                        {a.title}
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {a.title === "Vehicle Details" ? (
+                        <Box>
+                          <Typography variant="body2">
+                            <strong>Type:</strong>{" "}
+                            {vehicleSnap?.basicsDetails?.vehicleType ||
+                              currentQuotation?.transportation ||
+                              "—"}
+                          </Typography>
+                          <Typography variant="body2">
+                            <strong>Trip:</strong>{" "}
+                            {vehicleSnap?.basicsDetails?.tripType || "—"}
+                          </Typography>
+                          <Typography variant="body2">
+                            <strong>Transportation cost:</strong> ₹
+                            {(
+                              qdSnap?.transportationCost ??
+                              snap?.transportationCost ??
+                              snap?.transportationTotalCost ??
+                              vehicleSnap?.costDetails?.totalCost ??
+                              0
+                            ).toLocaleString("en-IN")}
+                          </Typography>
+                          <Divider sx={{ my: 1 }} />
+                          <Typography variant="body2">
+                            <strong>Pickup:</strong>{" "}
+                            {vehicleSnap?.pickupDropDetails?.pickupLocation ||
+                              currentQuotation?.pickupPoint ||
+                              "—"}
+                          </Typography>
+                          <Typography variant="body2">
+                            <strong>Drop:</strong>{" "}
+                            {vehicleSnap?.pickupDropDetails?.dropLocation ||
+                              currentQuotation?.dropPoint ||
+                              "—"}
+                          </Typography>
+                        </Box>
+                      ) : a.title === "Hotel Details" ? (
+                        <Box>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 0.75,
+                              mb: 2,
+                            }}
+                          >
+                            <Typography variant="body2">
+                              <Box component="span" fontWeight={600}>
+                                Guests:{" "}
+                              </Box>
+                              {quotation.hotel.guests}
+                            </Typography>
+                            <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Box component="span" fontWeight={600} sx={{ mr: 0.5 }}>
+                                Rooms:{" "}
+                              </Box>
+                              {quotation.hotel.rooms}
+                              <IconButton
+                                size="small"
+                                onClick={openRoomDetailsDialog}
+                                sx={{ ml: 0.5, p: 0.25 }}
+                                title="Edit Rooms"
+                              >
+                                <Edit fontSize="small" style={{ fontSize: "0.95rem" }} />
+                              </IconButton>
+                            </Typography>
+                            <Typography variant="body2">
+                              <Box component="span" fontWeight={600}>
+                                Hotel Type:{" "}
+                              </Box>
+                              {quotation.hotel.hotelType}
+                            </Typography>
+                            <Typography variant="body2" sx={{ display: "flex", alignItems: "center" }}>
+                              <Box component="span" fontWeight={600} sx={{ mr: 0.5 }}>
+                                Meal Plan:{" "}
+                              </Box>
+                              {quotation.hotel.mealPlan}
+                              <IconButton
+                                size="small"
+                                onClick={openMealPlanDialog}
+                                sx={{ ml: 0.5, p: 0.25 }}
+                                title="Edit Meal Plan"
+                              >
+                                <Edit fontSize="small" style={{ fontSize: "0.95rem" }} />
+                              </IconButton>
+                            </Typography>
+                            <Typography variant="body2">
+                              <Box component="span" fontWeight={600}>
+                                Destination:{" "}
+                              </Box>
+                              {quotation.hotel.destination}
+                            </Typography>
+                          </Box>
+                          <Divider sx={{ mb: 1.5 }} />
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            sx={{ mb: 1 }}
+                          >
+                            Hotels by destination
+                          </Typography>
+                          {(snap.destinationNights || []).length === 0 ? (
+                            <Typography variant="body2">
+                              No destination nights on snapshot.
+                            </Typography>
+                          ) : (
+                            (snap.destinationNights || []).map((d, idx) => (
+                              <Box key={idx} sx={{ mb: 1.5 }}>
+                                <Typography variant="body2" fontWeight="600">
+                                  {d.destination} — {d.nights}N
+                                </Typography>
+                                {(d.hotels || [])
+                                  .filter((h) => {
+                                    const nm = String(
+                                      h.hotelName || h.name || "",
+                                    ).trim();
+                                    return nm && !/^TBD$/i.test(nm);
+                                  })
+                                  .map((h) => {
+                                    const cat = String(h.category || "").trim();
+                                    const label = cat
+                                      ? `${cat.charAt(0).toUpperCase()}${cat.slice(1)}`
+                                      : "Hotel";
+                                    return (
+                                      <Typography
+                                        key={`${idx}-${label}-${h.hotelName || h.name}`}
+                                        variant="body2"
+                                        color="text.secondary"
+                                        sx={{ pl: 1 }}
+                                      >
+                                        {label}: {h.hotelName || h.name || "—"}
+                                      </Typography>
+                                    );
+                                  })}
+                              </Box>
+                            ))
+                          )}
+                        </Box>
+                      ) : a.title === "Company Margin" ? (
+                        <Typography variant="body2">
+                          Margin %: {qdSnap.companyMargin?.marginPercent ?? "—"}{" "}
+                          · Margin ₹:{" "}
+                          {qdSnap.companyMargin?.marginAmount ?? "—"} ·
+                          Discount: {qdSnap.discount ?? "—"} · GST:{" "}
+                          {qdSnap.taxes?.taxPercent ?? "—"}% (
+                          {qdSnap.taxes?.gstOn ?? "—"})
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          Not used for quick quotations.
+                        </Typography>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </CardContent>
+            </Card>
+          </Box>
+        </Grid>
+
+        {/* Main Content */}
+        <Grid size={{ xs: 12, md: 9 }}>
+          <Card>
+            <CardContent>
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Box display="flex" alignItems="center">
+                  <CalendarToday sx={{ fontSize: 18, mr: 0.5 }} />
+                  <Typography variant="body2" fontWeight="bold">
+                    Date: {quotation.date}
+                  </Typography>
+                </Box>
+                {isFinalized && (
+                  <Typography
+                    variant="h6"
+                    color="success.main"
+                    fontWeight="bold"
+                    display="flex"
+                    alignItems="center"
+                  >
+                    <CheckCircle sx={{ mr: 1 }} />
+                    Confirmation Voucher
+                  </Typography>
+                )}
+              </Box>
+
+              <Box display="flex" alignItems="center" mt={1}>
+                <Description sx={{ fontSize: 18, mr: 0.5 }} />
+                <Typography variant="body2" fontWeight="bold">
+                  Ref: {quotation.reference}
+                </Typography>
+              </Box>
+              {quotation.bookingId && (
+                <Box display="flex" alignItems="center" mt={1}>
+                  <CheckCircle sx={{ fontSize: 18, mr: 0.5, color: "error.main" }} />
+                  <Typography variant="body2" fontWeight="bold" color="error.main">
+                    Booking ID: {quotation.bookingId}
+                  </Typography>
+                </Box>
+              )}
+
+              <Box display="flex" alignItems="center" mt={2}>
+                <Person sx={{ fontSize: 18, mr: 0.5 }} />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Kind Attention: {quotation.customer.name}
+                </Typography>
+              </Box>
+
+              {/* Pickup/Drop Details */}
+              <Box
+                mt={2}
+                p={2}
+                sx={{ backgroundColor: "grey.50", borderRadius: 1 }}
+              >
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  mb={1}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight="bold"
+                    display="flex"
+                    alignItems="center"
+                    sx={{ fontSize: "0.875rem" }}
+                  >
+                    <RouteIcon sx={{ mr: 0.5 }} />
+                    Pickup/Drop Details
+                  </Typography>
+                </Box>
+                {pickupDetails.map((i, k) => (
+                  <Box key={k} display="flex" alignItems="center" mb={0.5}>
+                    {i.icon}
+                    <Typography variant="body2" sx={{ mr: 1 }}>
+                      {i.text}
+                    </Typography>
+                    {i.editable && (
+                      <IconButton
+                        size="small"
+                        onClick={() =>
+                          i.editGuestCounts
+                            ? openGuestCountsDialog()
+                            : i.editRoomsDetails
+                              ? openRoomDetailsDialog()
+                              : handleEditOpen(
+                                i.field,
+                                i.field === "pickup"
+                                  ? editablePickupDropPoint(i.text)
+                                  : i.text,
+                                i.nestedKey || i.field,
+                                !!i.nestedKey,
+                                i.nestedKey,
+                              )
+                        }
+                      >
+                        <Edit fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                ))}
+              </Box>
+              {isFinalized && (
+                <Box
+                  mt={2}
+                  p={2}
+                  sx={{
+                    backgroundColor: "grey.50",
+                    borderRadius: 1,
+                    borderLeft: "4px solid",
+                    borderColor: "success.main",
+                  }}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight="bold"
+                    color="success.main"
+                    sx={{ mb: 1 }}
+                  >
+                    Finalized Vendors
+                  </Typography>
+                  <Box sx={{ mb: 1.5 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<Edit />}
+                      onClick={() => setOpenBankDialog(true)}
+                    >
+                      Edit Vendors
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      startIcon={<CheckCircle />}
+                      sx={{ ml: 1 }}
+                      onClick={() => setOpenHotelConfirmation(true)}
+                    >
+                      Hotel Confirmation
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<Download />}
+                      sx={{ ml: 1 }}
+                      onClick={handleDownloadHotelConfirmation}
+                      disabled={downloadingHotelPdf}
+                    >
+                      {downloadingHotelPdf ? "Downloading..." : "Download Voucher"}
+                    </Button>
+                  </Box>
+
+                  {finalizedVendors.length ? (
+                    <Box display="flex" gap={1} flexWrap="wrap">
+                      {finalizedVendors.map((vendor) => (
+                        <Chip
+                          key={vendor.name}
+                          size="small"
+                          color="success"
+                          variant="outlined"
+                          label={
+                            vendor.amount != null
+                              ? `${vendor.name} (₹ ${Number(vendor.amount).toLocaleString("en-IN")})`
+                              : vendor.name
+                          }
+                        />
+                      ))}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      No vendor payment vouchers linked yet.
+                    </Typography>
+                  )}
+                </Box>
+              )}
+              {/* Quotation Details */}
+              <Box mt={3}>
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  gap={1}
+                >
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    flexWrap="wrap"
+                    gap={0.5}
+                  >
+                    <FormatQuoteIcon sx={{ mr: 1 }} />
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="warning.main"
+                    >
+                      {quotation.quotationTitle?.trim()
+                        ? quotation.quotationTitle
+                        : `Quick Quotation For ${quotation.customer.name}`}
+                    </Typography>
+                  </Box>
+                  <IconButton
+                    size="small"
+                    aria-label="Edit quotation title"
+                    onClick={() =>
+                      handleEditOpen(
+                        "quotationHeaderTitle",
+                        quotation.quotationTitle?.trim() ||
+                        `Quick Quotation For ${quotation.customer.name}`,
+                        "Quotation title (shown in header)",
+                      )
+                    }
+                  >
+                    <Edit fontSize="small" />
+                  </IconButton>
+                </Box>
+
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  mt={1}
+                  justifyContent="space-between"
+                  gap={1}
+                >
+                  <Box display="flex" alignItems="center" flexWrap="wrap">
+                    <Route sx={{ mr: 0.5 }} />
+                    <Typography variant="subtitle2">
+                      Destination : {quotation.hotel.destination}
+                    </Typography>
+                  </Box>
+                  <IconButton
+                    size="small"
+                    aria-label="Edit destination line"
+                    onClick={() =>
+                      handleEditOpen(
+                        "destinationLine",
+                        quotation.hotel.destination,
+                        "Destination line",
+                      )
+                    }
+                  >
+                    <Edit fontSize="small" />
+                  </IconButton>
+                </Box>
+
+                <Box display="flex" flexDirection="column" gap={1} mt={1}>
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    flexWrap="wrap"
+                    gap={1}
+                  >
+                    <ImageIcon sx={{ mr: 0.5 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      Banner image
+                    </Typography>
+                    <Button
+                      component="label"
+                      variant="outlined"
+                      size="small"
+                      startIcon={
+                        bannerUploading ? (
+                          <CircularProgress size={16} />
+                        ) : (
+                          <AddCircleOutline />
+                        )
+                      }
+                      disabled={bannerUploading || !apiEntityId}
+                      sx={{ textTransform: "none" }}
+                    >
+                      {bannerUploading ? "Uploading…" : "Upload image"}
+                      <input
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={handleBannerFileChange}
+                      />
+                    </Button>
+                  </Box>
+                  {quotation.bannerImage &&
+                    String(quotation.bannerImage).startsWith("http") && (
+                      <Box
+                        component="img"
+                        src={quotation.bannerImage}
+                        alt="Banner"
+                        sx={{ maxWidth: 360, maxHeight: 120, borderRadius: 1 }}
+                      />
+                    )}
+                </Box>
+
+                {/* Itinerary */}
+                <Box display="flex" flexDirection="column" mt={2}>
+                  <Box display="flex" alignItems="center" mb={1}>
+                    <Warning sx={{ mr: 1, color: "warning.main" }} />
+                    <Typography
+                      variant="h6"
+                      fontWeight="bold"
+                      color="warning.main"
+                    >
+                      Day Wise Itinerary
+                    </Typography>
+                  </Box>
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="space-between"
+                  >
+                    <Typography variant="body2" sx={{ flex: 1, mr: 2 }}>
+                      {quotation.hotel.itinerary}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      disabled={itinerarySaving}
+                      onClick={() =>
+                        handleEditOpen(
+                          "hotel.itinerary",
+                          quotation.hotel.itinerary,
+                          "Itinerary Note",
+                        )
+                      }
+                    >
+                      <Edit fontSize="small" />
+                    </IconButton>
+                  </Box>
+                </Box>
+
+                {/* Itinerary Days Section */}
+                <Box mt={2}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Box
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        mb={2}
+                      >
+                        <Typography variant="h6">Itinerary Details</Typography>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={handleAddItinerary}
+                          startIcon={<Add />}
+                          disabled={itinerarySaving}
+                        >
+                          Add Day
+                        </Button>
+                      </Box>
+
+                      {days.length > 0 ? (
+                        days.map((day, index) => (
+                          <Box
+                            key={day.id}
+                            mb={2}
+                            p={1}
+                            sx={{ border: "1px dashed #ddd", borderRadius: 1 }}
+                          >
+                            <Box
+                              display="flex"
+                              justifyContent="space-between"
+                              alignItems="flex-start"
+                            >
+                              <Typography variant="subtitle1" fontWeight="bold">
+                                {day.title}
+                              </Typography>
+                              <Box>
+                                <IconButton
+                                  size="small"
+                                  disabled={index === 0 || itinerarySaving}
+                                  onClick={async () => {
+                                    const next = [...days];
+                                    const [moved] = next.splice(index, 1);
+                                    next.splice(index - 1, 0, moved);
+                                    setDays(next);
+                                    await persistItineraryForDays(next);
+                                  }}
+                                >
+                                  <ArrowUpward fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  disabled={index === days.length - 1 || itinerarySaving}
+                                  onClick={async () => {
+                                    const next = [...days];
+                                    const [moved] = next.splice(index, 1);
+                                    next.splice(index + 1, 0, moved);
+                                    setDays(next);
+                                    await persistItineraryForDays(next);
+                                  }}
+                                >
+                                  <ArrowDownward fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  disabled={itinerarySaving}
+                                  onClick={() =>
+                                    handleEditItinerary(day, index)
+                                  }
+                                >
+                                  <Edit fontSize="small" />
+                                </IconButton>
+                                {days.length > 1 && (
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    disabled={itinerarySaving}
+                                    onClick={() => handleRemoveDay(day.id)}
+                                  >
+                                    <Delete />
+                                  </IconButton>
+                                )}
+                              </Box>
+                            </Box>
+                            <Typography variant="body2" sx={{ mt: 1 }}>
+                              {day.description || "No description added."}
+                            </Typography>
+
+                            {/* Image Section */}
+                            <Box
+                              display="flex"
+                              alignItems="center"
+                              gap={2}
+                              mt={2}
+                            >
+                              <ImageIcon sx={{ color: "primary.main" }} />
+                              <Typography variant="body1">Add Image</Typography>
+                              <Button
+                                component="label"
+                                variant="outlined"
+                                size="small"
+                                startIcon={<AddCircleOutline />}
+                                disabled={itinerarySaving || !apiEntityId}
+                              >
+                                Upload Image
+                                <input
+                                  type="file"
+                                  hidden
+                                  accept="image/*"
+                                  onChange={(e) =>
+                                    handleDayImageUpload(
+                                      day.id,
+                                      e.target.files[0],
+                                    )
+                                  }
+                                />
+                              </Button>
+                            </Box>
+
+                            {day.image && (
+                              <Box
+                                mt={2}
+                                display="flex"
+                                alignItems="center"
+                                gap={2}
+                              >
+                                <Box
+                                  component="img"
+                                  src={day.image.preview}
+                                  alt={`Day ${day.id}`}
+                                  sx={{
+                                    width: 100,
+                                    height: 100,
+                                    objectFit: "cover",
+                                    borderRadius: 1,
+                                    border: "1px solid #e0e0e0",
+                                  }}
+                                />
+                                <Box>
+                                  <Typography
+                                    variant="body2"
+                                    fontWeight="medium"
+                                  >
+                                    {day.image.name}
+                                  </Typography>
+                                  <Button
+                                    size="small"
+                                    color="error"
+                                    onClick={() =>
+                                      handleDayImageUpload(day.id, null)
+                                    }
+                                  >
+                                    Remove
+                                  </Button>
+                                </Box>
+                              </Box>
+                            )}
+                          </Box>
+                        ))
+                      ) : (
+                        <Typography
+                          variant="body2"
+                          color="textSecondary"
+                          textAlign="center"
+                          py={2}
+                        >
+                          No itinerary added yet. Click "Add Day" to create your
+                          itinerary.
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Box>
+              </Box>
+
+              {/* Quotation Details */}
+              <Box display="flex" flexDirection="column" mt={2}>
+                <Box display="flex" alignItems="center" mb={1}>
+                  <FormatQuote sx={{ mr: 1, color: "warning.main" }} />
+                  <Typography
+                    variant="h6"
+                    fontWeight="bold"
+                    color="warning.main"
+                  >
+                    Quotation Details
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 0.75,
+                  }}
+                >
+                  <Typography variant="body2">
+                    <Box component="span" fontWeight={600}>
+                      Guests:{" "}
+                    </Box>
+                    {quotation.hotel.guests}
+                  </Typography>
+                  <Typography variant="body2">
+                    <Box component="span" fontWeight={600}>
+                      Rooms:{" "}
+                    </Box>
+                    {quotation.hotel.rooms}
+                  </Typography>
+                  <Typography variant="body2">
+                    <Box component="span" fontWeight={600}>
+                      Hotel Type:{" "}
+                    </Box>
+                    {quotation.hotel.hotelType || "—"}
+                  </Typography>
+                  <Typography variant="body2" sx={{ display: "flex", alignItems: "center" }}>
+                    <Box component="span" fontWeight={600} sx={{ mr: 0.5 }}>
+                      Meal Plan:{" "}
+                    </Box>
+                    {quotation.hotel.mealPlan}
+                    <IconButton
+                      size="small"
+                      onClick={openMealPlanDialog}
+                      sx={{ ml: 0.5, p: 0.25 }}
+                      title="Edit Meal Plan"
+                    >
+                      <Edit fontSize="small" style={{ fontSize: "0.95rem" }} />
+                    </IconButton>
+                  </Typography>
+                  <Typography variant="body2">
+                    <Box component="span" fontWeight={600}>
+                      Destination:{" "}
+                    </Box>
+                    {quotation.hotel.destination}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Hotel Pricing Table */}
+              <Box mt={3}>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table>
+                    <TableHead sx={{ backgroundColor: "primary.light" }}>
+                      <TableRow>
+                        {[
+                          "Destination",
+                          "Nights",
+                          ...(showStandardCol ? ["Standard"] : []),
+                          ...(showDeluxeCol ? ["Deluxe"] : []),
+                          ...(showSuperiorCol ? ["Superior"] : []),
+                        ].map((h) => (
+                          <TableCell
+                            key={h}
+                            sx={{ color: "white", fontWeight: "bold" }}
+                          >
+                            {h}
+                          </TableCell>
+                        ))}
+                        <TableCell sx={{ color: "white", fontWeight: "bold" }}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {quickPricingRows.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={
+                              2 +
+                              (showStandardCol ? 1 : 0) +
+                              (showDeluxeCol ? 1 : 0) +
+                              (showSuperiorCol ? 1 : 0)
+                            }
+                            align="center"
+                          >
+                            <Typography variant="body2" color="text.secondary">
+                              No destination rows for this package.
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        quickPricingRows.map((row, index) => (
+                          <TableRow
+                            key={index}
+                            sx={{
+                              backgroundColor:
+                                index >= quickPricingRows.length - 2
+                                  ? "grey.50"
+                                  : "inherit",
+                              fontWeight:
+                                index === quickPricingRows.length - 1
+                                  ? "bold"
+                                  : "normal",
+                            }}
+                          >
+                            <TableCell>{row.destination}</TableCell>
+                            <TableCell>{row.nights}</TableCell>
+                            {showStandardCol && <TableCell>{row.standard}</TableCell>}
+                            {showDeluxeCol && <TableCell>{row.deluxe}</TableCell>}
+                            {showSuperiorCol && <TableCell>{row.superior}</TableCell>}
+                            <TableCell>
+                              {!isSummaryRow(row) && (
+                                <Box sx={{ display: "flex", gap: 0.5 }}>
+                                  <IconButton
+                                    size="small"
+                                    disabled={index === 0 || itinerarySaving}
+                                    onClick={() => handleMoveDestination(index, -1)}
+                                  >
+                                    <ArrowUpward fontSize="small" />
+                                  </IconButton>
+                                  <IconButton
+                                    size="small"
+                                    disabled={index === (snap.destinationNights?.length - 1) || itinerarySaving}
+                                    onClick={() => handleMoveDestination(index, 1)}
+                                  >
+                                    <ArrowDownward fontSize="small" />
+                                  </IconButton>
+                                </Box>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+
+              {/* Policies */}
+              <Grid container spacing={2} mt={1}>
+                {Policies.map((p, i) => (
+                  <Grid size={{ xs: 12 }} key={i}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Box
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="space-between"
+                        >
+                          <Typography
+                            variant="subtitle2"
+                            gutterBottom
+                            display="flex"
+                            alignItems="center"
+                            sx={{ fontSize: "0.875rem" }}
+                          >
+                            {p.icon}
+                            {p.title}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              handleEditOpen(
+                                p.field,
+                                p.isArray
+                                  ? typeof p.content === "string"
+                                    ? p.content
+                                    : JSON.stringify(p.content)
+                                  : p.content,
+                                p.title,
+                              )
+                            }
+                          >
+                            <Edit fontSize="small" />
+                          </IconButton>
+                        </Box>
+                        {p.isArray && typeof p.content === "string" ? (
+                          <List dense>
+                            {linesToPolicyArray(p.content).map((line, k) => (
+                              <ListItem key={k}>
+                                <ListItemText primary={line} />
+                              </ListItem>
+                            ))}
+                            {p.field === "policies.inclusions" &&
+                              additionalServiceLinesForInclusions.map((line, k) => (
+                                <ListItem key={`add-svc-${k}`}>
+                                  <ListItemText
+                                    primary={line}
+                                  />
+                                </ListItem>
+                              ))}
+                          </List>
+                        ) : (
+                          <Typography variant="body2" whiteSpace="pre-line">
+                            {p.content}
+                          </Typography>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* Terms & Conditions */}
+              <Box mt={2}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Box
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="space-between"
+                    >
+                      <Typography
+                        variant="subtitle2"
+                        gutterBottom
+                        display="flex"
+                        alignItems="center"
+                        sx={{ fontSize: "0.875rem" }}
+                      >
+                        <Description sx={{ mr: 0.5 }} />
+                        Terms & Condition
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() =>
+                          handleEditOpen(
+                            "policies.terms",
+                            policyInputs.termsAndConditions,
+                            "Terms & Conditions",
+                          )
+                        }
+                      >
+                        <Edit fontSize="small" />
+                      </IconButton>
+                    </Box>
+                    <Typography variant="body2" whiteSpace="pre-line">
+                      {policyInputs.termsAndConditions}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Box>
+
+              {/* Footer */}
+              <Box
+                mt={4}
+                p={2}
+                sx={{
+                  backgroundColor: "primary.light",
+                  borderRadius: 1,
+                  color: "white",
+                }}
+              >
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                >
+                  <Typography variant="body2">
+                    Thanks & Regards,
+                    <br />
+                    <Person sx={{ mr: 0.5, fontSize: 18 }} />
+                    {quotation.footer.contact}
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    sx={{ color: "white" }}
+                    onClick={() =>
+                      handleEditOpen(
+                        "footer.contact",
+                        quotation.footer.contact,
+                        "Footer Contact",
+                        false,
+                      )
+                    }
+                  >
+                    <Edit fontSize="small" />
+                  </IconButton>
+                </Box>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ mt: 1, fontWeight: "bold" }}
+                >
+                  {quotation.footer.company}
+                </Typography>
+                <Box display="flex" alignItems="center" mt={0.5}>
+                  <Business sx={{ mr: 0.5, fontSize: 18 }} />
+                  {quotation.footer.address}
+                </Box>
+                <Box display="flex" alignItems="center" mt={0.5}>
+                  <Language sx={{ mr: 0.5, fontSize: 18 }} />
+                  <a
+                    href={quotation.footer.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "white", textDecoration: "underline" }}
+                  >
+                    {quotation.footer.website}
+                  </a>
+                  <Typography variant="subtitle1" sx={{ ml: 2 }}>
+                    GST : 09EYCPK8832C1ZC
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+
+      {/* Dialogs */}
+      <QuickEditAllDialog
+        open={openQuickEditAll}
+        onClose={() => setOpenQuickEditAll(false)}
+        quotation={currentQuotation}
+        onSave={async (formData) => {
+          if (!apiEntityId) return;
+          await dispatch(updateQuickQuotation({ id: apiEntityId, formData })).unwrap();
+          await refreshQuotationFromApi();
+        }}
+      />
+      <Dialog
+        open={guestCountsDialog.open}
+        onClose={() => setGuestCountsDialog((s) => ({ ...s, open: false }))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit guest counts</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Updates adults, children, kids, and infants (stored on this quick
+            quotation).
+          </Typography>
+          <Grid container spacing={2}>
+            {[
+              { key: "adults", label: "Adults" },
+              { key: "children", label: "Children" },
+              { key: "kids", label: "Kids" },
+              { key: "infants", label: "Infants" },
+            ].map(({ key, label }) => (
+              <Grid size={{ xs: 6 }} key={key}>
+                <TextField
+                  label={label}
+                  type="number"
+                  fullWidth
+                  inputProps={{ min: 0 }}
+                  value={guestCountsDialog[key]}
+                  onChange={(e) =>
+                    setGuestCountsDialog((s) => ({
+                      ...s,
+                      [key]: e.target.value,
+                    }))
+                  }
+                />
+              </Grid>
+            ))}
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setGuestCountsDialog((s) => ({ ...s, open: false }))}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSaveGuestCounts}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={mealPlanDialog.open}
+        onClose={() => setMealPlanDialog((s) => ({ ...s, open: false }))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Meal Plan</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Update the meal plan shown on this quick quotation.
+          </Typography>
+          <Autocomplete
+            freeSolo
+            fullWidth
+            options={mealPlanOptions}
+            inputValue={mealPlanDialog.mealPlan || ""}
+            onInputChange={(_event, newInputValue) =>
+              setMealPlanDialog((s) => ({ ...s, mealPlan: newInputValue }))
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Meal Plan"
+                placeholder="e.g. CP, MAP, AP, EP"
+              />
+            )}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setMealPlanDialog((s) => ({ ...s, open: false }))}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSaveMealPlan}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={roomDetailsDialog.open}
+        onClose={() => setRoomDetailsDialog((s) => ({ ...s, open: false }))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Room Details</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Update the number of rooms, room type, and extra mattresses for this quick quotation.
+          </Typography>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                label="Room Type (Sharing Type)"
+                fullWidth
+                value={roomDetailsDialog.roomType}
+                onChange={(e) =>
+                  setRoomDetailsDialog((s) => ({
+                    ...s,
+                    roomType: e.target.value,
+                  }))
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="No of Rooms"
+                type="number"
+                fullWidth
+                inputProps={{ min: 1 }}
+                value={roomDetailsDialog.noOfRooms}
+                onChange={(e) =>
+                  setRoomDetailsDialog((s) => ({
+                    ...s,
+                    noOfRooms: e.target.value,
+                  }))
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="No of Extra Mattresses"
+                type="number"
+                fullWidth
+                inputProps={{ min: 0 }}
+                value={roomDetailsDialog.noOfMattress}
+                onChange={(e) =>
+                  setRoomDetailsDialog((s) => ({
+                    ...s,
+                    noOfMattress: e.target.value,
+                  }))
+                }
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setRoomDetailsDialog((s) => ({ ...s, open: false }))}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSaveRoomDetails}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <FinalizeDialog
+        open={openFinalize}
+        onClose={handleFinalizeClose}
+        onConfirm={handleConfirm}
+        packageOptionsOverride={finalizePackageOptions}
+        preselectedPackageLabel={currentQuotation?.finalizedPackage}
+        allowEditableAmount
+        companyOptions={mailCompanies}
+      />
+      <HotelVendorDialog
+        open={openBankDialog}
+        onClose={handleBankDialogClose}
+        onConfirm={handleBankConfirm}
+        initialVendorDetails={quotation?.finalizedVendorDetails}
+        initialFinalizedVendorsWithAmounts={quotation?.finalizedVendorsWithAmounts}
+      />
+      <AddBankDialog
+        open={openAddBankDialog}
+        onClose={handleAddBankClose}
+        newBankDetails={newBankDetails}
+        onNewBankChange={handleNewBankChange}
+        onAddBank={handleAddBank}
+      />
+      <EditDialog
+        open={editDialog.open}
+        onClose={handleEditClose}
+        title={editDialog.title}
+        value={editDialog.value}
+        onValueChange={handleEditValueChange}
+        onSave={handleEditSave}
+      />
+      <AddServiceDialog
+        open={openAddService}
+        onClose={handleAddServiceClose}
+        currentService={currentService}
+        onServiceChange={handleServiceChange}
+        services={services}
+        onAddService={handleAddService}
+        onClearService={handleClearService}
+        onRemoveService={handleRemoveService}
+        onEditService={handleEditService}
+        onSaveServices={handleSaveServices}
+        taxOptions={taxOptions}
+        isEditingService={Boolean(editingServiceId)}
+      />
+      <AddFlightDialog
+        open={openAddFlight}
+        onClose={handleAddFlightClose}
+        onSave={handleAddFlight}
+      />
+      {openEmailDialog && (
+        <EmailQuotationDialog
+          open={openEmailDialog}
+          onClose={handleEmailClose}
+          customer={quotation.customer}
+          onSend={handleEmailSend}
+          onCompanyChange={async (companyId, mailType) => {
+            const templates = await refreshEmailTemplates(companyId);
+            const type = mailType === "booking" ? "booking" : "normal";
+            return templates?.[type] || { subject: "", message: "" };
+          }}
+          initialValuesOverride={emailInitialValues}
+          templateBodies={emailTemplateBodies}
+          companyOptions={mailCompanies}
+          emailAccountOptions={emailAccounts}
+          hasPdfAttachment={!!pdfAttachmentForMail}
+          receiptOptions={paymentHistory.filter(v => v.paymentType === "Receive Voucher")}
+          onReceiptChange={(receiptId) => setSelectedReceiptIdForPdf(receiptId)}
+        />
+      )}
+      <TransactionSummaryDialog
+        open={openTransactionDialog}
+        onClose={() => setOpenTransactionDialog(false)}
+        loading={paymentHistoryLoading}
+        rows={paymentHistory}
+        quotationRef={apiEntityId}
+        onPreview={handleOpenReceiptPreview}
+      />
+
+      <ReceiptPreviewDialog 
+        open={openReceiptPreview}
+        onClose={() => setOpenReceiptPreview(false)}
+        voucher={selectedVoucherForPreview}
+        quotation={currentQuotation}
+      />
+
+      {/* Invoice PDF Dialog */}
+      <InvoicePdfDialog
+        open={openInvoiceDialog}
+        onClose={handleCloseInvoiceDialog}
+        quotation={quotation}
+        invoiceData={invoiceData}
+      />
+
+      {/* Preview PDF Dialog - Using imported component */}
+      {QuotationPDFDialog && (
+        <QuotationPDFDialog
+          open={openPdfDialog}
+          onClose={handleClosePdfDialog}
+          quotation={quotationForPdf}
+          pdfHeading="QUICK QUOTATION"
+          onSendMail={(payload) => {
+            const attachment = payload?.pdfAttachment || payload || null;
+            setPdfAttachmentForMail(attachment);
+            setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
+            handleClosePdfDialog();
+            setEmailTemplateType("normal");
+            handleEmailOpen();
+          }}
+        />
+      )}
+
+      {/* Itinerary Dialog */}
+      <Dialog
+        open={itineraryDialog.open}
+        onClose={handleCloseItineraryDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {itineraryDialog.mode === "add" ? "Add" : "Edit"} Itinerary - Day{" "}
+          {itineraryDialog.day}
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Title"
+            fullWidth
+            variant="outlined"
+            value={itineraryDialog.title}
+            onChange={(e) =>
+              setItineraryDialog({ ...itineraryDialog, title: e.target.value })
+            }
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Description"
+            fullWidth
+            variant="outlined"
+            multiline
+            rows={4}
+            value={itineraryDialog.description}
+            onChange={(e) =>
+              setItineraryDialog({
+                ...itineraryDialog,
+                description: e.target.value,
+              })
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseItineraryDialog}>Cancel</Button>
+          <Button onClick={handleSaveItinerary} variant="contained">
+            {itineraryDialog.mode === "add" ? "Add" : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <HotelConfirmationDialog
+        open={openHotelConfirmation}
+        onClose={() => setOpenHotelConfirmation(false)}
+        quotation={currentQuotation}
+        quotationRef={apiEntityId}
+        type="quick"
+        onSaveSuccess={refreshQuotationFromApi}
+      />
+
+      <Box sx={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1000px" }}>
+        <div id="hidden-receipt-container">
+          {selectedReceiptIdForPdf && (
+            <InvoiceView id={selectedReceiptIdForPdf} hideButtons={true} />
+          )}
+        </div>
+      </Box>
+    </Box>
+  );
 };
 
 export default QuickFinalize;

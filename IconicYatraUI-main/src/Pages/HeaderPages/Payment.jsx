@@ -63,8 +63,7 @@ const PaymentOption = () => {
   return (
     <Box
       sx={{
-        backgroundColor:
-          "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+        backgroundColor: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
         minHeight: "100vh",
         p: { xs: 2, sm: 3, md: 4 },
       }}
@@ -104,16 +103,14 @@ const PaymentOption = () => {
             elevation={4}
             sx={{
               borderRadius: 4,
-              background:
-                "linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)",
+              background: "linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)",
               border: "1px solid",
               borderColor: "divider",
             }}
           >
             <Box
               sx={{
-                background:
-                  "linear-gradient(45deg, #d32f2f 30%, #f44336 90%)",
+                background: "linear-gradient(45deg, #d32f2f 30%, #f44336 90%)",
                 p: 2,
                 textAlign: "center",
               }}
@@ -197,9 +194,7 @@ const PaymentOption = () => {
 
                           return (
                             <Box key={key} sx={{ mb: 1 }}>
-                              <Typography variant="caption">
-                                {key}:
-                              </Typography>
+                              <Typography variant="caption">{key}:</Typography>
                               <Typography>{value}</Typography>
                             </Box>
                           );
@@ -215,14 +210,8 @@ const PaymentOption = () => {
               {/* CREDIT / DEBIT + EASEBUZZ */}
               <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                  <CreditCard
-                    sx={{ color: "#ff9800", mr: 2, fontSize: 30 }}
-                  />
-                  <Typography
-                    variant="h5"
-                    fontWeight="bold"
-                    color="#ff9800"
-                  >
+                  <CreditCard sx={{ color: "#ff9800", mr: 2, fontSize: 30 }} />
+                  <Typography variant="h5" fontWeight="bold" color="#ff9800">
                     Credit / Debit Cards
                   </Typography>
                 </Box>
@@ -261,10 +250,7 @@ const PaymentOption = () => {
                         Easebuzz
                       </Typography>
 
-                      <Typography
-                        variant="h6"
-                        sx={{ fontWeight: 600, mb: 2 }}
-                      >
+                      <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                         3% Extra Pay with Easebuzz
                       </Typography>
 
@@ -273,26 +259,26 @@ const PaymentOption = () => {
                         color="text.secondary"
                         sx={{ mb: 3 }}
                       >
-                        In this Method you can use all type of payments
-                        such as upi, debit card, credit card, etc.
+                        In this Method you can use all type of payments such as
+                        upi, debit card, credit card, etc.
                       </Typography>
                       <Box
-  sx={{
-    display: "flex",
-    justifyContent: "center",
-    mb: 3,
-  }}
->
-  <img
-    src={AllCards}
-    alt="Accepted Cards"
-    style={{
-      maxWidth: "100%",
-      height: "40px",
-      objectFit: "contain",
-    }}
-  />
-</Box>
+                        sx={{
+                          display: "flex",
+                          justifyContent: "center",
+                          mb: 3,
+                        }}
+                      >
+                        <img
+                          src={AllCards}
+                          alt="Accepted Cards"
+                          style={{
+                            maxWidth: "100%",
+                            height: "40px",
+                            objectFit: "contain",
+                          }}
+                        />
+                      </Box>
 
                       <Button
                         fullWidth
@@ -341,9 +327,7 @@ const PaymentOption = () => {
                           borderRadius: 2,
                         }}
                       >
-                        <Typography variant="body2">
-                          {instruction}
-                        </Typography>
+                        <Typography variant="body2">{instruction}</Typography>
                       </Paper>
                     </Grid>
                   ))}
@@ -353,14 +337,13 @@ const PaymentOption = () => {
           </Card>
         </Grid>
 
-        {/* RIGHT SIDE QR (unchanged) */}
+        {/* RIGHT SIDE QR - UPDATED with G Pay and Phone Pay text */}
         <Grid size={{ xs: 12, md: 4 }}>
           <Card
             elevation={4}
             sx={{
               borderRadius: 4,
-              background:
-                "linear-gradient(145deg, #ffffff 0%, #f0f4ff 100%)",
+              background: "linear-gradient(145deg, #ffffff 0%, #f0f4ff 100%)",
               border: "1px solid",
               borderColor: "divider",
               position: "sticky",
@@ -376,7 +359,18 @@ const PaymentOption = () => {
                 {qrCodes.map((qr, index) => (
                   <Grid item xs={6} key={qr._id || index}>
                     <Paper sx={{ p: 3, borderRadius: 3 }}>
-                      <Chip label={qr.name} sx={{ mb: 2 }} />
+                      {/* Display payment app name based on index position */}
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          mb: 2,
+                          fontWeight: "bold",
+                          color: index === 0 ? "#00a86b" : "#5f259f",
+                          textAlign: "center",
+                        }}
+                      >
+                        {index === 0 ? "Google Pay" : "Phone Pay"}
+                      </Typography>
 
                       <img
                         src={qr.url}
@@ -399,9 +393,7 @@ const PaymentOption = () => {
                         <Button
                           size="small"
                           startIcon={<Download />}
-                          onClick={() =>
-                            handleDownloadQR(qr.url, qr.name)
-                          }
+                          onClick={() => handleDownloadQR(qr.url, qr.name)}
                         >
                           Save
                         </Button>

@@ -1,10 +1,12 @@
-// controllers/fullQuotation/fullQuotation.controller.js
 import { fullQuotation } from "../../models/quotation/fullQuotation.model.js";
+import { Lead } from "../../models/lead.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { clearPattern } from "../../utils/cache.js";
 import { v4 as uuidv4 } from "uuid";
 import { uploadOnCloudinary } from "../../utils/cloudinary.js";
+import { logActivity } from "../../utils/ActivityLog.js";
 /* =====================================================
    STEP 1 - CREATE OR RESUME QUOTATION
 ===================================================== */
@@ -57,6 +59,15 @@ export const createOrResumeStep1 = asyncHandler(async (req, res) => {
         currentStep: 1,
     });
 
+    await logActivity({
+        action: "CREATE",
+        model: "FullQuotation",
+        refId: quotationId,
+        description: `New full quotation ${quotationId} drafted for ${clientDetails.clientName} by ${req.user?.name || 'Admin'}`,
+        user: req.user?.name || "Admin",
+    });
+
+    await clearPattern('dashboard:stats:*');
     return res
         .status(201)
         .json(new ApiResponse(201, newQuotation, "Step 1: Quotation draft created"));
@@ -87,6 +98,7 @@ export const updateStep2 = asyncHandler(async (req, res) => {
     quotation.currentStep = Math.max(quotation.currentStep, 2);
     await quotation.save();
 
+    await clearPattern('dashboard:stats:*');
     return res
         .status(200)
         .json(new ApiResponse(200, quotation, "Step 2: Stay location saved"));
@@ -173,6 +185,7 @@ export const updateStep3 = asyncHandler(async (req, res) => {
     quotation.currentStep = Math.max(quotation.currentStep, 3);
     await quotation.save();
 
+    await clearPattern('dashboard:stats:*');
     return res
         .status(200)
         .json(new ApiResponse(200, quotation, "Step 3: Itinerary saved"));
@@ -203,6 +216,7 @@ export const updateStep4 = asyncHandler(async (req, res) => {
     quotation.currentStep = Math.max(quotation.currentStep, 4);
     await quotation.save();
 
+    await clearPattern('dashboard:stats:*');
     return res
         .status(200)
         .json(new ApiResponse(200, quotation, "Step 4: Accommodation details saved"));
@@ -233,6 +247,7 @@ export const updateStep5 = asyncHandler(async (req, res) => {
     quotation.currentStep = Math.max(quotation.currentStep, 4);
     await quotation.save();
 
+    await clearPattern('dashboard:stats:*');
     return res
         .status(200)
         .json(new ApiResponse(200, quotation, "Step 4: Vehicle saved"));
@@ -261,7 +276,7 @@ export const updateStep6 = async (req, res) => {
         contactDetails: pricing.contactDetails || "",
     };
 
-    await quotation.save();
+    await clearPattern('dashboard:stats:*');
     res.status(200).json({ message: "Step 6: Pricing saved", data: quotation });
 };
 
@@ -278,13 +293,69 @@ export const finalizeQuotation = asyncHandler(async (req, res) => {
     quotation.isFinalized = true;
     quotation.status = "Submitted";
     quotation.submittedAt = new Date();
+
+    // Generate bookingId if not already present
+    if (!quotation.bookingId) {
+        const selectedCompany = await resolveCompanyForEmail({
+            companyId: req.body?.companyId,
+            companyName: req.body?.companyName,
+        });
+        const compName = selectedCompany?.companyName || req.body?.companyName || "Iconic Travel";
+        quotation.companyName = compName;
+        if (selectedCompany?._id) quotation.companyId = selectedCompany._id;
+        
+        const { generateBookingId } = await import("../../utils/bookingIdGenerator.js");
+        quotation.bookingId = await generateBookingId(compName);
+    }
+
     await quotation.save();
 
+    if (quotation.clientDetails?.clientName) {
+        const lead = await Lead.findOne({ "personalDetails.fullName": quotation.clientDetails.clientName }).sort({ createdAt: -1 });
+        if (lead && lead.status !== 'Confirmed') {
+            lead.status = 'Confirmed';
+            await lead.save();
+            await clearPattern('leads:*');
+            await clearPattern(`leads:id:${lead.leadId}`);
+        }
+    }
+
+    await logActivity({
+        action: "UPDATE",
+        model: "FullQuotation",
+        refId: quotationId,
+        description: `Full quotation ${quotationId} for ${quotation.clientDetails?.clientName} was finalized by ${req.user?.name || 'Admin'}`,
+        user: req.user?.name || "Admin",
+    });
+
+    await clearPattern('dashboard:stats:*');
     return res
         .status(200)
         .json(new ApiResponse(200, quotation, "Quotation finalized successfully"));
 });
 
+
+/* =====================================================
+   UPDATE QUOTATION (Generic)
+===================================================== */
+export const updateFullQuotation = asyncHandler(async (req, res) => {
+    const { quotationId } = req.params;
+    const updateData = req.body;
+
+    const quotation = await fullQuotation.findOneAndUpdate(
+        { quotationId },
+        { $set: updateData },
+        { new: true, runValidators: true }
+    );
+
+    if (!quotation) throw new ApiError(404, "Quotation not found");
+
+    await clearPattern('dashboard:stats:*');
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, quotation, "Quotation updated successfully"));
+});
 
 /* =====================================================
    GET QUOTATION BY ID
@@ -311,3 +382,18 @@ export const getAllQuotations = asyncHandler(async (req, res) => {
         .status(200)
         .json(new ApiResponse(200, quotations, "All quotations fetched successfully"));
 });
+
+const resolveCompanyForEmail = async ({ companyId, companyName }) => {
+    const Company = (await import("../../models/company.model.js")).default;
+    if (companyId) {
+        const byId = await Company.findById(companyId).lean();
+        if (byId) return byId;
+    }
+    if (companyName) {
+        const byName = await Company.findOne({
+            companyName: { $regex: `^${String(companyName).trim()}$`, $options: "i" },
+        }).lean();
+        if (byName) return byName;
+    }
+    return null;
+};

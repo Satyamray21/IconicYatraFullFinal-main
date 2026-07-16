@@ -115,6 +115,8 @@ const HotelForm = ({ onSubmit, initialValues, isEdit = false }) => {
         formik.setFieldValue("hotelType", newValue);
       } else if (currentField === "facilities") {
         formik.setFieldValue("facilities", [...formik.values.facilities, newValue]);
+      } else if (currentField === "city") {
+        formik.setFieldValue("city", newValue);
       }
 
       handleCloseDialog();
@@ -172,7 +174,19 @@ const HotelForm = ({ onSubmit, initialValues, isEdit = false }) => {
       try {
         const formData = new FormData();
 
+        const excludeKeys = ["country", "state", "city", "address", "pincode"];
+        
+        const locationData = {
+          country: values.country,
+          state: values.state,
+          city: values.city,
+          address: values.address,
+          pincode: values.pincode,
+        };
+        formData.append("location", JSON.stringify(locationData));
+
         Object.keys(values).forEach((key) => {
+          if (excludeKeys.includes(key)) return;
           if (key === "facilities" || key === "hotelType") {
             formData.append(key, JSON.stringify(values[key]));
           } else if (values[key] !== null && values[key] !== undefined && values[key] !== "") {
@@ -180,7 +194,7 @@ const HotelForm = ({ onSubmit, initialValues, isEdit = false }) => {
           }
         });
 
-        console.log("🔹 Sending form data with keys:", Object.keys(values));
+        console.log("🔹 Sending form data with keys:", Array.from(formData.keys()));
         const resultAction = await dispatch(createHotelStep1(formData)).unwrap();
         setHotelId(resultAction._id);
         handleNext();
@@ -520,16 +534,52 @@ const HotelForm = ({ onSubmit, initialValues, isEdit = false }) => {
                   <Select
                     name="city"
                     value={formik.values.city}
-                    onChange={formik.handleChange}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === "__add_new") {
+                        handleOpenDialog("city");
+                      } else {
+                        formik.handleChange(e);
+                      }
+                    }}
                     onBlur={formik.handleBlur}
                     disabled={!formik.values.state}
                     error={formik.touched.city && Boolean(formik.errors.city)}
                   >
-                    {cities.map((city) => (
-                      <MenuItem key={city.name} value={city.name}>
-                        {city.name}
+                    {[
+                      ...new Set([
+                        ...(cities.map((c) => c.name) || []),
+                        ...(options
+                          ?.filter((opt) => opt.fieldName === "city")
+                          .map((opt) => opt.value) || []),
+                      ]),
+                    ].map((cityName) => (
+                      <MenuItem key={cityName} value={cityName}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                          <span>{cityName}</span>
+                          {options?.find((opt) => opt.fieldName === "city" && opt.value === cityName) && (
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const optionToDelete = options.find(
+                                  (opt) => opt.fieldName === "city" && opt.value === cityName
+                                );
+                                if (optionToDelete && window.confirm(`Delete "${cityName}"?`)) {
+                                  dispatch(deleteLeadOption(optionToDelete._id));
+                                }
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </div>
                       </MenuItem>
                     ))}
+                    <MenuItem value="__add_new" style={{ color: "#1976d2", fontWeight: 500 }}>
+                      + Add New City
+                    </MenuItem>
                   </Select>
                   {formik.touched.city && formik.errors.city && (
                     <FormHelperText error>{formik.errors.city}</FormHelperText>

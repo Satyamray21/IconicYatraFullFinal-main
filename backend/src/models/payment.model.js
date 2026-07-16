@@ -80,6 +80,12 @@ const receivedVoucherSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+
+    /** Links voucher to custom (or other) quotation id, e.g. ICYR_CQ_0001 */
+    quotationRef: {
+      type: String,
+      index: true,
+    },
   },
   {
     timestamps: true,

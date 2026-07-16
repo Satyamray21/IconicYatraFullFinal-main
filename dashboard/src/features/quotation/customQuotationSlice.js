@@ -9,7 +9,7 @@ export const createCustomQuotation = createAsyncThunk(
     async (formData, { rejectWithValue }) => {
         try {
             const res = await axios.post("/customQT/", formData);
-            return res.data.data;
+            return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Create failed");
         }
@@ -22,7 +22,7 @@ export const getAllCustomQuotations = createAsyncThunk(
     async (_, { rejectWithValue }) => {
         try {
             const res = await axios.get("/customQT");
-            return res.data.data;
+            return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Fetch failed");
         }
@@ -35,20 +35,24 @@ export const getCustomQuotationById = createAsyncThunk(
     async (quotationId, { rejectWithValue }) => {
         try {
             const res = await axios.get(`/customQT/${quotationId}`);
-            return res.data.data;
+            return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Fetch failed");
         }
     }
 );
 
-// Update full quotation
+// Update full quotation — use quotationId (e.g. ICYR_CQ_0001) from URL, or Mongo _id as id
 export const updateCustomQuotation = createAsyncThunk(
     "customQuotation/update",
-    async ({ id, formData }, { rejectWithValue }) => {
+    async ({ id, quotationId, formData }, { rejectWithValue }) => {
         try {
-            const res = await axios.put(`/customQT/${id}`, formData);
-            return res.data.data;
+            const url = quotationId
+                ? `/customQT/quotation/${encodeURIComponent(quotationId)}`
+                : `/customQT/${id}`;
+            const res = await axios.put(url, formData);
+            const payload = res.data?.data ?? res.data;
+            return payload;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Update failed");
         }
@@ -99,11 +103,77 @@ export const updateQuotationStep = createAsyncThunk(
 
             const res = await axios.post("/customQT/update-step", requestData, config);
             console.log("✅ Redux: Step update successful");
-            return res.data.data;
+            return res.data?.data ?? res.data;
         } catch (err) {
             console.error("❌ Redux: Step update failed:", err);
             console.error("❌ Error details:", err.response?.data);
             return rejectWithValue(err.response?.data?.message || "Step update failed");
+        }
+    }
+);
+
+// Update costing: packageCalculations, companyMargin, discount
+export const updateCustomQuotationCosting = createAsyncThunk(
+    "customQuotation/updateCosting",
+    async ({ quotationId, body }, { rejectWithValue }) => {
+        try {
+            const res = await axios.patch(
+                `/customQT/${encodeURIComponent(quotationId)}/package-calculations`,
+                body
+            );
+            return res.data?.data ?? res.data;
+        } catch (err) {
+            return rejectWithValue(
+                err.response?.data?.message || "Costing update failed"
+            );
+        }
+    }
+);
+
+// Finalize custom quotation (Standard / Deluxe / Superior)
+export const finalizeCustomQuotation = createAsyncThunk(
+    "customQuotation/finalize",
+    async (
+        { quotationId, finalizedPackage, finalizedPackages, finalizedVendorsWithAmounts, companyId, companyName },
+        { rejectWithValue, getState }
+    ) => {
+        try {
+            const payload = {};
+            const selectedQuotation = getState()?.customQuotation?.selectedQuotation;
+            const existingPackage =
+                selectedQuotation?.finalizedPackages?.[0] ||
+                selectedQuotation?.finalizedPackage;
+            
+            // Prioritize multiple packages if available
+            if (Array.isArray(finalizedPackages) && finalizedPackages.length > 0) {
+                payload.finalizedPackages = finalizedPackages;
+                payload.finalizedPackage = finalizedPackages[0];
+            } else if (finalizedPackage && String(finalizedPackage).trim()) {
+                payload.finalizedPackage = finalizedPackage;
+            } else if (
+                Array.isArray(finalizedVendorsWithAmounts) &&
+                finalizedVendorsWithAmounts.length > 0 &&
+                existingPackage
+            ) {
+                // Backend currently requires a valid package even for vendor-only updates.
+                payload.finalizedPackage = existingPackage;
+            }
+            
+            // Add vendor amounts if provided
+            if (Array.isArray(finalizedVendorsWithAmounts) && finalizedVendorsWithAmounts.length > 0) {
+                payload.finalizedVendorsWithAmounts = finalizedVendorsWithAmounts;
+            }
+            
+            const res = await axios.patch(`/customQT/${quotationId}/finalize`, {
+                ...payload,
+                companyId,
+                companyName
+            });
+            return res.data?.data ?? res.data;
+        } catch (err) {
+            return rejectWithValue(
+                err.response?.data?.message || "Finalize failed"
+            );
         }
     }
 );
@@ -114,7 +184,7 @@ export const deleteCustomQuotation = createAsyncThunk(
     async (id, { rejectWithValue }) => {
         try {
             const res = await axios.delete(`/customQT/${id}`);
-            return res.data.data;
+            return res.data?.data ?? res.data;
         } catch (err) {
             return rejectWithValue(err.response?.data?.message || "Delete failed");
         }
@@ -213,6 +283,46 @@ const customQuotationSlice = createSlice({
             }
         });
         builder.addCase(updateQuotationStep.rejected, (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        });
+
+        builder.addCase(updateCustomQuotationCosting.pending, (state) => {
+            state.loading = true;
+        });
+        builder.addCase(updateCustomQuotationCosting.fulfilled, (state, action) => {
+            state.loading = false;
+            const idx = state.quotations.findIndex(
+                (q) => q._id === action.payload._id
+            );
+            if (idx !== -1) state.quotations[idx] = action.payload;
+            if (
+                state.selectedQuotation?._id === action.payload._id ||
+                state.selectedQuotation?.quotationId ===
+                    action.payload.quotationId
+            ) {
+                state.selectedQuotation = action.payload;
+            }
+        });
+        builder.addCase(updateCustomQuotationCosting.rejected, (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        });
+
+        builder.addCase(finalizeCustomQuotation.pending, (state) => {
+            state.loading = true;
+        });
+        builder.addCase(finalizeCustomQuotation.fulfilled, (state, action) => {
+            state.loading = false;
+            const idx = state.quotations.findIndex(
+                (q) => q._id === action.payload._id
+            );
+            if (idx !== -1) state.quotations[idx] = action.payload;
+            if (state.selectedQuotation?._id === action.payload._id) {
+                state.selectedQuotation = action.payload;
+            }
+        });
+        builder.addCase(finalizeCustomQuotation.rejected, (state, action) => {
             state.loading = false;
             state.error = action.payload;
         });
