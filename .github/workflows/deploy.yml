@@ -23,19 +23,11 @@ jobs:
         with:
           node-version: '20'
           
-      - name: Create env file
-        run: |
-          cd IconicYatraUI-main
-          echo "VITE_BASE_URL=https://api.globevisitors.com" > .env.production
-          echo "VITE_MAIN_URL=https://www.globevisitors.com" >> .env.production
-          echo "VITE_ADMIN_URL=https://admin.globevisitors.com" >> .env.production
-
       - name: Install and Build Frontend
         run: |
           cd IconicYatraUI-main
-          
           npm install --legacy-peer-deps
-          npm run build
+          VITE_BASE_URL=https://api.globevisitors.com VITE_MAIN_URL=https://www.globevisitors.com VITE_ADMIN_URL=https://admin.globevisitors.com npm run build
 
       - name: Move build output to repo root
         run: |
