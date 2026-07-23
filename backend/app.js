@@ -201,10 +201,16 @@ app.use("/api/v1", verifyToken, hotelRoutes);
 
 import Company from "./src/models/company.model.js";
 
-// Dynamically resolve the frontend directory because it's "IconicYatraUI-main" locally but "frontend" on the VPS
+// Dynamically resolve the frontend directory because it's "IconicYatraUI-main" locally but deployed differently on the VPS
 const frontendDir1 = path.join(process.cwd(), "../frontend/dist");
 const frontendDir2 = path.join(process.cwd(), "../IconicYatraUI-main/dist");
-const activeFrontendDir = fs.existsSync(frontendDir1) ? frontendDir1 : frontendDir2;
+const frontendDir3 = path.join(process.cwd(), "../dist"); // Local repo root
+const frontendDirGlobe = "/var/www/globevisitors.com/dist"; // VPS actual path
+
+let activeFrontendDir = frontendDir2;
+if (fs.existsSync(frontendDirGlobe)) activeFrontendDir = frontendDirGlobe;
+else if (fs.existsSync(frontendDir3)) activeFrontendDir = frontendDir3;
+else if (fs.existsSync(frontendDir1)) activeFrontendDir = frontendDir1;
 
 // Serve frontend assets statically (excluding index.html)
 app.use(express.static(activeFrontendDir, { index: false }));
