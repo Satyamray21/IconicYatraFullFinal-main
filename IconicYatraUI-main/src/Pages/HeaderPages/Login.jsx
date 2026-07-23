@@ -46,9 +46,9 @@ const LoginPage = () => {
 
       let adminUrl = "";
 
-      // If we are on the master domain, go to the dedicated admin subdomain
-      if (window.location.hostname.includes("iconicyatra.com")) {
-          adminUrl = import.meta.env.VITE_ADMIN_URL || "https://admin.iconicyatra.com";
+      // If we are on the master domain (IconicYatra or GlobeVisitors), go to the dedicated admin subdomain
+      if (window.location.hostname.includes("iconicyatra.com") || window.location.hostname.includes("globevisitors.com") || window.location.hostname === "localhost") {
+          adminUrl = import.meta.env.VITE_ADMIN_URL || "https://admin.globevisitors.com";
       } else {
           // Tenant agencies will access their dashboard via /admin/ on their own domain
           adminUrl = `${window.location.origin}/admin/`;
