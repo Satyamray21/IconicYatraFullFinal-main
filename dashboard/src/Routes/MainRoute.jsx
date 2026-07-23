@@ -451,7 +451,7 @@ const MainRoute = () => {
   
   {/* SaaS Admin Routes */}
   <Route path="/saas-admin" element={
-      window.location.hostname === "iconicyatra.com" || window.location.hostname === "admin.iconicyatra.com" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
+      window.location.hostname === "iconicyatra.com" || window.location.hostname === "admin.iconicyatra.com" || window.location.hostname === "globevisitors.com" || window.location.hostname === "admin.globevisitors.com" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
       ? <TenantsList /> 
       : <div><h1>404 Not Found</h1></div>
   } />
