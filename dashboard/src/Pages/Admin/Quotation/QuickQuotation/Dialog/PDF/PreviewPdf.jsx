@@ -480,6 +480,17 @@ const QuotationPDFDialog = ({
   ];
 
   const policiesInclusions = getValue(quotationData, "policies.inclusions", []);
+  const policiesExclusions = getValue(quotationData, "policies.exclusions", []);
+  const policiesPaymentPolicy = getValue(
+    quotationData,
+    "policies.paymentPolicy",
+    "",
+  );
+  const policiesCancellationPolicy = getValue(
+    quotationData,
+    "policies.cancellationPolicy",
+    [],
+  );
   const additionalServices = Array.isArray(
     getRawValue(quotationData, "additionalServices"),
   )
@@ -495,11 +506,6 @@ const QuotationPDFDialog = ({
       return `${particulars}: INR ${(Number.isFinite(total) ? total : 0).toLocaleString("en-IN")}`;
     })
     .filter(Boolean);
-  const policiesCancellationPolicy = getValue(
-    quotationData,
-    "policies.cancellationPolicy",
-    [],
-  );
 
   const rawDays = getRawValue(quotationData, "days");
   const days = Array.isArray(rawDays) ? rawDays : [];
@@ -618,41 +624,107 @@ const QuotationPDFDialog = ({
     showSuperiorCol,
   ].filter(Boolean).length;
 
-  const inclusionArray = Array.isArray(policiesInclusions)
-    ? policiesInclusions
-    : typeof policiesInclusions === "string"
-      ? policiesInclusions.split("\n").filter((s) => s.trim())
-      : typeof policiesInclusions === "object"
-        ? Object.values(policiesInclusions)
-        : [];
-  const exclusionArray = Array.isArray(globalPolicyDefaults.exclusions)
-    ? globalPolicyDefaults.exclusions
-    : [];
-  const paymentPolicyArray =
-    typeof globalPolicyDefaults.paymentPolicy === "string"
-      ? globalPolicyDefaults.paymentPolicy.split("\n").filter((s) => s.trim())
-      : [];
-  const globalCancellationArray =
-    typeof globalPolicyDefaults.cancellationPolicy === "string"
-      ? globalPolicyDefaults.cancellationPolicy
-        .split("\n")
-        .filter((s) => s.trim())
-      : [];
+  const decodeHtmlEntities = (text) =>
+    String(text || "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&#(\d+);/g, (_, code) => {
+        const n = Number(code);
+        return Number.isFinite(n) ? String.fromCharCode(n) : "";
+      });
 
+  const htmlPolicyToPlainLines = (value) => {
+    let s = String(value ?? "");
+    if (!s.trim()) return [];
+    s = s
+      .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+      .replace(/<\/\s*p\s*>/gi, "\n")
+      .replace(/<\/\s*div\s*>/gi, "\n")
+      .replace(/<\/\s*li\s*>/gi, "\n")
+      .replace(/<\s*li[^>]*>/gi, "")
+      .replace(/<\s*p[^>]*>/gi, "")
+      .replace(/<\s*div[^>]*>/gi, "")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\r/g, "");
+    s = decodeHtmlEntities(s);
+    let lines = s
+      .split("\n")
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    if (lines.length === 1 && /\.[A-Z]/.test(lines[0])) {
+      lines = lines[0]
+        .split(/(?<=\.)\s*(?=[A-Z*0-9])/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    }
+    return lines;
+  };
+
+  const toPolicyLines = (value) => {
+    if (Array.isArray(value)) {
+      return value.flatMap((v) => htmlPolicyToPlainLines(v)).filter(Boolean);
+    }
+    if (typeof value === "string") {
+      return htmlPolicyToPlainLines(value);
+    }
+    if (value && typeof value === "object") {
+      return Object.values(value)
+        .flatMap((v) => htmlPolicyToPlainLines(v))
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const isPlaceholderPolicyLine = (line) =>
+    /^(no\s+(exclusions|inclusions|payment policy|cancellation policy|terms and conditions)\s+specified)$/i.test(
+      String(line || "").trim(),
+    );
+
+  const quotationInclusionLines = toPolicyLines(policiesInclusions).filter(
+    (line) => !isPlaceholderPolicyLine(line),
+  );
+  const quotationExclusionLines = toPolicyLines(policiesExclusions).filter(
+    (line) => !isPlaceholderPolicyLine(line),
+  );
+  const quotationPaymentLines = toPolicyLines(policiesPaymentPolicy).filter(
+    (line) => !isPlaceholderPolicyLine(line),
+  );
+  const quotationCancellationLines = toPolicyLines(
+    policiesCancellationPolicy,
+  ).filter((line) => !isPlaceholderPolicyLine(line));
+
+  const globalInclusionLines = toPolicyLines(globalPolicyDefaults.inclusions);
+  const globalExclusionLines = toPolicyLines(globalPolicyDefaults.exclusions);
+  const paymentPolicyArray = toPolicyLines(globalPolicyDefaults.paymentPolicy);
+  const globalCancellationArray = toPolicyLines(
+    globalPolicyDefaults.cancellationPolicy,
+  );
+
+  // Prefer quotation edits; fall back to global settings / defaults
   const finalInclusionArray =
-    globalPolicyDefaults.inclusions?.length > 0
-      ? globalPolicyDefaults.inclusions
-      : fallbackInclusions;
+    quotationInclusionLines.length > 0
+      ? quotationInclusionLines
+      : globalInclusionLines.length > 0
+        ? globalInclusionLines
+        : fallbackInclusions;
   const finalInclusionArrayWithServices = [
     ...finalInclusionArray,
     ...additionalServiceLines,
   ];
-  const finalExclusionArray = exclusionArray.filter((item) =>
-    String(item || "").trim(),
-  );
-  const finalPaymentPolicyArray = paymentPolicyArray.filter((item) =>
-    String(item || "").trim(),
-  );
+  const finalExclusionArray = (
+    quotationExclusionLines.length > 0
+      ? quotationExclusionLines
+      : globalExclusionLines
+  ).filter((item) => String(item || "").trim());
+  const finalPaymentPolicyArray = (
+    quotationPaymentLines.length > 0
+      ? quotationPaymentLines
+      : paymentPolicyArray
+  ).filter((item) => String(item || "").trim());
 
   const omitRedundantCancellationBodyLine = (line) => {
     const s = String(line || "").trim();
@@ -669,9 +741,11 @@ const QuotationPDFDialog = ({
   };
 
   const finalCancellationArray = (
-    globalCancellationArray.length > 0
-      ? globalCancellationArray
-      : fallbackCancellationPolicy
+    quotationCancellationLines.length > 0
+      ? quotationCancellationLines
+      : globalCancellationArray.length > 0
+        ? globalCancellationArray
+        : fallbackCancellationPolicy
   ).filter(omitRedundantCancellationBodyLine);
 
   const normalizeWebUrl = (value) => {
