@@ -290,11 +290,9 @@ const MainRoute = () => {
     setIsAuthenticated(false);
     setShowExpiryAlert(false);
     
-    if (window.location.hostname.includes("iconicyatra.com")) {
-      window.location.href = "https://www.iconicyatra.com/login";
-    } else {
-      window.location.href = "/login"; // This drops the /admin path and goes to the tenant's root frontend
-    }
+    // Redirect to the main frontend's login page
+    const mainUrl = import.meta.env.VITE_MAIN_URL || "https://www.iconicyatra.com";
+    window.location.href = `${mainUrl}/login`;
   };
 
   const handleExtendSession = () => {
