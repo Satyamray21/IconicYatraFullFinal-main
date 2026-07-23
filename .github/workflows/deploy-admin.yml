@@ -15,21 +15,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # It is much faster and safer to build React on GitHub's servers than on the VPS!
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
-          
+
       - name: Create env file
         run: |
           cd dashboard
-          echo "${{ secrets.DASHBOARD_ENV }}" > .env
+          cat <<EOF > .env
+          VITE_BASE_URL=https://api.globevisitors.com
+          VITE_MAIN_URL=https://admin.globevisitors.com
+          EOF
 
       - name: Install and Build Dashboard
         run: |
           cd dashboard
-          
           npm install --legacy-peer-deps
           npm run build
 
