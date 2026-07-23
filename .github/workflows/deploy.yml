@@ -1,3 +1,5 @@
+
+
 name: Deploy Customer Frontend
 
 on:
@@ -35,6 +37,11 @@ jobs:
           
           npm install --legacy-peer-deps
           npm run build
+
+      - name: Move build output to repo root
+        run: |
+          rm -rf dist
+          cp -r IconicYatraUI-main/dist ./dist
 
       - name: Copy compiled files to VPS
         uses: appleboy/scp-action@master
