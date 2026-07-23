@@ -69,7 +69,7 @@ const attachToken = (config) => {
     
     // If testing locally, impersonate the Master Tenant
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-      hostname = "iconicyatra.com";
+      hostname = "globevisitors.com";
     }
 
     if (hostname.startsWith("admin.")) {

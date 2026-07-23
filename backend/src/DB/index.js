@@ -14,23 +14,25 @@ const connectDB = async () => {
         // Ensure the Master Superadmin Tenant exists in the database
         const { default: Company } = await import("../models/company.model.js");
         const existingCompanies = await Company.find({});
-        let masterCompany;
-        
-        if (existingCompanies.length > 0) {
-            masterCompany = existingCompanies.find(c => c.domain === "iconicyatra.com");
-            if (!masterCompany) {
-                console.log("Upgrading existing primary company to Master Tenant (iconicyatra.com)...");
-                masterCompany = existingCompanies[0];
-                masterCompany.domain = "iconicyatra.com";
+        let masterCompany = existingCompanies.find(c => c.role === "master");
+
+        if (!masterCompany) {
+            masterCompany = existingCompanies.find(c => c.domain === "globevisitors.com");
+            if (masterCompany) {
+                console.log("Upgrading existing primary company to Master Tenant (globevisitors.com)...");
+                masterCompany.role = "master";
+                masterCompany.domain = "globevisitors.com";
                 await masterCompany.save();
+                console.log("Master tenant upgraded successfully.");
+            } else {
+                console.log("No companies found. Creating Master Tenant (globevisitors.com)...");
+                masterCompany = await Company.create({
+                    companyName: "Globe Visitors",
+                    domain: "globevisitors.com",
+                    address: "HQ",
+                    role: "master"
+                });
             }
-        } else {
-            console.log("No companies found. Creating Master Tenant (iconicyatra.com)...");
-            masterCompany = await Company.create({
-                companyName: "Iconic Yatra",
-                domain: "iconicyatra.com",
-                address: "HQ"
-            });
         }
         
         // Migrate ALL historical data to the Master Tenant

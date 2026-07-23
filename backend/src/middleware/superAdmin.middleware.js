@@ -1,6 +1,6 @@
 export const requireSuperAdmin = (req, res, next) => {
-    // Determine the master domain from environment variable, fallback to iconicyatra.com
-    const masterDomain = process.env.MASTER_TENANT_DOMAIN || "iconicyatra.com";
+    // Determine the master domain from environment variable, fallback to globevisitors.com
+    const masterDomain = process.env.MASTER_TENANT_DOMAIN || "globevisitors.com";
     
     // The current request's domain was attached by tenant.middleware.js 
     // Wait, let's fetch the origin header just like tenant middleware did.
@@ -28,7 +28,7 @@ export const requireSuperAdmin = (req, res, next) => {
     domainName = domainName.split(':')[0];
 
     // Allow localhost for local development, and the exact master domains for production
-    if (domainName !== masterDomain && domainName !== "admin.iconicyatra.com" && domainName !== "localhost" && domainName !== "127.0.0.1") {
+    if (domainName !== masterDomain && domainName !== "admin.globevisitors.com" && domainName !== "localhost" && domainName !== "127.0.0.1") {
         return res.status(403).json({
             success: false,
             message: "Forbidden: This action requires Universal Superadmin privileges.",

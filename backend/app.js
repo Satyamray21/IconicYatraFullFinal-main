@@ -230,8 +230,8 @@ app.get(/.*/, async (req, res, next) => {
       const title = company.seoTitle || `${company.companyName} | Tour Packages`;
       const description = company.seoDescription || `Explore premium tour packages with ${company.companyName}.`;
       const keywords = company.seoKeywords || `${company.companyName}, travel agency, tours`;
-      const favicon = company.faviconUrl || "https://www.iconicyatra.com/logoiconic.jpg";
-      const ogImage = company.ogImageUrl || "https://www.iconicyatra.com/og-image.jpg?v=1";
+      const favicon = company.faviconUrl || "https://www.globevisitors.com/logoiconic.jpg";
+      const ogImage = company.ogImageUrl || "https://www.globevisitors.com/og-image.jpg?v=1";
 
       html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`);
       html = html.replace(/<meta\s+name="title"\s+content="[^"]*"\s*\/>/i, `<meta name="title" content="${title}" />`);

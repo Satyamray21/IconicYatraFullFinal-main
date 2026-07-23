@@ -41,4 +41,4 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "IconicYatraUI-main/dist/*"
           strip_components: 1
-          target: "/var/www/iconicyatra/frontend"
+          target: "/var/www/globevisitors.com"

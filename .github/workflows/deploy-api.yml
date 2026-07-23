@@ -23,7 +23,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "backend/*,ecosystem.config.js"
           strip_components: 0
-          target: "/var/www/iconicyatra"
+          target: "/var/www/api.globevisitors.com"
 
       - name: Install dependencies and restart PM2
         uses: appleboy/ssh-action@master
@@ -32,9 +32,9 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /var/www/iconicyatra/backend
+            cd /var/www/api.globevisitors.com/backend
             npm install --legacy-peer-deps
             
             # Go back to root to start PM2 so the ecosystem relative paths resolve correctly!
-            cd /var/www/iconicyatra
+            cd /var/www/api.globevisitors.com
             pm2 startOrReload ecosystem.config.js --env production

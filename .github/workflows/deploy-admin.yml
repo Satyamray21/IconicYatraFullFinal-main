@@ -41,4 +41,4 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "dashboard/dist/*"
           strip_components: 0
-          target: "/var/www/iconicyatra"
+          target: "/var/www/admin.globevisitors.com"

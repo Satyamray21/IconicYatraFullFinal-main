@@ -19,14 +19,14 @@ const createSuperadmin = async () => {
     await mongoose.connect("mongodb+srv://satyamray0651:Satyam123@cluster0.y7vezi8.mongodb.net/?retryWrites=true&w=majority");
     console.log("Connected to MongoDB.");
 
-    // Fetch the Master Tenant (iconicyatra.com)
+    // Fetch the Master Tenant (globevisitors.com)
     const companySchema = new mongoose.Schema({ domain: String, name: String });
     const Company = mongoose.models.Company || mongoose.model("Company", companySchema);
     
-    let masterTenant = await Company.findOne({ domain: "iconicyatra.com" });
+    let masterTenant = await Company.findOne({ domain: "globevisitors.com" });
     
     if (!masterTenant) {
-        console.warn("Master Tenant (iconicyatra.com) not found in DB!");
+        console.warn("Master Tenant (globevisitors.com) not found in DB!");
         const allComps = await Company.find({});
         console.log("All companies in DB:", allComps);
         if (allComps.length > 0) {
