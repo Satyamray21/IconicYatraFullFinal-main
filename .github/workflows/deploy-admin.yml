@@ -5,8 +5,8 @@ on:
     branches:
       - saas-migration
     paths:
-      - 'dashboard/**'
-      - '.github/workflows/deploy-admin.yml'
+      - "dashboard/**"
+      - ".github/workflows/deploy-admin.yml"
 
 jobs:
   deploy-admin:
@@ -18,21 +18,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '20'
-
-      - name: Create env file
-        run: |
-          cd dashboard
-          cat <<EOF > .env
-          VITE_BASE_URL=https://api.globevisitors.com
-          VITE_MAIN_URL=https://admin.globevisitors.com
-          EOF
+          node-version: "20"
 
       - name: Install and Build Dashboard
         run: |
           cd dashboard
           npm install --legacy-peer-deps
-          npm run build
+          VITE_BASE_URL=https://api.globevisitors.com VITE_MAIN_URL=https://globevisitors.com npm run build
 
       - name: Copy compiled files to VPS
         uses: appleboy/scp-action@master
