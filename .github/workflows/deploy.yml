@@ -26,9 +26,10 @@ jobs:
       - name: Create env file
         run: |
           cd IconicYatraUI-main
-          cat <<EOF > .env
+          cat <<EOF > .env.production
           VITE_BASE_URL=https://api.globevisitors.com
           VITE_MAIN_URL=https://www.globevisitors.com
+          VITE_ADMIN_URL=https://admin.globevisitors.com
           EOF
 
       - name: Install and Build Frontend
