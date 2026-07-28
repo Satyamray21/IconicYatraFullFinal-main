@@ -302,7 +302,7 @@ const InvoiceCard = () => {
     }
   };
 
-  const handleBulkDownloadClick = () => {
+  const handleBulkDownloadClick = async () => {
     if (filteredData.length === 0) {
       setSnackbar({ open: true, message: "No invoices found to download", severity: "warning" });
       return;
@@ -313,6 +313,30 @@ const InvoiceCard = () => {
     }
     setIsBulkDownloading(true);
     setBulkDownloadProgress(0);
+
+    try {
+      // Preload all company logos to ensure they appear in the bulk PDF
+      const logoUrls = Array.from(new Set(filteredData.map(inv => {
+        if (typeof inv.companyId === "object" && inv.companyId?.logo) {
+          return inv.companyId.logo;
+        }
+        const comp = (Array.isArray(companies) ? companies : []).find(c => String(c._id) === String(inv.companyId));
+        return comp?.logo;
+      }).filter(Boolean)));
+
+      await Promise.all(logoUrls.map(url => {
+        return new Promise(resolve => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = resolve;
+          img.onerror = resolve; // resolve on error so we don't block
+          img.src = url;
+        });
+      }));
+    } catch (e) {
+      console.error("Error preloading logos:", e);
+    }
+
     // Allow React time to mount all the hidden InvoicePDF components
     setTimeout(() => {
       processBulkDownload();
@@ -725,14 +749,23 @@ const InvoiceCard = () => {
           </Box>
         )}
         {isBulkDownloading &&
-          filteredData.map((inv, idx) => (
-            <Box key={inv._id} sx={{ width: "1000px" }}>
-              <InvoicePDF
-                invoiceData={inv}
-                ref={(el) => (bulkPdfRefs.current[idx] = el)}
-              />
-            </Box>
-          ))}
+          filteredData.map((inv, idx) => {
+            let hydratedInv = inv;
+            if (typeof inv.companyId === "string") {
+              const comp = (Array.isArray(companies) ? companies : []).find(
+                (c) => String(c._id) === String(inv.companyId)
+              );
+              if (comp) hydratedInv = { ...inv, companyId: comp };
+            }
+            return (
+              <Box key={inv._id} sx={{ width: "1000px" }}>
+                <InvoicePDF
+                  invoiceData={hydratedInv}
+                  ref={(el) => (bulkPdfRefs.current[idx] = el)}
+                />
+              </Box>
+            );
+          })}
       </Box>
 
       {/* Snackbar */}
