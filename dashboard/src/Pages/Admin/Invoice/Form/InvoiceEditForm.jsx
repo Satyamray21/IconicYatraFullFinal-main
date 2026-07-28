@@ -234,6 +234,7 @@ const InvoiceEditForm = () => {
                 taxPercent,
                 taxAmount: Number(taxAmount.toFixed(2)),
                 amount: Number(amount.toFixed(2)),
+                basePrice: Number(baseAmount.toFixed(2)),
             };
         });
 

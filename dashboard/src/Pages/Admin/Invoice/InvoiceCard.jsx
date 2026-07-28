@@ -35,6 +35,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import EmailIcon from "@mui/icons-material/Email";
 import api from "../../../utils/axios";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 import { buildInvoiceWhatsAppText, buildInvoiceEmailHtml } from "../../../utils/invoiceMailerTemplates";
 import EmailInvoiceDialog from "./Dialog/EmailInvoiceDialog";
 import InvoicePDF from "./Dialog/InvoicePdf/InvoicePDF";
@@ -61,6 +63,9 @@ const InvoiceCard = () => {
 
   // 🔴 Confirm dialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+  const [bulkDownloadProgress, setBulkDownloadProgress] = useState(0);
+  const bulkPdfRefs = React.useRef([]);
   const [deleteId, setDeleteId] = useState(null);
 
   // 🔔 Snackbar state
@@ -267,6 +272,53 @@ const InvoiceCard = () => {
     }
   };
 
+  const processBulkDownload = async () => {
+    try {
+      const zip = new JSZip();
+      for (let i = 0; i < filteredData.length; i++) {
+        const inv = filteredData[i];
+        const ref = bulkPdfRefs.current[i];
+        if (ref && ref.generateBase64) {
+          const base64 = await ref.generateBase64();
+          if (base64) {
+            const filename = `Invoice_${(inv.invoiceNo || "Unknown").replace(/\//g, "_")}.pdf`;
+            zip.file(filename, base64, { base64: true });
+          }
+        }
+        setBulkDownloadProgress(Math.round(((i + 1) / filteredData.length) * 100));
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const zipName = `Invoices_${fromDate || "All"}_to_${toDate || "All"}.zip`;
+      saveAs(content, zipName);
+
+      setSnackbar({ open: true, message: "Bulk download completed successfully!", severity: "success" });
+    } catch (err) {
+      console.error(err);
+      setSnackbar({ open: true, message: "Failed to generate bulk PDFs", severity: "error" });
+    } finally {
+      setIsBulkDownloading(false);
+      setBulkDownloadProgress(0);
+    }
+  };
+
+  const handleBulkDownloadClick = () => {
+    if (filteredData.length === 0) {
+      setSnackbar({ open: true, message: "No invoices found to download", severity: "warning" });
+      return;
+    }
+    if (filteredData.length > 200) {
+      setSnackbar({ open: true, message: "Too many invoices. Please filter down (max 200).", severity: "warning" });
+      return;
+    }
+    setIsBulkDownloading(true);
+    setBulkDownloadProgress(0);
+    // Allow React time to mount all the hidden InvoicePDF components
+    setTimeout(() => {
+      processBulkDownload();
+    }, 2000);
+  };
+
   // 🔍 Filter invoices
   const filteredData = useMemo(() => {
     let source = Array.isArray(invoices) ? invoices : [];
@@ -400,6 +452,14 @@ const InvoiceCard = () => {
               onClick={handleRepairInvoiceSerials}
             >
               {repairingSerials ? "Repairing…" : "Repair Invoice S.No"}
+            </Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              disabled={isBulkDownloading}
+              onClick={handleBulkDownloadClick}
+            >
+              {isBulkDownloading ? `Zipping... ${bulkDownloadProgress}%` : "Bulk Download PDFs (ZIP)"}
             </Button>
           </Box>
 
@@ -664,6 +724,15 @@ const InvoiceCard = () => {
             <InvoicePDF invoiceData={mailInvoice} ref={invoicePdfRef} />
           </Box>
         )}
+        {isBulkDownloading &&
+          filteredData.map((inv, idx) => (
+            <Box key={inv._id} sx={{ width: "1000px" }}>
+              <InvoicePDF
+                invoiceData={inv}
+                ref={(el) => (bulkPdfRefs.current[idx] = el)}
+              />
+            </Box>
+          ))}
       </Box>
 
       {/* Snackbar */}
