@@ -216,7 +216,7 @@ const MainRoute = () => {
         ? "/admin/"
         : "/";
       window.history.replaceState({}, document.title, basePath);
-      window.location.hash = "#/lead";
+      window.location.hash = "#/";
     }
   }, []);
   /* ========================== */
