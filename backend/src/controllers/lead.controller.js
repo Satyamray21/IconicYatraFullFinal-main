@@ -28,7 +28,7 @@ const handleAddMoreArray = (arr = []) => {
   }
   return arr.map((item) => handleAddMoreValue(item));
 };
-const saveAddMoreValue = async (fieldName, value) => {
+const saveAddMoreValue = async (fieldName, value, companyId) => {
   if (!value || (Array.isArray(value) && value.length === 0)) return;
 
   // If value is an object from Add More, extract actual value
@@ -38,17 +38,17 @@ const saveAddMoreValue = async (fieldName, value) => {
 
   if (Array.isArray(value)) {
     for (const v of value) {
-      const exists = await LeadOptions.findOne({ fieldName, value: v.trim() });
+      const exists = await LeadOptions.findOne({ companyId, fieldName, value: v.trim() });
       if (!exists) {
-        await LeadOptions.create({ fieldName, value: v.trim() });
-        await deleteCache('leads:options');
+        await LeadOptions.create({ companyId, fieldName, value: v.trim() });
+        await deleteCache(`leads:options:${companyId}`);
       }
     }
   } else {
-    const exists = await LeadOptions.findOne({ fieldName, value: value.trim() });
+    const exists = await LeadOptions.findOne({ companyId, fieldName, value: value.trim() });
     if (!exists) {
-      await LeadOptions.create({ fieldName, value: value.trim() });
-      await deleteCache('leads:options');
+      await LeadOptions.create({ companyId, fieldName, value: value.trim() });
+      await deleteCache(`leads:options:${companyId}`);
     }
   }
 };
@@ -120,19 +120,19 @@ export const createLead = asyncHandler(async (req, res) => {
   const hotelTypeToSave = handleAddMoreArray(hotelType);
 
   await Promise.all([
-    saveAddMoreValue("source", sourceToSave),
-    saveAddMoreValue("agentName", agentNameToSave),
-    saveAddMoreValue("referredBy", referredByToSave),
-    saveAddMoreValue("tourDestination", tourDestination),
-    saveAddMoreValue("servicesRequired", servicesRequiredToSave),
-    saveAddMoreValue("arrivalCity", arrivalCityToSave),
-    saveAddMoreValue("arrivalLocation", arrivalLocationToSave),
-    saveAddMoreValue("departureCity", departureCityToSave),
-    saveAddMoreValue("departureLocation", departureLocationToSave),
-    saveAddMoreValue("hotelType", hotelTypeToSave),
-    saveAddMoreValue("mealPlan", mealPlan),
-    saveAddMoreValue("sharingType", sharingType),
-    saveAddMoreValue("country", country),
+    saveAddMoreValue("source", sourceToSave, req.companyId),
+    saveAddMoreValue("agentName", agentNameToSave, req.companyId),
+    saveAddMoreValue("referredBy", referredByToSave, req.companyId),
+    saveAddMoreValue("tourDestination", tourDestination, req.companyId),
+    saveAddMoreValue("servicesRequired", servicesRequiredToSave, req.companyId),
+    saveAddMoreValue("arrivalCity", arrivalCityToSave, req.companyId),
+    saveAddMoreValue("arrivalLocation", arrivalLocationToSave, req.companyId),
+    saveAddMoreValue("departureCity", departureCityToSave, req.companyId),
+    saveAddMoreValue("departureLocation", departureLocationToSave, req.companyId),
+    saveAddMoreValue("hotelType", hotelTypeToSave, req.companyId),
+    saveAddMoreValue("mealPlan", mealPlan, req.companyId),
+    saveAddMoreValue("sharingType", sharingType, req.companyId),
+    saveAddMoreValue("country", country, req.companyId),
   ]);
 
   // ✅ Prepare members & accommodation objects
@@ -587,7 +587,7 @@ export const getLeadOptions = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, cachedOptions, "Lead options fetched from cache"));
   }
 
-  const options = await LeadOptions.find().sort({ fieldName: 1, value: 1 });
+  const options = await LeadOptions.find({ companyId: req.companyId }).sort({ fieldName: 1, value: 1 });
   await setCache(cacheKey, options, 3600);
 
   return res.status(200).json(
@@ -601,18 +601,21 @@ export const addLeadOption = asyncHandler(async (req, res) => {
     throw new ApiError(400, "fieldName and value are required");
   }
 
-  const exists = await LeadOptions.findOne({ fieldName, value });
+  const exists = await LeadOptions.findOne({ companyId: req.companyId, fieldName, value });
 
   if (!exists) {
-    await LeadOptions.create({ fieldName, value });
+    const newOption = await LeadOptions.create({ companyId: req.companyId, fieldName, value });
     // Invalidate options cache
-    await deleteCache('leads:options');
+    await deleteCache(`leads:options:${req.companyId}`);
+    return res
+      .status(201)
+      .json(new ApiResponse(201, newOption, "Option added successfully"));
   }
 
 
   return res
     .status(201)
-    .json(new ApiResponse(201, { fieldName, value }, "Option added successfully"));
+    .json(new ApiResponse(201, exists, "Option added successfully"));
 });
 
 export const getLeadsByStaff = asyncHandler(async (req, res) => {
