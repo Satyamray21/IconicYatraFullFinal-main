@@ -215,18 +215,37 @@ if (fs.existsSync(frontendDirGlobe)) activeFrontendDir = frontendDirGlobe;
 else if (fs.existsSync(frontendDir3)) activeFrontendDir = frontendDir3;
 else if (fs.existsSync(frontendDir1)) activeFrontendDir = frontendDir1;
 
+// Dynamically resolve dashboard directory
+const dashboardDir1 = path.join(process.cwd(), "../dashboard/dist");
+const dashboardGlobe = "/var/www/globevisitors.com/admin/dist"; // VPS actual path for dashboard (if applicable)
+
+let activeDashboardDir = dashboardDir1;
+if (fs.existsSync(dashboardGlobe)) activeDashboardDir = dashboardGlobe;
+
 // Serve frontend assets statically (excluding index.html)
 app.use(express.static(activeFrontendDir, { index: false }));
+
+// Serve dashboard assets statically under /admin (excluding index.html)
+app.use("/admin", express.static(activeDashboardDir, { index: false }));
 
 // Catch-all route to serve dynamic index.html
 app.get(/.*/, async (req, res, next) => {
   if (req.originalUrl.startsWith("/api")) return next();
   
   try {
+    const isAdmin = req.originalUrl.startsWith("/admin");
     let domain = req.headers.host?.split(":")[0];
     if (domain?.startsWith("www.")) domain = domain.substring(4);
 
     const company = await Company.findOne({ domain });
+
+    if (isAdmin) {
+      const adminIndexPath = path.join(activeDashboardDir, "index.html");
+      if (!fs.existsSync(adminIndexPath)) {
+        return res.status(404).send(`Dashboard build not found at ${adminIndexPath}`);
+      }
+      return res.sendFile(adminIndexPath);
+    }
 
     const indexPath = path.join(activeFrontendDir, "index.html");
     if (!fs.existsSync(indexPath)) {
