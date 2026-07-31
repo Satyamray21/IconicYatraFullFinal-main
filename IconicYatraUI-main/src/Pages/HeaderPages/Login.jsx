@@ -44,21 +44,25 @@ const LoginPage = () => {
       const token = res.token;
       const user = res.user;
 
-      let adminUrl = "";
+      // Master domain → dedicated admin subdomain
+      // Tenant domain → same origin /admin/ (HashRouter)
+      const isMasterDomain =
+        window.location.hostname.includes("iconicyatra.com") ||
+        window.location.hostname.includes("globevisitors.com") ||
+        window.location.hostname === "localhost";
 
-      // If we are on the master domain (IconicYatra or GlobeVisitors), go to the dedicated admin subdomain
-      if (window.location.hostname.includes("iconicyatra.com") || window.location.hostname.includes("globevisitors.com") || window.location.hostname === "localhost") {
-          adminUrl = import.meta.env.VITE_ADMIN_URL || "https://admin.globevisitors.com";
-      } else {
-          // Tenant agencies will access their dashboard via /admin/ on their own domain
-          adminUrl = `${window.location.origin}/admin/`;
-      }
+      const adminBase = isMasterDomain
+        ? (import.meta.env.VITE_ADMIN_URL || "https://admin.globevisitors.com").replace(/\/$/, "")
+        : `${window.location.origin}/admin`;
 
-      window.location.replace(
-        `${adminUrl}/?token=${token}&user=${encodeURIComponent(
-          JSON.stringify(user),
-        )}`,
-      );
+      const params = new URLSearchParams({
+        token,
+        user: JSON.stringify(user),
+      });
+
+      // Tenant: https://travelyatra.cloud/admin/?token=...&user=...
+      // Keep /admin/ in the path so refresh keeps working
+      window.location.replace(`${adminBase}/?${params.toString()}`);
     } catch (err) {
       console.error(err);
     }

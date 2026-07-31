@@ -210,8 +210,13 @@ const MainRoute = () => {
       localStorage.setItem("user", userFromUrl);
       localStorage.setItem("sessionStart", Date.now().toString());
 
-      // Remove token from URL (important for security)
-      window.history.replaceState({}, document.title, "/");
+      // Remove token from URL but KEEP /admin/ path (do not reset to "/")
+      // Resetting to "/" made tenant URLs become /#/lead and broke refresh
+      const basePath = window.location.pathname.startsWith("/admin")
+        ? "/admin/"
+        : "/";
+      window.history.replaceState({}, document.title, basePath);
+      window.location.hash = "#/lead";
     }
   }, []);
   /* ========================== */
