@@ -109,7 +109,7 @@ export const saveHomePage = async (req, res) => {
 
     // ================= Save in DB =================
     const saved = await HomePage.findOneAndUpdate(
-      {},
+      { companyId: req.companyId },
       {
         heroSlider: { slides },
         whyChooseUs: {
@@ -145,7 +145,7 @@ export const saveHomePage = async (req, res) => {
 // ================= GET =================
 export const getHomePage = async (req, res) => {
   try {
-    const data = await HomePage.findOne();
+    const data = await HomePage.findOne({ companyId: req.companyId });
     if (!data) {
       return res.status(200).json({ 
         success: true, 

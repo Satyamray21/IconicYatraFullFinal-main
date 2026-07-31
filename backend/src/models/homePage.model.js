@@ -2,11 +2,6 @@
 import mongoose from "mongoose";
 
 const slideSchema = new mongoose.Schema({
-    companyId: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'Company', 
-      required: true 
-    },
   image: String,
   imageName: String,
   title: String,
@@ -30,6 +25,11 @@ const achievementSchema = new mongoose.Schema({
 
 const homePageSchema = new mongoose.Schema(
   {
+    companyId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Company', 
+      required: true 
+    },
     heroSlider: {
       slides: [slideSchema],
     },
