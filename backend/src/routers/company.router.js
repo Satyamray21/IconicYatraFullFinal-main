@@ -13,9 +13,6 @@ import { requireSuperAdmin } from "../middleware/superAdmin.middleware.js";
 
 const router = express.Router();
 
-// ALL COMPANY ENDPOINTS REQUIRE UNIVERSAL SUPERADMIN PRIVILEGES
-router.use(requireSuperAdmin);
-
 // handle multiple uploads: logo + signature
 router.post(
     "/",
