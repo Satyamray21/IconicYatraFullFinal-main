@@ -228,6 +228,9 @@ app.use(express.static(activeFrontendDir, { index: false }));
 // Serve dashboard assets statically under /admin (excluding index.html)
 app.use("/admin", express.static(activeDashboardDir, { index: false }));
 
+// Serve unique dashboard assets directly to avoid conflicts with frontend assets
+app.use("/dashboard-assets", express.static(path.join(activeDashboardDir, "dashboard-assets")));
+
 // Catch-all route to serve dynamic index.html
 app.get(/.*/, async (req, res, next) => {
   if (req.originalUrl.startsWith("/api")) return next();
