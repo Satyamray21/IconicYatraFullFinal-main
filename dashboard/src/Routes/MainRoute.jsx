@@ -324,7 +324,7 @@ const MainRoute = () => {
     if (window.location.hostname.includes("iconicyatra.com")) {
       window.location.href = "https://www.iconicyatra.com/login";
     } else {
-      window.location.href = "/login"; // This drops the /admin path and goes to the tenant's root frontend
+      window.location.href = window.location.pathname.startsWith("/admin") ? "/admin/login" : "/login"; 
     }
     return null;
   }
