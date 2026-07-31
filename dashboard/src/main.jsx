@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
-import { BrowserRouter } from "react-router-dom";
+import { HashRouter } from "react-router-dom";
 import { Provider } from "react-redux";
 import store from "./store/store";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -18,7 +18,7 @@ root.render(
   <React.StrictMode>
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Provider store={store}>
-        <BrowserRouter basename={window.location.pathname.startsWith('/admin') ? '/admin' : '/'}>
+        <HashRouter>
           <App />
 
           {/* ✅ Global Toast Container */}
@@ -33,8 +33,8 @@ root.render(
             pauseOnHover
             theme="colored"
           />
-        </BrowserRouter>
-      </Provider>
+          </HashRouter>
+        </Provider>
     </LocalizationProvider>
   </React.StrictMode>
 );
