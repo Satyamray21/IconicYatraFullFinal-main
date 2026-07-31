@@ -233,7 +233,7 @@ app.get(/.*/, async (req, res, next) => {
   if (req.originalUrl.startsWith("/api")) return next();
   
   try {
-    const isAdmin = req.originalUrl.startsWith("/admin");
+    const isAdmin = req.originalUrl.startsWith("/admin") && !req.originalUrl.startsWith("/admin/login");
     let domain = req.headers.host?.split(":")[0];
     if (domain?.startsWith("www.")) domain = domain.substring(4);
 
