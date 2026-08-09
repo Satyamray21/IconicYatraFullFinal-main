@@ -609,21 +609,36 @@ const PackageEditView = () => {
 
       const exactMatch = hotelCity === searchCity;
       const partialMatch =
-        hotelCity.includes(searchCity) ||
-        searchCity.includes(hotelCity) ||
-        hotelName.includes(searchCity) ||
-        hotelCity.includes(searchCity.split(" ")[0]) ||
-        searchCity.includes(hotelCity.split(" ")[0]);
+        (hotelCity !== "" && (
+          hotelCity.includes(searchCity) ||
+          searchCity.includes(hotelCity) ||
+          hotelCity.includes(searchCity.split(" ")[0]) ||
+          searchCity.includes(hotelCity.split(" ")[0])
+        )) ||
+        (hotelName !== "" && hotelName.includes(searchCity));
 
       return exactMatch || partialMatch;
     });
 
     const organized = { standard: [], deluxe: [], superior: [] };
     destinationHotels.forEach((hotel) => {
-      const category = hotel.category?.toLowerCase() || "standard";
+      let category = typeof hotel.category === 'string' ? hotel.category.toLowerCase().trim() : "";
+      if (!category && hotel.hotelType) {
+        if (Array.isArray(hotel.hotelType) && hotel.hotelType.length > 0) {
+          category = hotel.hotelType[0].toLowerCase().trim();
+        } else if (typeof hotel.hotelType === 'string') {
+          category = hotel.hotelType.toLowerCase().trim();
+        }
+      }
+      if (!category) category = "standard";
+
       const hotelName = hotel.hotelName?.trim();
-      if (hotelName && organized[category] && !organized[category].includes(hotelName)) {
-        organized[category].push(hotelName);
+      if (hotelName) {
+        if (organized[category] && !organized[category].includes(hotelName)) {
+          organized[category].push(hotelName);
+        } else if (!organized[category] && !organized.standard.includes(hotelName)) {
+          organized.standard.push(hotelName);
+        }
       }
     });
     return organized;
