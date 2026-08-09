@@ -125,6 +125,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   // Loading state for save button
   const [saving, setSaving] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [fetchingImageIndex, setFetchingImageIndex] = useState(null);
 
   // Search states
   const [arrivalSearch, setArrivalSearch] = useState("");
@@ -850,6 +851,19 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   }, [dispatch, selectedCountry, selectedState, tourType]);
 
   // Rest of your handlers remain the same
+  const getCityForDay = (dayIndex) => {
+    if (!tourDetails.stayLocations || tourDetails.stayLocations.length === 0) return packageData?.sector || "landscape";
+    let currentDay = 0;
+    for (let loc of tourDetails.stayLocations) {
+      const nights = parseInt(loc.nights) || 1;
+      if (dayIndex < currentDay + nights) {
+        return loc.city;
+      }
+      currentDay += nights;
+    }
+    return tourDetails.stayLocations[tourDetails.stayLocations.length - 1].city;
+  };
+
   const handleDayChange = (index, field, value) => {
     const updatedDays = [...tourDetails.days];
     if (field === "selectedSightseeing") {
@@ -912,6 +926,38 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       setSnackbar({ open: true, message: "Failed to generate itinerary. Check your API key and try again.", severity: "error" });
     } finally {
       setIsGeneratingAi(false);
+    }
+  };
+
+  const handleAutoFetchImage = async (index, query, isBanner = false) => {
+    if (!query) {
+      setSnackbar({ open: true, message: "No destination found to fetch image for. Please fill out the Sector or Stay Locations field.", severity: "warning" });
+      return;
+    }
+    setFetchingImageIndex(isBanner ? 'banner' : index);
+    
+    // Use page offset so each day gets a completely unique image of the same destination
+    // Banner gets page 1. Day 1 gets page 2, Day 2 gets page 3, etc.
+    const pageNum = isBanner ? 1 : (index !== null && index !== undefined ? index + 2 : 1);
+    
+    // For landmarks, it sometimes helps to append "landmark" or "city" if the query is just a city name
+    const finalQuery = isBanner ? query : `${query} landmark architecture`;
+    
+    try {
+      const res = await axios.get(`/photos/search?query=${encodeURIComponent(finalQuery)}&page=${pageNum}`);
+      if (res.data?.success && res.data?.data) {
+        if (isBanner) {
+          setTourDetails(prev => ({ ...prev, bannerImage: res.data.data }));
+        } else {
+          handleDayChange(index, "dayImage", res.data.data);
+        }
+        setSnackbar({ open: true, message: "Photo fetched successfully!", severity: "success" });
+      }
+    } catch (err) {
+      console.error("Auto fetch image error:", err);
+      setSnackbar({ open: true, message: "Failed to fetch photo.", severity: "error" });
+    } finally {
+      setFetchingImageIndex(null);
     }
   };
 
@@ -1417,24 +1463,44 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
           />
         </Grid>
         <Grid size={{ xs: 12 }}>
-          <Button variant="contained" component="label">
-            Upload Banner Image
-            <input
-              hidden
-              type="file"
-              accept="image/*"
-              onChange={(e) =>
-                setTourDetails({
-                  ...tourDetails,
-                  bannerImage: e.target.files[0],
-                })
-              }
-            />
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Button variant="contained" component="label" sx={{ textTransform: 'none', fontWeight: 'bold' }}>
+              Upload Banner Image
+              <input
+                hidden
+                type="file"
+                accept="image/*"
+                onChange={(e) =>
+                  setTourDetails({
+                    ...tourDetails,
+                    bannerImage: e.target.files[0],
+                  })
+                }
+              />
+            </Button>
+            <Button 
+              variant="contained" 
+              disabled={fetchingImageIndex === 'banner'}
+              onClick={() => handleAutoFetchImage(null, packageData?.sector || "landscape", true)}
+              sx={{
+                background: 'linear-gradient(45deg, #9c27b0 30%, #f50057 90%)',
+                color: 'white',
+                boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
+                textTransform: 'none',
+                fontWeight: 'bold',
+              }}
+            >
+              {fetchingImageIndex === 'banner' ? "⏳ Fetching..." : "✨ Auto-Fetch Banner Photo"}
+            </Button>
+          </Box>
           {tourDetails.bannerImage && (
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              {tourDetails.bannerImage.name}
-            </Typography>
+            <Box sx={{ mt: 1 }}>
+              {typeof tourDetails.bannerImage === 'string' ? (
+                <img src={tourDetails.bannerImage} alt="Banner preview" style={{ height: "200px", width: "100%", objectFit: "cover", borderRadius: "8px", marginTop: "8px" }} />
+              ) : (
+                <Typography variant="body2">{tourDetails.bannerImage.name}</Typography>
+              )}
+            </Box>
           )}
         </Grid>
       </Grid>
@@ -1528,21 +1594,41 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
               />
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <Button variant="outlined" component="label">
-                Upload Day Image
-                <input
-                  hidden
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) =>
-                    handleDayChange(index, "dayImage", e.target.files[0])
-                  }
-                />
-              </Button>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Button variant="outlined" component="label" sx={{ textTransform: 'none', fontWeight: 'bold' }}>
+                  Upload Day Image
+                  <input
+                    hidden
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      handleDayChange(index, "dayImage", e.target.files[0])
+                    }
+                  />
+                </Button>
+                <Button 
+                  variant="contained" 
+                  disabled={fetchingImageIndex === index}
+                  onClick={() => handleAutoFetchImage(index, getCityForDay(index))}
+                  sx={{
+                    background: 'linear-gradient(45deg, #9c27b0 30%, #f50057 90%)',
+                    color: 'white',
+                    boxShadow: '0 2px 4px 1px rgba(255, 105, 135, .3)',
+                    textTransform: 'none',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {fetchingImageIndex === index ? "⏳ Fetching..." : "✨ Auto-Fetch Photo"}
+                </Button>
+              </Box>
               {day.dayImage && (
-                <Typography variant="body2" sx={{ mt: 1 }}>
-                  {day.dayImage.name}
-                </Typography>
+                <Box sx={{ mt: 1 }}>
+                  {typeof day.dayImage === 'string' ? (
+                    <img src={day.dayImage} alt="Day preview" style={{ height: "150px", width: "100%", objectFit: "cover", borderRadius: "8px", marginTop: "8px" }} />
+                  ) : (
+                    <Typography variant="body2">{day.dayImage.name}</Typography>
+                  )}
+                </Box>
               )}
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>

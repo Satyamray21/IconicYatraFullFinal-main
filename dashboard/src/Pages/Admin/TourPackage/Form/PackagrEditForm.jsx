@@ -38,6 +38,8 @@ import {
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
 } from "@mui/icons-material";
+import { ArrowBack, Delete, Check } from "@mui/icons-material";
+import axios from "../../../../utils/axios";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
@@ -151,6 +153,7 @@ const PackageEditView = () => {
   const [addMore, setAddMore] = useState("");
   const [currentHotelCategory, setCurrentHotelCategory] = useState("");
   const [hotelDialogOpen, setHotelDialogOpen] = useState(false);
+  const [fetchingImageIndex, setFetchingImageIndex] = useState(null);
 
   const { options = [] } = useSelector((state) => state.leads || {});
   const { hotels, loading: hotelsLoading } = useSelector((state) => state.hotel || {});
@@ -865,6 +868,51 @@ const PackageEditView = () => {
       };
     }
     setPkg({ ...pkg, days: updated });
+  };
+
+  const handleAutoFetchImage = async (index, query, isBanner = false) => {
+    if (!query) {
+      alert("No destination found to fetch image for. Please ensure Sector or Stay Locations are filled.");
+      return;
+    }
+    setFetchingImageIndex(isBanner ? 'banner' : index);
+    
+    // Use page offset so each day gets a completely unique image of the same destination
+    // Banner gets page 1. Day 1 gets page 2, Day 2 gets page 3, etc.
+    const pageNum = isBanner ? 1 : (index !== null && index !== undefined ? index + 2 : 1);
+    
+    // For landmarks, it sometimes helps to append "landmark" or "city" if the query is just a city name
+    const finalQuery = isBanner ? query : `${query} landmark architecture`;
+    
+    try {
+      const res = await axios.get(`/photos/search?query=${encodeURIComponent(finalQuery)}&page=${pageNum}`);
+      if (res.data?.success && res.data?.data) {
+        if (isBanner) {
+          setPkg(prev => ({ ...prev, bannerImage: res.data.data }));
+        } else {
+          handleDayChange(index, "dayImage", res.data.data);
+        }
+        alert("Photo fetched successfully! Please click Save Package to save changes.");
+      }
+    } catch (err) {
+      console.error("Auto fetch image error:", err);
+      alert("Failed to fetch photo.");
+    } finally {
+      setFetchingImageIndex(null);
+    }
+  };
+
+  const getCityForDay = (dayIndex) => {
+    if (!pkg.stayLocations || pkg.stayLocations.length === 0) return pkg.sector || "landscape";
+    let currentDay = 0;
+    for (let loc of pkg.stayLocations) {
+      const nights = parseInt(loc.nights) || 1;
+      if (dayIndex < currentDay + nights) {
+        return loc.city;
+      }
+      currentDay += nights;
+    }
+    return pkg.stayLocations[pkg.stayLocations.length - 1].city;
   };
 
   const handleAddDay = () => {
@@ -2039,19 +2087,35 @@ const PackageEditView = () => {
                     </Typography>
                   </Box>
                 )}
-                <Button variant="contained" component="label" sx={{ mt: 2 }}>
-                  Upload Banner
-                  <input
-                    type="file"
-                    hidden
-                    accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) {
-                        handleBannerUpload(e.target.files[0]);
-                      }
+                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 2 }}>
+                  <Button variant="contained" component="label" sx={{ textTransform: 'none', fontWeight: 'bold' }}>
+                    Upload Banner
+                    <input
+                      type="file"
+                      hidden
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) {
+                          handleBannerUpload(e.target.files[0]);
+                        }
+                      }}
+                    />
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    disabled={fetchingImageIndex === 'banner'}
+                    onClick={() => handleAutoFetchImage(null, pkg.sector || "landscape", true)}
+                    sx={{
+                      background: 'linear-gradient(45deg, #9c27b0 30%, #f50057 90%)',
+                      color: 'white',
+                      boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
+                      textTransform: 'none',
+                      fontWeight: 'bold',
                     }}
-                  />
-                </Button>
+                  >
+                    {fetchingImageIndex === 'banner' ? "⏳ Fetching..." : "✨ Auto-Fetch"}
+                  </Button>
+                </Box>
               </Box>
 
               {/* Days Section */}
@@ -2168,33 +2232,49 @@ const PackageEditView = () => {
                             <img
                               src={day.dayImage}
                               alt={`Day ${index + 1}`}
-                              style={{ maxHeight: 100, maxWidth: "100%" }}
+                              style={{ height: "150px", width: "100%", objectFit: "cover", borderRadius: "8px" }}
                             />
                           ) : (
                             <Typography variant="caption">No image</Typography>
                           )}
-                          <Button
-                            variant="outlined"
-                            component="label"
-                            size="small"
-                            fullWidth
-                            sx={{ mt: 1 }}
-                          >
-                            {day?.dayImage ? "Change" : "Upload"} Image
-                            <input
-                              hidden
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => {
-                                if (e.target.files?.[0]) {
-                                  handleDayImageUpload(
-                                    index,
-                                    e.target.files[0],
-                                  );
-                                }
-                              }}
-                            />
-                          </Button>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'center', mt: 2 }}>
+                                <Button
+                                  variant="outlined"
+                                  component="label"
+                                  size="small"
+                                  sx={{ textTransform: 'none', fontWeight: 'bold' }}
+                                >
+                                  {day?.dayImage ? "Change" : "Upload"}
+                                  <input
+                                    type="file"
+                                    hidden
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      if (e.target.files?.[0]) {
+                                        handleDayImageUpload(
+                                          index,
+                                          e.target.files[0],
+                                        );
+                                      }
+                                    }}
+                                  />
+                                </Button>
+                                <Button 
+                                  variant="contained" 
+                                  size="small"
+                                  disabled={fetchingImageIndex === index}
+                                  onClick={() => handleAutoFetchImage(index, getCityForDay(index))}
+                                  sx={{
+                                    background: 'linear-gradient(45deg, #9c27b0 30%, #f50057 90%)',
+                                    color: 'white',
+                                    boxShadow: '0 2px 4px 1px rgba(255, 105, 135, .3)',
+                                    textTransform: 'none',
+                                    fontWeight: 'bold',
+                                  }}
+                                >
+                                  {fetchingImageIndex === index ? "⏳ Fetching..." : "✨ Auto-Fetch"}
+                                </Button>
+                              </Box>
                         </Box>
                       </Grid>
 
