@@ -923,7 +923,13 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       }
     } catch (err) {
       console.error("Failed to generate itinerary:", err);
-      setSnackbar({ open: true, message: "Failed to generate itinerary. Check your API key and try again.", severity: "error" });
+      setSnackbar({
+        open: true,
+        message:
+          err?.response?.data?.message ||
+          "Failed to generate itinerary. Please try again.",
+        severity: "error",
+      });
     } finally {
       setIsGeneratingAi(false);
     }
