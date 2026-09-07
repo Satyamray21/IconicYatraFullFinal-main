@@ -10,20 +10,25 @@ export const fetchPhoto = async (req, res, next) => {
       });
     }
 
-    const { query, page = 1 } = req.query;
-    if (!query) {
+    const { query, page = 1, per_page = 20, all = "false" } = req.query;
+    if (!query || !query.trim()) {
       return res.status(400).json({
         success: false,
         message: "Search query is required (e.g., ?query=Gangtok).",
       });
     }
 
-    const fetchFromUnsplash = async (searchQuery) => {
+    const cleanQuery = query.trim();
+    const isPickerMode = all === "true" || all === true;
+    const requestedPage = Math.max(1, parseInt(page) || 1);
+    const requestedPerPage = Math.min(30, Math.max(5, parseInt(per_page) || 20));
+
+    const fetchFromUnsplash = async (searchQuery, targetPage = 1) => {
       return await axios.get("https://api.unsplash.com/search/photos", {
         params: {
           query: searchQuery,
-          per_page: 15,
-          page: 1, // Always fetch page 1 to get a pool of results
+          per_page: requestedPerPage,
+          page: targetPage,
           orientation: "landscape",
         },
         headers: {
@@ -32,28 +37,49 @@ export const fetchPhoto = async (req, res, next) => {
       });
     };
 
-    // Call Unsplash Search API
-    let response = await fetchFromUnsplash(query);
+    // In picker mode, pass the actual page to Unsplash for genuine pagination
+    const unsplashPage = isPickerMode ? requestedPage : 1;
+    let response = await fetchFromUnsplash(cleanQuery, unsplashPage);
 
-    // Fallback if the highly specific query yields 0 results
-    if ((!response.data.results || response.data.results.length === 0) && query.includes(" landmark architecture")) {
-      const fallbackQuery = query.replace(" landmark architecture", "").trim();
-      response = await fetchFromUnsplash(fallbackQuery);
+    // Fallback 1: If query includes " landmark architecture" and had no results, strip it
+    if ((!response.data.results || response.data.results.length === 0) && cleanQuery.includes(" landmark architecture")) {
+      const fallbackQuery = cleanQuery.replace(" landmark architecture", "").trim();
+      response = await fetchFromUnsplash(fallbackQuery, unsplashPage);
+    }
+
+    // Fallback 2: If still 0 results and query has multiple words (e.g. specific temple or point + city), try first 2 words
+    if ((!response.data.results || response.data.results.length === 0) && cleanQuery.split(" ").length > 2) {
+      const fallbackQuery = cleanQuery.split(" ").slice(0, 2).join(" ");
+      response = await fetchFromUnsplash(fallbackQuery, unsplashPage);
     }
 
     if (response.data.results && response.data.results.length > 0) {
-      // Use the requested page as an index, modulo the total results
-      // This ensures we never hit a 404 due to deep pagination
-      const resultIndex = (parseInt(page) - 1) % response.data.results.length;
-      const photoUrl = response.data.results[resultIndex].urls.regular;
+      const photos = response.data.results.map((item) => ({
+        id: item.id,
+        url: item.urls?.regular || item.urls?.full,
+        small: item.urls?.small || item.urls?.regular,
+        thumb: item.urls?.thumb || item.urls?.small,
+        alt: item.alt_description || item.description || cleanQuery,
+        photographer: item.user?.name || "Unsplash Contributor",
+      }));
+
+      // For single-url auto-fetch backwards compatibility:
+      // If NOT in picker mode, use the page as an offset index so consecutive days get distinct images
+      const resultIndex = isPickerMode ? 0 : (requestedPage - 1) % photos.length;
+      const photoUrl = photos[resultIndex]?.url || photos[0]?.url;
+
       return res.status(200).json({
         success: true,
         data: photoUrl,
+        photos,
+        total: response.data.total || photos.length,
+        totalPages: response.data.total_pages || 1,
+        page: unsplashPage,
       });
     } else {
       return res.status(404).json({
         success: false,
-        message: "No photos found for the given destination.",
+        message: `No photos found for "${cleanQuery}". Try another sightseeing spot or city name.`,
       });
     }
   } catch (error) {

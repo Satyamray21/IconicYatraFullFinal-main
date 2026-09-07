@@ -24,10 +24,18 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  Chip,
+  InputAdornment,
+  Tooltip,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import DeleteIcon from "@mui/icons-material/Delete";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
+import SearchIcon from "@mui/icons-material/Search";
+import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CloseIcon from "@mui/icons-material/Close";
 import { useDispatch, useSelector } from "react-redux";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import {
@@ -126,6 +134,20 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   const [saving, setSaving] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [fetchingImageIndex, setFetchingImageIndex] = useState(null);
+
+  // Photo Picker Modal state for choosing photos
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
+  const [photoPickerTarget, setPhotoPickerTarget] = useState({ isBanner: false, dayIndex: null });
+  const [photoPickerSearch, setPhotoPickerSearch] = useState("");
+  const [photoPickerResults, setPhotoPickerResults] = useState([]);
+  const [photoPickerLoading, setPhotoPickerLoading] = useState(false);
+  const [photoPickerPage, setPhotoPickerPage] = useState(1);
+  const [photoPickerTotalPages, setPhotoPickerTotalPages] = useState(1);
+  const [photoPickerSightseeing, setPhotoPickerSightseeing] = useState([]);
+  const [photoPickerCity, setPhotoPickerCity] = useState("");
+  const [photoPickerDayTitle, setPhotoPickerDayTitle] = useState("");
+  const [isAutoFetchingAll, setIsAutoFetchingAll] = useState(false);
+  const [dayPhotoOffsets, setDayPhotoOffsets] = useState({});
 
   // Search states
   const [arrivalSearch, setArrivalSearch] = useState("");
@@ -935,19 +957,45 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     }
   };
 
+  const getDaySightseeingList = (index) => {
+    const day = tourDetails.days?.[index];
+    if (!day) return [];
+    const list = [
+      ...(Array.isArray(day.selectedSightseeing) ? day.selectedSightseeing : []),
+      ...(Array.isArray(day.sightseeing) ? day.sightseeing : []),
+    ];
+    return [...new Set(list.map((s) => (typeof s === "string" ? s.trim() : "")).filter(Boolean))];
+  };
+
+  const getBestDayQuery = (index) => {
+    const day = tourDetails.days?.[index];
+    const city = getCityForDay(index);
+    const sightseeingList = getDaySightseeingList(index);
+
+    if (sightseeingList.length > 0) {
+      return `${sightseeingList[0]} ${city || ""}`.trim();
+    }
+    if (day?.title && day.title.trim()) {
+      return `${day.title} ${city || ""}`.trim();
+    }
+    return city || packageData?.sector || "landscape";
+  };
+
   const handleAutoFetchImage = async (index, query, isBanner = false) => {
-    if (!query) {
+    const effectiveQuery = (query || (isBanner ? (packageData?.sector || selectedState || selectedCountry || "landscape") : getBestDayQuery(index))).trim();
+    if (!effectiveQuery) {
       setSnackbar({ open: true, message: "No destination found to fetch image for. Please fill out the Sector or Stay Locations field.", severity: "warning" });
       return;
     }
     setFetchingImageIndex(isBanner ? 'banner' : index);
     
-    // Use page offset so each day gets a completely unique image of the same destination
-    // Banner gets page 1. Day 1 gets page 2, Day 2 gets page 3, etc.
-    const pageNum = isBanner ? 1 : (index !== null && index !== undefined ? index + 2 : 1);
-    
-    // For landmarks, it sometimes helps to append "landmark" or "city" if the query is just a city name
-    const finalQuery = isBanner ? query : `${query} landmark architecture`;
+    // Cycle page offsets so subsequent clicks on "Auto-Fetch" fetch different photos
+    const currentOffset = isBanner ? (dayPhotoOffsets['banner'] || 0) : (dayPhotoOffsets[index] || 0);
+    const nextOffset = currentOffset + 1;
+    setDayPhotoOffsets(prev => ({ ...prev, [isBanner ? 'banner' : index]: nextOffset }));
+
+    const pageNum = isBanner ? nextOffset : ((index !== null && index !== undefined ? index * 2 : 0) + nextOffset);
+    const finalQuery = isBanner ? effectiveQuery : `${effectiveQuery} landmark architecture`;
     
     try {
       const res = await axios.get(`/photos/search?query=${encodeURIComponent(finalQuery)}&page=${pageNum}`);
@@ -957,7 +1005,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
         } else {
           handleDayChange(index, "dayImage", res.data.data);
         }
-        setSnackbar({ open: true, message: "Photo fetched successfully!", severity: "success" });
+        setSnackbar({ open: true, message: `Photo fetched for ${effectiveQuery}! Click "Choose Photo" if you'd like to pick another.`, severity: "success" });
       }
     } catch (err) {
       console.error("Auto fetch image error:", err);
@@ -965,6 +1013,117 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     } finally {
       setFetchingImageIndex(null);
     }
+  };
+
+  const handleAutoFetchAllPhotos = async () => {
+    if (!tourDetails.days || tourDetails.days.length === 0) {
+      setSnackbar({ open: true, message: "No days available to fetch photos for.", severity: "warning" });
+      return;
+    }
+    setIsAutoFetchingAll(true);
+    let successCount = 0;
+    try {
+      const updatedDays = [...tourDetails.days];
+      for (let i = 0; i < updatedDays.length; i++) {
+        const query = getBestDayQuery(i);
+        const pageNum = i + 1;
+        const finalQuery = `${query} landmark architecture`;
+        try {
+          const res = await axios.get(
+            `/photos/search?query=${encodeURIComponent(finalQuery)}&page=${pageNum}`
+          );
+          if (res.data?.success && res.data?.data) {
+            updatedDays[i] = { ...updatedDays[i], dayImage: res.data.data };
+            successCount++;
+          }
+        } catch (e) {
+          console.warn(`Could not auto-fetch photo for day ${i + 1}:`, e);
+        }
+      }
+      setTourDetails((prev) => ({ ...prev, days: updatedDays }));
+      setSnackbar({
+        open: true,
+        message: `Photos fetched for ${successCount} day(s) matched to sightseeing! Click "Choose Photo" on any day to pick another.`,
+        severity: "success",
+      });
+    } catch (err) {
+      console.error("Auto fetch all error:", err);
+      setSnackbar({ open: true, message: "Failed to fetch photos for all days.", severity: "error" });
+    } finally {
+      setIsAutoFetchingAll(false);
+    }
+  };
+
+  const handleOpenPhotoPicker = (index, isBanner = false) => {
+    setPhotoPickerTarget({ isBanner, dayIndex: index });
+
+    if (isBanner) {
+      const bannerQuery = packageData?.sector || selectedState || selectedCountry || "landscape";
+      setPhotoPickerSightseeing([]);
+      setPhotoPickerCity(bannerQuery);
+      setPhotoPickerDayTitle("Banner Photo");
+      setPhotoPickerSearch(bannerQuery);
+      setPhotoPickerPage(1);
+      setPhotoPickerOpen(true);
+      searchPhotosForPicker(bannerQuery, 1);
+    } else {
+      const day = tourDetails.days?.[index];
+      const city = getCityForDay(index);
+      const sights = getDaySightseeingList(index);
+      const initialQuery = getBestDayQuery(index);
+
+      setPhotoPickerSightseeing(sights);
+      setPhotoPickerCity(city);
+      setPhotoPickerDayTitle(day?.title || `Day ${index + 1}`);
+      setPhotoPickerSearch(initialQuery);
+      setPhotoPickerPage(1);
+      setPhotoPickerOpen(true);
+      searchPhotosForPicker(initialQuery, 1);
+    }
+  };
+
+  const searchPhotosForPicker = async (query, page = 1) => {
+    const cleanQuery = (query || "").trim();
+    if (!cleanQuery) return;
+    setPhotoPickerLoading(true);
+    try {
+      const res = await axios.get(
+        `/photos/search?query=${encodeURIComponent(cleanQuery)}&all=true&page=${page}&per_page=20`
+      );
+      if (res.data?.success) {
+        const list = Array.isArray(res.data.photos) && res.data.photos.length > 0
+          ? res.data.photos
+          : res.data.data
+            ? [{ id: "single", url: res.data.data, small: res.data.data, thumb: res.data.data, alt: cleanQuery, photographer: "Unsplash" }]
+            : [];
+        setPhotoPickerResults(list);
+        setPhotoPickerPage(page);
+        setPhotoPickerTotalPages(res.data.totalPages || 1);
+      } else {
+        setPhotoPickerResults([]);
+      }
+    } catch (err) {
+      console.error("Failed to search photos:", err);
+      setPhotoPickerResults([]);
+    } finally {
+      setPhotoPickerLoading(false);
+    }
+  };
+
+  const handleSelectPhoto = (photoUrl) => {
+    if (!photoUrl) return;
+    if (photoPickerTarget.isBanner) {
+      setTourDetails((prev) => ({ ...prev, bannerImage: photoUrl }));
+      setSnackbar({ open: true, message: "Banner image updated successfully!", severity: "success" });
+    } else if (photoPickerTarget.dayIndex !== null && photoPickerTarget.dayIndex !== undefined) {
+      handleDayChange(photoPickerTarget.dayIndex, "dayImage", photoUrl);
+      setSnackbar({
+        open: true,
+        message: `Photo selected for Day ${photoPickerTarget.dayIndex + 1}!`,
+        severity: "success",
+      });
+    }
+    setPhotoPickerOpen(false);
   };
 
   const handleAddDay = () => {
@@ -1469,9 +1628,35 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
           />
         </Grid>
         <Grid size={{ xs: 12 }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Button variant="contained" component="label" sx={{ textTransform: 'none', fontWeight: 'bold' }}>
-              Upload Banner Image
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Button 
+              variant="contained" 
+              onClick={() => handleOpenPhotoPicker(null, true)}
+              startIcon={<PhotoLibraryIcon />}
+              sx={{
+                background: 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)',
+                color: 'white',
+                textTransform: 'none',
+                fontWeight: 'bold',
+                boxShadow: '0 2px 6px rgba(25, 118, 210, 0.3)',
+              }}
+            >
+              🖼️ Choose Banner Photo
+            </Button>
+            <Button 
+              variant="outlined" 
+              disabled={fetchingImageIndex === 'banner'}
+              onClick={() => handleAutoFetchImage(null, packageData?.sector || selectedState || selectedCountry || "landscape", true)}
+              startIcon={fetchingImageIndex === 'banner' ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
+              {fetchingImageIndex === 'banner' ? "⏳ Fetching..." : "✨ Auto-Fetch Banner Photo"}
+            </Button>
+            <Button variant="outlined" component="label" sx={{ textTransform: 'none', fontWeight: 600 }}>
+              📁 Upload Banner Image
               <input
                 hidden
                 type="file"
@@ -1484,27 +1669,63 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
                 }
               />
             </Button>
-            <Button 
-              variant="contained" 
-              disabled={fetchingImageIndex === 'banner'}
-              onClick={() => handleAutoFetchImage(null, packageData?.sector || "landscape", true)}
-              sx={{
-                background: 'linear-gradient(45deg, #9c27b0 30%, #f50057 90%)',
-                color: 'white',
-                boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
-                textTransform: 'none',
-                fontWeight: 'bold',
-              }}
-            >
-              {fetchingImageIndex === 'banner' ? "⏳ Fetching..." : "✨ Auto-Fetch Banner Photo"}
-            </Button>
+            {tourDetails.bannerImage && (
+              <Button
+                color="error"
+                size="small"
+                onClick={() => setTourDetails((prev) => ({ ...prev, bannerImage: null }))}
+                startIcon={<DeleteIcon fontSize="small" />}
+                sx={{ textTransform: "none" }}
+              >
+                Remove Banner
+              </Button>
+            )}
           </Box>
           {tourDetails.bannerImage && (
-            <Box sx={{ mt: 1 }}>
+            <Box sx={{ mt: 1.5, maxWidth: "550px" }}>
               {typeof tourDetails.bannerImage === 'string' ? (
-                <img src={tourDetails.bannerImage} alt="Banner preview" style={{ height: "200px", width: "100%", objectFit: "cover", borderRadius: "8px", marginTop: "8px" }} />
+                <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden", border: "1px solid #ddd", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+                  <img src={tourDetails.bannerImage} alt="Banner preview" style={{ height: "200px", width: "100%", objectFit: "cover", display: "block" }} />
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      p: 1,
+                      background: "linear-gradient(transparent, rgba(0,0,0,0.75))",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ color: "white", fontWeight: 600 }}>
+                      Current Banner Image
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={() => handleOpenPhotoPicker(null, true)}
+                      sx={{
+                        fontSize: "0.75rem",
+                        py: 0.3,
+                        px: 1.2,
+                        textTransform: "none",
+                        bgcolor: "rgba(255,255,255,0.9)",
+                        color: "#1976d2",
+                        fontWeight: "bold",
+                        "&:hover": { bgcolor: "white" },
+                      }}
+                    >
+                      Change Banner
+                    </Button>
+                  </Box>
+                </Box>
               ) : (
-                <Typography variant="body2">{tourDetails.bannerImage.name}</Typography>
+                <Paper sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", bgcolor: "#f5f5f5", borderRadius: 2 }}>
+                  <Typography variant="body2" fontWeight={500}>📁 {tourDetails.bannerImage.name}</Typography>
+                  <Button size="small" color="error" onClick={() => setTourDetails((prev) => ({ ...prev, bannerImage: null }))}>Remove</Button>
+                </Paper>
               )}
             </Box>
           )}
@@ -1539,19 +1760,33 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       </Grid>
 
       {/* Days Section */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mt={3} mb={1}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mt={3} mb={1} flexWrap="wrap" gap={1.5}>
         <Typography variant="h6" color="primary">
           Day Wise Plan
         </Typography>
-        <Button 
-          variant="contained" 
-          color="secondary" 
-          onClick={handleGenerateItinerary} 
-          disabled={isGeneratingAi}
-          startIcon={isGeneratingAi ? <CircularProgress size={20} /> : <span>✨</span>}
-        >
-          {isGeneratingAi ? "Generating..." : "Generate Itinerary with AI"}
-        </Button>
+        <Box display="flex" gap={1.5} alignItems="center" flexWrap="wrap">
+          {tourDetails.days.length > 0 && (
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleAutoFetchAllPhotos}
+              disabled={isAutoFetchingAll || isGeneratingAi}
+              startIcon={isAutoFetchingAll ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+              sx={{ textTransform: "none", fontWeight: 600 }}
+            >
+              {isAutoFetchingAll ? "Fetching All Photos..." : "✨ Auto-Fetch All Day Photos"}
+            </Button>
+          )}
+          <Button 
+            variant="contained" 
+            color="secondary" 
+            onClick={handleGenerateItinerary} 
+            disabled={isGeneratingAi || isAutoFetchingAll}
+            startIcon={isGeneratingAi ? <CircularProgress size={20} /> : <span>✨</span>}
+          >
+            {isGeneratingAi ? "Generating..." : "Generate Itinerary with AI"}
+          </Button>
+        </Box>
       </Box>
       {tourDetails.days.map((day, index) => (
         <Paper key={index} sx={{ p: 2, my: 2, border: "1px solid #ccc" }}>
@@ -1600,9 +1835,37 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
               />
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                <Button variant="outlined" component="label" sx={{ textTransform: 'none', fontWeight: 'bold' }}>
-                  Upload Day Image
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+                <Button 
+                  variant="contained" 
+                  onClick={() => handleOpenPhotoPicker(index)}
+                  startIcon={<PhotoLibraryIcon />}
+                  sx={{
+                    background: 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)',
+                    color: 'white',
+                    textTransform: 'none',
+                    fontWeight: 'bold',
+                    boxShadow: '0 2px 6px rgba(25, 118, 210, 0.3)',
+                  }}
+                >
+                  🖼️ Choose Photo (by Sightseeing)
+                </Button>
+
+                <Button 
+                  variant="outlined" 
+                  disabled={fetchingImageIndex === index}
+                  onClick={() => handleAutoFetchImage(index, getBestDayQuery(index))}
+                  startIcon={fetchingImageIndex === index ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                  }}
+                >
+                  {fetchingImageIndex === index ? "⏳ Fetching..." : (day.dayImage ? "✨ Auto-Fetch Next" : "✨ Auto-Fetch Photo")}
+                </Button>
+
+                <Button variant="outlined" component="label" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                  📁 Upload Custom
                   <input
                     hidden
                     type="file"
@@ -1612,27 +1875,82 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
                     }
                   />
                 </Button>
-                <Button 
-                  variant="contained" 
-                  disabled={fetchingImageIndex === index}
-                  onClick={() => handleAutoFetchImage(index, getCityForDay(index))}
-                  sx={{
-                    background: 'linear-gradient(45deg, #9c27b0 30%, #f50057 90%)',
-                    color: 'white',
-                    boxShadow: '0 2px 4px 1px rgba(255, 105, 135, .3)',
-                    textTransform: 'none',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  {fetchingImageIndex === index ? "⏳ Fetching..." : "✨ Auto-Fetch Photo"}
-                </Button>
+
+                {day.dayImage && (
+                  <Button
+                    color="error"
+                    size="small"
+                    onClick={() => handleDayChange(index, "dayImage", null)}
+                    startIcon={<DeleteIcon fontSize="small" />}
+                    sx={{ textTransform: "none" }}
+                  >
+                    Remove Photo
+                  </Button>
+                )}
               </Box>
+
               {day.dayImage && (
-                <Box sx={{ mt: 1 }}>
+                <Box sx={{ mt: 1, maxWidth: "460px" }}>
                   {typeof day.dayImage === 'string' ? (
-                    <img src={day.dayImage} alt="Day preview" style={{ height: "150px", width: "100%", objectFit: "cover", borderRadius: "8px", marginTop: "8px" }} />
+                    <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden", border: "1px solid #ddd", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+                      <img
+                        src={day.dayImage}
+                        alt={`Day ${index + 1} preview`}
+                        style={{
+                          height: "180px",
+                          width: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          p: 1,
+                          background: "linear-gradient(transparent, rgba(0,0,0,0.75))",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ color: "white", fontWeight: 600 }}>
+                          Day {index + 1} Image
+                        </Typography>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => handleOpenPhotoPicker(index)}
+                          sx={{
+                            fontSize: "0.75rem",
+                            py: 0.3,
+                            px: 1.2,
+                            textTransform: "none",
+                            bgcolor: "rgba(255,255,255,0.9)",
+                            color: "#1976d2",
+                            fontWeight: "bold",
+                            "&:hover": { bgcolor: "white" },
+                          }}
+                        >
+                          Change Photo
+                        </Button>
+                      </Box>
+                    </Box>
                   ) : (
-                    <Typography variant="body2">{day.dayImage.name}</Typography>
+                    <Paper sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", bgcolor: "#f5f5f5", borderRadius: 2 }}>
+                      <Typography variant="body2" fontWeight={500}>
+                        📁 {day.dayImage.name}
+                      </Typography>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => handleDayChange(index, "dayImage", null)}
+                      >
+                        Remove
+                      </Button>
+                    </Paper>
                   )}
                 </Box>
               )}
@@ -2285,6 +2603,318 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
             disabled={!addMore.trim()}
           >
             Add {currentHotelCategory ? "Hotel" : "Item"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Photo Picker Dialog for selecting sightseeing & landscape photos */}
+      <Dialog
+        open={photoPickerOpen}
+        onClose={() => setPhotoPickerOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            maxHeight: "90vh",
+            display: "flex",
+            flexDirection: "column",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            pb: 1.5,
+            borderBottom: "1px solid #e0e0e0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Box display="flex" alignItems="center" gap={1}>
+            <PhotoLibraryIcon color="primary" />
+            <Typography variant="h6" fontWeight="bold">
+              {photoPickerTarget.isBanner
+                ? "Choose Banner Photo"
+                : `Choose Photo for Day ${(photoPickerTarget.dayIndex ?? 0) + 1}${
+                    photoPickerDayTitle ? ` - ${photoPickerDayTitle}` : ""
+                  }`}
+            </Typography>
+          </Box>
+          <IconButton onClick={() => setPhotoPickerOpen(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3 }}>
+          {/* Sightseeing & City quick filters */}
+          {!photoPickerTarget.isBanner &&
+            (photoPickerSightseeing.length > 0 || photoPickerCity) && (
+              <Box
+                mb={2.5}
+                p={2}
+                sx={{
+                  bgcolor: "#f4f7fb",
+                  borderRadius: 2,
+                  border: "1px solid #e0e7f1",
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  color="text.primary"
+                  fontWeight="bold"
+                  mb={1}
+                  display="flex"
+                  alignItems="center"
+                  gap={0.5}
+                >
+                  <LocationOnIcon fontSize="small" color="error" />
+                  Quick Filter by Day's Sightseeing & City:
+                </Typography>
+                <Box display="flex" flexWrap="wrap" gap={1}>
+                  {photoPickerSightseeing.map((spot, sIdx) => {
+                    const spotQuery = `${spot} ${photoPickerCity || ""}`.trim();
+                    const isSelected =
+                      photoPickerSearch.toLowerCase() === spotQuery.toLowerCase() ||
+                      photoPickerSearch.toLowerCase() === spot.toLowerCase();
+                    return (
+                      <Chip
+                        key={sIdx}
+                        label={`📍 ${spot}`}
+                        clickable
+                        color={isSelected ? "primary" : "default"}
+                        variant={isSelected ? "filled" : "outlined"}
+                        onClick={() => {
+                          setPhotoPickerSearch(spotQuery);
+                          searchPhotosForPicker(spotQuery, 1);
+                        }}
+                        sx={{ fontWeight: 500 }}
+                      />
+                    );
+                  })}
+                  {photoPickerCity && (
+                    <Chip
+                      label={`🏙️ ${photoPickerCity}`}
+                      clickable
+                      color={
+                        photoPickerSearch.toLowerCase() === photoPickerCity.toLowerCase()
+                          ? "primary"
+                          : "default"
+                      }
+                      variant={
+                        photoPickerSearch.toLowerCase() === photoPickerCity.toLowerCase()
+                          ? "filled"
+                          : "outlined"
+                      }
+                      onClick={() => {
+                        setPhotoPickerSearch(photoPickerCity);
+                        searchPhotosForPicker(photoPickerCity, 1);
+                      }}
+                      sx={{ fontWeight: 500 }}
+                    />
+                  )}
+                </Box>
+              </Box>
+            )}
+
+          {/* Search bar */}
+          <Box display="flex" gap={1.5} mb={2.5}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search sightseeing attraction, monument, landscape, or city (e.g. Taj Mahal, Pangong Lake, Eiffel Tower)..."
+              value={photoPickerSearch}
+              onChange={(e) => setPhotoPickerSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  searchPhotosForPicker(photoPickerSearch, 1);
+                }
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Button
+              variant="contained"
+              onClick={() => searchPhotosForPicker(photoPickerSearch, 1)}
+              disabled={photoPickerLoading || !photoPickerSearch.trim()}
+              sx={{ minWidth: 110, textTransform: "none", fontWeight: "bold" }}
+            >
+              Search
+            </Button>
+          </Box>
+
+          {/* Photo Grid */}
+          {photoPickerLoading ? (
+            <Box
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              justifyContent="center"
+              py={8}
+              gap={2}
+            >
+              <CircularProgress size={40} />
+              <Typography variant="body2" color="text.secondary">
+                Searching high-quality photos for "{photoPickerSearch}"...
+              </Typography>
+            </Box>
+          ) : photoPickerResults.length === 0 ? (
+            <Box
+              textAlign="center"
+              py={6}
+              bgcolor="#fafafa"
+              borderRadius={2}
+              border="1px dashed #ccc"
+            >
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                No photos found
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                Try clicking one of the sightseeing tags above or typing a broader name (e.g. city or state name).
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                Found {photoPickerResults.length} photos. Click any photo below to select it:
+              </Typography>
+
+              <Grid container spacing={2}>
+                {photoPickerResults.map((photo, pIdx) => {
+                  const currentImage = photoPickerTarget.isBanner
+                    ? tourDetails.bannerImage
+                    : tourDetails.days?.[photoPickerTarget.dayIndex]?.dayImage;
+                  const isCurrent = currentImage === photo.url;
+
+                  return (
+                    <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={photo.id || pIdx}>
+                      <Card
+                        onClick={() => handleSelectPhoto(photo.url)}
+                        sx={{
+                          cursor: "pointer",
+                          height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
+                          position: "relative",
+                          border: isCurrent ? "3px solid #1976d2" : "1px solid #e0e0e0",
+                          borderRadius: 2,
+                          transition: "all 0.2s ease-in-out",
+                          "&:hover": {
+                            transform: "translateY(-4px)",
+                            boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+                            borderColor: "#1976d2",
+                          },
+                        }}
+                      >
+                        <Box sx={{ position: "relative", paddingTop: "65%", overflow: "hidden" }}>
+                          <img
+                            src={photo.small || photo.url}
+                            alt={photo.alt || "Tour photo"}
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                          {isCurrent && (
+                            <Box
+                              sx={{
+                                position: "absolute",
+                                top: 8,
+                                right: 8,
+                                bgcolor: "primary.main",
+                                color: "white",
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1,
+                                fontSize: "0.75rem",
+                                fontWeight: "bold",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                              }}
+                            >
+                              <CheckCircleIcon sx={{ fontSize: 14 }} /> Current
+                            </Box>
+                          )}
+                        </Box>
+                        <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                              color: "text.secondary",
+                              minHeight: "2.4em",
+                            }}
+                          >
+                            {photo.alt || "Landscape view"}
+                          </Typography>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
+                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: "0.7rem" }}>
+                              📸 {photo.photographer}
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant={isCurrent ? "outlined" : "contained"}
+                              color="primary"
+                              sx={{ py: 0.2, px: 1, fontSize: "0.75rem", textTransform: "none" }}
+                            >
+                              {isCurrent ? "Selected" : "Select"}
+                            </Button>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+
+              {/* Pagination controls */}
+              <Box display="flex" justifyContent="center" alignItems="center" gap={2} mt={3}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={photoPickerPage <= 1 || photoPickerLoading}
+                  onClick={() => searchPhotosForPicker(photoPickerSearch, photoPickerPage - 1)}
+                  sx={{ textTransform: "none" }}
+                >
+                  ◀ Previous
+                </Button>
+                <Typography variant="body2" color="text.secondary">
+                  Page {photoPickerPage} of {photoPickerTotalPages}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={photoPickerPage >= photoPickerTotalPages || photoPickerLoading}
+                  onClick={() => searchPhotosForPicker(photoPickerSearch, photoPickerPage + 1)}
+                  sx={{ textTransform: "none" }}
+                >
+                  Next ▶
+                </Button>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid #eee", justifyContent: "space-between" }}>
+          <Typography variant="caption" color="text.secondary">
+            Photos sourced from Unsplash
+          </Typography>
+          <Button onClick={() => setPhotoPickerOpen(false)} color="inherit">
+            Cancel
           </Button>
         </DialogActions>
       </Dialog>
