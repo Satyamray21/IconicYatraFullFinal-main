@@ -110,6 +110,135 @@ const normalizePolicyState = (source = {}) => {
   };
 };
 
+const generateImpressiveTitles = ({
+  nights,
+  days,
+  sector,
+  country,
+  tourType,
+  packageCategory,
+  stayLocations,
+}) => {
+  if (!nights || nights <= 0) return [];
+  const safeDays = days > 0 ? days : nights + 1;
+  const dur = `${nights} Nights / ${safeDays} Days`;
+  const dur0 = `${String(nights).padStart(2, "0")} Nights / ${String(safeDays).padStart(2, "0")} Days`;
+  const durShort = `${nights}N/${safeDays}D`;
+
+  const dest = (
+    sector ||
+    country ||
+    (Array.isArray(stayLocations) && stayLocations[0]?.city) ||
+    "Scenic Tour"
+  ).trim();
+
+  const cityList = (stayLocations || [])
+    .map((s) => (typeof s === "string" ? s.trim() : s?.city?.trim()))
+    .filter(Boolean);
+
+  const cityChain = (stayLocations || [])
+    .filter((s) => (typeof s === "string" ? s.trim() : s?.city?.trim()))
+    .map((s) => {
+      const c = typeof s === "string" ? s.trim() : s.city.trim();
+      const n = typeof s === "object" ? Number(s.nights) || 1 : 1;
+      return `${c} ${n}N`;
+    })
+    .join(" - ");
+
+  const cityNames =
+    cityList.slice(0, 3).join(", ") + (cityList.length > 3 ? " & more" : "");
+
+  const textToCheck = `${dest} ${tourType || ""} ${packageCategory || ""}`.toLowerCase();
+  const isSpiritual =
+    /kashi|varanasi|ayodhya|puri|char dham|chardham|kedarnath|badrinath|amarnath|haridwar|rishikesh|ujjain|shirdi|vaishno|tirupati|rameshwaram|mathura|vrindavan|yatra|spiritual/i.test(
+      textToCheck
+    );
+  const isHeritage =
+    /rajasthan|jaipur|udaipur|jodhpur|jaisalmer|agra|delhi|khajuraho|hampi|mysore|heritage|royal/i.test(
+      textToCheck
+    );
+  const isHills =
+    /himachal|kashmir|ladakh|manali|shimla|kullu|uttarakhand|nainital|mussoorie|sikkim|gangtok|darjeeling|ooty|munnar|kodaikanal|meghalaya|shillong|hills|mountain/i.test(
+      textToCheck
+    );
+  const isBeach =
+    /goa|andaman|kerala|maldives|bali|phuket|thailand|mauritius|seychelles|dubai|beach|island/i.test(
+      textToCheck
+    );
+
+  const suggestions = [];
+
+  // 1. Primary Mesmerizing / Scenic (Iconic Yatra signature style)
+  suggestions.push({
+    label: `🌟 Mesmerizing ${dest} (${dur0})`,
+    value: `Mesmerizing ${dest}: ${dur0} Scenic Tour`,
+  });
+
+  // 2. Enchanting Getaway
+  suggestions.push({
+    label: `✨ Enchanting ${dest} (${dur})`,
+    value: `Enchanting ${dest} Getaway - ${dur}`,
+  });
+
+  // 3. Thematic / Mood-specific
+  if (isSpiritual) {
+    suggestions.push({
+      label: `🕉️ Divine ${dest} Sacred Yatra`,
+      value: `Divine ${dest}: ${dur0} Sacred Yatra`,
+    });
+  } else if (isHeritage) {
+    suggestions.push({
+      label: `👑 Royal ${dest} Heritage Tour`,
+      value: `Royal ${dest}: ${dur0} Heritage & Palace Tour`,
+    });
+  } else if (isHills) {
+    suggestions.push({
+      label: `🏔️ Splendid ${dest} Mountain Paradise`,
+      value: `Splendid ${dest}: ${dur0} Mountain Paradise Tour`,
+    });
+  } else if (isBeach) {
+    suggestions.push({
+      label: `🌴 Exotic ${dest} Tropical Holiday`,
+      value: `Exotic ${dest} Getaway: ${dur0} Holiday`,
+    });
+  } else {
+    suggestions.push({
+      label: `💎 Splendid ${dest} Explorer`,
+      value: `Splendid ${dest}: ${dur0} Holiday Package`,
+    });
+  }
+
+  // 4. Best of with key cities
+  if (cityNames) {
+    suggestions.push({
+      label: `📍 Best of ${dest} (${cityNames})`,
+      value: `Best of ${dest} (${cityNames}) - ${dur}`,
+    });
+  }
+
+  // 5. Circuit breakdown with night counts per city
+  if (cityChain) {
+    suggestions.push({
+      label: `🗺️ Circuit (${cityChain})`,
+      value: `${dur} ${dest} Tour (${cityChain})`,
+    });
+  }
+
+  // 6. Classic Two-digit Scenic
+  suggestions.push({
+    label: `🎯 ${dur0} Classic`,
+    value: `${dur0} Scenic ${dest} Holiday`,
+  });
+
+  // 7. Short & Punchy
+  suggestions.push({
+    label: `⚡ ${dest} Explorer - ${durShort}`,
+    value: `${dest} Explorer - ${durShort}`,
+  });
+
+  return suggestions;
+};
+
 const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -222,10 +351,46 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   const selectedState = packageData?.sector || "";
   const DOMESTIC_TOUR_TYPES = ["Domestic"];
 
+  // Helper to extract stay locations & calculate nights and days = nights + 1
+  const getStayLocationsFromData = (pkgD, initD) => {
+    if (Array.isArray(pkgD?.stayLocations) && pkgD.stayLocations.length > 0) {
+      return pkgD.stayLocations.map((loc) => ({
+        city: loc.city || loc.destination || "",
+        nights: Number(loc.nights) || 0,
+      }));
+    }
+    if (Array.isArray(initD?.destinationNights) && initD.destinationNights.length > 0) {
+      return initD.destinationNights.map((dest) => ({
+        city: dest.destination || dest.city || "",
+        nights: Number(dest.nights) || 0,
+      }));
+    }
+    if (Array.isArray(initD?.stayLocations) && initD.stayLocations.length > 0) {
+      return initD.stayLocations.map((loc) => ({
+        city: loc.city || loc.destination || "",
+        nights: Number(loc.nights) || 0,
+      }));
+    }
+    return [];
+  };
+
+  const initialStayLocs = getStayLocationsFromData(packageData, initialData);
+  const initialNightsCount = initialStayLocs.reduce((sum, sl) => sum + (Number(sl.nights) || 0), 0);
+  const initialDaysTarget = initialNightsCount > 0 ? initialNightsCount + 1 : 1;
+  const initialTitlesList = generateImpressiveTitles({
+    nights: initialNightsCount,
+    days: initialDaysTarget,
+    sector: packageData?.sector || selectedState,
+    country: selectedCountry,
+    tourType,
+    stayLocations: initialStayLocs,
+  });
+  const initialDefaultTitle = initialTitlesList[0]?.value || "";
+
   const [tourDetails, setTourDetails] = useState({
     arrivalCity: initialData?.arrivalCity || "",
     departureCity: initialData?.departureCity || "",
-    title: initialData?.title || "",
+    title: initialData?.title || initialDefaultTitle,
     notes:
       initialData?.notes ||
       "This is only tentative schedule for sightseeing and travel. Actual sightseeing may get affected due to weather, road conditions, local authority notices, shortage of timing, or off days.",
@@ -242,22 +407,20 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
           sightseeing: d.sightseeing || [],
           selectedSightseeing: d.selectedSightseeing || [],
         }))
-        : [
-          {
+        : Array.from({ length: initialDaysTarget }, () => ({
             title: "",
             notes: "",
             aboutCity: "",
             dayImage: null,
             sightseeing: [],
             selectedSightseeing: [],
-          },
-        ],
+          })),
     perPerson: initialData?.perPerson || 1,
     numberOfRooms: Number(initialData?.numberOfRooms) || 1,
     transportationCostPerDay:
       Number(initialData?.transportationCostPerDay) || 0,
     transportationDays:
-      Number(initialData?.transportationDays) || initialData?.days?.length || 0,
+      Number(initialData?.transportationDays) || initialDaysTarget || 0,
     manualCostMargin: Number(initialData?.manualCostMargin) || 0,
     mealPlan: {
       planType: initialData?.mealPlan?.planType || "",
@@ -448,10 +611,56 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       });
 
       console.log("🔄 Updated destination nights:", updatedDestinationNights);
-      setTourDetails((prev) => ({
-        ...prev,
-        destinationNights: updatedDestinationNights,
-      }));
+
+      const totalN = packageData.stayLocations.reduce(
+        (sum, sl) => sum + (Number(sl.nights) || 0),
+        0
+      );
+      const totalD = totalN > 0 ? totalN + 1 : 1;
+      const impressiveTitles = generateImpressiveTitles({
+        nights: totalN,
+        days: totalD,
+        sector: packageData.sector || selectedState,
+        country: selectedCountry,
+        tourType,
+        stayLocations: packageData.stayLocations,
+      });
+      const generatedTitle = impressiveTitles[0]?.value || "";
+
+      setTourDetails((prev) => {
+        const updates = { destinationNights: updatedDestinationNights };
+
+        // Auto-fill title if currently blank
+        if (!prev.title || prev.title.trim() === "") {
+          updates.title = generatedTitle;
+        }
+
+        // Expand days array to totalD (nights + 1) if currently just 1 empty day
+        const hasOnlyOneEmptyDay =
+          (!prev.days || prev.days.length <= 1) &&
+          (!initialData?.days || initialData.days.length <= 1) &&
+          !prev.days?.[0]?.title &&
+          !prev.days?.[0]?.notes;
+
+        if (hasOnlyOneEmptyDay && totalD > 1) {
+          updates.days = Array.from({ length: totalD }, () => ({
+            title: "",
+            notes: "",
+            aboutCity: "",
+            dayImage: null,
+            sightseeing: [],
+            selectedSightseeing: [],
+          }));
+          if (!prev.transportationDays || prev.transportationDays <= 1) {
+            updates.transportationDays = totalD;
+          }
+        }
+
+        return {
+          ...prev,
+          ...updates,
+        };
+      });
 
       // ✅ We fetch all hotels initially, so local filtering works without overwriting Redux state
       console.log("✅ Local filtering will handle destinations");
@@ -459,6 +668,56 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       console.log("⚠️ No stay locations found in packageData");
     }
   }, [packageData, dispatch]);
+
+  // Live stay locations & duration calculations: Nights from stay locations & Days = Nights + 1
+  const stayLocationsList = useMemo(() => {
+    if (Array.isArray(packageData?.stayLocations) && packageData.stayLocations.length > 0) {
+      return packageData.stayLocations.map((loc) => ({
+        city: loc.city || loc.destination || "",
+        nights: Number(loc.nights) || 0,
+      }));
+    }
+    if (Array.isArray(tourDetails.destinationNights) && tourDetails.destinationNights.length > 0) {
+      return tourDetails.destinationNights.map((dest) => ({
+        city: dest.destination || dest.city || "",
+        nights: Number(dest.nights) || 0,
+      }));
+    }
+    if (Array.isArray(initialData?.stayLocations) && initialData.stayLocations.length > 0) {
+      return initialData.stayLocations.map((loc) => ({
+        city: loc.city || loc.destination || "",
+        nights: Number(loc.nights) || 0,
+      }));
+    }
+    return [];
+  }, [packageData?.stayLocations, tourDetails.destinationNights, initialData?.stayLocations]);
+
+  const calculatedNights = useMemo(() => {
+    return stayLocationsList.reduce((sum, loc) => sum + (Number(loc.nights) || 0), 0);
+  }, [stayLocationsList]);
+
+  const calculatedDays = useMemo(() => {
+    return calculatedNights > 0 ? calculatedNights + 1 : 1;
+  }, [calculatedNights]);
+
+  const titleSuggestions = useMemo(() => {
+    return generateImpressiveTitles({
+      nights: calculatedNights,
+      days: calculatedDays,
+      sector: packageData?.sector || selectedState,
+      country: selectedCountry,
+      tourType,
+      stayLocations: stayLocationsList,
+    });
+  }, [
+    calculatedNights,
+    calculatedDays,
+    packageData?.sector,
+    selectedState,
+    selectedCountry,
+    tourType,
+    stayLocationsList,
+  ]);
 
   const organizedHotelOptions = useMemo(() => {
     const options = {
@@ -1538,7 +1797,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
       {/* Basic Info - OPTIMIZED WITH SEARCH & ADD NEW */}
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Autocomplete
             options={filteredArrivalCities}
             loading={loading}
@@ -1572,7 +1831,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
             }
           />
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Autocomplete
             options={filteredDepartureCities}
             value={tourDetails.departureCity || null}
@@ -1605,15 +1864,88 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
             }
           />
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <TextField
-            fullWidth
-            label="Package Title"
-            value={tourDetails.title}
-            onChange={(e) =>
-              setTourDetails({ ...tourDetails, title: e.target.value })
-            }
-          />
+        <Grid size={{ xs: 12 }}>
+          <Box sx={{ p: 2, bgcolor: "#f9fbfe", borderRadius: 2, border: "1px solid #dbe6f5" }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1} flexWrap="wrap" gap={1}>
+              <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
+                  Package Title
+                </Typography>
+                {calculatedNights > 0 && (
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={`⏱️ Duration: ${calculatedNights} Nights / ${calculatedDays} Days (${calculatedNights}N from Stay Locations + 1 Day)`}
+                    sx={{ fontWeight: "bold" }}
+                  />
+                )}
+              </Box>
+              {calculatedNights > 0 && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  onClick={() => {
+                    if (titleSuggestions.length > 0) {
+                      setTourDetails({ ...tourDetails, title: titleSuggestions[0].value });
+                      setSnackbar({
+                        open: true,
+                        message: `Title updated to "${titleSuggestions[0].value}"`,
+                        severity: "success",
+                      });
+                    }
+                  }}
+                  startIcon={<AutoAwesomeIcon fontSize="small" />}
+                  sx={{ textTransform: "none", fontWeight: "bold", fontSize: "0.8rem" }}
+                >
+                  Auto-Fill Title
+                </Button>
+              )}
+            </Box>
+
+            <TextField
+              fullWidth
+              size="small"
+              placeholder={
+                calculatedNights > 0
+                  ? `e.g. ${calculatedNights} Nights / ${calculatedDays} Days ${packageData?.sector || "Scenic Tour"}`
+                  : "e.g. 5 Nights / 6 Days Scenic Tour"
+              }
+              value={tourDetails.title}
+              onChange={(e) =>
+                setTourDetails({ ...tourDetails, title: e.target.value })
+              }
+              helperText="Nights are computed from Stay Locations & Days = Nights + 1. You can freely edit or choose from suggestions below."
+            />
+
+            {calculatedNights > 0 && titleSuggestions.length > 0 && (
+              <Box display="flex" alignItems="center" gap={1} mt={1.5} flexWrap="wrap">
+                <Typography variant="caption" color="text.secondary" fontWeight="600">
+                  Quick Title Formats:
+                </Typography>
+                {titleSuggestions.map((sug, sIdx) => (
+                  <Chip
+                    key={sIdx}
+                    size="small"
+                    label={sug.label}
+                    clickable
+                    color={tourDetails.title === sug.value ? "primary" : "default"}
+                    variant={tourDetails.title === sug.value ? "filled" : "outlined"}
+                    onClick={() => {
+                      setTourDetails({ ...tourDetails, title: sug.value });
+                      setSnackbar({
+                        open: true,
+                        message: `Applied title: "${sug.value}"`,
+                        severity: "info",
+                      });
+                    }}
+                    sx={{ fontSize: "0.75rem", cursor: "pointer" }}
+                  />
+                ))}
+              </Box>
+            )}
+          </Box>
         </Grid>
         <Grid size={{ xs: 12 }}>
           <TextField
