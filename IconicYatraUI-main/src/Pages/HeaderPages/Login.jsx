@@ -36,10 +36,13 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) return;
+    const loginIdentifier = email.trim();
+    if (!loginIdentifier || !password) return;
 
     try {
-      const res = await dispatch(loginUser({ email, password })).unwrap();
+      const res = await dispatch(
+        loginUser({ email: loginIdentifier, password })
+      ).unwrap();
 
       const token = res.token;
       const user = res.user;
@@ -166,6 +169,11 @@ const LoginPage = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={handleKeyDown} // <-- ENTER key handling
+              inputProps={{
+                autoCapitalize: "none",
+                autoCorrect: "off",
+                spellCheck: "false",
+              }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
