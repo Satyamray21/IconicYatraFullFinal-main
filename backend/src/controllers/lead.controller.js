@@ -10,6 +10,7 @@ import { calculateAccommodation } from "../utils/calculateAccommondation.js"
 import { logActivity } from "../utils/ActivityLog.js"
 import { getCache, setCache, clearPattern, deleteCache } from '../utils/cache.js';
 import { Notification } from '../models/Notification.model.js';
+import { syncLeadToQuotations } from './quotation/unifiedQuotation.controller.js';
 
 //  Helper for single-value fields
 const handleAddMoreValue = (valueObj) => {
@@ -304,6 +305,14 @@ export const updateLead = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Lead not found");
   }
 
+  // Snapshot previous details to reliably match and sync associated quotations
+  const previousLeadInfo = {
+    fullName: existingLead.personalDetails?.fullName,
+    emailId: existingLead.personalDetails?.emailId,
+    mobile: existingLead.personalDetails?.mobile,
+    status: existingLead.status,
+  };
+
   // Source default fallback
   let sourceToSave = officialDetail?.source || existingLead.officialDetail.source;
 
@@ -359,6 +368,11 @@ export const updateLead = asyncHandler(async (req, res) => {
     Object.assign(existingLead.tourDetails, tourDetails);
   }
 
+  if (req.body.status && ['Active', 'Cancelled', 'Confirmed', 'Not Converted'].includes(req.body.status)) {
+    console.log("🔄 Updating status to:", req.body.status);
+    existingLead.status = req.body.status;
+  }
+
   try {
     await existingLead.save();
 
@@ -368,6 +382,14 @@ export const updateLead = asyncHandler(async (req, res) => {
       clearPattern('dashboard:stats:*'),
       deleteCache(`leads:id:${leadId}`)
     ]);
+
+    // Reflect lead updates in Quick Quotation and Custom Quotation (and other quotations)
+    try {
+      const syncResult = await syncLeadToQuotations(existingLead, previousLeadInfo);
+      console.log("🔄 Quotations synced after lead update:", syncResult);
+    } catch (syncError) {
+      console.error("⚠️ Failed to sync lead updates to quotations:", syncError);
+    }
 
     await logActivity({
       action: "UPDATE",
@@ -565,6 +587,19 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
     clearPattern('dashboard:stats:*'),
     deleteCache(`leads:id:${leadId}`)
   ]);
+
+  // Synchronize status to Quick Quotations, Custom Quotations, etc.
+  try {
+    const syncResult = await syncLeadToQuotations(lead, {
+      status: currentStatus,
+      fullName: lead.personalDetails?.fullName,
+      emailId: lead.personalDetails?.emailId,
+      mobile: lead.personalDetails?.mobile,
+    });
+    console.log("🔄 Quotations synced after lead status change:", syncResult);
+  } catch (syncError) {
+    console.error("⚠️ Failed to sync quotations with lead status change:", syncError);
+  }
 
   await logActivity({
     action: "Status Changed",

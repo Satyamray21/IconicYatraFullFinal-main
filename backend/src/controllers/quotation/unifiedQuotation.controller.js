@@ -5,14 +5,21 @@ import { Vehicle } from "../../models/quotation/vehicle.model.js";
 import { FlightQuotation } from "../../models/quotation/flightQuotation.model.js";
 import { HotelQuotation } from "../../models/quotation/hotelQuotation.model.js";
 import { fullQuotation } from "../../models/quotation/fullQuotation.model.js";
+import { Lead } from "../../models/lead.model.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { ApiError } from "../../utils/ApiError.js";
 import { startOfDay, endOfDay, startOfMonth, subMonths, format, addDays } from 'date-fns';
-import { getCache, setCache } from "../../utils/cache.js";
+import { getCache, setCache, clearPattern } from "../../utils/cache.js";
 import Company from "../../models/company.model.js";
 import emailQueue from "../../utils/emailQueue.js";
 import { buildHotelAvailabilityRequestEmail } from "../../utils/customQuotationMailerTemplates.js";
 import EmailAccount from "../../models/emailAccount.model.js";
+
+const escapeRegex = (string) => {
+  if (!string || typeof string !== "string") return "";
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
 
 export const searchAllQuotations = asyncHandler(async (req, res) => {
   const { search } = req.query;
@@ -31,7 +38,8 @@ export const searchAllQuotations = asyncHandler(async (req, res) => {
     CustomQuotation.find(regex ? {
       $or: [
         { quotationId: regex },
-        { "clientDetails.clientName": regex }
+        { "clientDetails.clientName": regex },
+        { leadId: regex }
       ]
     } : {})
       .select("_id quotationId clientDetails.clientName")
@@ -42,7 +50,9 @@ export const searchAllQuotations = asyncHandler(async (req, res) => {
     QuickQuotation.find(regex ? {
       $or: [
         { quickQuotationId: regex },
-        { customerName: regex }
+        { customerName: regex },
+        { email: regex },
+        { leadId: regex }
       ]
     } : {})
       .select("_id quickQuotationId customerName")
@@ -53,7 +63,8 @@ export const searchAllQuotations = asyncHandler(async (req, res) => {
     Vehicle.find(regex ? {
       $or: [
         { vehicleQuotationId: regex },
-        { "basicsDetails.clientName": regex }
+        { "basicsDetails.clientName": regex },
+        { leadId: regex }
       ]
     } : {})
       .select("_id vehicleQuotationId basicsDetails.clientName")
@@ -65,7 +76,9 @@ export const searchAllQuotations = asyncHandler(async (req, res) => {
       $or: [
         { flightQuotationId: regex },
         { "clientDetails.clientName": regex },
-        { "personalDetails.fullName": regex }
+        { "personalDetails.fullName": regex },
+        { "personalDetails.emailId": regex },
+        { leadId: regex }
       ]
     } : {})
       .select("_id flightQuotationId clientDetails.clientName personalDetails.fullName")
@@ -76,7 +89,8 @@ export const searchAllQuotations = asyncHandler(async (req, res) => {
     HotelQuotation.find(regex ? {
       $or: [
         { hotelQuotationId: regex },
-        { "clientDetails.clientName": regex }
+        { "clientDetails.clientName": regex },
+        { leadId: regex }
       ]
     } : {})
       .select("_id hotelQuotationId clientDetails.clientName")
@@ -467,5 +481,384 @@ export const sendHotelAvailabilityEmail = asyncHandler(async (req, res) => {
   emailQueue.add("hotel-availability", { mailOptions, smtpConfig });
 
   res.status(200).json(new ApiResponse(200, null, "Email added to queue successfully"));
+});
+
+/**
+ * Synchronize lead updates across all associated quotations:
+ * - Quick Quotations (customerName, title, email, phone, clientLocation, members, rooms, pickupDrop, etc.)
+ * - Custom Quotations (clientDetails, sector, tourDetails, quotationDetails, vehicleDetails, etc.)
+ * - Vehicle, Flight, Hotel, and Full quotations
+ *
+ * @param {Object} lead - The updated Lead document
+ * @param {Object} previousLeadInfo - Snapshot of lead details before update
+ * @returns {Promise<Object>} sync summary
+ */
+export const syncLeadToQuotations = async (lead, previousLeadInfo = {}) => {
+  if (!lead) return { success: false, message: "No lead provided" };
+
+  const leadId = lead.leadId;
+  const newName = lead.personalDetails?.fullName?.trim() || "";
+  const prevName = previousLeadInfo.fullName?.trim() || "";
+  const newEmail = lead.personalDetails?.emailId?.trim() || "";
+  const prevEmail = previousLeadInfo.emailId?.trim() || "";
+  const newPhone = lead.personalDetails?.mobile?.trim() || "";
+  const prevPhone = previousLeadInfo.mobile?.trim() || "";
+  const newTitle = lead.personalDetails?.title || "Mr";
+  const newStatus = lead.status;
+
+  const locationParts = [
+    lead.location?.city,
+    lead.location?.state,
+    lead.location?.country,
+  ].filter(Boolean);
+  const newLocation = locationParts.join(", ") || lead.location?.city || "";
+
+  const tourDetails = lead.tourDetails || {};
+  const members = tourDetails.members || {};
+  const pickupDrop = tourDetails.pickupDrop || {};
+  const accommodation = tourDetails.accommodation || {};
+
+  // 1. ================= QUICK QUOTATIONS =================
+  const quickOrConditions = [];
+  if (leadId) quickOrConditions.push({ leadId });
+  if (newName) quickOrConditions.push({ customerName: { $regex: new RegExp(`^${escapeRegex(newName)}$`, "i") } });
+  if (prevName) quickOrConditions.push({ customerName: { $regex: new RegExp(`^${escapeRegex(prevName)}$`, "i") } });
+  if (newEmail) quickOrConditions.push({ email: { $regex: new RegExp(`^${escapeRegex(newEmail)}$`, "i") } });
+  if (prevEmail) quickOrConditions.push({ email: { $regex: new RegExp(`^${escapeRegex(prevEmail)}$`, "i") } });
+  if (newPhone) quickOrConditions.push({ phone: newPhone });
+  if (prevPhone) quickOrConditions.push({ phone: prevPhone });
+
+  let updatedQuickCount = 0;
+  if (quickOrConditions.length > 0) {
+    const matchingQuickQuotes = await QuickQuotation.find({ $or: quickOrConditions });
+    for (const qq of matchingQuickQuotes) {
+      if (leadId) qq.leadId = leadId;
+      if (newName) qq.customerName = newName;
+      if (newEmail) qq.email = newEmail;
+      if (newPhone) qq.phone = newPhone;
+      if (newTitle) qq.title = newTitle;
+      if (newLocation) qq.clientLocation = newLocation;
+
+      // Update members
+      if (members.adults !== undefined && members.adults !== null && Number(members.adults) > 0) {
+        qq.adults = Number(members.adults);
+      }
+      if (members.children !== undefined && members.children !== null) {
+        qq.children = Number(members.children);
+      }
+      if (members.kidsWithoutMattress !== undefined && members.kidsWithoutMattress !== null) {
+        qq.kids = Number(members.kidsWithoutMattress);
+      }
+      if (members.infants !== undefined && members.infants !== null) {
+        qq.infants = Number(members.infants);
+      }
+
+      // Update accommodation
+      if (accommodation.noOfRooms !== undefined && accommodation.noOfRooms !== null && Number(accommodation.noOfRooms) > 0) {
+        qq.noOfRooms = Number(accommodation.noOfRooms);
+      }
+      if (accommodation.noOfMattress !== undefined && accommodation.noOfMattress !== null) {
+        qq.noOfMattress = Number(accommodation.noOfMattress);
+      }
+      if (accommodation.sharingType) {
+        qq.roomType = accommodation.sharingType;
+      }
+
+      // Update pickup/drop
+      const arrivalPt = (pickupDrop.arrivalLocation || pickupDrop.arrivalCity || "").trim();
+      if (arrivalPt) qq.pickupPoint = arrivalPt;
+      const departurePt = (pickupDrop.departureLocation || pickupDrop.departureCity || "").trim();
+      if (departurePt) qq.dropPoint = departurePt;
+      if (pickupDrop.arrivalDate) {
+        const arrDate = new Date(pickupDrop.arrivalDate);
+        if (!isNaN(arrDate.getTime())) qq.pickupTime = arrDate;
+      }
+      if (pickupDrop.departureDate) {
+        const depDate = new Date(pickupDrop.departureDate);
+        if (!isNaN(depDate.getTime())) qq.dropTime = depDate;
+      }
+      if (pickupDrop.noOfVehicles !== undefined && pickupDrop.noOfVehicles !== null) {
+        qq.noOfVehicles = Number(pickupDrop.noOfVehicles);
+      }
+
+      // Update status if appropriate
+      if (newStatus === "Cancelled" && qq.finalizeStatus !== "finalized") {
+        qq.finalizeStatus = "cancelled";
+      } else if (newStatus === "Confirmed" && qq.finalizeStatus === "draft") {
+        qq.finalizeStatus = "finalized";
+        if (!qq.finalizedAt) qq.finalizedAt = new Date();
+      } else if (newStatus === "Active" && qq.finalizeStatus === "cancelled") {
+        qq.finalizeStatus = "draft";
+      }
+
+      // Update packageSnapshot quotationDetails if present
+      if (qq.packageSnapshot && typeof qq.packageSnapshot === "object") {
+        const snapQD = { ...(qq.packageSnapshot.quotationDetails || {}) };
+        if (pickupDrop.arrivalDate) {
+          const arrD = new Date(pickupDrop.arrivalDate);
+          if (!isNaN(arrD.getTime())) snapQD.arrivalDate = format(arrD, "yyyy-MM-dd");
+        }
+        if (pickupDrop.departureDate) {
+          const depD = new Date(pickupDrop.departureDate);
+          if (!isNaN(depD.getTime())) snapQD.departureDate = format(depD, "yyyy-MM-dd");
+        }
+        if (accommodation.noOfRooms) snapQD.noOfRooms = Number(accommodation.noOfRooms);
+        if (accommodation.noOfMattress !== undefined) snapQD.noOfMattress = Number(accommodation.noOfMattress);
+        if (accommodation.mealPlan) snapQD.mealPlan = accommodation.mealPlan;
+        if (newLocation) qq.packageSnapshot.clientLocation = newLocation;
+        qq.packageSnapshot.quotationDetails = snapQD;
+        qq.markModified("packageSnapshot");
+      }
+
+      await qq.save();
+      await clearPattern(`quickQuotation:${qq._id}`);
+      updatedQuickCount++;
+    }
+  }
+
+  // 2. ================= CUSTOM QUOTATIONS =================
+  const customOrConditions = [];
+  if (leadId) customOrConditions.push({ leadId });
+  if (newName) customOrConditions.push({ "clientDetails.clientName": { $regex: new RegExp(`^${escapeRegex(newName)}$`, "i") } });
+  if (prevName) customOrConditions.push({ "clientDetails.clientName": { $regex: new RegExp(`^${escapeRegex(prevName)}$`, "i") } });
+
+  let updatedCustomCount = 0;
+  if (customOrConditions.length > 0) {
+    const matchingCustomQuotes = await CustomQuotation.find({ $or: customOrConditions });
+    for (const cq of matchingCustomQuotes) {
+      if (leadId) cq.leadId = leadId;
+      if (!cq.clientDetails) cq.clientDetails = {};
+
+      if (newName) cq.clientDetails.clientName = newName;
+      if (tourDetails.tourType && ["Domestic", "International"].includes(tourDetails.tourType)) {
+        cq.clientDetails.tourType = tourDetails.tourType;
+      }
+      if (tourDetails.tourDestination || lead.location?.state) {
+        cq.clientDetails.sector = tourDetails.tourDestination || lead.location?.state;
+      }
+
+      if (!cq.tourDetails) cq.tourDetails = {};
+
+      // Title update
+      if (newName) {
+        if (!cq.tourDetails.quotationTitle || cq.tourDetails.quotationTitle.startsWith("Quotation for") || (prevName && cq.tourDetails.quotationTitle.includes(prevName))) {
+          cq.tourDetails.quotationTitle = `Quotation for ${newName}`;
+        }
+      }
+
+      if (pickupDrop.arrivalCity) cq.tourDetails.arrivalCity = pickupDrop.arrivalCity;
+      if (pickupDrop.departureCity) cq.tourDetails.departureCity = pickupDrop.departureCity;
+      if (pickupDrop.arrivalDate) {
+        const arrDate = new Date(pickupDrop.arrivalDate);
+        if (!isNaN(arrDate.getTime())) {
+          cq.tourDetails.arrivalDate = format(arrDate, "yyyy-MM-dd");
+        }
+      }
+      if (pickupDrop.departureDate) {
+        const depDate = new Date(pickupDrop.departureDate);
+        if (!isNaN(depDate.getTime())) {
+          cq.tourDetails.departureDate = format(depDate, "yyyy-MM-dd");
+        }
+      }
+      if (accommodation.transport !== undefined) {
+        cq.tourDetails.transport = accommodation.transport ? "Yes" : "No";
+      }
+
+      // Quotation details (members, rooms, mealPlan)
+      if (!cq.tourDetails.quotationDetails) cq.tourDetails.quotationDetails = {};
+      const qd = cq.tourDetails.quotationDetails;
+      if (members.adults !== undefined && members.adults !== null && Number(members.adults) > 0) {
+        qd.adults = Number(members.adults);
+      }
+      if (members.children !== undefined && members.children !== null) {
+        qd.children = Number(members.children);
+      }
+      if (members.kidsWithoutMattress !== undefined && members.kidsWithoutMattress !== null) {
+        qd.kids = Number(members.kidsWithoutMattress);
+      }
+      if (members.infants !== undefined && members.infants !== null) {
+        qd.infants = Number(members.infants);
+      }
+      if (accommodation.mealPlan) {
+        qd.mealPlan = accommodation.mealPlan;
+      }
+
+      if (!qd.rooms) qd.rooms = {};
+      if (accommodation.noOfRooms !== undefined && accommodation.noOfRooms !== null && Number(accommodation.noOfRooms) > 0) {
+        qd.rooms.numberOfRooms = Number(accommodation.noOfRooms);
+      }
+      if (accommodation.sharingType) {
+        qd.rooms.sharingType = accommodation.sharingType;
+      }
+      if (accommodation.noOfMattress !== undefined && accommodation.noOfMattress !== null) {
+        qd.rooms.mattress = Number(accommodation.noOfMattress);
+      }
+      if (accommodation.hotelType) {
+        const hType = Array.isArray(accommodation.hotelType) ? accommodation.hotelType[0] : accommodation.hotelType;
+        if (hType) qd.rooms.roomType = hType;
+      }
+
+      // Vehicle details
+      if (!cq.tourDetails.vehicleDetails) cq.tourDetails.vehicleDetails = {};
+      if (!cq.tourDetails.vehicleDetails.basicsDetails) cq.tourDetails.vehicleDetails.basicsDetails = {};
+      if (newName) cq.tourDetails.vehicleDetails.basicsDetails.clientName = newName;
+
+      if (!cq.tourDetails.vehicleDetails.pickupDropDetails) cq.tourDetails.vehicleDetails.pickupDropDetails = {};
+      const pdd = cq.tourDetails.vehicleDetails.pickupDropDetails;
+      if (pickupDrop.arrivalDate) {
+        const arrDate = new Date(pickupDrop.arrivalDate);
+        if (!isNaN(arrDate.getTime())) pdd.pickupDate = format(arrDate, "yyyy-MM-dd");
+      }
+      if (pickupDrop.arrivalLocation || pickupDrop.arrivalCity) {
+        pdd.pickupLocation = pickupDrop.arrivalLocation || pickupDrop.arrivalCity;
+      }
+      if (pickupDrop.departureDate) {
+        const depDate = new Date(pickupDrop.departureDate);
+        if (!isNaN(depDate.getTime())) pdd.dropDate = format(depDate, "yyyy-MM-dd");
+      }
+      if (pickupDrop.departureLocation || pickupDrop.departureCity) {
+        pdd.dropLocation = pickupDrop.departureLocation || pickupDrop.departureCity;
+      }
+
+      // Status sync
+      if (newStatus === "Cancelled" && cq.finalizeStatus !== "finalized") {
+        cq.finalizeStatus = "cancelled";
+      } else if (newStatus === "Confirmed" && cq.finalizeStatus === "draft") {
+        cq.finalizeStatus = "finalized";
+        if (!cq.finalizedAt) cq.finalizedAt = new Date();
+      } else if (newStatus === "Active" && cq.finalizeStatus === "cancelled") {
+        cq.finalizeStatus = "draft";
+      }
+
+      cq.markModified("tourDetails");
+      cq.markModified("clientDetails");
+      await cq.save();
+      await clearPattern(`customQuotation:${cq.quotationId}`);
+      updatedCustomCount++;
+    }
+  }
+
+  // 3. ================= OTHER QUOTATIONS (Vehicle, Flight, Hotel, Full) =================
+  let updatedVehicleCount = 0;
+  let updatedFlightCount = 0;
+  let updatedHotelCount = 0;
+  let updatedFullCount = 0;
+
+  const namesToMatch = [prevName, newName].filter(Boolean);
+  const nameRegexList = namesToMatch.map(n => ({ $regex: new RegExp(`^${escapeRegex(n)}$`, "i") }));
+
+  if (nameRegexList.length > 0 || leadId) {
+    // Vehicle
+    const vCond = [];
+    if (leadId) vCond.push({ leadId });
+    nameRegexList.forEach(r => vCond.push({ "basicsDetails.clientName": r }));
+    const vRes = await Vehicle.updateMany(
+      { $or: vCond },
+      {
+        $set: {
+          ...(newName ? { "basicsDetails.clientName": newName } : {}),
+          ...(newPhone ? { "basicsDetails.mobile": newPhone } : {}),
+          ...(newEmail ? { "basicsDetails.email": newEmail } : {}),
+          ...(leadId ? { leadId } : {})
+        }
+      }
+    );
+    updatedVehicleCount = vRes.modifiedCount || 0;
+
+    // Flight
+    const fCond = [];
+    if (leadId) fCond.push({ leadId });
+    nameRegexList.forEach(r => {
+      fCond.push({ "clientDetails.clientName": r });
+      fCond.push({ "personalDetails.fullName": r });
+    });
+    const fRes = await FlightQuotation.updateMany(
+      { $or: fCond },
+      {
+        $set: {
+          ...(newName ? { "clientDetails.clientName": newName, "personalDetails.fullName": newName } : {}),
+          ...(newPhone ? { "personalDetails.mobileNumber": newPhone } : {}),
+          ...(newEmail ? { "personalDetails.emailId": newEmail } : {}),
+          ...(leadId ? { leadId } : {})
+        }
+      }
+    );
+    updatedFlightCount = fRes.modifiedCount || 0;
+
+    // Hotel
+    const hCond = [];
+    if (leadId) hCond.push({ leadId });
+    nameRegexList.forEach(r => {
+      hCond.push({ "clientDetails.clientName": r });
+      hCond.push({ "personalDetails.fullName": r });
+    });
+    const hRes = await HotelQuotation.updateMany(
+      { $or: hCond },
+      {
+        $set: {
+          ...(newName ? { "clientDetails.clientName": newName, "personalDetails.fullName": newName } : {}),
+          ...(newPhone ? { "personalDetails.contactNumber": newPhone } : {}),
+          ...(newEmail ? { "personalDetails.email": newEmail } : {}),
+          ...(leadId ? { leadId } : {})
+        }
+      }
+    );
+    updatedHotelCount = hRes.modifiedCount || 0;
+
+    // Full
+    const fullCond = [];
+    if (leadId) fullCond.push({ leadId });
+    nameRegexList.forEach(r => fullCond.push({ "clientDetails.clientName": r }));
+    const fullRes = await fullQuotation.updateMany(
+      { $or: fullCond },
+      {
+        $set: {
+          ...(newName ? { "clientDetails.clientName": newName } : {}),
+          ...(tourDetails.tourDestination ? { "clientDetails.sector": tourDetails.tourDestination } : {}),
+          ...(leadId ? { leadId } : {})
+        }
+      }
+    );
+    updatedFullCount = fullRes.modifiedCount || 0;
+  }
+
+  // Clear all cached quotations and unified statistics
+  await Promise.all([
+    clearPattern("quickQuotations:*"),
+    clearPattern("customQuotations:*"),
+    clearPattern("flightQuotations:*"),
+    clearPattern("quotations:search:*"),
+    clearPattern("quotations:stats"),
+    clearPattern("dashboard:stats:*"),
+  ]);
+
+  return {
+    success: true,
+    leadId,
+    updatedQuickCount,
+    updatedCustomCount,
+    updatedVehicleCount,
+    updatedFlightCount,
+    updatedHotelCount,
+    updatedFullCount,
+  };
+};
+
+/**
+ * Endpoint to manually or programmatically synchronize quotations with a lead
+ */
+export const syncLeadQuotationsController = asyncHandler(async (req, res) => {
+  const targetLeadId = req.params.leadId || req.body.leadId;
+  if (!targetLeadId) {
+    throw new ApiError(400, "leadId is required");
+  }
+
+  const lead = await Lead.findOne({ leadId: targetLeadId });
+  if (!lead) {
+    throw new ApiError(404, "Lead not found");
+  }
+
+  const result = await syncLeadToQuotations(lead, req.body.previousLeadInfo || {});
+  return res.status(200).json(new ApiResponse(200, result, "Quotations synchronized successfully with lead"));
 });
 

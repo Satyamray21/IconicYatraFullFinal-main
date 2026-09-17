@@ -5,6 +5,7 @@ import { vehicleDetailsSchema } from "../../common/vehicleDetails.js";
 import { policySchema } from "../../common/policy.js";
 import { pricingSchema } from "../../common/pricingSchema.js"
 const fullQuotationSchema = new mongoose.Schema({
+    leadId: { type: String, trim: true, index: true },
     clientDetails: {
         clientName: { type: String, required: true },
         tourType: { type: String, enum: ["Domestic", "International"] },
