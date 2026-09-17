@@ -140,9 +140,73 @@ const leadSchema = new mongoose.Schema({
       noOfNights: Number,
       requirementNote: String,
     }
-  }
+  },
 
-
+  // Additive follow-up tracker (defaults keep old leads working as-is)
+  followUps: {
+    status: {
+      type: String,
+      enum: [
+        "Pending",
+        "Scheduled",
+        "In Progress",
+        "Interested",
+        "No Response",
+        "Completed",
+        "Max Reached",
+      ],
+      default: "Pending",
+    },
+    maxAllowed: {
+      type: Number,
+      default: 5,
+      min: 1,
+      max: 20,
+    },
+    count: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    nextFollowUpAt: {
+      type: Date,
+      default: null,
+    },
+    lastFollowUpAt: {
+      type: Date,
+      default: null,
+    },
+    lastNote: {
+      type: String,
+      default: "",
+    },
+    history: [
+      {
+        date: { type: Date, default: Date.now },
+        method: {
+          type: String,
+          enum: ["Call", "WhatsApp", "Email", "Meeting", "Other"],
+          default: "Call",
+        },
+        outcome: {
+          type: String,
+          enum: [
+            "Connected",
+            "Not Reachable",
+            "Call Back Later",
+            "Interested",
+            "Not Interested",
+            "Wrong Number",
+            "Other",
+          ],
+          default: "Connected",
+        },
+        note: { type: String, default: "" },
+        nextFollowUpAt: { type: Date, default: null },
+        createdBy: { type: String, default: "System" },
+      },
+    ],
+  },
 
 }, { timestamps: true })
 export const Lead = new mongoose.model("Lead", leadSchema);

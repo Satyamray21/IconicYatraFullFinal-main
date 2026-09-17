@@ -256,19 +256,22 @@ export const createLead = asyncHandler(async (req, res) => {
 
 // view Lead
 export const viewAllLeads = asyncHandler(async (req, res) => {
-  try {
-    const now = new Date();
-    const updateResult = await Lead.updateMany(
-      { status: "Active", "tourDetails.pickupDrop.departureDate": { $lt: now } },
-      { $set: { status: "Not Converted" } }
-    );
-    if (updateResult.modifiedCount > 0) {
-      await clearPattern('leads:*');
-      await clearPattern('dashboard:stats:*');
+  // Non-blocking auto status update — never delay the list response
+  setImmediate(async () => {
+    try {
+      const now = new Date();
+      const updateResult = await Lead.updateMany(
+        { status: "Active", "tourDetails.pickupDrop.departureDate": { $lt: now } },
+        { $set: { status: "Not Converted" } }
+      );
+      if (updateResult.modifiedCount > 0) {
+        await clearPattern('leads:*');
+        await clearPattern('dashboard:stats:*');
+      }
+    } catch (e) {
+      console.error("Auto-convert failed", e);
     }
-  } catch(e) {
-    console.error("Auto-convert failed", e);
-  }
+  });
 
   const cacheKey = 'leads:all';
   const cachedLeads = await getCache(cacheKey);
@@ -277,10 +280,29 @@ export const viewAllLeads = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.find().sort({ createdAt: -1 });
-    await setCache(cacheKey, lead, 3600); // Cache for 1 hour
+    // lean() + projection keeps payload small so Lead page opens quickly in production
+    const lead = await Lead.find()
+      .select(
+        "leadId status personalDetails location address officialDetail tourDetails followUps createdAt updatedAt"
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Keep only recent follow-up history in list payload (full history still available on view-by-id)
+    const slimLeads = lead.map((item) => {
+      if (!item?.followUps?.history?.length) return item;
+      return {
+        ...item,
+        followUps: {
+          ...item.followUps,
+          history: item.followUps.history.slice(0, 10),
+        },
+      };
+    });
+
+    await setCache(cacheKey, slimLeads, 300); // 5 min — fresher list after deploy/edits
     res.status(200)
-      .json(new ApiResponse(200, lead, "All leads fetched successfully"))
+      .json(new ApiResponse(200, slimLeads, "All leads fetched successfully"))
   }
   catch (err) {
     console.log("Error", err.message);
@@ -383,13 +405,16 @@ export const updateLead = asyncHandler(async (req, res) => {
       deleteCache(`leads:id:${leadId}`)
     ]);
 
-    // Reflect lead updates in Quick Quotation and Custom Quotation (and other quotations)
-    try {
-      const syncResult = await syncLeadToQuotations(existingLead, previousLeadInfo);
-      console.log("🔄 Quotations synced after lead update:", syncResult);
-    } catch (syncError) {
-      console.error("⚠️ Failed to sync lead updates to quotations:", syncError);
-    }
+    // Reflect lead updates in quotations without blocking the API response
+    setImmediate(() => {
+      syncLeadToQuotations(existingLead, previousLeadInfo)
+        .then((syncResult) => {
+          console.log("🔄 Quotations synced after lead update:", syncResult);
+        })
+        .catch((syncError) => {
+          console.error("⚠️ Failed to sync lead updates to quotations:", syncError);
+        });
+    });
 
     await logActivity({
       action: "UPDATE",
@@ -425,9 +450,6 @@ export const viewAllLeadsReports = asyncHandler(async (req, res) => {
   }
 
   try {
-    const leads = await Lead.find();
-
-
     const now = new Date();
 
     // Define date ranges
@@ -588,18 +610,21 @@ export const changeLeadStatus = asyncHandler(async (req, res) => {
     deleteCache(`leads:id:${leadId}`)
   ]);
 
-  // Synchronize status to Quick Quotations, Custom Quotations, etc.
-  try {
-    const syncResult = await syncLeadToQuotations(lead, {
+  // Synchronize status to quotations without blocking response
+  setImmediate(() => {
+    syncLeadToQuotations(lead, {
       status: currentStatus,
       fullName: lead.personalDetails?.fullName,
       emailId: lead.personalDetails?.emailId,
       mobile: lead.personalDetails?.mobile,
-    });
-    console.log("🔄 Quotations synced after lead status change:", syncResult);
-  } catch (syncError) {
-    console.error("⚠️ Failed to sync quotations with lead status change:", syncError);
-  }
+    })
+      .then((syncResult) => {
+        console.log("🔄 Quotations synced after lead status change:", syncResult);
+      })
+      .catch((syncError) => {
+        console.error("⚠️ Failed to sync quotations with lead status change:", syncError);
+      });
+  });
 
   await logActivity({
     action: "Status Changed",
@@ -663,5 +688,188 @@ export const getLeadsByStaff = asyncHandler(async (req, res) => {
   return res.status(200).json(
     new ApiResponse(200, leads, `Leads assigned to ${staffName} fetched successfully`)
   );
+});
+
+const ensureFollowUps = (lead) => {
+  if (!lead.followUps) {
+    lead.followUps = {
+      status: "Pending",
+      maxAllowed: 5,
+      count: 0,
+      nextFollowUpAt: null,
+      lastFollowUpAt: null,
+      lastNote: "",
+      history: [],
+    };
+  }
+  if (!Array.isArray(lead.followUps.history)) {
+    lead.followUps.history = [];
+  }
+  if (!lead.followUps.maxAllowed || lead.followUps.maxAllowed < 1) {
+    lead.followUps.maxAllowed = 5;
+  }
+  if (typeof lead.followUps.count !== "number" || lead.followUps.count < 0) {
+    lead.followUps.count = 0;
+  }
+  return lead.followUps;
+};
+
+/**
+ * Log a follow-up attempt on a lead (does not change lead.status / quotations).
+ */
+export const addLeadFollowUp = asyncHandler(async (req, res) => {
+  const { leadId } = req.params;
+  const {
+    method = "Call",
+    outcome = "Connected",
+    note = "",
+    nextFollowUpAt = null,
+    followUpStatus = null,
+    force = false,
+  } = req.body || {};
+
+  if (!leadId) {
+    throw new ApiError(400, "leadId is required");
+  }
+
+  const lead = await Lead.findOne({ leadId });
+  if (!lead) {
+    throw new ApiError(404, "Lead not found");
+  }
+
+  const followUps = ensureFollowUps(lead);
+  const maxAllowed = Number(followUps.maxAllowed) || 5;
+
+  if (!force && followUps.count >= maxAllowed) {
+    followUps.status = "Max Reached";
+    await lead.save();
+    throw new ApiError(
+      400,
+      `Maximum follow-ups (${maxAllowed}) already reached. Increase max or use force.`,
+    );
+  }
+
+  const createdBy =
+    req.user?.name || req.user?.staffUserId || req.user?.email || "System";
+
+  const entry = {
+    date: new Date(),
+    method,
+    outcome,
+    note: String(note || "").trim(),
+    nextFollowUpAt: nextFollowUpAt ? new Date(nextFollowUpAt) : null,
+    createdBy,
+  };
+
+  followUps.history.unshift(entry);
+  followUps.count = (Number(followUps.count) || 0) + 1;
+  followUps.lastFollowUpAt = entry.date;
+  followUps.lastNote = entry.note;
+  followUps.nextFollowUpAt = entry.nextFollowUpAt;
+
+  if (followUps.count >= maxAllowed) {
+    followUps.status = "Max Reached";
+  } else if (followUpStatus) {
+    followUps.status = followUpStatus;
+  } else if (outcome === "Interested") {
+    followUps.status = "Interested";
+  } else if (outcome === "Not Reachable" || outcome === "Wrong Number") {
+    followUps.status = "No Response";
+  } else if (entry.nextFollowUpAt) {
+    followUps.status = "Scheduled";
+  } else if (followUps.status === "Pending") {
+    followUps.status = "In Progress";
+  }
+
+  lead.markModified("followUps");
+  await lead.save();
+
+  await Promise.all([
+    clearPattern("leads:*"),
+    deleteCache(`leads:id:${leadId}`),
+  ]);
+
+  await logActivity({
+    action: "FOLLOW_UP",
+    model: "Lead",
+    refId: leadId,
+    description: `Follow-up #${followUps.count}/${maxAllowed} (${method}/${outcome}) logged on lead ${leadId} by ${createdBy}`,
+    user: createdBy,
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, lead, "Follow-up logged successfully"));
+});
+
+/**
+ * Update follow-up settings only (max, status, next date) — does not change lead.status.
+ */
+export const updateLeadFollowUp = asyncHandler(async (req, res) => {
+  const { leadId } = req.params;
+  const { maxAllowed, status, nextFollowUpAt, lastNote } = req.body || {};
+
+  if (!leadId) {
+    throw new ApiError(400, "leadId is required");
+  }
+
+  const lead = await Lead.findOne({ leadId });
+  if (!lead) {
+    throw new ApiError(404, "Lead not found");
+  }
+
+  const followUps = ensureFollowUps(lead);
+  const allowedStatuses = [
+    "Pending",
+    "Scheduled",
+    "In Progress",
+    "Interested",
+    "No Response",
+    "Completed",
+    "Max Reached",
+  ];
+
+  if (maxAllowed !== undefined && maxAllowed !== null) {
+    const max = Number(maxAllowed);
+    if (!Number.isFinite(max) || max < 1 || max > 20) {
+      throw new ApiError(400, "maxAllowed must be between 1 and 20");
+    }
+    followUps.maxAllowed = max;
+    if (followUps.count >= max) {
+      followUps.status = "Max Reached";
+    } else if (followUps.status === "Max Reached") {
+      followUps.status = followUps.nextFollowUpAt ? "Scheduled" : "In Progress";
+    }
+  }
+
+  if (status) {
+    if (!allowedStatuses.includes(status)) {
+      throw new ApiError(400, `Invalid follow-up status. Allowed: ${allowedStatuses.join(", ")}`);
+    }
+    followUps.status = status;
+  }
+
+  if (nextFollowUpAt !== undefined) {
+    followUps.nextFollowUpAt = nextFollowUpAt ? new Date(nextFollowUpAt) : null;
+    if (followUps.nextFollowUpAt && followUps.status === "Pending") {
+      followUps.status = "Scheduled";
+    }
+  }
+
+  if (lastNote !== undefined) {
+    followUps.lastNote = String(lastNote || "").trim();
+  }
+
+  lead.markModified("followUps");
+  await lead.save();
+
+  await Promise.all([
+    clearPattern("leads:*"),
+    deleteCache(`leads:id:${leadId}`),
+  ]);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, lead, "Follow-up settings updated successfully"));
 });
 

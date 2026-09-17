@@ -1,7 +1,8 @@
 import { Router } from "express";
 import {
     createLead, viewAllLeads, updateLead, deleteLead, viewAllLeadsReports, viewByLeadId, changeLeadStatus,
-    getLeadOptions, addLeadOption, getLeadsByStaff
+    getLeadOptions, addLeadOption, getLeadsByStaff,
+    addLeadFollowUp, updateLeadFollowUp
 } from "../controllers/lead.controller.js";
 import { requirePermission } from "../middleware/staffPermission.middleware.js";
 
@@ -30,6 +31,10 @@ router
 router
     .route("/change-status/:leadId")
     .patch(requirePermission("canEditLead"), changeLeadStatus);
+router
+    .route("/follow-up/:leadId")
+    .post(requirePermission("canEditLead"), addLeadFollowUp)
+    .patch(requirePermission("canEditLead"), updateLeadFollowUp);
 router.get("/options", requirePermission("canAccessLeads"), getLeadOptions);
 
 router.post("/options/add", requirePermission("canEditLead"), addLeadOption);
