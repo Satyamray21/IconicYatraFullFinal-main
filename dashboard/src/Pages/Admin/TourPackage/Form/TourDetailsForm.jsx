@@ -24,10 +24,18 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  Chip,
+  InputAdornment,
+  Tooltip,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import DeleteIcon from "@mui/icons-material/Delete";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
+import SearchIcon from "@mui/icons-material/Search";
+import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CloseIcon from "@mui/icons-material/Close";
 import { useDispatch, useSelector } from "react-redux";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import {
@@ -102,6 +110,135 @@ const normalizePolicyState = (source = {}) => {
   };
 };
 
+const generateImpressiveTitles = ({
+  nights,
+  days,
+  sector,
+  country,
+  tourType,
+  packageCategory,
+  stayLocations,
+}) => {
+  if (!nights || nights <= 0) return [];
+  const safeDays = days > 0 ? days : nights + 1;
+  const dur = `${nights} Nights / ${safeDays} Days`;
+  const dur0 = `${String(nights).padStart(2, "0")} Nights / ${String(safeDays).padStart(2, "0")} Days`;
+  const durShort = `${nights}N/${safeDays}D`;
+
+  const dest = (
+    sector ||
+    country ||
+    (Array.isArray(stayLocations) && stayLocations[0]?.city) ||
+    "Scenic Tour"
+  ).trim();
+
+  const cityList = (stayLocations || [])
+    .map((s) => (typeof s === "string" ? s.trim() : s?.city?.trim()))
+    .filter(Boolean);
+
+  const cityChain = (stayLocations || [])
+    .filter((s) => (typeof s === "string" ? s.trim() : s?.city?.trim()))
+    .map((s) => {
+      const c = typeof s === "string" ? s.trim() : s.city.trim();
+      const n = typeof s === "object" ? Number(s.nights) || 1 : 1;
+      return `${c} ${n}N`;
+    })
+    .join(" - ");
+
+  const cityNames =
+    cityList.slice(0, 3).join(", ") + (cityList.length > 3 ? " & more" : "");
+
+  const textToCheck = `${dest} ${tourType || ""} ${packageCategory || ""}`.toLowerCase();
+  const isSpiritual =
+    /kashi|varanasi|ayodhya|puri|char dham|chardham|kedarnath|badrinath|amarnath|haridwar|rishikesh|ujjain|shirdi|vaishno|tirupati|rameshwaram|mathura|vrindavan|yatra|spiritual/i.test(
+      textToCheck
+    );
+  const isHeritage =
+    /rajasthan|jaipur|udaipur|jodhpur|jaisalmer|agra|delhi|khajuraho|hampi|mysore|heritage|royal/i.test(
+      textToCheck
+    );
+  const isHills =
+    /himachal|kashmir|ladakh|manali|shimla|kullu|uttarakhand|nainital|mussoorie|sikkim|gangtok|darjeeling|ooty|munnar|kodaikanal|meghalaya|shillong|hills|mountain/i.test(
+      textToCheck
+    );
+  const isBeach =
+    /goa|andaman|kerala|maldives|bali|phuket|thailand|mauritius|seychelles|dubai|beach|island/i.test(
+      textToCheck
+    );
+
+  const suggestions = [];
+
+  // 1. Primary Mesmerizing / Scenic (Iconic Yatra signature style)
+  suggestions.push({
+    label: `🌟 Mesmerizing ${dest} (${dur0})`,
+    value: `Mesmerizing ${dest}: ${dur0} Scenic Tour`,
+  });
+
+  // 2. Enchanting Getaway
+  suggestions.push({
+    label: `✨ Enchanting ${dest} (${dur})`,
+    value: `Enchanting ${dest} Getaway - ${dur}`,
+  });
+
+  // 3. Thematic / Mood-specific
+  if (isSpiritual) {
+    suggestions.push({
+      label: `🕉️ Divine ${dest} Sacred Yatra`,
+      value: `Divine ${dest}: ${dur0} Sacred Yatra`,
+    });
+  } else if (isHeritage) {
+    suggestions.push({
+      label: `👑 Royal ${dest} Heritage Tour`,
+      value: `Royal ${dest}: ${dur0} Heritage & Palace Tour`,
+    });
+  } else if (isHills) {
+    suggestions.push({
+      label: `🏔️ Splendid ${dest} Mountain Paradise`,
+      value: `Splendid ${dest}: ${dur0} Mountain Paradise Tour`,
+    });
+  } else if (isBeach) {
+    suggestions.push({
+      label: `🌴 Exotic ${dest} Tropical Holiday`,
+      value: `Exotic ${dest} Getaway: ${dur0} Holiday`,
+    });
+  } else {
+    suggestions.push({
+      label: `💎 Splendid ${dest} Explorer`,
+      value: `Splendid ${dest}: ${dur0} Holiday Package`,
+    });
+  }
+
+  // 4. Best of with key cities
+  if (cityNames) {
+    suggestions.push({
+      label: `📍 Best of ${dest} (${cityNames})`,
+      value: `Best of ${dest} (${cityNames}) - ${dur}`,
+    });
+  }
+
+  // 5. Circuit breakdown with night counts per city
+  if (cityChain) {
+    suggestions.push({
+      label: `🗺️ Circuit (${cityChain})`,
+      value: `${dur} ${dest} Tour (${cityChain})`,
+    });
+  }
+
+  // 6. Classic Two-digit Scenic
+  suggestions.push({
+    label: `🎯 ${dur0} Classic`,
+    value: `${dur0} Scenic ${dest} Holiday`,
+  });
+
+  // 7. Short & Punchy
+  suggestions.push({
+    label: `⚡ ${dest} Explorer - ${durShort}`,
+    value: `${dest} Explorer - ${durShort}`,
+  });
+
+  return suggestions;
+};
+
 const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -124,6 +261,22 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
   // Loading state for save button
   const [saving, setSaving] = useState(false);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [fetchingImageIndex, setFetchingImageIndex] = useState(null);
+
+  // Photo Picker Modal state for choosing photos
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
+  const [photoPickerTarget, setPhotoPickerTarget] = useState({ isBanner: false, dayIndex: null });
+  const [photoPickerSearch, setPhotoPickerSearch] = useState("");
+  const [photoPickerResults, setPhotoPickerResults] = useState([]);
+  const [photoPickerLoading, setPhotoPickerLoading] = useState(false);
+  const [photoPickerPage, setPhotoPickerPage] = useState(1);
+  const [photoPickerTotalPages, setPhotoPickerTotalPages] = useState(1);
+  const [photoPickerSightseeing, setPhotoPickerSightseeing] = useState([]);
+  const [photoPickerCity, setPhotoPickerCity] = useState("");
+  const [photoPickerDayTitle, setPhotoPickerDayTitle] = useState("");
+  const [isAutoFetchingAll, setIsAutoFetchingAll] = useState(false);
+  const [dayPhotoOffsets, setDayPhotoOffsets] = useState({});
 
   // Search states
   const [arrivalSearch, setArrivalSearch] = useState("");
@@ -198,10 +351,46 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   const selectedState = packageData?.sector || "";
   const DOMESTIC_TOUR_TYPES = ["Domestic"];
 
+  // Helper to extract stay locations & calculate nights and days = nights + 1
+  const getStayLocationsFromData = (pkgD, initD) => {
+    if (Array.isArray(pkgD?.stayLocations) && pkgD.stayLocations.length > 0) {
+      return pkgD.stayLocations.map((loc) => ({
+        city: loc.city || loc.destination || "",
+        nights: Number(loc.nights) || 0,
+      }));
+    }
+    if (Array.isArray(initD?.destinationNights) && initD.destinationNights.length > 0) {
+      return initD.destinationNights.map((dest) => ({
+        city: dest.destination || dest.city || "",
+        nights: Number(dest.nights) || 0,
+      }));
+    }
+    if (Array.isArray(initD?.stayLocations) && initD.stayLocations.length > 0) {
+      return initD.stayLocations.map((loc) => ({
+        city: loc.city || loc.destination || "",
+        nights: Number(loc.nights) || 0,
+      }));
+    }
+    return [];
+  };
+
+  const initialStayLocs = getStayLocationsFromData(packageData, initialData);
+  const initialNightsCount = initialStayLocs.reduce((sum, sl) => sum + (Number(sl.nights) || 0), 0);
+  const initialDaysTarget = initialNightsCount > 0 ? initialNightsCount + 1 : 1;
+  const initialTitlesList = generateImpressiveTitles({
+    nights: initialNightsCount,
+    days: initialDaysTarget,
+    sector: packageData?.sector || selectedState,
+    country: selectedCountry,
+    tourType,
+    stayLocations: initialStayLocs,
+  });
+  const initialDefaultTitle = initialTitlesList[0]?.value || "";
+
   const [tourDetails, setTourDetails] = useState({
     arrivalCity: initialData?.arrivalCity || "",
     departureCity: initialData?.departureCity || "",
-    title: initialData?.title || "",
+    title: initialData?.title || initialDefaultTitle,
     notes:
       initialData?.notes ||
       "This is only tentative schedule for sightseeing and travel. Actual sightseeing may get affected due to weather, road conditions, local authority notices, shortage of timing, or off days.",
@@ -218,22 +407,20 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
           sightseeing: d.sightseeing || [],
           selectedSightseeing: d.selectedSightseeing || [],
         }))
-        : [
-          {
+        : Array.from({ length: initialDaysTarget }, () => ({
             title: "",
             notes: "",
             aboutCity: "",
             dayImage: null,
             sightseeing: [],
             selectedSightseeing: [],
-          },
-        ],
+          })),
     perPerson: initialData?.perPerson || 1,
     numberOfRooms: Number(initialData?.numberOfRooms) || 1,
     transportationCostPerDay:
       Number(initialData?.transportationCostPerDay) || 0,
     transportationDays:
-      Number(initialData?.transportationDays) || initialData?.days?.length || 0,
+      Number(initialData?.transportationDays) || initialDaysTarget || 0,
     manualCostMargin: Number(initialData?.manualCostMargin) || 0,
     mealPlan: {
       planType: initialData?.mealPlan?.planType || "",
@@ -424,10 +611,56 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       });
 
       console.log("🔄 Updated destination nights:", updatedDestinationNights);
-      setTourDetails((prev) => ({
-        ...prev,
-        destinationNights: updatedDestinationNights,
-      }));
+
+      const totalN = packageData.stayLocations.reduce(
+        (sum, sl) => sum + (Number(sl.nights) || 0),
+        0
+      );
+      const totalD = totalN > 0 ? totalN + 1 : 1;
+      const impressiveTitles = generateImpressiveTitles({
+        nights: totalN,
+        days: totalD,
+        sector: packageData.sector || selectedState,
+        country: selectedCountry,
+        tourType,
+        stayLocations: packageData.stayLocations,
+      });
+      const generatedTitle = impressiveTitles[0]?.value || "";
+
+      setTourDetails((prev) => {
+        const updates = { destinationNights: updatedDestinationNights };
+
+        // Auto-fill title if currently blank
+        if (!prev.title || prev.title.trim() === "") {
+          updates.title = generatedTitle;
+        }
+
+        // Expand days array to totalD (nights + 1) if currently just 1 empty day
+        const hasOnlyOneEmptyDay =
+          (!prev.days || prev.days.length <= 1) &&
+          (!initialData?.days || initialData.days.length <= 1) &&
+          !prev.days?.[0]?.title &&
+          !prev.days?.[0]?.notes;
+
+        if (hasOnlyOneEmptyDay && totalD > 1) {
+          updates.days = Array.from({ length: totalD }, () => ({
+            title: "",
+            notes: "",
+            aboutCity: "",
+            dayImage: null,
+            sightseeing: [],
+            selectedSightseeing: [],
+          }));
+          if (!prev.transportationDays || prev.transportationDays <= 1) {
+            updates.transportationDays = totalD;
+          }
+        }
+
+        return {
+          ...prev,
+          ...updates,
+        };
+      });
 
       // ✅ We fetch all hotels initially, so local filtering works without overwriting Redux state
       console.log("✅ Local filtering will handle destinations");
@@ -435,6 +668,56 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       console.log("⚠️ No stay locations found in packageData");
     }
   }, [packageData, dispatch]);
+
+  // Live stay locations & duration calculations: Nights from stay locations & Days = Nights + 1
+  const stayLocationsList = useMemo(() => {
+    if (Array.isArray(packageData?.stayLocations) && packageData.stayLocations.length > 0) {
+      return packageData.stayLocations.map((loc) => ({
+        city: loc.city || loc.destination || "",
+        nights: Number(loc.nights) || 0,
+      }));
+    }
+    if (Array.isArray(tourDetails.destinationNights) && tourDetails.destinationNights.length > 0) {
+      return tourDetails.destinationNights.map((dest) => ({
+        city: dest.destination || dest.city || "",
+        nights: Number(dest.nights) || 0,
+      }));
+    }
+    if (Array.isArray(initialData?.stayLocations) && initialData.stayLocations.length > 0) {
+      return initialData.stayLocations.map((loc) => ({
+        city: loc.city || loc.destination || "",
+        nights: Number(loc.nights) || 0,
+      }));
+    }
+    return [];
+  }, [packageData?.stayLocations, tourDetails.destinationNights, initialData?.stayLocations]);
+
+  const calculatedNights = useMemo(() => {
+    return stayLocationsList.reduce((sum, loc) => sum + (Number(loc.nights) || 0), 0);
+  }, [stayLocationsList]);
+
+  const calculatedDays = useMemo(() => {
+    return calculatedNights > 0 ? calculatedNights + 1 : 1;
+  }, [calculatedNights]);
+
+  const titleSuggestions = useMemo(() => {
+    return generateImpressiveTitles({
+      nights: calculatedNights,
+      days: calculatedDays,
+      sector: packageData?.sector || selectedState,
+      country: selectedCountry,
+      tourType,
+      stayLocations: stayLocationsList,
+    });
+  }, [
+    calculatedNights,
+    calculatedDays,
+    packageData?.sector,
+    selectedState,
+    selectedCountry,
+    tourType,
+    stayLocationsList,
+  ]);
 
   const organizedHotelOptions = useMemo(() => {
     const options = {
@@ -445,7 +728,15 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
     if (hotels && hotels.length > 0) {
       hotels.forEach((hotel) => {
-        const category = hotel.category?.toLowerCase() || "standard";
+        let category = typeof hotel.category === 'string' ? hotel.category.toLowerCase().trim() : "";
+        if (!category && hotel.hotelType) {
+          if (Array.isArray(hotel.hotelType) && hotel.hotelType.length > 0) {
+            category = hotel.hotelType[0].toLowerCase().trim();
+          } else if (typeof hotel.hotelType === 'string') {
+            category = hotel.hotelType.toLowerCase().trim();
+          }
+        }
+        if (!category) category = "standard";
 
         if (options[category]) {
           options[category].push(hotel.hotelName);
@@ -488,11 +779,13 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       const exactMatch = hotelCity === searchCity;
       // Partial matches
       const partialMatch =
-        hotelCity.includes(searchCity) ||
-        searchCity.includes(hotelCity) ||
-        hotelName.includes(searchCity) ||
-        hotelCity.includes(searchCity.split(" ")[0]) ||
-        searchCity.includes(hotelCity.split(" ")[0]);
+        (hotelCity !== "" && (
+          hotelCity.includes(searchCity) ||
+          searchCity.includes(hotelCity) ||
+          hotelCity.includes(searchCity.split(" ")[0]) ||
+          searchCity.includes(hotelCity.split(" ")[0])
+        )) ||
+        (hotelName !== "" && hotelName.includes(searchCity));
 
       if (exactMatch) {
         console.log(`✅ Exact match found: ${hotel.hotelName}`);
@@ -514,16 +807,26 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     };
 
     destinationHotels.forEach((hotel) => {
-      const category = hotel.category?.toLowerCase() || "standard";
+      let category = typeof hotel.category === 'string' ? hotel.category.toLowerCase().trim() : "";
+      if (!category && hotel.hotelType) {
+        if (Array.isArray(hotel.hotelType) && hotel.hotelType.length > 0) {
+          category = hotel.hotelType[0].toLowerCase().trim();
+        } else if (typeof hotel.hotelType === 'string') {
+          category = hotel.hotelType.toLowerCase().trim();
+        }
+      }
+      if (!category) category = "standard";
+
       const hotelName = hotel.hotelName?.trim();
 
-      if (
-        hotelName &&
-        organized[category] &&
-        !organized[category].includes(hotelName)
-      ) {
-        organized[category].push(hotelName);
-        console.log(`🏩 Added ${hotelName} to ${category} category`);
+      if (hotelName) {
+        if (organized[category] && !organized[category].includes(hotelName)) {
+          organized[category].push(hotelName);
+          console.log(`🏩 Added ${hotelName} to ${category} category`);
+        } else if (!organized[category] && !organized.standard.includes(hotelName)) {
+          organized.standard.push(hotelName);
+          console.log(`🏩 Added ${hotelName} to standard category (fallback for ${category})`);
+        }
       }
     });
 
@@ -829,6 +1132,19 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   }, [dispatch, selectedCountry, selectedState, tourType]);
 
   // Rest of your handlers remain the same
+  const getCityForDay = (dayIndex) => {
+    if (!tourDetails.stayLocations || tourDetails.stayLocations.length === 0) return packageData?.sector || "landscape";
+    let currentDay = 0;
+    for (let loc of tourDetails.stayLocations) {
+      const nights = parseInt(loc.nights) || 1;
+      if (dayIndex < currentDay + nights) {
+        return loc.city;
+      }
+      currentDay += nights;
+    }
+    return tourDetails.stayLocations[tourDetails.stayLocations.length - 1].city;
+  };
+
   const handleDayChange = (index, field, value) => {
     const updatedDays = [...tourDetails.days];
     if (field === "selectedSightseeing") {
@@ -842,6 +1158,231 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       updatedDays[index][field] = value;
     }
     setTourDetails({ ...tourDetails, days: updatedDays });
+  };
+
+  const handleGenerateItinerary = async () => {
+    try {
+      setIsGeneratingAi(true);
+      const totalNights = packageData?.stayLocations?.reduce((sum, sl) => sum + (Number(sl.nights) || 0), 0) || 0;
+      const targetDays = totalNights > 0 ? totalNights + 1 : Math.max(1, tourDetails.days.length);
+
+      const res = await axios.post("/ai/generate-itinerary", {
+        arrivalCity: tourDetails.arrivalCity,
+        departureCity: tourDetails.departureCity,
+        destinationCountry: selectedCountry,
+        sector: selectedState,
+        days: targetDays,
+        tourType: tourType,
+        stayLocations: packageData?.stayLocations
+      });
+      if (res.data?.success && res.data?.data) {
+        const generatedDays = res.data.data;
+        setTourDetails(prev => {
+          const newDays = [...prev.days];
+          generatedDays.forEach((genDay, idx) => {
+            const aiSightseeing = Array.isArray(genDay.sightseeing) ? genDay.sightseeing : [];
+            if (newDays[idx]) {
+              newDays[idx].title = genDay.title || newDays[idx].title;
+              newDays[idx].notes = genDay.notes || newDays[idx].notes;
+              newDays[idx].aboutCity = genDay.aboutCity || newDays[idx].aboutCity;
+              newDays[idx].sightseeing = aiSightseeing.length > 0 ? aiSightseeing : newDays[idx].sightseeing;
+              newDays[idx].selectedSightseeing = aiSightseeing.length > 0 ? aiSightseeing : newDays[idx].selectedSightseeing;
+            } else {
+              newDays.push({
+                title: genDay.title || "",
+                notes: genDay.notes || "",
+                aboutCity: genDay.aboutCity || "",
+                dayImage: null,
+                sightseeing: aiSightseeing,
+                selectedSightseeing: aiSightseeing,
+              });
+            }
+          });
+          return { ...prev, days: newDays };
+        });
+        setSnackbar({ open: true, message: "Itinerary generated successfully!", severity: "success" });
+      }
+    } catch (err) {
+      console.error("Failed to generate itinerary:", err);
+      setSnackbar({
+        open: true,
+        message:
+          err?.response?.data?.message ||
+          "Failed to generate itinerary. Please try again.",
+        severity: "error",
+      });
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
+
+  const getDaySightseeingList = (index) => {
+    const day = tourDetails.days?.[index];
+    if (!day) return [];
+    const list = [
+      ...(Array.isArray(day.selectedSightseeing) ? day.selectedSightseeing : []),
+      ...(Array.isArray(day.sightseeing) ? day.sightseeing : []),
+    ];
+    return [...new Set(list.map((s) => (typeof s === "string" ? s.trim() : "")).filter(Boolean))];
+  };
+
+  const getBestDayQuery = (index) => {
+    const day = tourDetails.days?.[index];
+    const city = getCityForDay(index);
+    const sightseeingList = getDaySightseeingList(index);
+
+    if (sightseeingList.length > 0) {
+      return `${sightseeingList[0]} ${city || ""}`.trim();
+    }
+    if (day?.title && day.title.trim()) {
+      return `${day.title} ${city || ""}`.trim();
+    }
+    return city || packageData?.sector || "landscape";
+  };
+
+  const handleAutoFetchImage = async (index, query, isBanner = false) => {
+    const effectiveQuery = (query || (isBanner ? (packageData?.sector || selectedState || selectedCountry || "landscape") : getBestDayQuery(index))).trim();
+    if (!effectiveQuery) {
+      setSnackbar({ open: true, message: "No destination found to fetch image for. Please fill out the Sector or Stay Locations field.", severity: "warning" });
+      return;
+    }
+    setFetchingImageIndex(isBanner ? 'banner' : index);
+    
+    // Cycle page offsets so subsequent clicks on "Auto-Fetch" fetch different photos
+    const currentOffset = isBanner ? (dayPhotoOffsets['banner'] || 0) : (dayPhotoOffsets[index] || 0);
+    const nextOffset = currentOffset + 1;
+    setDayPhotoOffsets(prev => ({ ...prev, [isBanner ? 'banner' : index]: nextOffset }));
+
+    const pageNum = isBanner ? nextOffset : ((index !== null && index !== undefined ? index * 2 : 0) + nextOffset);
+    const finalQuery = isBanner ? effectiveQuery : `${effectiveQuery} landmark architecture`;
+    
+    try {
+      const res = await axios.get(`/photos/search?query=${encodeURIComponent(finalQuery)}&page=${pageNum}`);
+      if (res.data?.success && res.data?.data) {
+        if (isBanner) {
+          setTourDetails(prev => ({ ...prev, bannerImage: res.data.data }));
+        } else {
+          handleDayChange(index, "dayImage", res.data.data);
+        }
+        setSnackbar({ open: true, message: `Photo fetched for ${effectiveQuery}! Click "Choose Photo" if you'd like to pick another.`, severity: "success" });
+      }
+    } catch (err) {
+      console.error("Auto fetch image error:", err);
+      setSnackbar({ open: true, message: "Failed to fetch photo.", severity: "error" });
+    } finally {
+      setFetchingImageIndex(null);
+    }
+  };
+
+  const handleAutoFetchAllPhotos = async () => {
+    if (!tourDetails.days || tourDetails.days.length === 0) {
+      setSnackbar({ open: true, message: "No days available to fetch photos for.", severity: "warning" });
+      return;
+    }
+    setIsAutoFetchingAll(true);
+    let successCount = 0;
+    try {
+      const updatedDays = [...tourDetails.days];
+      for (let i = 0; i < updatedDays.length; i++) {
+        const query = getBestDayQuery(i);
+        const pageNum = i + 1;
+        const finalQuery = `${query} landmark architecture`;
+        try {
+          const res = await axios.get(
+            `/photos/search?query=${encodeURIComponent(finalQuery)}&page=${pageNum}`
+          );
+          if (res.data?.success && res.data?.data) {
+            updatedDays[i] = { ...updatedDays[i], dayImage: res.data.data };
+            successCount++;
+          }
+        } catch (e) {
+          console.warn(`Could not auto-fetch photo for day ${i + 1}:`, e);
+        }
+      }
+      setTourDetails((prev) => ({ ...prev, days: updatedDays }));
+      setSnackbar({
+        open: true,
+        message: `Photos fetched for ${successCount} day(s) matched to sightseeing! Click "Choose Photo" on any day to pick another.`,
+        severity: "success",
+      });
+    } catch (err) {
+      console.error("Auto fetch all error:", err);
+      setSnackbar({ open: true, message: "Failed to fetch photos for all days.", severity: "error" });
+    } finally {
+      setIsAutoFetchingAll(false);
+    }
+  };
+
+  const handleOpenPhotoPicker = (index, isBanner = false) => {
+    setPhotoPickerTarget({ isBanner, dayIndex: index });
+
+    if (isBanner) {
+      const bannerQuery = packageData?.sector || selectedState || selectedCountry || "landscape";
+      setPhotoPickerSightseeing([]);
+      setPhotoPickerCity(bannerQuery);
+      setPhotoPickerDayTitle("Banner Photo");
+      setPhotoPickerSearch(bannerQuery);
+      setPhotoPickerPage(1);
+      setPhotoPickerOpen(true);
+      searchPhotosForPicker(bannerQuery, 1);
+    } else {
+      const day = tourDetails.days?.[index];
+      const city = getCityForDay(index);
+      const sights = getDaySightseeingList(index);
+      const initialQuery = getBestDayQuery(index);
+
+      setPhotoPickerSightseeing(sights);
+      setPhotoPickerCity(city);
+      setPhotoPickerDayTitle(day?.title || `Day ${index + 1}`);
+      setPhotoPickerSearch(initialQuery);
+      setPhotoPickerPage(1);
+      setPhotoPickerOpen(true);
+      searchPhotosForPicker(initialQuery, 1);
+    }
+  };
+
+  const searchPhotosForPicker = async (query, page = 1) => {
+    const cleanQuery = (query || "").trim();
+    if (!cleanQuery) return;
+    setPhotoPickerLoading(true);
+    try {
+      const res = await axios.get(
+        `/photos/search?query=${encodeURIComponent(cleanQuery)}&all=true&page=${page}&per_page=20`
+      );
+      if (res.data?.success) {
+        const list = Array.isArray(res.data.photos) && res.data.photos.length > 0
+          ? res.data.photos
+          : res.data.data
+            ? [{ id: "single", url: res.data.data, small: res.data.data, thumb: res.data.data, alt: cleanQuery, photographer: "Unsplash" }]
+            : [];
+        setPhotoPickerResults(list);
+        setPhotoPickerPage(page);
+        setPhotoPickerTotalPages(res.data.totalPages || 1);
+      } else {
+        setPhotoPickerResults([]);
+      }
+    } catch (err) {
+      console.error("Failed to search photos:", err);
+      setPhotoPickerResults([]);
+    } finally {
+      setPhotoPickerLoading(false);
+    }
+  };
+
+  const handleSelectPhoto = (photoUrl) => {
+    if (!photoUrl) return;
+    if (photoPickerTarget.isBanner) {
+      setTourDetails((prev) => ({ ...prev, bannerImage: photoUrl }));
+      setSnackbar({ open: true, message: "Banner image updated successfully!", severity: "success" });
+    } else if (photoPickerTarget.dayIndex !== null && photoPickerTarget.dayIndex !== undefined) {
+      handleDayChange(photoPickerTarget.dayIndex, "dayImage", photoUrl);
+      setSnackbar({
+        open: true,
+        message: `Photo selected for Day ${photoPickerTarget.dayIndex + 1}!`,
+        severity: "success",
+      });
+    }
+    setPhotoPickerOpen(false);
   };
 
   const handleAddDay = () => {
@@ -1256,7 +1797,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
       {/* Basic Info - OPTIMIZED WITH SEARCH & ADD NEW */}
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Autocomplete
             options={filteredArrivalCities}
             loading={loading}
@@ -1290,7 +1831,7 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
             }
           />
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Autocomplete
             options={filteredDepartureCities}
             value={tourDetails.departureCity || null}
@@ -1323,15 +1864,88 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
             }
           />
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <TextField
-            fullWidth
-            label="Package Title"
-            value={tourDetails.title}
-            onChange={(e) =>
-              setTourDetails({ ...tourDetails, title: e.target.value })
-            }
-          />
+        <Grid size={{ xs: 12 }}>
+          <Box sx={{ p: 2, bgcolor: "#f9fbfe", borderRadius: 2, border: "1px solid #dbe6f5" }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1} flexWrap="wrap" gap={1}>
+              <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
+                  Package Title
+                </Typography>
+                {calculatedNights > 0 && (
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={`⏱️ Duration: ${calculatedNights} Nights / ${calculatedDays} Days (${calculatedNights}N from Stay Locations + 1 Day)`}
+                    sx={{ fontWeight: "bold" }}
+                  />
+                )}
+              </Box>
+              {calculatedNights > 0 && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  onClick={() => {
+                    if (titleSuggestions.length > 0) {
+                      setTourDetails({ ...tourDetails, title: titleSuggestions[0].value });
+                      setSnackbar({
+                        open: true,
+                        message: `Title updated to "${titleSuggestions[0].value}"`,
+                        severity: "success",
+                      });
+                    }
+                  }}
+                  startIcon={<AutoAwesomeIcon fontSize="small" />}
+                  sx={{ textTransform: "none", fontWeight: "bold", fontSize: "0.8rem" }}
+                >
+                  Auto-Fill Title
+                </Button>
+              )}
+            </Box>
+
+            <TextField
+              fullWidth
+              size="small"
+              placeholder={
+                calculatedNights > 0
+                  ? `e.g. ${calculatedNights} Nights / ${calculatedDays} Days ${packageData?.sector || "Scenic Tour"}`
+                  : "e.g. 5 Nights / 6 Days Scenic Tour"
+              }
+              value={tourDetails.title}
+              onChange={(e) =>
+                setTourDetails({ ...tourDetails, title: e.target.value })
+              }
+              helperText="Nights are computed from Stay Locations & Days = Nights + 1. You can freely edit or choose from suggestions below."
+            />
+
+            {calculatedNights > 0 && titleSuggestions.length > 0 && (
+              <Box display="flex" alignItems="center" gap={1} mt={1.5} flexWrap="wrap">
+                <Typography variant="caption" color="text.secondary" fontWeight="600">
+                  Quick Title Formats:
+                </Typography>
+                {titleSuggestions.map((sug, sIdx) => (
+                  <Chip
+                    key={sIdx}
+                    size="small"
+                    label={sug.label}
+                    clickable
+                    color={tourDetails.title === sug.value ? "primary" : "default"}
+                    variant={tourDetails.title === sug.value ? "filled" : "outlined"}
+                    onClick={() => {
+                      setTourDetails({ ...tourDetails, title: sug.value });
+                      setSnackbar({
+                        open: true,
+                        message: `Applied title: "${sug.value}"`,
+                        severity: "info",
+                      });
+                    }}
+                    sx={{ fontSize: "0.75rem", cursor: "pointer" }}
+                  />
+                ))}
+              </Box>
+            )}
+          </Box>
         </Grid>
         <Grid size={{ xs: 12 }}>
           <TextField
@@ -1346,24 +1960,106 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
           />
         </Grid>
         <Grid size={{ xs: 12 }}>
-          <Button variant="contained" component="label">
-            Upload Banner Image
-            <input
-              hidden
-              type="file"
-              accept="image/*"
-              onChange={(e) =>
-                setTourDetails({
-                  ...tourDetails,
-                  bannerImage: e.target.files[0],
-                })
-              }
-            />
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Button 
+              variant="contained" 
+              onClick={() => handleOpenPhotoPicker(null, true)}
+              startIcon={<PhotoLibraryIcon />}
+              sx={{
+                background: 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)',
+                color: 'white',
+                textTransform: 'none',
+                fontWeight: 'bold',
+                boxShadow: '0 2px 6px rgba(25, 118, 210, 0.3)',
+              }}
+            >
+              🖼️ Choose Banner Photo
+            </Button>
+            <Button 
+              variant="outlined" 
+              disabled={fetchingImageIndex === 'banner'}
+              onClick={() => handleAutoFetchImage(null, packageData?.sector || selectedState || selectedCountry || "landscape", true)}
+              startIcon={fetchingImageIndex === 'banner' ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
+              {fetchingImageIndex === 'banner' ? "⏳ Fetching..." : "✨ Auto-Fetch Banner Photo"}
+            </Button>
+            <Button variant="outlined" component="label" sx={{ textTransform: 'none', fontWeight: 600 }}>
+              📁 Upload Banner Image
+              <input
+                hidden
+                type="file"
+                accept="image/*"
+                onChange={(e) =>
+                  setTourDetails({
+                    ...tourDetails,
+                    bannerImage: e.target.files[0],
+                  })
+                }
+              />
+            </Button>
+            {tourDetails.bannerImage && (
+              <Button
+                color="error"
+                size="small"
+                onClick={() => setTourDetails((prev) => ({ ...prev, bannerImage: null }))}
+                startIcon={<DeleteIcon fontSize="small" />}
+                sx={{ textTransform: "none" }}
+              >
+                Remove Banner
+              </Button>
+            )}
+          </Box>
           {tourDetails.bannerImage && (
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              {tourDetails.bannerImage.name}
-            </Typography>
+            <Box sx={{ mt: 1.5, maxWidth: "550px" }}>
+              {typeof tourDetails.bannerImage === 'string' ? (
+                <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden", border: "1px solid #ddd", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+                  <img src={tourDetails.bannerImage} alt="Banner preview" style={{ height: "200px", width: "100%", objectFit: "cover", display: "block" }} />
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      p: 1,
+                      background: "linear-gradient(transparent, rgba(0,0,0,0.75))",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ color: "white", fontWeight: 600 }}>
+                      Current Banner Image
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={() => handleOpenPhotoPicker(null, true)}
+                      sx={{
+                        fontSize: "0.75rem",
+                        py: 0.3,
+                        px: 1.2,
+                        textTransform: "none",
+                        bgcolor: "rgba(255,255,255,0.9)",
+                        color: "#1976d2",
+                        fontWeight: "bold",
+                        "&:hover": { bgcolor: "white" },
+                      }}
+                    >
+                      Change Banner
+                    </Button>
+                  </Box>
+                </Box>
+              ) : (
+                <Paper sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", bgcolor: "#f5f5f5", borderRadius: 2 }}>
+                  <Typography variant="body2" fontWeight={500}>📁 {tourDetails.bannerImage.name}</Typography>
+                  <Button size="small" color="error" onClick={() => setTourDetails((prev) => ({ ...prev, bannerImage: null }))}>Remove</Button>
+                </Paper>
+              )}
+            </Box>
           )}
         </Grid>
       </Grid>
@@ -1396,9 +2092,34 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
       </Grid>
 
       {/* Days Section */}
-      <Typography variant="h6" color="primary" sx={{ mt: 3 }}>
-        Day Wise Plan
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mt={3} mb={1} flexWrap="wrap" gap={1.5}>
+        <Typography variant="h6" color="primary">
+          Day Wise Plan
+        </Typography>
+        <Box display="flex" gap={1.5} alignItems="center" flexWrap="wrap">
+          {tourDetails.days.length > 0 && (
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleAutoFetchAllPhotos}
+              disabled={isAutoFetchingAll || isGeneratingAi}
+              startIcon={isAutoFetchingAll ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+              sx={{ textTransform: "none", fontWeight: 600 }}
+            >
+              {isAutoFetchingAll ? "Fetching All Photos..." : "✨ Auto-Fetch All Day Photos"}
+            </Button>
+          )}
+          <Button 
+            variant="contained" 
+            color="secondary" 
+            onClick={handleGenerateItinerary} 
+            disabled={isGeneratingAi || isAutoFetchingAll}
+            startIcon={isGeneratingAi ? <CircularProgress size={20} /> : <span>✨</span>}
+          >
+            {isGeneratingAi ? "Generating..." : "Generate Itinerary with AI"}
+          </Button>
+        </Box>
+      </Box>
       {tourDetails.days.map((day, index) => (
         <Paper key={index} sx={{ p: 2, my: 2, border: "1px solid #ccc" }}>
           <Box display="flex" justifyContent="space-between">
@@ -1446,21 +2167,124 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
               />
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <Button variant="outlined" component="label">
-                Upload Day Image
-                <input
-                  hidden
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) =>
-                    handleDayChange(index, "dayImage", e.target.files[0])
-                  }
-                />
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+                <Button 
+                  variant="contained" 
+                  onClick={() => handleOpenPhotoPicker(index)}
+                  startIcon={<PhotoLibraryIcon />}
+                  sx={{
+                    background: 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)',
+                    color: 'white',
+                    textTransform: 'none',
+                    fontWeight: 'bold',
+                    boxShadow: '0 2px 6px rgba(25, 118, 210, 0.3)',
+                  }}
+                >
+                  🖼️ Choose Photo (by Sightseeing)
+                </Button>
+
+                <Button 
+                  variant="outlined" 
+                  disabled={fetchingImageIndex === index}
+                  onClick={() => handleAutoFetchImage(index, getBestDayQuery(index))}
+                  startIcon={fetchingImageIndex === index ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                  }}
+                >
+                  {fetchingImageIndex === index ? "⏳ Fetching..." : (day.dayImage ? "✨ Auto-Fetch Next" : "✨ Auto-Fetch Photo")}
+                </Button>
+
+                <Button variant="outlined" component="label" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                  📁 Upload Custom
+                  <input
+                    hidden
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      handleDayChange(index, "dayImage", e.target.files[0])
+                    }
+                  />
+                </Button>
+
+                {day.dayImage && (
+                  <Button
+                    color="error"
+                    size="small"
+                    onClick={() => handleDayChange(index, "dayImage", null)}
+                    startIcon={<DeleteIcon fontSize="small" />}
+                    sx={{ textTransform: "none" }}
+                  >
+                    Remove Photo
+                  </Button>
+                )}
+              </Box>
+
               {day.dayImage && (
-                <Typography variant="body2" sx={{ mt: 1 }}>
-                  {day.dayImage.name}
-                </Typography>
+                <Box sx={{ mt: 1, maxWidth: "460px" }}>
+                  {typeof day.dayImage === 'string' ? (
+                    <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden", border: "1px solid #ddd", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+                      <img
+                        src={day.dayImage}
+                        alt={`Day ${index + 1} preview`}
+                        style={{
+                          height: "180px",
+                          width: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          p: 1,
+                          background: "linear-gradient(transparent, rgba(0,0,0,0.75))",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ color: "white", fontWeight: 600 }}>
+                          Day {index + 1} Image
+                        </Typography>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => handleOpenPhotoPicker(index)}
+                          sx={{
+                            fontSize: "0.75rem",
+                            py: 0.3,
+                            px: 1.2,
+                            textTransform: "none",
+                            bgcolor: "rgba(255,255,255,0.9)",
+                            color: "#1976d2",
+                            fontWeight: "bold",
+                            "&:hover": { bgcolor: "white" },
+                          }}
+                        >
+                          Change Photo
+                        </Button>
+                      </Box>
+                    </Box>
+                  ) : (
+                    <Paper sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", bgcolor: "#f5f5f5", borderRadius: 2 }}>
+                      <Typography variant="body2" fontWeight={500}>
+                        📁 {day.dayImage.name}
+                      </Typography>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => handleDayChange(index, "dayImage", null)}
+                      >
+                        Remove
+                      </Button>
+                    </Paper>
+                  )}
+                </Box>
               )}
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -2111,6 +2935,318 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
             disabled={!addMore.trim()}
           >
             Add {currentHotelCategory ? "Hotel" : "Item"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Photo Picker Dialog for selecting sightseeing & landscape photos */}
+      <Dialog
+        open={photoPickerOpen}
+        onClose={() => setPhotoPickerOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            maxHeight: "90vh",
+            display: "flex",
+            flexDirection: "column",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            pb: 1.5,
+            borderBottom: "1px solid #e0e0e0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Box display="flex" alignItems="center" gap={1}>
+            <PhotoLibraryIcon color="primary" />
+            <Typography variant="h6" fontWeight="bold">
+              {photoPickerTarget.isBanner
+                ? "Choose Banner Photo"
+                : `Choose Photo for Day ${(photoPickerTarget.dayIndex ?? 0) + 1}${
+                    photoPickerDayTitle ? ` - ${photoPickerDayTitle}` : ""
+                  }`}
+            </Typography>
+          </Box>
+          <IconButton onClick={() => setPhotoPickerOpen(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3 }}>
+          {/* Sightseeing & City quick filters */}
+          {!photoPickerTarget.isBanner &&
+            (photoPickerSightseeing.length > 0 || photoPickerCity) && (
+              <Box
+                mb={2.5}
+                p={2}
+                sx={{
+                  bgcolor: "#f4f7fb",
+                  borderRadius: 2,
+                  border: "1px solid #e0e7f1",
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  color="text.primary"
+                  fontWeight="bold"
+                  mb={1}
+                  display="flex"
+                  alignItems="center"
+                  gap={0.5}
+                >
+                  <LocationOnIcon fontSize="small" color="error" />
+                  Quick Filter by Day's Sightseeing & City:
+                </Typography>
+                <Box display="flex" flexWrap="wrap" gap={1}>
+                  {photoPickerSightseeing.map((spot, sIdx) => {
+                    const spotQuery = `${spot} ${photoPickerCity || ""}`.trim();
+                    const isSelected =
+                      photoPickerSearch.toLowerCase() === spotQuery.toLowerCase() ||
+                      photoPickerSearch.toLowerCase() === spot.toLowerCase();
+                    return (
+                      <Chip
+                        key={sIdx}
+                        label={`📍 ${spot}`}
+                        clickable
+                        color={isSelected ? "primary" : "default"}
+                        variant={isSelected ? "filled" : "outlined"}
+                        onClick={() => {
+                          setPhotoPickerSearch(spotQuery);
+                          searchPhotosForPicker(spotQuery, 1);
+                        }}
+                        sx={{ fontWeight: 500 }}
+                      />
+                    );
+                  })}
+                  {photoPickerCity && (
+                    <Chip
+                      label={`🏙️ ${photoPickerCity}`}
+                      clickable
+                      color={
+                        photoPickerSearch.toLowerCase() === photoPickerCity.toLowerCase()
+                          ? "primary"
+                          : "default"
+                      }
+                      variant={
+                        photoPickerSearch.toLowerCase() === photoPickerCity.toLowerCase()
+                          ? "filled"
+                          : "outlined"
+                      }
+                      onClick={() => {
+                        setPhotoPickerSearch(photoPickerCity);
+                        searchPhotosForPicker(photoPickerCity, 1);
+                      }}
+                      sx={{ fontWeight: 500 }}
+                    />
+                  )}
+                </Box>
+              </Box>
+            )}
+
+          {/* Search bar */}
+          <Box display="flex" gap={1.5} mb={2.5}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search sightseeing attraction, monument, landscape, or city (e.g. Taj Mahal, Pangong Lake, Eiffel Tower)..."
+              value={photoPickerSearch}
+              onChange={(e) => setPhotoPickerSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  searchPhotosForPicker(photoPickerSearch, 1);
+                }
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Button
+              variant="contained"
+              onClick={() => searchPhotosForPicker(photoPickerSearch, 1)}
+              disabled={photoPickerLoading || !photoPickerSearch.trim()}
+              sx={{ minWidth: 110, textTransform: "none", fontWeight: "bold" }}
+            >
+              Search
+            </Button>
+          </Box>
+
+          {/* Photo Grid */}
+          {photoPickerLoading ? (
+            <Box
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              justifyContent="center"
+              py={8}
+              gap={2}
+            >
+              <CircularProgress size={40} />
+              <Typography variant="body2" color="text.secondary">
+                Searching high-quality photos for "{photoPickerSearch}"...
+              </Typography>
+            </Box>
+          ) : photoPickerResults.length === 0 ? (
+            <Box
+              textAlign="center"
+              py={6}
+              bgcolor="#fafafa"
+              borderRadius={2}
+              border="1px dashed #ccc"
+            >
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                No photos found
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                Try clicking one of the sightseeing tags above or typing a broader name (e.g. city or state name).
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                Found {photoPickerResults.length} photos. Click any photo below to select it:
+              </Typography>
+
+              <Grid container spacing={2}>
+                {photoPickerResults.map((photo, pIdx) => {
+                  const currentImage = photoPickerTarget.isBanner
+                    ? tourDetails.bannerImage
+                    : tourDetails.days?.[photoPickerTarget.dayIndex]?.dayImage;
+                  const isCurrent = currentImage === photo.url;
+
+                  return (
+                    <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={photo.id || pIdx}>
+                      <Card
+                        onClick={() => handleSelectPhoto(photo.url)}
+                        sx={{
+                          cursor: "pointer",
+                          height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
+                          position: "relative",
+                          border: isCurrent ? "3px solid #1976d2" : "1px solid #e0e0e0",
+                          borderRadius: 2,
+                          transition: "all 0.2s ease-in-out",
+                          "&:hover": {
+                            transform: "translateY(-4px)",
+                            boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+                            borderColor: "#1976d2",
+                          },
+                        }}
+                      >
+                        <Box sx={{ position: "relative", paddingTop: "65%", overflow: "hidden" }}>
+                          <img
+                            src={photo.small || photo.url}
+                            alt={photo.alt || "Tour photo"}
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                          {isCurrent && (
+                            <Box
+                              sx={{
+                                position: "absolute",
+                                top: 8,
+                                right: 8,
+                                bgcolor: "primary.main",
+                                color: "white",
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1,
+                                fontSize: "0.75rem",
+                                fontWeight: "bold",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                              }}
+                            >
+                              <CheckCircleIcon sx={{ fontSize: 14 }} /> Current
+                            </Box>
+                          )}
+                        </Box>
+                        <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                              color: "text.secondary",
+                              minHeight: "2.4em",
+                            }}
+                          >
+                            {photo.alt || "Landscape view"}
+                          </Typography>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
+                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: "0.7rem" }}>
+                              📸 {photo.photographer}
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant={isCurrent ? "outlined" : "contained"}
+                              color="primary"
+                              sx={{ py: 0.2, px: 1, fontSize: "0.75rem", textTransform: "none" }}
+                            >
+                              {isCurrent ? "Selected" : "Select"}
+                            </Button>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+
+              {/* Pagination controls */}
+              <Box display="flex" justifyContent="center" alignItems="center" gap={2} mt={3}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={photoPickerPage <= 1 || photoPickerLoading}
+                  onClick={() => searchPhotosForPicker(photoPickerSearch, photoPickerPage - 1)}
+                  sx={{ textTransform: "none" }}
+                >
+                  ◀ Previous
+                </Button>
+                <Typography variant="body2" color="text.secondary">
+                  Page {photoPickerPage} of {photoPickerTotalPages}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={photoPickerPage >= photoPickerTotalPages || photoPickerLoading}
+                  onClick={() => searchPhotosForPicker(photoPickerSearch, photoPickerPage + 1)}
+                  sx={{ textTransform: "none" }}
+                >
+                  Next ▶
+                </Button>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid #eee", justifyContent: "space-between" }}>
+          <Typography variant="caption" color="text.secondary">
+            Photos sourced from Unsplash
+          </Typography>
+          <Button onClick={() => setPhotoPickerOpen(false)} color="inherit">
+            Cancel
           </Button>
         </DialogActions>
       </Dialog>

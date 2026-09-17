@@ -88,31 +88,22 @@ const HolidaysPackages = () => {
 
   // UPDATED: ENHANCED PRICE FUNCTION - SAME AS INTERNATIONAL & LATEST PACKAGES
   const getStandardHotelPrice = (pkg) => {
-    // Pehle direct price fields check karein
-    if (pkg?.startingPrice) {
-      return `₹${pkg.startingPrice.toLocaleString()}`;
-    }
-    if (pkg?.price) {
-      return `₹${pkg.price.toLocaleString()}`;
-    }
-
-    // Fir destinationNights se standard hotel price
-    if (!pkg.destinationNights || pkg.destinationNights.length === 0) {
+    if (!pkg.destinationNights || !Array.isArray(pkg.destinationNights)) {
       return "Price on request";
     }
 
-    const firstDestination = pkg.destinationNights[0];
-    if (!firstDestination.hotels || firstDestination.hotels.length === 0) {
-      return "Price on request";
-    }
+    let totalPrice = 0;
+    pkg.destinationNights.forEach(destination => {
+      const standardHotel = destination.hotels?.find(hotel =>
+        hotel.category?.toLowerCase() === 'standard'
+      );
+      if (standardHotel && standardHotel.pricePerPerson) {
+        totalPrice += (standardHotel.pricePerPerson * (destination.nights || 0));
+      }
+    });
 
-    // Find standard hotel category
-    const standardHotel = firstDestination.hotels.find(
-      hotel => hotel.category === "standard"
-    );
-
-    if (standardHotel && standardHotel.pricePerPerson > 0) {
-      return `₹${standardHotel.pricePerPerson.toLocaleString()}`;
+    if (totalPrice > 0) {
+      return `₹${totalPrice.toLocaleString()}`;
     }
 
     return "Price on request";
@@ -120,10 +111,10 @@ const HolidaysPackages = () => {
 
   // UPDATED: Check if price is available for conditional rendering
   const hasPrice = (pkg) => {
-    return pkg?.startingPrice || pkg?.price ||
-      (pkg.destinationNights && pkg.destinationNights[0]?.hotels?.some(hotel =>
-        hotel.category === "standard" && hotel.pricePerPerson > 0
-      ));
+    if (!pkg.destinationNights || !Array.isArray(pkg.destinationNights)) return false;
+    return pkg.destinationNights.some(destination =>
+      destination.hotels?.some(hotel => hotel.category?.toLowerCase() === 'standard' && hotel.pricePerPerson > 0)
+    );
   };
 
   return (
@@ -301,7 +292,7 @@ const HolidaysPackages = () => {
                         backdropFilter: "blur(10px)",
                       }}
                     >
-                      Starting {pkg.startingPrice ? "Starting " : ""}{getStandardHotelPrice(pkg)}
+                      Starting {getStandardHotelPrice(pkg)}
                     </Box>
                   )}
 

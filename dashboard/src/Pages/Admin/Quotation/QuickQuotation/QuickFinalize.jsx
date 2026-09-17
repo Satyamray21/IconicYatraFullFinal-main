@@ -124,14 +124,63 @@ function setQuotationValueByPath(prev, path, value) {
 }
 
 function linesToPolicyArray(v) {
-  if (Array.isArray(v)) return v.map(String);
-  if (typeof v === "string") {
+  if (Array.isArray(v)) {
     return v
-      .split("\n")
-      .map((s) => s.trim())
+      .flatMap((item) => htmlPolicyToPlainLines(item))
       .filter(Boolean);
   }
-  return [String(v)];
+  if (typeof v === "string") {
+    return htmlPolicyToPlainLines(v);
+  }
+  return [String(v)].filter(Boolean);
+}
+
+function decodeHtmlEntities(text) {
+  return String(text || "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => {
+      const n = Number(code);
+      return Number.isFinite(n) ? String.fromCharCode(n) : "";
+    });
+}
+
+/** Convert HTML policy blobs into clean newline-separated plain lines. */
+function htmlPolicyToPlainLines(value) {
+  let s = String(value ?? "");
+  if (!s.trim()) return [];
+
+  s = s
+    .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/\s*p\s*>/gi, "\n")
+    .replace(/<\/\s*div\s*>/gi, "\n")
+    .replace(/<\/\s*li\s*>/gi, "\n")
+    .replace(/<\s*li[^>]*>/gi, "")
+    .replace(/<\s*p[^>]*>/gi, "")
+    .replace(/<\s*div[^>]*>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\r/g, "");
+
+  s = decodeHtmlEntities(s);
+
+  let lines = s
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  // Recover already-mangled text: "Etc.Any other cost" → separate lines
+  if (lines.length === 1 && /\.[A-Z]/.test(lines[0])) {
+    lines = lines[0]
+      .split(/(?<=\.)\s*(?=[A-Z*0-9])/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  return lines;
 }
 
 function buildQuickMongoSetFromEditDialog(editDialog, newValue) {
@@ -196,15 +245,15 @@ function buildQuickMongoSetFromEditDialog(editDialog, newValue) {
   }
   switch (editDialog.field) {
     case "policies.inclusions":
-      return { "policy.inclusionPolicy": linesToPolicyArray(newValue) };
+      return { policy: { inclusionPolicy: linesToPolicyArray(newValue) } };
     case "policies.exclusions":
-      return { "policy.exclusionPolicy": linesToPolicyArray(newValue) };
+      return { policy: { exclusionPolicy: linesToPolicyArray(newValue) } };
     case "policies.paymentPolicy":
-      return { "policy.paymentPolicy": linesToPolicyArray(newValue) };
+      return { policy: { paymentPolicy: linesToPolicyArray(newValue) } };
     case "policies.cancellationPolicy":
-      return { "policy.cancellationPolicy": linesToPolicyArray(newValue) };
+      return { policy: { cancellationPolicy: linesToPolicyArray(newValue) } };
     case "policies.terms":
-      return { "policy.termsAndConditions": linesToPolicyArray(newValue) };
+      return { policy: { termsAndConditions: linesToPolicyArray(newValue) } };
     case "hotel.itinerary":
       return { message: String(newValue) };
     case "customer.name":
@@ -249,37 +298,51 @@ function summarizeVoucherAmounts(vouchers) {
   };
 }
 
-const normalizePolicyForEditor = (value) => {
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "";
-    return value
-      .join("\n")
-      .trim()
-      .replace(/<[^>]*>/g, "");
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed ? trimmed.replace(/<[^>]*>/g, "") : "";
-  }
-  return "";
+const normalizePolicyForEditor = (value) =>
+  htmlPolicyToPlainLines(value).join("\n");
+
+const looksMangledPolicyText = (text) => {
+  const s = String(text || "");
+  if (!s) return true;
+  if (/&amp;|&lt;|&gt;/.test(s)) return true;
+  // Single blob with sentence glued to next capital letter and no newlines
+  if (!s.includes("\n") && /\.[A-Z]/.test(s)) return true;
+  return false;
 };
 
 const normalizePolicyState = (source = {}) => {
-  const policySource = source?.policy || source || {};
+  const quotationPolicy = source?.policy || {};
+  const snapshotPolicy =
+    source?.packageSnapshot?.policy ||
+    (source?.packageId && typeof source.packageId === "object"
+      ? source.packageId.policy
+      : null) ||
+    {};
+
+  const pickField = (key, altKeys = []) => {
+    const fromQuotation =
+      quotationPolicy?.[key] ??
+      altKeys.map((k) => quotationPolicy?.[k]).find((v) => v != null);
+    const fromSnapshot =
+      snapshotPolicy?.[key] ??
+      altKeys.map((k) => snapshotPolicy?.[k]).find((v) => v != null);
+
+    const quotationText = normalizePolicyForEditor(fromQuotation);
+    const snapshotText = normalizePolicyForEditor(fromSnapshot);
+
+    if (quotationText && !looksMangledPolicyText(quotationText)) {
+      return quotationText;
+    }
+    if (snapshotText) return snapshotText;
+    return quotationText || "";
+  };
+
   return {
-    inclusionPolicy: normalizePolicyForEditor(
-      policySource?.inclusionPolicy ?? policySource?.inclusions,
-    ),
-    exclusionPolicy: normalizePolicyForEditor(
-      policySource?.exclusionPolicy ?? policySource?.exclusions,
-    ),
-    paymentPolicy: normalizePolicyForEditor(policySource?.paymentPolicy),
-    cancellationPolicy: normalizePolicyForEditor(
-      policySource?.cancellationPolicy,
-    ),
-    termsAndConditions: normalizePolicyForEditor(
-      policySource?.termsAndConditions,
-    ),
+    inclusionPolicy: pickField("inclusionPolicy", ["inclusions"]),
+    exclusionPolicy: pickField("exclusionPolicy", ["exclusions"]),
+    paymentPolicy: pickField("paymentPolicy"),
+    cancellationPolicy: pickField("cancellationPolicy"),
+    termsAndConditions: pickField("termsAndConditions"),
   };
 };
 
@@ -890,7 +953,33 @@ function inferQuickHotelType(pkg, policy) {
 function transformQuickApiToDisplay(apiData, company) {
   if (!apiData) return null;
   const pkg = mergeQuickPackageForDisplay(apiData);
-  const policy = apiData.policy || {};
+  const policy = (() => {
+    const qPolicy = apiData.policy || {};
+    const snapPolicy =
+      apiData.packageSnapshot?.policy ||
+      (apiData.packageId && typeof apiData.packageId === "object"
+        ? apiData.packageId.policy
+        : null) ||
+      {};
+    const pick = (key) => {
+      const qVal = qPolicy?.[key];
+      const sVal = snapPolicy?.[key];
+      const qText = normalizePolicyForEditor(qVal);
+      const sText = normalizePolicyForEditor(sVal);
+      if (qText && !looksMangledPolicyText(qText)) {
+        return htmlPolicyToPlainLines(qVal);
+      }
+      if (sText) return htmlPolicyToPlainLines(sVal);
+      return htmlPolicyToPlainLines(qVal);
+    };
+    return {
+      inclusionPolicy: pick("inclusionPolicy"),
+      exclusionPolicy: pick("exclusionPolicy"),
+      paymentPolicy: pick("paymentPolicy"),
+      cancellationPolicy: pick("cancellationPolicy"),
+      termsAndConditions: pick("termsAndConditions"),
+    };
+  })();
   const qd = pkg.quotationDetails || {};
   const adults = Number(apiData.adults) || 0;
   const children = Number(apiData.children) || 0;
@@ -1521,10 +1610,39 @@ const QuickFinalize = () => {
       if (qd.superiorCost > 0) payableSuperior = Number(qd.superiorCost) + addOn;
     }
 
+    const inclusionLines = linesToPolicyArray(policyInputs.inclusionPolicy);
+    const exclusionLines = linesToPolicyArray(policyInputs.exclusionPolicy);
+    const paymentLines = linesToPolicyArray(policyInputs.paymentPolicy);
+    const cancellationLines = linesToPolicyArray(policyInputs.cancellationPolicy);
+    const termsLines = linesToPolicyArray(policyInputs.termsAndConditions);
+
     const base = {
       ...quotation,
       days,
       additionalServices: serializeAdditionalServicesForApi(services),
+      policies: {
+        ...(quotation?.policies || {}),
+        inclusions:
+          inclusionLines.length > 0
+            ? inclusionLines
+            : quotation?.policies?.inclusions || [],
+        exclusions:
+          exclusionLines.length > 0
+            ? exclusionLines.join("\n")
+            : quotation?.policies?.exclusions || "",
+        paymentPolicy:
+          paymentLines.length > 0
+            ? paymentLines.join("\n")
+            : quotation?.policies?.paymentPolicy || "",
+        cancellationPolicy:
+          cancellationLines.length > 0
+            ? cancellationLines.join("\n")
+            : quotation?.policies?.cancellationPolicy || "",
+        terms:
+          termsLines.length > 0
+            ? termsLines.join("\n")
+            : quotation?.policies?.terms || "",
+      },
     };
     if (!Number.isFinite(payableStandard) || payableStandard <= 0) return base;
     const hpd = [...(base.hotelPricingData || [])];
@@ -1556,7 +1674,7 @@ const QuickFinalize = () => {
       },
       hotelPricingData: hpd,
     };
-  }, [quotation, days, currentQuotation, services]);
+  }, [quotation, days, currentQuotation, services, policyInputs]);
 
   const [accountType, setAccountType] = useState("company");
   const [accountName, setAccountName] = useState("Iconic Yatra");
@@ -2463,6 +2581,30 @@ const QuickFinalize = () => {
       }
       return setQuotationValueByPath(prev, editDialog.field, newValue);
     });
+
+    if (editDialog.field.startsWith("policies.")) {
+      const textValue = Array.isArray(newValue)
+        ? newValue.join("\n")
+        : String(newValue ?? "");
+      setPolicyInputs((prev) => {
+        if (editDialog.field === "policies.inclusions") {
+          return { ...prev, inclusionPolicy: textValue };
+        }
+        if (editDialog.field === "policies.exclusions") {
+          return { ...prev, exclusionPolicy: textValue };
+        }
+        if (editDialog.field === "policies.paymentPolicy") {
+          return { ...prev, paymentPolicy: textValue };
+        }
+        if (editDialog.field === "policies.cancellationPolicy") {
+          return { ...prev, cancellationPolicy: textValue };
+        }
+        if (editDialog.field === "policies.terms") {
+          return { ...prev, termsAndConditions: textValue };
+        }
+        return prev;
+      });
+    }
 
     const mongoSet = buildQuickMongoSetFromEditDialog(editDialog, newValue);
     if (mongoSet && apiEntityId) {

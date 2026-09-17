@@ -10,6 +10,9 @@ import { OTP } from "../models/otp.model.js";
 import { comparePassword } from "../utils/permission.utils.js";
 import { LoginHistory } from "../models/loginHistory.model.js";
 
+const escapeRegex = (string) =>
+  String(string ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const saveLoginHistory = async (userName, id, staffId, status, req) => {
   try {
     const ip =
@@ -85,10 +88,11 @@ async function loadStaffFromTokenPayload(decoded) {
   }
   const loginHint = decoded.loginId ?? decoded.username;
   if (loginHint) {
+    const hintRegex = new RegExp(`^${escapeRegex(String(loginHint))}$`, "i");
     const perm = await StaffPermission.findOne({
       $or: [
-        { staffUserId: String(loginHint) },
-        { "credentials.username": String(loginHint) },
+        { staffUserId: hintRegex },
+        { "credentials.username": hintRegex },
       ],
     })
       .select("staffId")
@@ -130,7 +134,8 @@ async function loadUserFromTokenPayload(decoded) {
   if (decoded.email) {
     const email = String(decoded.email).trim().toLowerCase();
     if (email) {
-      const u = await User.findOne({ email }).select("-password").lean();
+      const emailRegex = new RegExp(`^${escapeRegex(email)}$`, "i");
+      const u = await User.findOne({ email: emailRegex }).select("-password").lean();
       if (u) return u;
     }
   }
@@ -146,10 +151,11 @@ async function findStaffByRouteParam(param) {
     const byId = await Staff.findById(s).lean();
     if (byId) return byId;
   }
-  const byStaffCode = await Staff.findOne({ staffId: s }).lean();
+  const sRegex = new RegExp(`^${escapeRegex(s)}$`, "i");
+  const byStaffCode = await Staff.findOne({ staffId: sRegex }).lean();
   if (byStaffCode) return byStaffCode;
   const perm = await StaffPermission.findOne({
-    $or: [{ staffUserId: s }, { "credentials.username": s }],
+    $or: [{ staffUserId: sRegex }, { "credentials.username": sRegex }],
   })
     .select("staffId")
     .lean();
@@ -326,7 +332,11 @@ export const login = async (req, res) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = await User.findOne({ email: loginId });
+    const loginRegex = new RegExp(`^${escapeRegex(loginId)}$`, "i");
+
+    const user = await User.findOne({
+      $or: [{ email: loginRegex }, { userId: loginRegex }],
+    });
     if (user) {
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) {
@@ -373,11 +383,23 @@ export const login = async (req, res) => {
       });
     }
 
-    const permission = await StaffPermission.findOne({
+    const staffByEmail = await Staff.findOne({
       $or: [
-        { "credentials.username": loginId },
-        { staffUserId: loginId },
+        { "personalDetails.email": loginRegex },
+        { staffId: loginRegex },
       ],
+    }).select("_id staffId");
+
+    const staffOrConditions = [
+      { "credentials.username": loginRegex },
+      { staffUserId: loginRegex },
+    ];
+    if (staffByEmail?._id) {
+      staffOrConditions.push({ staffId: staffByEmail._id });
+    }
+
+    const permission = await StaffPermission.findOne({
+      $or: staffOrConditions,
     }).populate("staffId", "personalDetails staffId");
 
     if (!permission) {
@@ -611,8 +633,11 @@ export const deleteUser = async (req, res) => {
 export const sendResetCode = async (req, res) => {
   try {
     const { email } = req.body;
+    const emailTrimmed = typeof email === "string" ? email.trim() : "";
+    if (!emailTrimmed) return res.status(400).json({ error: "Email is required" });
 
-    const user = await User.findOne({ email });
+    const emailRegex = new RegExp(`^${escapeRegex(emailTrimmed)}$`, "i");
+    const user = await User.findOne({ email: emailRegex });
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -677,8 +702,11 @@ export const sendResetCode = async (req, res) => {
 export const changePassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
+    const emailTrimmed = typeof email === "string" ? email.trim() : "";
+    if (!emailTrimmed) return res.status(400).json({ error: "Email is required" });
 
-    const user = await User.findOne({ email });
+    const emailRegex = new RegExp(`^${escapeRegex(emailTrimmed)}$`, "i");
+    const user = await User.findOne({ email: emailRegex });
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const otpRecord = await OTP.findOne({ userId: user._id, otp });

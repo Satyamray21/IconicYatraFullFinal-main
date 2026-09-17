@@ -121,13 +121,13 @@ const PackageDashboard = () => {
       width: 160,
       renderCell: (params) => (
         <Box display="flex" gap={1}>
-          <IconButton color="primary" size="small" onClick={() => handleEditClick(params.row)}>
+          <IconButton color="primary" size="small" onClick={(e) => { e.stopPropagation(); handleEditClick(params.row); }}>
             <EditIcon fontSize="small" />
           </IconButton>
-          <IconButton color="info" size="small" onClick={() => handleCloneClick(params.row._id)}>
+          <IconButton color="info" size="small" onClick={(e) => { e.stopPropagation(); handleCloneClick(params.row._id); }}>
             <ContentCopyIcon fontSize="small" />
           </IconButton>
-          <IconButton color="error" size="small" onClick={() => handleDeleteClick(params.row._id)}>
+          <IconButton color="error" size="small" onClick={(e) => { e.stopPropagation(); handleDeleteClick(params.row._id); }}>
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Box>

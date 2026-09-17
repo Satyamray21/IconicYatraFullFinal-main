@@ -12,17 +12,23 @@ import {
   getPermissionModules,
 } from "../utils/permission.utils.js";
 
+const escapeRegex = (string) =>
+  String(string ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** Route param may be Mongo _id, human-readable staffUserId (e.g. ICYR_ST0012), or username. Only ObjectId paths may use staffId field. */
 function buildPermissionLookupFilter(staffIdParam) {
+  const s = typeof staffIdParam === "string" ? staffIdParam.trim() : staffIdParam;
+  const sRegex =
+    typeof s === "string" ? new RegExp(`^${escapeRegex(s)}$`, "i") : s;
   const or = [
-    { staffUserId: staffIdParam },
-    { "credentials.username": staffIdParam },
+    { staffUserId: sRegex },
+    { "credentials.username": sRegex },
   ];
   if (
-    typeof staffIdParam === "string" &&
-    /^[0-9a-fA-F]{24}$/.test(staffIdParam)
+    typeof s === "string" &&
+    /^[0-9a-fA-F]{24}$/.test(s)
   ) {
-    or.push({ staffId: new mongoose.Types.ObjectId(staffIdParam) });
+    or.push({ staffId: new mongoose.Types.ObjectId(s) });
   }
   return { $or: or };
 }
