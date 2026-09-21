@@ -192,6 +192,7 @@ const CustomQuotationMain = () => {
     setFormData((prev) => ({ ...prev, clientDetails: sanitizedClientDetails }));
 
     const initialQuotationData = {
+      leadId: matchedLead?.leadId || undefined,
       clientDetails: sanitizedClientDetails,
       pickupDrop: [{ cityName: "TBC", nights: 0 }],
       tourDetails: {

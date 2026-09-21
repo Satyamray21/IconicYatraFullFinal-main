@@ -130,6 +130,7 @@ export const createQuickQuotation = async (req, res) => {
       title,
       email,
       phone,
+      leadId,
       clientLocation,
       packageId,
       adults,
@@ -209,11 +210,27 @@ export const createQuickQuotation = async (req, res) => {
       },
     };
 
+    let resolvedLeadId = leadId;
+    if (!resolvedLeadId && (customerName || email)) {
+      const matchConditions = [];
+      if (email) matchConditions.push({ "personalDetails.emailId": { $regex: new RegExp(`^${email.trim()}$`, "i") } });
+      if (customerName) matchConditions.push({ "personalDetails.fullName": { $regex: new RegExp(`^${customerName.trim()}$`, "i") } });
+      if (phone) matchConditions.push({ "personalDetails.mobile": phone.trim() });
+
+      if (matchConditions.length > 0) {
+        const matchedLead = await Lead.findOne({ $or: matchConditions }).select("leadId").lean();
+        if (matchedLead?.leadId) {
+          resolvedLeadId = matchedLead.leadId;
+        }
+      }
+    }
+
     const newQuotation = await QuickQuotation.create({
       customerName,
       title: title || "Mr",
       email,
       phone,
+      leadId: resolvedLeadId,
       clientLocation: String(clientLocation || "").trim(),
       packageId,
       adults,

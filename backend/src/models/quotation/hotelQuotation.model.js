@@ -3,6 +3,7 @@ import { stayLocationSchema } from "../../common/stayLocation.js";
 import { vehicleDetailsSchema } from "../../common/vehicleDetails.js";
 const hotelQuotationSchema = new mongoose.Schema(
     {
+        leadId: { type: String, trim: true, index: true },
         clientDetails: {
             clientName: {
                 type: String,

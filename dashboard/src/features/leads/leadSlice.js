@@ -55,6 +55,34 @@ export const changeLeadStatus = createAsyncThunk(
   }
 );
 
+export const addLeadFollowUp = createAsyncThunk(
+  "leads/addLeadFollowUp",
+  async ({ leadId, payload }, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(`/lead/follow-up/${leadId}`, payload);
+      return response.data.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to log follow-up"
+      );
+    }
+  }
+);
+
+export const updateLeadFollowUp = createAsyncThunk(
+  "leads/updateLeadFollowUp",
+  async ({ leadId, payload }, { rejectWithValue }) => {
+    try {
+      const response = await axios.patch(`/lead/follow-up/${leadId}`, payload);
+      return response.data.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to update follow-up settings"
+      );
+    }
+  }
+);
+
 export const getLeadOptions = createAsyncThunk(
   "lead/getLeadOptions",
   async (_, { rejectWithValue }) => {
@@ -312,6 +340,52 @@ export const leadSlice = createSlice({
         state.success = false;
         state.error = action.payload;
         state.message = '';
+      })
+
+      .addCase(addLeadFollowUp.pending, (state) => {
+        state.updateLoading = true;
+        state.updateError = null;
+      })
+      .addCase(addLeadFollowUp.fulfilled, (state, action) => {
+        state.updateLoading = false;
+        const updatedLead = action.payload;
+        if (updatedLead?.leadId) {
+          const index = state.list.findIndex(
+            (lead) => lead.leadId === updatedLead.leadId,
+          );
+          if (index !== -1) state.list[index] = updatedLead;
+          if (state.viewedLead?.leadId === updatedLead.leadId) {
+            state.viewedLead = updatedLead;
+          }
+        }
+        state.message = "Follow-up logged successfully";
+      })
+      .addCase(addLeadFollowUp.rejected, (state, action) => {
+        state.updateLoading = false;
+        state.updateError = action.payload;
+      })
+
+      .addCase(updateLeadFollowUp.pending, (state) => {
+        state.updateLoading = true;
+        state.updateError = null;
+      })
+      .addCase(updateLeadFollowUp.fulfilled, (state, action) => {
+        state.updateLoading = false;
+        const updatedLead = action.payload;
+        if (updatedLead?.leadId) {
+          const index = state.list.findIndex(
+            (lead) => lead.leadId === updatedLead.leadId,
+          );
+          if (index !== -1) state.list[index] = updatedLead;
+          if (state.viewedLead?.leadId === updatedLead.leadId) {
+            state.viewedLead = updatedLead;
+          }
+        }
+        state.message = "Follow-up settings updated";
+      })
+      .addCase(updateLeadFollowUp.rejected, (state, action) => {
+        state.updateLoading = false;
+        state.updateError = action.payload;
       })
 
       // Get Lead Options

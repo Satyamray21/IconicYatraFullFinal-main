@@ -12,6 +12,7 @@ const packageCalculationSchema = new mongoose.Schema({
 });
 const customQuotationSchema = new mongoose.Schema(
     {
+        leadId: { type: String, trim: true, index: true },
         clientDetails: {
             clientName: { type: String, required: true },
             tourType: { type: String, enum: ["Domestic", "International"] },

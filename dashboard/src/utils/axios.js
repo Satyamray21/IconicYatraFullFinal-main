@@ -20,6 +20,7 @@ export function resolveAuthToken() {
 
 const instance = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '',
+    timeout: 30000, // prevent Lead page from hanging forever on slow/stuck APIs
 });
 
 instance.interceptors.request.use((config) => {

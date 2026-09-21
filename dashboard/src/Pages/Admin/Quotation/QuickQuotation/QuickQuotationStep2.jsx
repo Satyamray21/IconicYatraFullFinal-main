@@ -65,6 +65,7 @@ const StepClientDetails = ({ onNext, convertSector, convertNights, initialClient
 
   const buildInitialValues = React.useCallback(
     () => ({
+      leadId: initialClientDetails.leadId || "",
       title: normalizeTitle(initialClientDetails.title, titleOptions),
       customerName: initialClientDetails.customerName || "",
       email: initialClientDetails.email || "",
@@ -142,6 +143,9 @@ const StepClientDetails = ({ onNext, convertSector, convertNights, initialClient
   const applyLeadToForm = (selectedClient, setFieldValue) => {
     if (!selectedClient) return;
 
+    if (selectedClient.leadId) {
+      setFieldValue("leadId", selectedClient.leadId);
+    }
     setFieldValue(
       "title",
       normalizeTitle(selectedClient.personalDetails?.title, titleOptions),

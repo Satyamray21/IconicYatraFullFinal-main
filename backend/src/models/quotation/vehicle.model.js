@@ -2,6 +2,7 @@ import mongoose from "mongoose"
 import { policySchema } from "../../common/policy.js";
 
 const vehicleSchema = mongoose.Schema({
+    leadId: { type: String, trim: true, index: true },
     basicsDetails: {
         vehiclesSameOrDifferent: {
             type: String,

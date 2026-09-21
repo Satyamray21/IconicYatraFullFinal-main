@@ -14,6 +14,7 @@ const quickQuotationSchema = new mongoose.Schema(
         email: { type: String, required: true, trim: true },
         phone: { type: String, trim: true },
         clientLocation: { type: String, trim: true, default: "" },
+        leadId: { type: String, trim: true, index: true },
 
         packageId: {
             type: mongoose.Schema.Types.ObjectId,

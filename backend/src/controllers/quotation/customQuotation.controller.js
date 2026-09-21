@@ -86,8 +86,20 @@ export const createCustomQuotation = asyncHandler(async (req, res) => {
     try {
       const quotationId = await generateQuotationId();
 
+      let resolvedLeadId = req.body.leadId;
+      if (!resolvedLeadId && req.body.clientDetails?.clientName) {
+        const clientName = String(req.body.clientDetails.clientName).trim();
+        const matchedLead = await Lead.findOne({
+          "personalDetails.fullName": { $regex: new RegExp(`^${clientName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }
+        }).select("leadId").lean();
+        if (matchedLead?.leadId) {
+          resolvedLeadId = matchedLead.leadId;
+        }
+      }
+
       const quotation = await CustomQuotation.create({
         ...req.body,
+        leadId: resolvedLeadId,
         quotationId,
         currentStep: 1,
       });

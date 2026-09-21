@@ -358,11 +358,17 @@ const MainRoute = () => {
           <Box
             sx={{
               display: "flex",
-              height: "100vh",
+              flexDirection: "column",
+              height: "50vh",
               alignItems: "center",
               justifyContent: "center",
+              gap: 2,
+              px: 2,
             }}
           >
+            <Box sx={{ color: "text.secondary", fontSize: 14 }}>
+              Opening page…
+            </Box>
             <LinearProgress sx={{ width: "100%", maxWidth: 400 }} />
           </Box>
         }

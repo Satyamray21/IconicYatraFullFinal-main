@@ -23,6 +23,9 @@ import {
   FormControl,
   InputLabel,
   Select,
+  Chip,
+  Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import SearchIcon from "@mui/icons-material/Search";
@@ -31,10 +34,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import GridOnIcon from "@mui/icons-material/GridOn";
+import PhoneCallbackIcon from "@mui/icons-material/PhoneCallback";
 import { useSelector, useDispatch } from "react-redux";
-import { saveAs } from "file-saver";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import {
@@ -42,10 +43,77 @@ import {
   fetchLeadsReports,
   changeLeadStatus,
   deleteLead,
+  addLeadFollowUp,
+  updateLeadFollowUp,
 } from "../../../features/leads/leadSlice";
 import LeadEditForm from "./Form/LeadEditForm";
 
 dayjs.extend(customParseFormat);
+
+const FOLLOW_UP_STATUSES = [
+  "Pending",
+  "Scheduled",
+  "In Progress",
+  "Interested",
+  "No Response",
+  "Completed",
+  "Max Reached",
+];
+
+const FOLLOW_UP_METHODS = ["Call", "WhatsApp", "Email", "Meeting", "Other"];
+
+const FOLLOW_UP_OUTCOMES = [
+  "Connected",
+  "Not Reachable",
+  "Call Back Later",
+  "Interested",
+  "Not Interested",
+  "Wrong Number",
+  "Other",
+];
+
+const FOLLOW_UP_STATUS_COLORS = {
+  Pending: "default",
+  Scheduled: "info",
+  "In Progress": "primary",
+  Interested: "success",
+  "No Response": "warning",
+  Completed: "success",
+  "Max Reached": "error",
+};
+
+const getFollowUps = (lead) => {
+  const fu = lead?.followUps || {};
+  return {
+    status: fu.status || "Pending",
+    maxAllowed: Number(fu.maxAllowed) > 0 ? Number(fu.maxAllowed) : 5,
+    count: Number(fu.count) || 0,
+    nextFollowUpAt: fu.nextFollowUpAt || null,
+    lastFollowUpAt: fu.lastFollowUpAt || null,
+    lastNote: fu.lastNote || "",
+    history: Array.isArray(fu.history) ? fu.history : [],
+  };
+};
+
+const formatFollowUpDate = (value) => {
+  if (!value) return "-";
+  const d = dayjs(value);
+  return d.isValid() ? d.format("DD MMM YYYY") : "-";
+};
+
+const isFollowUpOverdue = (nextFollowUpAt, status) => {
+  if (!nextFollowUpAt) return false;
+  if (["Completed", "Max Reached"].includes(status)) return false;
+  const d = dayjs(nextFollowUpAt).startOf("day");
+  if (!d.isValid()) return false;
+  return d.isBefore(dayjs().startOf("day"));
+};
+
+const isFollowUpToday = (nextFollowUpAt) => {
+  if (!nextFollowUpAt) return false;
+  const d = dayjs(nextFollowUpAt);
+  return d.isValid() && d.isSame(dayjs(), "day");
+};
 
 const EXPORT_COLUMNS = [
   { key: "srNo", label: "S.No" },
@@ -180,6 +248,7 @@ const LeadCard = () => {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("all");
+  const [followUpFilter, setFollowUpFilter] = useState("all");
 
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
@@ -194,6 +263,32 @@ const LeadCard = () => {
     leadData: null,
   });
 
+  const [followUpDialog, setFollowUpDialog] = useState({
+    open: false,
+    leadId: null,
+    leadName: "",
+    followUps: null,
+  });
+
+  const [followUpForm, setFollowUpForm] = useState({
+    method: "Call",
+    outcome: "Connected",
+    note: "",
+    nextFollowUpAt: "",
+    followUpStatus: "In Progress",
+    maxAllowed: 5,
+  });
+
+  const [followUpSaving, setFollowUpSaving] = useState(false);
+
+  const [historyDialog, setHistoryDialog] = useState({
+    open: false,
+    leadId: null,
+    leadName: "",
+    followUps: null,
+    row: null,
+  });
+
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -205,6 +300,7 @@ const LeadCard = () => {
   const {
     list: leadList = [],
     status,
+    error: leadsError,
     deleteLoading,
     deleteError,
   } = useSelector((state) => state.leads);
@@ -217,6 +313,11 @@ const LeadCard = () => {
     dispatch(getAllLeads());
     dispatch(fetchLeadsReports());
   }, [dispatch]);
+
+  const handleRetryLoad = () => {
+    dispatch(getAllLeads());
+    dispatch(fetchLeadsReports());
+  };
 
   useEffect(() => {
     if (deleteError) {
@@ -258,6 +359,17 @@ const LeadCard = () => {
         return false;
       }
 
+      const fu = getFollowUps(lead);
+      if (followUpFilter === "overdue") {
+        if (!isFollowUpOverdue(fu.nextFollowUpAt, fu.status)) return false;
+      } else if (followUpFilter === "today") {
+        if (!isFollowUpToday(fu.nextFollowUpAt)) return false;
+      } else if (followUpFilter === "max") {
+        if (fu.status !== "Max Reached" && fu.count < fu.maxAllowed) return false;
+      } else if (followUpFilter !== "all") {
+        if (fu.status !== followUpFilter) return false;
+      }
+
       if (fromKey || toKey) {
         const arrivalKey = getArrivalDateKey(getRawArrivalDate(lead));
         if (!arrivalKey) return false;
@@ -289,23 +401,31 @@ const LeadCard = () => {
     }
 
     const total = filtered.length;
-    return filtered.map((lead, index) => ({
-      id: lead._id || lead.leadId || `lead-${index}`,
-      srNo: total - index,
-      leadId: lead.leadId || "-",
-      status: lead.status || "New",
-      source: lead.officialDetail?.source || "-",
-      name: lead.personalDetails?.fullName || "-",
-      mobile: lead.personalDetails?.mobile || "-",
-      email: lead.personalDetails?.emailId || "-",
-      destination: lead.tourDetails?.tourDestination || "-",
-      arrivalDate: formatDate(getRawArrivalDate(lead)),
-      priority: lead.officialDetail?.priority || "-",
-      assignTo:
-        lead.officialDetail?.assignedTo || lead.officialDetail?.assinedTo || "-",
-      originalData: lead,
-    }));
-  }, [leadList, searchTerm, fromDate, toDate, destinationFilter]);
+    return filtered.map((lead, index) => {
+      const fu = getFollowUps(lead);
+      const overdue = isFollowUpOverdue(fu.nextFollowUpAt, fu.status);
+      return {
+        id: lead._id || lead.leadId || `lead-${index}`,
+        srNo: total - index,
+        leadId: lead.leadId || "-",
+        status: lead.status || "New",
+        source: lead.officialDetail?.source || "-",
+        name: lead.personalDetails?.fullName || "-",
+        mobile: lead.personalDetails?.mobile || "-",
+        email: lead.personalDetails?.emailId || "-",
+        destination: lead.tourDetails?.tourDestination || "-",
+        arrivalDate: formatDate(getRawArrivalDate(lead)),
+        priority: lead.officialDetail?.priority || "-",
+        assignTo:
+          lead.officialDetail?.assignedTo || lead.officialDetail?.assinedTo || "-",
+        followUpStatus: fu.status,
+        followUpCountLabel: `${fu.count}/${fu.maxAllowed}`,
+        nextFollowUp: formatFollowUpDate(fu.nextFollowUpAt),
+        followUpOverdue: overdue,
+        originalData: lead,
+      };
+    });
+  }, [leadList, searchTerm, fromDate, toDate, destinationFilter, followUpFilter]);
 
   const handleAddClick = () => {
     navigate("/lead/leadtourform");
@@ -429,6 +549,107 @@ const LeadCard = () => {
     handleMenuClose(rowId);
   };
 
+  const openFollowUpDialog = (row) => {
+    handleMenuClose(row.id);
+    const fu = getFollowUps(row.originalData);
+    setFollowUpDialog({
+      open: true,
+      leadId: row.leadId,
+      leadName: row.name,
+      followUps: fu,
+    });
+    setFollowUpForm({
+      method: "Call",
+      outcome: "Connected",
+      note: "",
+      nextFollowUpAt: fu.nextFollowUpAt
+        ? dayjs(fu.nextFollowUpAt).format("YYYY-MM-DD")
+        : "",
+      followUpStatus:
+        fu.status === "Max Reached" ? "In Progress" : fu.status || "In Progress",
+      maxAllowed: fu.maxAllowed || 5,
+    });
+  };
+
+  const closeFollowUpDialog = () => {
+    setFollowUpDialog({
+      open: false,
+      leadId: null,
+      leadName: "",
+      followUps: null,
+    });
+  };
+
+  const openFollowUpHistory = (row) => {
+    const fu = getFollowUps(row.originalData);
+    setHistoryDialog({
+      open: true,
+      leadId: row.leadId,
+      leadName: row.name,
+      followUps: fu,
+      row,
+    });
+  };
+
+  const closeFollowUpHistory = () => {
+    setHistoryDialog({
+      open: false,
+      leadId: null,
+      leadName: "",
+      followUps: null,
+      row: null,
+    });
+  };
+
+  const handleSaveFollowUp = async () => {
+    if (!followUpDialog.leadId) return;
+    setFollowUpSaving(true);
+    try {
+      const fu = followUpDialog.followUps || {};
+      const newMax = Number(followUpForm.maxAllowed) || fu.maxAllowed || 5;
+      const atMax = (fu.count || 0) >= newMax;
+
+      if (Number(newMax) !== Number(fu.maxAllowed)) {
+        await dispatch(
+          updateLeadFollowUp({
+            leadId: followUpDialog.leadId,
+            payload: { maxAllowed: newMax },
+          }),
+        ).unwrap();
+      }
+
+      await dispatch(
+        addLeadFollowUp({
+          leadId: followUpDialog.leadId,
+          payload: {
+            method: followUpForm.method,
+            outcome: followUpForm.outcome,
+            note: followUpForm.note,
+            nextFollowUpAt: followUpForm.nextFollowUpAt || null,
+            followUpStatus: followUpForm.followUpStatus,
+            force: atMax,
+          },
+        }),
+      ).unwrap();
+
+      setSnackbar({
+        open: true,
+        message: "Follow-up logged successfully",
+        severity: "success",
+      });
+      closeFollowUpDialog();
+      dispatch(getAllLeads());
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: err || "Failed to log follow-up",
+        severity: "error",
+      });
+    } finally {
+      setFollowUpSaving(false);
+    }
+  };
+
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
   };
@@ -443,7 +664,7 @@ const LeadCard = () => {
     return parts.join("  |  ");
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     if (!mappedLeads.length) {
       setSnackbar({
         open: true,
@@ -453,19 +674,28 @@ const LeadCard = () => {
       return;
     }
 
-    const xml = buildExcelXml(mappedLeads, getFilterSummary());
-    const blob = new Blob([xml], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
-    saveAs(blob, `Leads_${formatFileStamp()}.xls`);
-    setSnackbar({
-      open: true,
-      message: "Excel downloaded successfully",
-      severity: "success",
-    });
+    try {
+      const { saveAs } = await import("file-saver");
+      const xml = buildExcelXml(mappedLeads, getFilterSummary());
+      const blob = new Blob([xml], {
+        type: "application/vnd.ms-excel;charset=utf-8;",
+      });
+      saveAs(blob, `Leads_${formatFileStamp()}.xls`);
+      setSnackbar({
+        open: true,
+        message: "Excel downloaded successfully",
+        severity: "success",
+      });
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: "Failed to download Excel",
+        severity: "error",
+      });
+    }
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!mappedLeads.length) {
       setSnackbar({
         open: true,
@@ -475,40 +705,108 @@ const LeadCard = () => {
       return;
     }
 
-    const doc = new jsPDF({
-      orientation: "landscape",
-      unit: "mm",
-      format: "a4",
-    });
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
 
-    doc.setFontSize(14);
-    doc.text("Leads Report", 14, 12);
-    doc.setFontSize(9);
-    doc.text(getFilterSummary(), 14, 18);
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
 
-    autoTable(doc, {
-      startY: 22,
-      head: [EXPORT_COLUMNS.map((col) => col.label)],
-      body: mappedLeads.map((row) =>
-        EXPORT_COLUMNS.map((col) => String(row[col.key] ?? "-"))
-      ),
-      styles: { fontSize: 8, cellPadding: 1.5 },
-      headStyles: { fillColor: [233, 30, 99], textColor: 255 },
-      alternateRowStyles: { fillColor: [252, 228, 236] },
-    });
+      doc.setFontSize(14);
+      doc.text("Leads Report", 14, 12);
+      doc.setFontSize(9);
+      doc.text(getFilterSummary(), 14, 18);
 
-    doc.save(`Leads_${formatFileStamp()}.pdf`);
-    setSnackbar({
-      open: true,
-      message: "PDF downloaded successfully",
-      severity: "success",
-    });
+      autoTable(doc, {
+        startY: 22,
+        head: [EXPORT_COLUMNS.map((col) => col.label)],
+        body: mappedLeads.map((row) =>
+          EXPORT_COLUMNS.map((col) => String(row[col.key] ?? "-")),
+        ),
+        styles: { fontSize: 8, cellPadding: 1.5 },
+        headStyles: { fillColor: [233, 30, 99], textColor: 255 },
+        alternateRowStyles: { fillColor: [252, 228, 236] },
+      });
+
+      doc.save(`Leads_${formatFileStamp()}.pdf`);
+      setSnackbar({
+        open: true,
+        message: "PDF downloaded successfully",
+        severity: "success",
+      });
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: "Failed to download PDF",
+        severity: "error",
+      });
+    }
   };
 
   const columns = [
     { field: "srNo", headerName: "S.No", width: 70 },
     { field: "leadId", headerName: "Lead Id", width: 100 },
     { field: "status", headerName: "Status", width: 100 },
+    {
+      field: "followUpStatus",
+      headerName: "Follow-up",
+      width: 130,
+      renderCell: (params) => (
+        <Chip
+          size="small"
+          label={params.value || "Pending"}
+          color={FOLLOW_UP_STATUS_COLORS[params.value] || "default"}
+          variant={params.row.followUpOverdue ? "filled" : "outlined"}
+        />
+      ),
+    },
+    {
+      field: "followUpCountLabel",
+      headerName: "Attempts",
+      width: 90,
+    },
+    {
+      field: "nextFollowUp",
+      headerName: "Next FU",
+      width: 130,
+      align: "center",
+      headerAlign: "center",
+      renderCell: (params) => (
+        <Tooltip title="Click to view previous follow-up notes">
+          <Box
+            onClick={() => openFollowUpHistory(params.row)}
+            sx={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              borderRadius: 1,
+              px: 0.5,
+              "&:hover": {
+                backgroundColor: "action.hover",
+              },
+            }}
+          >
+            <Typography
+              variant="body2"
+              color={params.row.followUpOverdue ? "error" : "text.primary"}
+              fontWeight={params.row.followUpOverdue ? 600 : 500}
+              textAlign="center"
+              sx={{ lineHeight: 1.2 }}
+            >
+              {params.row.followUpOverdue ? `⚠ ${params.value}` : params.value}
+            </Typography>
+          </Box>
+        </Tooltip>
+      ),
+    },
     { field: "source", headerName: "Source", width: 80 },
     { field: "name", headerName: "Name", width: 150 },
     { field: "mobile", headerName: "Mobile", width: 100 },
@@ -520,11 +818,21 @@ const LeadCard = () => {
     {
       field: "action",
       headerName: "Action",
-      width: 140,
+      width: 180,
       renderCell: (params) => {
         const rowId = params.row.id;
         return (
-          <Box display="flex" gap={1} alignItems="center">
+          <Box display="flex" gap={0.5} alignItems="center">
+            <Tooltip title="Add Follow-up">
+              <IconButton
+                color="secondary"
+                size="small"
+                onClick={() => openFollowUpDialog(params.row)}
+                disabled={deleteLoading}
+              >
+                <PhoneCallbackIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <IconButton
               color="primary"
               size="small"
@@ -553,6 +861,14 @@ const LeadCard = () => {
               open={Boolean(anchorEls[rowId])}
               onClose={() => handleMenuClose(rowId)}
             >
+              <MenuItem
+                onClick={() => {
+                  handleMenuClose(rowId);
+                  openFollowUpDialog(params.row);
+                }}
+              >
+                Add Follow-up
+              </MenuItem>
               <MenuItem onClick={() => handleStatusChange(rowId, "Active")}>
                 Active
               </MenuItem>
@@ -675,6 +991,26 @@ const LeadCard = () => {
               </Select>
             </FormControl>
 
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel id="lead-followup-filter-label">Follow-up</InputLabel>
+              <Select
+                labelId="lead-followup-filter-label"
+                label="Follow-up"
+                value={followUpFilter}
+                onChange={(e) => setFollowUpFilter(e.target.value)}
+              >
+                <MenuItem value="all">All Follow-ups</MenuItem>
+                <MenuItem value="today">Due Today</MenuItem>
+                <MenuItem value="overdue">Overdue</MenuItem>
+                <MenuItem value="max">Max Reached</MenuItem>
+                {FOLLOW_UP_STATUSES.map((s) => (
+                  <MenuItem key={s} value={s}>
+                    {s}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
             <Button
               variant="contained"
               color="success"
@@ -722,6 +1058,20 @@ const LeadCard = () => {
           </Typography>
         )}
 
+        {status === "failed" && (
+          <Alert
+            severity="error"
+            sx={{ mb: 2 }}
+            action={
+              <Button color="inherit" size="small" onClick={handleRetryLoad}>
+                Retry
+              </Button>
+            }
+          >
+            {leadsError || "Failed to load leads. Please retry."}
+          </Alert>
+        )}
+
         <Box sx={{ width: "100%", overflowX: "auto" }}>
           <Box sx={{ minWidth: "600px" }}>
             <DataGrid
@@ -732,6 +1082,12 @@ const LeadCard = () => {
               autoHeight
               disableRowSelectionOnClick
               loading={status === "loading"}
+              sx={{
+                "& .MuiDataGrid-cell": {
+                  display: "flex",
+                  alignItems: "center",
+                },
+              }}
             />
           </Box>
         </Box>
@@ -787,6 +1143,266 @@ const LeadCard = () => {
               autoFocus
             >
               {deleteLoading ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={followUpDialog.open}
+          onClose={closeFollowUpDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            Follow-up — {followUpDialog.leadName} ({followUpDialog.leadId})
+          </DialogTitle>
+          <DialogContent dividers>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Attempts:{" "}
+              <strong>
+                {followUpDialog.followUps?.count || 0}/
+                {followUpDialog.followUps?.maxAllowed || 5}
+              </strong>
+              {" · "}
+              Status:{" "}
+              <strong>{followUpDialog.followUps?.status || "Pending"}</strong>
+              {followUpDialog.followUps?.lastNote
+                ? ` · Last note: ${followUpDialog.followUps.lastNote}`
+                : ""}
+            </Typography>
+
+            {(followUpDialog.followUps?.count || 0) >=
+              (followUpDialog.followUps?.maxAllowed || 5) && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Max follow-ups reached. Increase Max Allowed below to continue,
+                or this log will be forced.
+              </Alert>
+            )}
+
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Method</InputLabel>
+                  <Select
+                    label="Method"
+                    value={followUpForm.method}
+                    onChange={(e) =>
+                      setFollowUpForm((p) => ({ ...p, method: e.target.value }))
+                    }
+                  >
+                    {FOLLOW_UP_METHODS.map((m) => (
+                      <MenuItem key={m} value={m}>
+                        {m}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Outcome</InputLabel>
+                  <Select
+                    label="Outcome"
+                    value={followUpForm.outcome}
+                    onChange={(e) =>
+                      setFollowUpForm((p) => ({ ...p, outcome: e.target.value }))
+                    }
+                  >
+                    {FOLLOW_UP_OUTCOMES.map((o) => (
+                      <MenuItem key={o} value={o}>
+                        {o}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Follow-up Status</InputLabel>
+                  <Select
+                    label="Follow-up Status"
+                    value={followUpForm.followUpStatus}
+                    onChange={(e) =>
+                      setFollowUpForm((p) => ({
+                        ...p,
+                        followUpStatus: e.target.value,
+                      }))
+                    }
+                  >
+                    {FOLLOW_UP_STATUSES.filter((s) => s !== "Max Reached").map(
+                      (s) => (
+                        <MenuItem key={s} value={s}>
+                          {s}
+                        </MenuItem>
+                      ),
+                    )}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="date"
+                  label="Next Follow-up Date"
+                  InputLabelProps={{ shrink: true }}
+                  value={followUpForm.nextFollowUpAt}
+                  onChange={(e) =>
+                    setFollowUpForm((p) => ({
+                      ...p,
+                      nextFollowUpAt: e.target.value,
+                    }))
+                  }
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Max Allowed"
+                  inputProps={{ min: 1, max: 20 }}
+                  value={followUpForm.maxAllowed}
+                  onChange={(e) =>
+                    setFollowUpForm((p) => ({
+                      ...p,
+                      maxAllowed: e.target.value,
+                    }))
+                  }
+                  helperText="Default 5 (max 20)"
+                />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  multiline
+                  minRows={2}
+                  label="Note / Remark"
+                  value={followUpForm.note}
+                  onChange={(e) =>
+                    setFollowUpForm((p) => ({ ...p, note: e.target.value }))
+                  }
+                />
+              </Grid>
+            </Grid>
+
+            {Array.isArray(followUpDialog.followUps?.history) &&
+              followUpDialog.followUps.history.length > 0 && (
+                <Box mt={3}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Recent history
+                  </Typography>
+                  {followUpDialog.followUps.history.slice(0, 5).map((h, idx) => (
+                    <Typography
+                      key={`${h.date}-${idx}`}
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mb: 0.5 }}
+                    >
+                      {formatFollowUpDate(h.date)} · {h.method} · {h.outcome}
+                      {h.note ? ` — ${h.note}` : ""}
+                    </Typography>
+                  ))}
+                </Box>
+              )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeFollowUpDialog} disabled={followUpSaving}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={handleSaveFollowUp}
+              disabled={followUpSaving}
+              startIcon={
+                followUpSaving ? <CircularProgress size={16} /> : null
+              }
+            >
+              {followUpSaving ? "Saving..." : "Save Follow-up"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={historyDialog.open}
+          onClose={closeFollowUpHistory}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            Previous Follow-ups — {historyDialog.leadName} ({historyDialog.leadId})
+          </DialogTitle>
+          <DialogContent dividers>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Attempts:{" "}
+              <strong>
+                {historyDialog.followUps?.count || 0}/
+                {historyDialog.followUps?.maxAllowed || 5}
+              </strong>
+              {" · "}
+              Status:{" "}
+              <strong>{historyDialog.followUps?.status || "Pending"}</strong>
+              {" · "}
+              Next FU:{" "}
+              <strong>
+                {formatFollowUpDate(historyDialog.followUps?.nextFollowUpAt)}
+              </strong>
+            </Typography>
+
+            {Array.isArray(historyDialog.followUps?.history) &&
+            historyDialog.followUps.history.length > 0 ? (
+              <Box display="flex" flexDirection="column" gap={1.5}>
+                {historyDialog.followUps.history.map((h, idx) => (
+                  <Box
+                    key={`${h.date}-${idx}`}
+                    sx={{
+                      p: 1.5,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      backgroundColor: idx === 0 ? "action.hover" : "background.paper",
+                    }}
+                  >
+                    <Typography variant="subtitle2">
+                      #{(historyDialog.followUps.count || historyDialog.followUps.history.length) - idx}{" "}
+                      · {formatFollowUpDate(h.date)} · {h.method} · {h.outcome}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" mt={0.5}>
+                      {h.note?.trim() ? h.note : "No note added"}
+                    </Typography>
+                    {h.nextFollowUpAt && (
+                      <Typography variant="caption" color="text.secondary">
+                        Next set to: {formatFollowUpDate(h.nextFollowUpAt)}
+                      </Typography>
+                    )}
+                    {h.createdBy && (
+                      <Typography variant="caption" display="block" color="text.secondary">
+                        By: {h.createdBy}
+                      </Typography>
+                    )}
+                  </Box>
+                ))}
+              </Box>
+            ) : (
+              <Alert severity="info">
+                No previous follow-up notes yet for this lead.
+              </Alert>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeFollowUpHistory}>Close</Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={() => {
+                const row = historyDialog.row;
+                closeFollowUpHistory();
+                if (row) openFollowUpDialog(row);
+              }}
+            >
+              Add Follow-up
             </Button>
           </DialogActions>
         </Dialog>

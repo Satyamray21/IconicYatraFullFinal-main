@@ -10,6 +10,7 @@ const flightDetailSchema = new mongoose.Schema({
 }, { _id: false });
 
 const flightQuotationSchema = mongoose.Schema({
+    leadId: { type: String, trim: true, index: true },
     tripType: {
         type: String,
         enum: ["oneway", "roundtrip", "multicity"],
