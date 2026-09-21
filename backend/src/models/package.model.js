@@ -8,6 +8,8 @@ const StayLocationSchema = new mongoose.Schema(
   {
     city: { type: String, trim: true, required: true },
     nights: { type: Number, min: 1, required: true },
+    // Overnight travel nights after this stay (no hotel) — optional
+    overstayAfter: { type: Number, min: 0, default: 0 },
   },
   { _id: false }
 );

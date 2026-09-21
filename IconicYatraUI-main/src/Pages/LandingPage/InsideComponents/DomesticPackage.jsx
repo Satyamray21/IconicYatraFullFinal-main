@@ -242,7 +242,10 @@ const filteredPackages = domesticPackages.filter(
                       }}
                     >
                       {pkg.stayLocations.reduce((s, l) => s + (l.nights || 0), 0)}N /
-                      {pkg.stayLocations.reduce((s, l) => s + (l.nights || 0), 0) + 1}D
+                      {pkg.stayLocations.reduce(
+                        (s, l) => s + (l.nights || 0) + (l.overstayAfter || 0),
+                        0,
+                      ) + 1}D
                     </Box>
                   )}
 

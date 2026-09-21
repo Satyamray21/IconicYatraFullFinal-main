@@ -400,6 +400,7 @@ const PackageEditView = () => {
           (location) => ({
             city: location?.city || "",
             nights: location?.nights || 1,
+            overstayAfter: location?.overstayAfter || 0,
             state: location?.state || safeCurrent.sector || "",
             country:
               location?.country || safeCurrent.destinationCountry || "India",
@@ -591,7 +592,7 @@ const PackageEditView = () => {
     return pkg.stayLocations?.map((location) => location.city) || [];
   }, [pkg.stayLocations]);
 
-  // Duration & Title suggestions from stay locations: Nights from stay locations & Days = Nights + 1
+  // Duration: hotel nights unchanged; days = hotel nights + overstay + 1
   const editCalculatedNights = React.useMemo(() => {
     return (pkg.stayLocations || []).reduce(
       (total, loc) => total + (parseInt(loc.nights) || 0),
@@ -599,9 +600,18 @@ const PackageEditView = () => {
     );
   }, [pkg.stayLocations]);
 
+  const editCalculatedOverstay = React.useMemo(() => {
+    return (pkg.stayLocations || []).reduce(
+      (total, loc) => total + (parseInt(loc.overstayAfter) || 0),
+      0
+    );
+  }, [pkg.stayLocations]);
+
   const editCalculatedDays = React.useMemo(() => {
-    return editCalculatedNights > 0 ? editCalculatedNights + 1 : 1;
-  }, [editCalculatedNights]);
+    return editCalculatedNights > 0
+      ? editCalculatedNights + editCalculatedOverstay + 1
+      : 1;
+  }, [editCalculatedNights, editCalculatedOverstay]);
 
   const editTitleSuggestions = React.useMemo(() => {
     return generateImpressiveTitles({
@@ -771,6 +781,7 @@ const PackageEditView = () => {
         selectedCountry ||
         (DOMESTIC_TOUR_TYPES.includes(pkg.tourType) ? "India" : ""),
       nights: 1,
+      overstayAfter: 0,
     };
 
     if (
@@ -966,28 +977,39 @@ const PackageEditView = () => {
       return;
 
     const updated = [...pkg.stayLocations];
-    const oldNights = parseInt(updated[index].nights) || 1;
-    const newNights = field === "nights" ? parseInt(value) || 0 : oldNights;
+    const isNumericField = field === "nights" || field === "overstayAfter";
 
-    if (field === "nights") {
+    if (isNumericField) {
+      const oldNights = parseInt(updated[index].nights) || 1;
+      const oldOverstay = parseInt(updated[index].overstayAfter) || 0;
+      const newNights =
+        field === "nights" ? parseInt(value) || 0 : oldNights;
+      const newOverstay =
+        field === "overstayAfter" ? parseInt(value) || 0 : oldOverstay;
+
       updated[index] = {
         ...updated[index],
-        [field]: newNights,
+        nights: newNights,
+        overstayAfter: newOverstay,
       };
 
-      // Adjust itinerary days if nights changed
-      if (newNights !== oldNights) {
-        const diff = newNights - oldNights;
+      const oldBlock = oldNights + oldOverstay;
+      const newBlock = newNights + newOverstay;
+      const diff = newBlock - oldBlock;
+
+      if (diff !== 0) {
         const newDays = [...(pkg.days || [])];
 
-        // Find the split point (after this city's current block)
+        // Split after this city's full block (hotel nights + overstay)
         let splitPoint = 0;
-        for (let i = 0; i <= index; i++) {
-          splitPoint += parseInt(pkg.stayLocations[i].nights) || 1;
+        for (let i = 0; i < index; i++) {
+          splitPoint +=
+            (parseInt(pkg.stayLocations[i].nights) || 1) +
+            (parseInt(pkg.stayLocations[i].overstayAfter) || 0);
         }
+        splitPoint += oldBlock;
 
         if (diff > 0) {
-          // Add days
           const newDayEntries = Array(diff)
             .fill(null)
             .map(() => ({
@@ -999,20 +1021,22 @@ const PackageEditView = () => {
               selectedSightseeing: [],
             }));
           newDays.splice(splitPoint, 0, ...newDayEntries);
-        } else if (diff < 0) {
-          // Remove days (from the end of this city's block)
+        } else {
           newDays.splice(splitPoint + diff, Math.abs(diff));
         }
 
         setPkg({ ...pkg, stayLocations: updated, days: newDays });
         return;
       }
-    } else {
-      updated[index] = {
-        ...updated[index],
-        [field]: value || "",
-      };
+
+      setPkg({ ...pkg, stayLocations: updated });
+      return;
     }
+
+    updated[index] = {
+      ...updated[index],
+      [field]: value || "",
+    };
     setPkg({ ...pkg, stayLocations: updated });
   };
 
@@ -1026,16 +1050,19 @@ const PackageEditView = () => {
 
     if (index !== -1) {
       const nights = parseInt(pkg.stayLocations[index].nights) || 1;
+      const overstay = parseInt(pkg.stayLocations[index].overstayAfter) || 0;
       const newDays = [...(pkg.days || [])];
 
       // Calculate start index of days for this city
       let startDayIndex = 0;
       for (let i = 0; i < index; i++) {
-        startDayIndex += parseInt(pkg.stayLocations[i].nights) || 1;
+        startDayIndex +=
+          (parseInt(pkg.stayLocations[i].nights) || 1) +
+          (parseInt(pkg.stayLocations[i].overstayAfter) || 0);
       }
 
-      // Remove corresponding days
-      newDays.splice(startDayIndex, nights);
+      // Remove corresponding days (hotel nights + overstay)
+      newDays.splice(startDayIndex, nights + overstay);
 
       const updated = pkg.stayLocations.filter((_, i) => i !== index);
       setPkg({ ...pkg, stayLocations: updated, days: newDays });
@@ -1070,20 +1097,29 @@ const PackageEditView = () => {
           (sum, sl) => sum + (Number(sl.nights) || 0),
           0
         ) || 0;
+      const totalOverstay =
+        (pkg.stayLocations || []).reduce(
+          (sum, sl) => sum + (Number(sl.overstayAfter) || 0),
+          0
+        ) || 0;
       const targetDays =
         totalNights > 0
-          ? totalNights + 1
+          ? totalNights + totalOverstay + 1
           : Math.max(1, (pkg.days || []).length);
 
-      const res = await axios.post("/ai/generate-itinerary", {
-        arrivalCity: pkg.arrivalCity || "",
-        departureCity: pkg.departureCity || "",
-        destinationCountry: pkg.destinationCountry || selectedCountry || "India",
-        sector: pkg.sector || currentState || "",
-        days: targetDays,
-        tourType: pkg.tourType || "Domestic",
-        stayLocations: pkg.stayLocations || [],
-      });
+      const res = await axios.post(
+        "/ai/generate-itinerary",
+        {
+          arrivalCity: pkg.arrivalCity || "",
+          departureCity: pkg.departureCity || "",
+          destinationCountry: pkg.destinationCountry || selectedCountry || "India",
+          sector: pkg.sector || currentState || "",
+          days: targetDays,
+          tourType: pkg.tourType || "Domestic",
+          stayLocations: pkg.stayLocations || [],
+        },
+        { timeout: 180000 }, // AI can take >30s; default axios timeout cancels at 30s
+      );
 
       if (res.data?.success && res.data?.data) {
         const generatedDays = res.data.data;
@@ -1342,12 +1378,23 @@ const PackageEditView = () => {
   const getCityForDay = (dayIndex) => {
     if (!pkg.stayLocations || pkg.stayLocations.length === 0) return pkg.sector || "landscape";
     let currentDay = 0;
-    for (let loc of pkg.stayLocations) {
+    for (let i = 0; i < pkg.stayLocations.length; i++) {
+      const loc = pkg.stayLocations[i];
       const nights = parseInt(loc.nights) || 1;
+      const overstay = parseInt(loc.overstayAfter) || 0;
       if (dayIndex < currentDay + nights) {
         return loc.city;
       }
       currentDay += nights;
+      if (overstay > 0) {
+        if (dayIndex < currentDay + overstay) {
+          const nextCity = pkg.stayLocations[i + 1]?.city;
+          return nextCity
+            ? `Overnight Travel → ${nextCity}`
+            : "Overnight Travel";
+        }
+        currentDay += overstay;
+      }
     }
     return pkg.stayLocations[pkg.stayLocations.length - 1].city;
   };
@@ -1613,6 +1660,7 @@ const PackageEditView = () => {
         (location, index) => ({
           city: location?.city?.trim() || `City ${index + 1}`,
           nights: parseInt(location?.nights) || 1,
+          overstayAfter: parseInt(location?.overstayAfter) || 0,
           state: location?.state || pkg.sector || "",
           country: location?.country || pkg.destinationCountry || "India",
         }),
@@ -2223,13 +2271,15 @@ const PackageEditView = () => {
                                           let currentDay = 0;
                                           const blocks = newList.map(
                                             (stay) => {
-                                              const nights =
-                                                parseInt(stay.nights) || 1;
+                                              const blockSize =
+                                                (parseInt(stay.nights) || 1) +
+                                                (parseInt(stay.overstayAfter) ||
+                                                  0);
                                               const block = oldDays.slice(
                                                 currentDay,
-                                                currentDay + nights,
+                                                currentDay + blockSize,
                                               );
-                                              currentDay += nights;
+                                              currentDay += blockSize;
                                               return block;
                                             },
                                           );
@@ -2288,13 +2338,15 @@ const PackageEditView = () => {
                                           let currentDay = 0;
                                           const blocks = newList.map(
                                             (stay) => {
-                                              const nights =
-                                                parseInt(stay.nights) || 1;
+                                              const blockSize =
+                                                (parseInt(stay.nights) || 1) +
+                                                (parseInt(stay.overstayAfter) ||
+                                                  0);
                                               const block = oldDays.slice(
                                                 currentDay,
-                                                currentDay + nights,
+                                                currentDay + blockSize,
                                               );
-                                              currentDay += nights;
+                                              currentDay += blockSize;
                                               return block;
                                             },
                                           );
@@ -2347,7 +2399,8 @@ const PackageEditView = () => {
                                   <Box
                                     sx={{
                                       display: "flex",
-                                      alignItems: "center",
+                                      flexDirection: "column",
+                                      gap: 1,
                                       mt: 1,
                                       width: "100%",
                                     }}
@@ -2366,6 +2419,22 @@ const PackageEditView = () => {
                                         )
                                       }
                                       inputProps={{ min: 1 }}
+                                    />
+                                    <TextField
+                                      label="Overstay after (optional)"
+                                      type="number"
+                                      size="small"
+                                      fullWidth
+                                      helperText="Overnight travel after this stay — no hotel"
+                                      value={item.overstayAfter ?? 0}
+                                      onChange={(e) =>
+                                        handleStayChange(
+                                          globalIndex,
+                                          "overstayAfter",
+                                          e.target.value,
+                                        )
+                                      }
+                                      inputProps={{ min: 0 }}
                                     />
                                   </Box>
                                 </Box>
@@ -2413,7 +2482,11 @@ const PackageEditView = () => {
                             size="small"
                             color="primary"
                             variant="outlined"
-                            label={`⏱️ Duration: ${editCalculatedNights} Nights / ${editCalculatedDays} Days (${editCalculatedNights}N from Stay Locations + 1 Day)`}
+                            label={
+                              editCalculatedOverstay > 0
+                                ? `⏱️ Duration: ${editCalculatedNights} Nights / ${editCalculatedDays} Days (${editCalculatedNights} hotel N + ${editCalculatedOverstay} overstay + 1 Day)`
+                                : `⏱️ Duration: ${editCalculatedNights} Nights / ${editCalculatedDays} Days (${editCalculatedNights}N from Stay Locations + 1 Day)`
+                            }
                             sx={{ fontWeight: "bold" }}
                           />
                         )}
@@ -2442,7 +2515,11 @@ const PackageEditView = () => {
                       }
                       value={pkg.title || ""}
                       onChange={(e) => setPkg({ ...pkg, title: e.target.value })}
-                      helperText="Nights are computed from Stay Locations & Days = Nights + 1. You can freely edit or choose from suggestions below."
+                      helperText={
+                        editCalculatedOverstay > 0
+                          ? `Hotel nights (${editCalculatedNights}) stay the same; ${editCalculatedOverstay} overstay night(s) add day(s). Days = ${editCalculatedNights} + ${editCalculatedOverstay} + 1.`
+                          : "Nights are computed from Stay Locations & Days = Nights + 1. You can freely edit or choose from suggestions below."
+                      }
                     />
 
                     {editCalculatedNights > 0 && editTitleSuggestions.length > 0 && (

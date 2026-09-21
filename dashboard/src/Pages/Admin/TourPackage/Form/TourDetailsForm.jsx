@@ -351,24 +351,27 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
   const selectedState = packageData?.sector || "";
   const DOMESTIC_TOUR_TYPES = ["Domestic"];
 
-  // Helper to extract stay locations & calculate nights and days = nights + 1
+  // Helper to extract stay locations & calculate nights and days = nights + overstay + 1
   const getStayLocationsFromData = (pkgD, initD) => {
     if (Array.isArray(pkgD?.stayLocations) && pkgD.stayLocations.length > 0) {
       return pkgD.stayLocations.map((loc) => ({
         city: loc.city || loc.destination || "",
         nights: Number(loc.nights) || 0,
+        overstayAfter: Number(loc.overstayAfter) || 0,
       }));
     }
     if (Array.isArray(initD?.destinationNights) && initD.destinationNights.length > 0) {
       return initD.destinationNights.map((dest) => ({
         city: dest.destination || dest.city || "",
         nights: Number(dest.nights) || 0,
+        overstayAfter: Number(dest.overstayAfter) || 0,
       }));
     }
     if (Array.isArray(initD?.stayLocations) && initD.stayLocations.length > 0) {
       return initD.stayLocations.map((loc) => ({
         city: loc.city || loc.destination || "",
         nights: Number(loc.nights) || 0,
+        overstayAfter: Number(loc.overstayAfter) || 0,
       }));
     }
     return [];
@@ -376,7 +379,12 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
   const initialStayLocs = getStayLocationsFromData(packageData, initialData);
   const initialNightsCount = initialStayLocs.reduce((sum, sl) => sum + (Number(sl.nights) || 0), 0);
-  const initialDaysTarget = initialNightsCount > 0 ? initialNightsCount + 1 : 1;
+  const initialOverstayCount = initialStayLocs.reduce(
+    (sum, sl) => sum + (Number(sl.overstayAfter) || 0),
+    0,
+  );
+  const initialDaysTarget =
+    initialNightsCount > 0 ? initialNightsCount + initialOverstayCount + 1 : 1;
   const initialTitlesList = generateImpressiveTitles({
     nights: initialNightsCount,
     days: initialDaysTarget,
@@ -616,7 +624,11 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
         (sum, sl) => sum + (Number(sl.nights) || 0),
         0
       );
-      const totalD = totalN > 0 ? totalN + 1 : 1;
+      const totalOverstay = packageData.stayLocations.reduce(
+        (sum, sl) => sum + (Number(sl.overstayAfter) || 0),
+        0
+      );
+      const totalD = totalN > 0 ? totalN + totalOverstay + 1 : 1;
       const impressiveTitles = generateImpressiveTitles({
         nights: totalN,
         days: totalD,
@@ -669,24 +681,27 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     }
   }, [packageData, dispatch]);
 
-  // Live stay locations & duration calculations: Nights from stay locations & Days = Nights + 1
+  // Live stay locations & duration: hotel nights unchanged; days = hotel nights + overstay + 1
   const stayLocationsList = useMemo(() => {
     if (Array.isArray(packageData?.stayLocations) && packageData.stayLocations.length > 0) {
       return packageData.stayLocations.map((loc) => ({
         city: loc.city || loc.destination || "",
         nights: Number(loc.nights) || 0,
+        overstayAfter: Number(loc.overstayAfter) || 0,
       }));
     }
     if (Array.isArray(tourDetails.destinationNights) && tourDetails.destinationNights.length > 0) {
       return tourDetails.destinationNights.map((dest) => ({
         city: dest.destination || dest.city || "",
         nights: Number(dest.nights) || 0,
+        overstayAfter: Number(dest.overstayAfter) || 0,
       }));
     }
     if (Array.isArray(initialData?.stayLocations) && initialData.stayLocations.length > 0) {
       return initialData.stayLocations.map((loc) => ({
         city: loc.city || loc.destination || "",
         nights: Number(loc.nights) || 0,
+        overstayAfter: Number(loc.overstayAfter) || 0,
       }));
     }
     return [];
@@ -696,9 +711,18 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     return stayLocationsList.reduce((sum, loc) => sum + (Number(loc.nights) || 0), 0);
   }, [stayLocationsList]);
 
+  const calculatedOverstay = useMemo(() => {
+    return stayLocationsList.reduce(
+      (sum, loc) => sum + (Number(loc.overstayAfter) || 0),
+      0,
+    );
+  }, [stayLocationsList]);
+
   const calculatedDays = useMemo(() => {
-    return calculatedNights > 0 ? calculatedNights + 1 : 1;
-  }, [calculatedNights]);
+    return calculatedNights > 0
+      ? calculatedNights + calculatedOverstay + 1
+      : 1;
+  }, [calculatedNights, calculatedOverstay]);
 
   const titleSuggestions = useMemo(() => {
     return generateImpressiveTitles({
@@ -1133,16 +1157,31 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
 
   // Rest of your handlers remain the same
   const getCityForDay = (dayIndex) => {
-    if (!tourDetails.stayLocations || tourDetails.stayLocations.length === 0) return packageData?.sector || "landscape";
+    const locs =
+      packageData?.stayLocations?.length > 0
+        ? packageData.stayLocations
+        : tourDetails.stayLocations || [];
+    if (!locs || locs.length === 0) return packageData?.sector || "landscape";
     let currentDay = 0;
-    for (let loc of tourDetails.stayLocations) {
+    for (let i = 0; i < locs.length; i++) {
+      const loc = locs[i];
       const nights = parseInt(loc.nights) || 1;
+      const overstay = parseInt(loc.overstayAfter) || 0;
       if (dayIndex < currentDay + nights) {
         return loc.city;
       }
       currentDay += nights;
+      if (overstay > 0) {
+        if (dayIndex < currentDay + overstay) {
+          const nextCity = locs[i + 1]?.city;
+          return nextCity
+            ? `Overnight Travel → ${nextCity}`
+            : "Overnight Travel";
+        }
+        currentDay += overstay;
+      }
     }
-    return tourDetails.stayLocations[tourDetails.stayLocations.length - 1].city;
+    return locs[locs.length - 1].city;
   };
 
   const handleDayChange = (index, field, value) => {
@@ -1164,17 +1203,22 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
     try {
       setIsGeneratingAi(true);
       const totalNights = packageData?.stayLocations?.reduce((sum, sl) => sum + (Number(sl.nights) || 0), 0) || 0;
-      const targetDays = totalNights > 0 ? totalNights + 1 : Math.max(1, tourDetails.days.length);
+      const totalOverstay = packageData?.stayLocations?.reduce((sum, sl) => sum + (Number(sl.overstayAfter) || 0), 0) || 0;
+      const targetDays = totalNights > 0 ? totalNights + totalOverstay + 1 : Math.max(1, tourDetails.days.length);
 
-      const res = await axios.post("/ai/generate-itinerary", {
-        arrivalCity: tourDetails.arrivalCity,
-        departureCity: tourDetails.departureCity,
-        destinationCountry: selectedCountry,
-        sector: selectedState,
-        days: targetDays,
-        tourType: tourType,
-        stayLocations: packageData?.stayLocations
-      });
+      const res = await axios.post(
+        "/ai/generate-itinerary",
+        {
+          arrivalCity: tourDetails.arrivalCity,
+          departureCity: tourDetails.departureCity,
+          destinationCountry: selectedCountry,
+          sector: selectedState,
+          days: targetDays,
+          tourType: tourType,
+          stayLocations: packageData?.stayLocations,
+        },
+        { timeout: 180000 }, // AI can take >30s; default axios timeout cancels at 30s
+      );
       if (res.data?.success && res.data?.data) {
         const generatedDays = res.data.data;
         setTourDetails(prev => {
@@ -1876,7 +1920,11 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
                     size="small"
                     color="primary"
                     variant="outlined"
-                    label={`⏱️ Duration: ${calculatedNights} Nights / ${calculatedDays} Days (${calculatedNights}N from Stay Locations + 1 Day)`}
+                    label={
+                      calculatedOverstay > 0
+                        ? `⏱️ Duration: ${calculatedNights} Nights / ${calculatedDays} Days (${calculatedNights} hotel N + ${calculatedOverstay} overstay + 1 Day)`
+                        : `⏱️ Duration: ${calculatedNights} Nights / ${calculatedDays} Days (${calculatedNights}N from Stay Locations + 1 Day)`
+                    }
                     sx={{ fontWeight: "bold" }}
                   />
                 )}
@@ -1916,7 +1964,11 @@ const TourDetailsForm = ({ onNext, initialData, packageId, packageData }) => {
               onChange={(e) =>
                 setTourDetails({ ...tourDetails, title: e.target.value })
               }
-              helperText="Nights are computed from Stay Locations & Days = Nights + 1. You can freely edit or choose from suggestions below."
+              helperText={
+                calculatedOverstay > 0
+                  ? `Hotel nights (${calculatedNights}) stay the same; ${calculatedOverstay} overstay night(s) add day(s). Days = ${calculatedNights} + ${calculatedOverstay} + 1.`
+                  : "Nights are computed from Stay Locations & Days = Nights + 1. You can freely edit or choose from suggestions below."
+              }
             />
 
             {calculatedNights > 0 && titleSuggestions.length > 0 && (

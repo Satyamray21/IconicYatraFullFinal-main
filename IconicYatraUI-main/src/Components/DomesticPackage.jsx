@@ -242,7 +242,11 @@ const DomesticPackage = () => {
                         }}
                       >
                         {pkg.stayLocations.reduce((sum, loc) => sum + (loc.nights || 0), 0)}N/
-                        {pkg.stayLocations.reduce((sum, loc) => sum + (loc.nights || 0), 0) + 1}D
+                        {pkg.stayLocations.reduce(
+                          (sum, loc) =>
+                            sum + (loc.nights || 0) + (loc.overstayAfter || 0),
+                          0,
+                        ) + 1}D
                       </Box>
                     )}
 

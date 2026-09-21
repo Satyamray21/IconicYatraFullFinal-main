@@ -3,7 +3,13 @@ import { DB_NAME } from "../constants.js";
 
 const connectDB = async () => {
     try {
-        const connectionInstances = await mongoose.connect(`${process.env.MONGODB_URL}/${DB_NAME}`)
+        const connectionInstances = await mongoose.connect(
+            `${process.env.MONGODB_URL}/${DB_NAME}`,
+            {
+                family: 4,
+                serverSelectionTimeoutMS: 30000,
+            },
+        );
         console.log(`DB IS CONNECTED ${connectionInstances.connection.host}`);
 
         // Drop stale unique index on "name" in counters collection if it exists.

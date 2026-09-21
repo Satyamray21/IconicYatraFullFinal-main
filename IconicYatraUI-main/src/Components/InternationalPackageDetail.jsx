@@ -82,7 +82,8 @@ const InternationalPackageDetailPage = () => {
   const formatDuration = (pkg) => {
     if (pkg?.stayLocations && pkg.stayLocations.length > 0) {
       const totalNights = pkg.stayLocations.reduce((sum, location) => sum + (location.nights || 0), 0);
-      const totalDays = totalNights + 1;
+      const totalOverstay = pkg.stayLocations.reduce((sum, location) => sum + (location.overstayAfter || 0), 0);
+      const totalDays = totalNights + totalOverstay + 1;
       return `${totalDays}D/${totalNights}N`;
     }
     return "Flexible";

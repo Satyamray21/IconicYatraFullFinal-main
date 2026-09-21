@@ -26,6 +26,9 @@ import {
   Chip,
   Tooltip,
   CircularProgress,
+  Tabs,
+  Tab,
+  Avatar,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import SearchIcon from "@mui/icons-material/Search";
@@ -249,6 +252,7 @@ const LeadCard = () => {
   const [toDate, setToDate] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("all");
   const [followUpFilter, setFollowUpFilter] = useState("all");
+  const [currentTab, setCurrentTab] = useState(0);
 
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
@@ -351,6 +355,9 @@ const LeadCard = () => {
     const term = searchTerm.trim().toLowerCase();
 
     const filtered = leadList.filter((lead) => {
+      if (currentTab === 1 && lead.status !== "Confirmed") {
+        return false;
+      }
       const destination = lead?.tourDetails?.tourDestination || "-";
       if (
         destinationFilter !== "all" &&
@@ -425,7 +432,7 @@ const LeadCard = () => {
         originalData: lead,
       };
     });
-  }, [leadList, searchTerm, fromDate, toDate, destinationFilter, followUpFilter]);
+  }, [leadList, searchTerm, fromDate, toDate, destinationFilter, followUpFilter, currentTab]);
 
   const handleAddClick = () => {
     navigate("/lead/leadtourform");
@@ -749,13 +756,15 @@ const LeadCard = () => {
   };
 
   const columns = [
-    { field: "srNo", headerName: "S.No", width: 70 },
-    { field: "leadId", headerName: "Lead Id", width: 100 },
-    { field: "status", headerName: "Status", width: 100 },
+    { field: "srNo", headerName: "S.No", width: 70, align: "center", headerAlign: "center" },
+    // { field: "leadId", headerName: "Lead Id", width: 100, align: "center", headerAlign: "center" },
+    // { field: "status", headerName: "Status", width: 100, align: "center", headerAlign: "center" },
     {
       field: "followUpStatus",
       headerName: "Follow-up",
       width: 130,
+      align: "center",
+      headerAlign: "center",
       renderCell: (params) => (
         <Chip
           size="small"
@@ -769,6 +778,8 @@ const LeadCard = () => {
       field: "followUpCountLabel",
       headerName: "Attempts",
       width: 90,
+      align: "center",
+      headerAlign: "center",
     },
     {
       field: "nextFollowUp",
@@ -807,22 +818,88 @@ const LeadCard = () => {
         </Tooltip>
       ),
     },
-    { field: "source", headerName: "Source", width: 80 },
-    { field: "name", headerName: "Name", width: 150 },
-    { field: "mobile", headerName: "Mobile", width: 100 },
-    { field: "email", headerName: "Email", width: 150 },
-    { field: "destination", headerName: "Destination", width: 100 },
-    { field: "arrivalDate", headerName: "Arrival Date", width: 100 },
-    { field: "priority", headerName: "Priority", width: 80 },
-    { field: "assignTo", headerName: "Assign To", width: 100 },
+    {
+      field: "source",
+      headerName: "Source",
+      width: 100,
+      renderCell: (params) => (
+        <Typography variant="caption" sx={{ bgcolor: '#f1f5f9', color: '#475569', px: 1, py: 0.5, borderRadius: 1, fontWeight: 600 }}>
+          {params.value}
+        </Typography>
+      )
+    },
+    {
+      field: "name",
+      headerName: "Name",
+      width: 240,
+      align: "center",
+      headerAlign: "center",
+      renderCell: (params) => {
+        const name = params.value || "Unknown";
+        const initial = name.charAt(0).toUpperCase();
+        const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#00bcd4', '#009688', '#4caf50', '#ff9800', '#ff5722'];
+        const charCode = name.charCodeAt(0) || 0;
+        const color = colors[charCode % colors.length];
+
+        return (
+          <Box display="flex" justifyContent="center" alignItems="center" width="100%" height="100%">
+            <Box display="flex" alignItems="center" gap={1.5} width="160px">
+              <Avatar sx={{ bgcolor: color, width: 32, height: 32, fontSize: '14px', fontWeight: 600, flexShrink: 0 }}>{initial}</Avatar>
+              <Typography variant="body2" fontWeight={500} color="text.primary" noWrap>
+                {name}
+              </Typography>
+            </Box>
+          </Box>
+        );
+      }
+    },
+    { field: "mobile", headerName: "Mobile", width: 120 },
+    {
+      field: "email",
+      headerName: "Email",
+      width: 230,
+      renderCell: (params) => (
+        <Typography variant="body2" color="text.secondary">
+          {params.value}
+        </Typography>
+      )
+    },
+    { field: "destination", headerName: "Destination", width: 150 },
+    { field: "arrivalDate", headerName: "Arrival Date", width: 120 },
+    {
+      field: "priority",
+      headerName: "Priority",
+      width: 100,
+      align: "center",
+      headerAlign: "center",
+      renderCell: (params) => {
+        const p = params.value || "Low";
+        let color = "default";
+        if (p.toLowerCase() === 'high') color = "error";
+        else if (p.toLowerCase() === 'medium') color = "warning";
+        else if (p.toLowerCase() === 'low') color = "success";
+        return (
+          <Chip
+            label={p}
+            size="small"
+            color={color}
+            variant="filled"
+            sx={{ fontWeight: 600, fontSize: '0.7rem', height: 24 }}
+          />
+        );
+      }
+    },
+    { field: "assignTo", headerName: "Assign To", width: 150 },
     {
       field: "action",
       headerName: "Action",
       width: 180,
+      align: "center",
+      headerAlign: "center",
       renderCell: (params) => {
         const rowId = params.row.id;
         return (
-          <Box display="flex" gap={0.5} alignItems="center">
+          <Box display="flex" gap={0.5} alignItems="center" justifyContent="center" width="100%">
             <Tooltip title="Add Follow-up">
               <IconButton
                 color="secondary"
@@ -920,6 +997,27 @@ const LeadCard = () => {
             </Grid>
           ))}
         </Grid>
+
+        <Box mt={3}>
+          <Tabs 
+            value={currentTab} 
+            onChange={(e, val) => setCurrentTab(val)} 
+            textColor="secondary"
+            indicatorColor="secondary"
+            sx={{ 
+              borderBottom: 1, 
+              borderColor: 'divider',
+              '& .MuiTab-root': {
+                fontWeight: 'bold',
+                fontSize: '1rem',
+                textTransform: 'none'
+              }
+            }}
+          >
+            <Tab label="All Leads" />
+            <Tab label="Confirmed Leads" />
+          </Tabs>
+        </Box>
 
         <Box
           mt={3}
@@ -1072,7 +1170,7 @@ const LeadCard = () => {
           </Alert>
         )}
 
-        <Box sx={{ width: "100%", overflowX: "auto" }}>
+        <Box sx={{ width: "100%", overflowX: "auto", p: 1 }}>
           <Box sx={{ minWidth: "600px" }}>
             <DataGrid
               rows={mappedLeads}
@@ -1080,13 +1178,51 @@ const LeadCard = () => {
               pageSize={7}
               rowsPerPageOptions={[7, 25, 50, 100]}
               autoHeight
+              rowHeight={64}
+              columnHeaderHeight={54}
               disableRowSelectionOnClick
               loading={status === "loading"}
+              showCellVerticalBorder
+              showColumnVerticalBorder
               sx={{
-                "& .MuiDataGrid-cell": {
-                  display: "flex",
-                  alignItems: "center",
+                border: "1px solid #e0e3e7",
+                borderRadius: "8px",
+                boxShadow: "0px 4px 6px -1px rgba(0,0,0,0.05)",
+                backgroundColor: "#ffffff",
+                "& .MuiDataGrid-columnHeaders": {
+                  backgroundColor: "#f8fafc !important",
+                  color: "#64748b !important",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  borderBottom: "1px solid #cbd5e1",
                 },
+                "& .MuiDataGrid-columnHeader": {
+                  borderRight: "1px solid #cbd5e1",
+                },
+                "& .MuiDataGrid-columnHeaderTitle": {
+                  fontWeight: 700,
+                },
+                "& .MuiDataGrid-cell": {
+                  borderBottom: "1px solid #cbd5e1",
+                  borderRight: "1px solid #cbd5e1",
+                  fontSize: "14px",
+                  color: "#334155",
+                },
+                "& .MuiDataGrid-row": {
+                  transition: "background-color 0.2s ease",
+                },
+                "& .MuiDataGrid-row:hover": {
+                  backgroundColor: "#f8fafc",
+                },
+                "& .MuiDataGrid-footerContainer": {
+                  borderTop: "1px solid #cbd5e1",
+                  backgroundColor: "#ffffff",
+                },
+                "& .MuiDataGrid-iconSeparator": {
+                  display: "none",
+                }
               }}
             />
           </Box>

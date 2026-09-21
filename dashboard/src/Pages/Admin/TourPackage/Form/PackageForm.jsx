@@ -159,16 +159,22 @@ const PackageEntryForm = ({ onNext, initialData }) => {
         return;
       }
 
+      const normalizedStayLocations = stayLocationList.map((loc) => ({
+        ...loc,
+        nights: parseInt(loc.nights, 10) || 1,
+        overstayAfter: parseInt(loc.overstayAfter, 10) || 0,
+      }));
+
       const payload = {
         ...values,
-        stayLocations: stayLocationList,
+        stayLocations: normalizedStayLocations,
         destinationCountry: DOMESTIC_TOUR_TYPES.includes(values.tourType)
           ? "India"
           : values.destinationCountry,
         status: "active",
       };
 
-      onNext(payload, stayLocationList);
+      onNext(payload, normalizedStayLocations);
     },
   });
 
@@ -285,6 +291,7 @@ const PackageEntryForm = ({ onNext, initialData }) => {
         selectedCountry ||
         (DOMESTIC_TOUR_TYPES.includes(tourType) ? "India" : ""),
       nights: "",
+      overstayAfter: "", // optional overnight travel nights after this stay (no hotel)
     };
 
     // Check if city already exists (from any state)
@@ -388,6 +395,17 @@ const PackageEntryForm = ({ onNext, initialData }) => {
   };
 
   const groupedStayLocations = getStayLocationsByState();
+
+  const totalHotelNights = stayLocationList.reduce(
+    (sum, item) => sum + (parseInt(item.nights, 10) || 0),
+    0,
+  );
+  const totalOverstayNights = stayLocationList.reduce(
+    (sum, item) => sum + (parseInt(item.overstayAfter, 10) || 0),
+    0,
+  );
+  const totalPackageDays =
+    totalHotelNights > 0 ? totalHotelNights + totalOverstayNights + 1 : 0;
 
   return (
     <Box border={1} borderColor="grey.300" borderRadius={2} p={3} boxShadow={2}>
@@ -750,7 +768,7 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                 <Box
                   sx={{
                     border: "1px solid #ccc",
-                    height: 270,
+                    height: 320,
                     overflowY: "auto",
                     mt: 1,
                     p: 1,
@@ -895,6 +913,29 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                                   sx={{ mt: 1, width: "50%" }}
                                   inputProps={{ min: 1 }}
                                 />
+                                <TextField
+                                  type="number"
+                                  size="small"
+                                  label="Overstay after (optional)"
+                                  helperText="Overnight travel nights after this stay — no hotel"
+                                  value={item.overstayAfter ?? ""}
+                                  onChange={(e) => {
+                                    const newList = [...stayLocationList];
+                                    const itemIndex = newList.findIndex(
+                                      (stayItem) =>
+                                        stayItem.city === item.city &&
+                                        stayItem.state === item.state,
+                                    );
+                                    if (itemIndex !== -1) {
+                                      newList[itemIndex].overstayAfter =
+                                        e.target.value;
+                                      setStayLocationList(newList);
+                                    }
+                                  }}
+                                  sx={{ mt: 1, width: "100%" }}
+                                  inputProps={{ min: 0 }}
+                                  placeholder="e.g. 1"
+                                />
                               </Box>
                             );
                           })}
@@ -912,6 +953,22 @@ const PackageEntryForm = ({ onNext, initialData }) => {
                     </Typography>
                   )}
                 </Box>
+                {totalHotelNights > 0 && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mt: 1 }}
+                  >
+                    Hotel {totalHotelNights}N
+                    {totalOverstayNights > 0
+                      ? ` + ${totalOverstayNights} overstay`
+                      : ""}{" "}
+                    → {totalHotelNights} Nights / {totalPackageDays} Days
+                    {totalOverstayNights > 0
+                      ? " (hotel nights unchanged; days include overnight travel)"
+                      : ""}
+                  </Typography>
+                )}
               </Grid>
             </Grid>
           </Grid>

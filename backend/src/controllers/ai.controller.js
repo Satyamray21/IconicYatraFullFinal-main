@@ -11,7 +11,7 @@ const getModelCandidates = () => [
       "gemini-3.5-flash-lite",
       "gemini-2.5-flash",
       "gemini-2.0-flash",
-    ].filter(Boolean)
+    ].filter(Boolean),
   ),
 ];
 
@@ -57,7 +57,7 @@ const generateItineraryText = async (client, prompt) => {
           model: "gemini-3.6-flash",
         },
       },
-      { timeout: 180000 }
+      { timeout: 180000 },
     );
     const text = extractText(interaction);
     if (text?.trim()) return text;
@@ -65,14 +65,17 @@ const generateItineraryText = async (client, prompt) => {
     lastError = error;
   }
 
-  throw lastError || new Error("Antigravity/Gemini returned an empty response.");
+  throw (
+    lastError || new Error("Antigravity/Gemini returned an empty response.")
+  );
 };
 
 const parseItineraryJson = (text) => {
   let jsonText = String(text || "").trim();
   if (jsonText.startsWith("```json")) jsonText = jsonText.substring(7);
   if (jsonText.startsWith("```")) jsonText = jsonText.substring(3);
-  if (jsonText.endsWith("```")) jsonText = jsonText.substring(0, jsonText.length - 3);
+  if (jsonText.endsWith("```"))
+    jsonText = jsonText.substring(0, jsonText.length - 3);
   jsonText = jsonText.trim();
 
   try {
@@ -90,7 +93,8 @@ export const generateItinerary = async (req, res, next) => {
     if (!apiKey || apiKey === "your_key_here") {
       return res.status(500).json({
         success: false,
-        message: "GEMINI_API_KEY is missing or invalid in environment variables.",
+        message:
+          "GEMINI_API_KEY is missing or invalid in environment variables.",
       });
     }
 
@@ -121,11 +125,41 @@ export const generateItinerary = async (req, res, next) => {
       locationParts.length > 0 ? locationParts.join(", ") : "the destination";
 
     let stayInfo = "";
-    if (stayLocations && Array.isArray(stayLocations) && stayLocations.length > 0) {
+    if (
+      stayLocations &&
+      Array.isArray(stayLocations) &&
+      stayLocations.length > 0
+    ) {
+      const hotelNights = stayLocations.reduce(
+        (sum, sl) => sum + (Number(sl.nights) || 0),
+        0,
+      );
+      const overstayTotal = stayLocations.reduce(
+        (sum, sl) => sum + (Number(sl.overstayAfter) || 0),
+        0,
+      );
+
+      const staySchedule = stayLocations
+        .map((sl, idx) => {
+          const nextCity = stayLocations[idx + 1]?.city;
+          const overstay = Number(sl.overstayAfter) || 0;
+          let line = `${sl.nights} hotel night(s) in ${sl.city}`;
+          if (overstay > 0) {
+            line +=
+              `, then ${overstay} overnight travel night(s) with NO hotel` +
+              (nextCity ? ` while transferring toward ${nextCity}` : "");
+          }
+          return line;
+        })
+        .join("; ");
+
       stayInfo = `\n\nSTRICT ITINERARY STRUCTURE REQUIRED:
       - Day 1: Arrival at ${arrivalCity || "the starting city"} and transfer to ${stayLocations[0].city}.
-      - The tour has ${parsedDays} total days and ${parsedDays - 1} nights.
-      - The overnight stays are strictly: ${stayLocations.map((sl) => `${sl.nights} nights in ${sl.city}`).join(", ")}.
+      - The tour has ${parsedDays} total days.
+      - Hotel nights only: ${hotelNights}. Overnight travel (overstay) nights with NO hotel: ${overstayTotal}.
+      - Package marketing nights stay as hotel nights (${hotelNights}N); extra overstay nights add days to the itinerary (not hotel stays).
+      - Stay schedule: ${staySchedule}.
+      - For any overstay/overnight travel night: describe travel (train/bus/flight overnight), do NOT assign a hotel stay, and keep sightseeing light or travel-focused.
       - You must map out exactly what happens each day to match this overnight schedule. If transferring between cities, mention it on the correct day.
       - Day ${parsedDays}: Check out from the last location and departure from ${departureCity || arrivalCity || "the departure city"}.`;
     }
