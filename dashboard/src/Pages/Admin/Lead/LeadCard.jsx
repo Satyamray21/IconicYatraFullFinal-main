@@ -821,11 +821,13 @@ const LeadCard = () => {
     {
       field: "source",
       headerName: "Source",
-      width: 100,
+      width: 140,
       renderCell: (params) => (
-        <Typography variant="caption" sx={{ bgcolor: '#f1f5f9', color: '#475569', px: 1, py: 0.5, borderRadius: 1, fontWeight: 600 }}>
-          {params.value}
-        </Typography>
+        <Box display="flex" alignItems="center" height="100%" width="100%">
+          <Typography variant="caption" sx={{ bgcolor: '#f1f5f9', color: '#475569', px: 1, py: 0.5, borderRadius: 1, fontWeight: 600 }}>
+            {params.value}
+          </Typography>
+        </Box>
       )
     },
     {
@@ -857,11 +859,15 @@ const LeadCard = () => {
     {
       field: "email",
       headerName: "Email",
-      width: 230,
+      width: 250,
+      align: "center",
+      headerAlign: "center",
       renderCell: (params) => (
-        <Typography variant="body2" color="text.secondary">
-          {params.value}
-        </Typography>
+        <Box display="flex" alignItems="center" justifyContent="center" height="100%" width="100%">
+          <Typography variant="body2" color="text.secondary">
+            {params.value}
+          </Typography>
+        </Box>
       )
     },
     { field: "destination", headerName: "Destination", width: 150 },
@@ -1185,40 +1191,56 @@ const LeadCard = () => {
               showCellVerticalBorder
               showColumnVerticalBorder
               sx={{
-                border: "1px solid #e0e3e7",
-                borderRadius: "8px",
-                boxShadow: "0px 4px 6px -1px rgba(0,0,0,0.05)",
+                border: "1px solid #f8bbd0",
+                borderRadius: "12px",
+                overflow: "hidden",
+                boxShadow: "0px 8px 24px rgba(233, 30, 99, 0.08)",
                 backgroundColor: "#ffffff",
                 "& .MuiDataGrid-columnHeaders": {
-                  backgroundColor: "#f8fafc !important",
-                  color: "#64748b !important",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  borderBottom: "1px solid #cbd5e1",
+                  backgroundColor: "#fce4ec !important",
+                  borderBottom: "2px solid #f48fb1 !important",
                 },
                 "& .MuiDataGrid-columnHeader": {
-                  borderRight: "1px solid #cbd5e1",
+                  backgroundColor: "#fce4ec !important",
+                  color: "#880e4f !important",
+                  fontSize: "12px",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.8px",
+                  borderRight: "1px solid #f48fb1 !important",
                 },
                 "& .MuiDataGrid-columnHeaderTitle": {
-                  fontWeight: 700,
+                  fontWeight: 800,
+                  color: "#880e4f !important",
+                },
+                "& .MuiDataGrid-columnHeaders .MuiIconButton-root": {
+                  color: "#880e4f !important",
+                },
+                "& .MuiDataGrid-sortIcon": {
+                  color: "#880e4f !important",
                 },
                 "& .MuiDataGrid-cell": {
-                  borderBottom: "1px solid #cbd5e1",
-                  borderRight: "1px solid #cbd5e1",
+                  borderBottom: "1px solid #f8bbd0 !important",
+                  borderRight: "1px solid #f8bbd0 !important",
                   fontSize: "14px",
-                  color: "#334155",
+                  color: "#333333",
+                  fontWeight: 500,
                 },
                 "& .MuiDataGrid-row": {
-                  transition: "background-color 0.2s ease",
+                  transition: "all 0.2s ease",
+                },
+                "& .MuiDataGrid-row:nth-of-type(even)": {
+                  backgroundColor: "#fffafb",
                 },
                 "& .MuiDataGrid-row:hover": {
-                  backgroundColor: "#f8fafc",
+                  backgroundColor: "#fce4ec !important",
+                  transform: "scale(1.001)",
+                  boxShadow: "0 2px 8px rgba(233,30,99,0.1)",
+                  zIndex: 1,
                 },
                 "& .MuiDataGrid-footerContainer": {
-                  borderTop: "1px solid #cbd5e1",
-                  backgroundColor: "#ffffff",
+                  borderTop: "2px solid #f48fb1 !important",
+                  backgroundColor: "#fce4ec",
                 },
                 "& .MuiDataGrid-iconSeparator": {
                   display: "none",
