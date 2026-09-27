@@ -1169,8 +1169,8 @@ function transformQuickApiToDisplay(apiData, company) {
     actions: [
       "Finalize",
       "Add Service",
-      "Email Quotation",
-      "Preview PDF",
+      "Booking Confirmation",
+      "Send Quotation in Pdf",
       "Make Payment",
       "Add Flight",
       "Transaction",
@@ -1452,8 +1452,8 @@ const QuickFinalize = () => {
     actions: [
       "Finalize",
       "Add Service",
-      "Email Quotation",
-      "Preview PDF",
+      "Booking Confirmation",
+      "Send Quotation in Pdf",
       "Make Payment",
       "Add Flight",
       "Transaction",
@@ -2345,7 +2345,7 @@ const QuickFinalize = () => {
       });
       return;
     }
-    setEmailTemplateType("normal");
+    setEmailTemplateType("booking");
     // Prefer the company chosen at finalization
     const defaultCompanyId = currentQuotation?.companyId || company?._id || mailCompanies?.[0]?._id;
     try {
@@ -3201,10 +3201,10 @@ const QuickFinalize = () => {
       case "Add Service":
         handleAddServiceOpen();
         break;
-      case "Email Quotation":
+      case "Booking Confirmation":
         handleEmailOpen();
         break;
-      case "Preview PDF":
+      case "Send Quotation in Pdf":
         handlePreviewPdf();
         break;
       case "Make Payment":
@@ -4815,7 +4815,7 @@ const QuickFinalize = () => {
             return templates?.[type] || { subject: "", message: "" };
           }}
           initialValuesOverride={emailInitialValues}
-          templateBodies={emailTemplateBodies}
+          
           companyOptions={mailCompanies}
           emailAccountOptions={emailAccounts}
           hasPdfAttachment={!!pdfAttachmentForMail}
@@ -4859,7 +4859,7 @@ const QuickFinalize = () => {
             setPdfAttachmentForMail(attachment);
             setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
             handleClosePdfDialog();
-            setEmailTemplateType("normal");
+            setEmailTemplateType("booking");
             handleEmailOpen();
           }}
         />
