@@ -678,7 +678,7 @@ useEffect(() => {
     const [quotation, setQuotation] = useState({
         date: "",
         reference: "",
-        actions: ["Finalize", "Add Service", "Email Quotation", "Preview PDF", "Make Payment", "Add Flight", "Transaction"],
+        actions: ["Finalize", "Add Service", "Booking Confirmation", "Send Quotation in Pdf", "Make Payment", "Add Flight", "Transaction"],
         bannerImage: "",
         customer: {
             name: "",
@@ -1136,7 +1136,7 @@ useEffect(() => {
             reference: quotationId,
             quotationTitle: tourDetails.quotationTitle || "",
             destinationSummary: tourDetails.destinationSummary || "",
-            actions: ["Finalize", "Add Service", "Email Quotation", "Preview PDF", "Make Payment", "Add Flight", "Transaction"],
+            actions: ["Finalize", "Add Service", "Booking Confirmation", "Send Quotation in Pdf", "Make Payment", "Add Flight", "Transaction"],
             bannerImage: tourDetails.bannerImage || "",
             customer: {
                 name: clientDetails.clientName,
@@ -1408,7 +1408,7 @@ useEffect(() => {
             });
             return;
         }
-        setEmailTemplateType("normal");
+        setEmailTemplateType("booking");
         // Prefer the company chosen at finalization
         const defaultCompanyId = selectedQuotation?.companyId || company?._id || mailCompanies?.[0]?._id;
         try {
@@ -2312,11 +2312,11 @@ useEffect(() => {
             case "Add Service":
                 handleAddServiceOpen();
                 break;
-            case "Email Quotation":
-                setEmailTemplateType("normal");
+            case "Booking Confirmation":
+                setEmailTemplateType("booking");
                 handleEmailOpen();
                 break;
-            case "Preview PDF":
+            case "Send Quotation in Pdf":
                 handlePreviewPdf();
                 break;
             case "Make Payment":
@@ -3768,7 +3768,7 @@ useEffect(() => {
                         return templates?.[type] || { subject: "", message: "" };
                     }}
                     initialValuesOverride={emailInitialValues}
-                    templateBodies={emailTemplateBodies}
+                    
                     companyOptions={mailCompanies}
                     emailAccountOptions={emailAccounts}
                     hasPdfAttachment={!!pdfAttachmentForMail}
@@ -3812,7 +3812,7 @@ useEffect(() => {
                         setPdfAttachmentForMail(attachment);
                         setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
                         handleClosePdfDialog();
-                        setEmailTemplateType("normal");
+                        setEmailTemplateType("booking");
                         handleEmailOpen();
                     }}
                 />
