@@ -29,6 +29,7 @@ import {
   Tabs,
   Tab,
   Avatar,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import SearchIcon from "@mui/icons-material/Search";
@@ -38,6 +39,8 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import GridOnIcon from "@mui/icons-material/GridOn";
 import PhoneCallbackIcon from "@mui/icons-material/PhoneCallback";
+import AssessmentIcon from "@mui/icons-material/Assessment";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
 import { useSelector, useDispatch } from "react-redux";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -253,6 +256,9 @@ const LeadCard = () => {
   const [destinationFilter, setDestinationFilter] = useState("all");
   const [followUpFilter, setFollowUpFilter] = useState("all");
   const [currentTab, setCurrentTab] = useState(0);
+  const [statsFilter, setStatsFilter] = useState({ title: null, status: null });
+  const [statsDialog, setStatsDialog] = useState(false);
+  const [statsDays, setStatsDays] = useState(14);
 
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
@@ -344,6 +350,30 @@ const LeadCard = () => {
     return [...unique].sort((a, b) => a.localeCompare(b));
   }, [leadList]);
 
+  
+  const dailyData = useMemo(() => {
+    const counts = {};
+    leadList.forEach(lead => {
+      const date = lead.createdAt || (lead.originalData && lead.originalData.createdAt);
+      if (!date) return;
+      const parsed = dayjs(date);
+      if (!parsed.isValid()) return;
+      const key = parsed.format('DD MMM YYYY');
+      const sortKey = parsed.format('YYYY-MM-DD');
+      
+      if (!counts[key]) {
+        counts[key] = { date: key, sortKey, total: 0, Active: 0, Confirmed: 0, Cancelled: 0, 'Not Converted': 0 };
+      }
+      counts[key].total += 1;
+      
+      const status = lead.status;
+      if (counts[key][status] !== undefined) {
+        counts[key][status] += 1;
+      }
+    });
+    return Object.values(counts).sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+  }, [leadList]);
+
   const mappedLeads = useMemo(() => {
     let fromKey = fromDate ? getArrivalDateKey(fromDate) : null;
     let toKey = toDate ? getArrivalDateKey(toDate) : null;
@@ -432,7 +462,7 @@ const LeadCard = () => {
         originalData: lead,
       };
     });
-  }, [leadList, searchTerm, fromDate, toDate, destinationFilter, followUpFilter, currentTab]);
+  }, [leadList, searchTerm, fromDate, toDate, destinationFilter, followUpFilter, currentTab, statsFilter]);
 
   const handleAddClick = () => {
     navigate("/lead/leadtourform");
@@ -988,16 +1018,10 @@ const LeadCard = () => {
                   <Typography variant="h6">
                     {item.title}: {item.active}
                   </Typography>
-                  <Typography variant="body2">Active: {item.Active}</Typography>
-                  <Typography variant="body2">
-                    Confirmed: {item.Confirmed}
-                  </Typography>
-                  <Typography variant="body2">
-                    Cancelled: {item.Cancelled}
-                  </Typography>
-                  <Typography variant="body2">
-                    Not Converted: {item["Not Converted"] || 0}
-                  </Typography>
+                  <Typography variant="body2" onClick={() => setStatsFilter({ title: item.title, status: 'Active' })} sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' }, textDecoration: statsFilter?.title === item.title && statsFilter?.status === 'Active' ? 'underline' : 'none' }}>Active: {item.Active}</Typography>
+                  <Typography variant="body2" onClick={() => setStatsFilter({ title: item.title, status: 'Confirmed' })} sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' }, textDecoration: statsFilter?.title === item.title && statsFilter?.status === 'Confirmed' ? 'underline' : 'none' }}>Confirmed: {item.Confirmed}</Typography>
+                  <Typography variant="body2" onClick={() => setStatsFilter({ title: item.title, status: 'Cancelled' })} sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' }, textDecoration: statsFilter?.title === item.title && statsFilter?.status === 'Cancelled' ? 'underline' : 'none' }}>Cancelled: {item.Cancelled}</Typography>
+                  <Typography variant="body2" onClick={() => setStatsFilter({ title: item.title, status: 'Not Converted' })} sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' }, textDecoration: statsFilter?.title === item.title && statsFilter?.status === 'Not Converted' ? 'underline' : 'none' }}>Not Converted: {item["Not Converted"] || 0}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -1130,7 +1154,15 @@ const LeadCard = () => {
               onClick={handleDownloadPdf}
             >
               PDF
-            </Button>
+              </Button>
+              <Button
+                variant="contained"
+                color="info"
+                startIcon={<AssessmentIcon />}
+                onClick={() => setStatsDialog(true)}
+              >
+                Daily Stats
+              </Button>
           </Box>
 
           <TextField
@@ -1580,7 +1612,77 @@ const LeadCard = () => {
           </Alert>
         </Snackbar>
       </Box>
-    </Container>
+    
+      <Dialog open={statsDialog} onClose={() => setStatsDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Daily Lead Breakdown
+          <Box>
+            <Select
+              size="small"
+              value={statsDays}
+              onChange={(e) => setStatsDays(e.target.value)}
+              sx={{ minWidth: 150 }}
+            >
+              <MenuItem value={7}>Last 7 Days</MenuItem>
+              <MenuItem value={14}>Last 14 Days</MenuItem>
+              <MenuItem value={30}>Last 30 Days</MenuItem>
+              <MenuItem value={60}>Last 60 Days</MenuItem>
+              <MenuItem value={90}>Last 90 Days</MenuItem>
+              <MenuItem value={10000}>All Time</MenuItem>
+            </Select>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ width: '100%', height: 300, mb: 4 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={[...dailyData].slice(0, statsDays).reverse()} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <RechartsTooltip />
+                <Legend />
+                <Bar dataKey="total" fill="#8884d8" name="Total Leads" />
+                <Bar dataKey="Active" fill="#82ca9d" name="Active" />
+                <Bar dataKey="Confirmed" fill="#ffc658" name="Confirmed" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Box>
+          <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+            <Table stickyHeader size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Date</strong></TableCell>
+                  <TableCell align="center"><strong>Total Leads</strong></TableCell>
+                  <TableCell align="center"><strong>Active</strong></TableCell>
+                  <TableCell align="center"><strong>Confirmed</strong></TableCell>
+                  <TableCell align="center"><strong>Cancelled</strong></TableCell>
+                  <TableCell align="center"><strong>Not Converted</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dailyData.length > 0 ? dailyData.slice(0, statsDays).map((row) => (
+                  <TableRow key={row.date} hover>
+                    <TableCell>{row.date}</TableCell>
+                    <TableCell align="center">{row.total}</TableCell>
+                    <TableCell align="center">{row.Active}</TableCell>
+                    <TableCell align="center">{row.Confirmed}</TableCell>
+                    <TableCell align="center">{row.Cancelled}</TableCell>
+                    <TableCell align="center">{row['Not Converted']}</TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">No daily data available</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatsDialog(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+</Container>
   );
 };
 
