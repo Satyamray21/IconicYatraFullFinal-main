@@ -758,13 +758,22 @@ function isQuickPackageDayObjectArray(days) {
 }
 
 /**
- * Lump-sum total saved from Edit Quotation / finalize costing.
- * Wins over a stale per-person rate (rate × guests) when both exist.
+ * Create (per person, no costing edit): rate × guests.
+ * After Edit Quotation / finalize: the saved package total, when it no longer matches that product.
  */
-function savedQuickTierTotal(quick, tier) {
+function resolveQuickTierTotal(quick, tier, perPersonTotal) {
   const details = quick?.packageSnapshot?.quotationDetails || {};
-  const fromCalc = Number(details?.packageCalculations?.[tier]?.finalTotal);
-  if (Number.isFinite(fromCalc) && fromCalc > 0) return fromCalc;
+  const edited = Number(details?.packageCalculations?.[tier]?.finalTotal);
+  const hasEdit = Number.isFinite(edited) && edited > 0;
+  const fromRates = Number(perPersonTotal);
+  const hasRates = Number.isFinite(fromRates) && fromRates > 0;
+
+  if (hasEdit && hasRates && Math.round(edited) !== Math.round(fromRates)) {
+    return edited;
+  }
+  if (hasRates) return fromRates;
+  if (hasEdit) return edited;
+
   const fromDetails = Number(details?.[`${tier}Cost`]);
   if (Number.isFinite(fromDetails) && fromDetails > 0) return fromDetails;
   return null;
@@ -1610,15 +1619,21 @@ const QuickFinalize = () => {
       };
 
       const addOn = sumBillableAdditionalServices(services);
-      const sTotal =
-        savedQuickTierTotal(currentQuotation, "standard") ??
-        calcTier(rate("standardAdultCost") || rate("perPersonAdultCost"), rate("standardChildCost") || rate("perPersonChildCost"), rate("standardMattressCost") || rate("perPersonMattressCost"));
-      const dTotal =
-        savedQuickTierTotal(currentQuotation, "deluxe") ??
-        calcTier(rate("deluxeAdultCost"), rate("deluxeChildCost"), rate("deluxeMattressCost"));
-      const supTotal =
-        savedQuickTierTotal(currentQuotation, "superior") ??
-        calcTier(rate("superiorAdultCost"), rate("superiorChildCost"), rate("superiorMattressCost"));
+      const sTotal = resolveQuickTierTotal(
+        currentQuotation,
+        "standard",
+        calcTier(rate("standardAdultCost") || rate("perPersonAdultCost"), rate("standardChildCost") || rate("perPersonChildCost"), rate("standardMattressCost") || rate("perPersonMattressCost")),
+      );
+      const dTotal = resolveQuickTierTotal(
+        currentQuotation,
+        "deluxe",
+        calcTier(rate("deluxeAdultCost"), rate("deluxeChildCost"), rate("deluxeMattressCost")),
+      );
+      const supTotal = resolveQuickTierTotal(
+        currentQuotation,
+        "superior",
+        calcTier(rate("superiorAdultCost"), rate("superiorChildCost"), rate("superiorMattressCost")),
+      );
 
       if (sTotal > 0) payableStandard = sTotal + addOn;
       if (dTotal > 0) payableDeluxe = dTotal + addOn;
@@ -2195,15 +2210,21 @@ const QuickFinalize = () => {
         return (Number(adultCost || 0) * adults) + (Number(childCost || 0) * children) + (Number(mattressCost || 0) * mattresses);
       };
 
-      const sTotal =
-        savedQuickTierTotal(currentQuotation, "standard") ??
-        calcTier(currentQuotation.standardAdultCost || currentQuotation.perPersonAdultCost, currentQuotation.standardChildCost || currentQuotation.perPersonChildCost, currentQuotation.standardMattressCost || currentQuotation.perPersonMattressCost);
-      const dTotal =
-        savedQuickTierTotal(currentQuotation, "deluxe") ??
-        calcTier(currentQuotation.deluxeAdultCost, currentQuotation.deluxeChildCost, currentQuotation.deluxeMattressCost);
-      const supTotal =
-        savedQuickTierTotal(currentQuotation, "superior") ??
-        calcTier(currentQuotation.superiorAdultCost, currentQuotation.superiorChildCost, currentQuotation.superiorMattressCost);
+      const sTotal = resolveQuickTierTotal(
+        currentQuotation,
+        "standard",
+        calcTier(currentQuotation.standardAdultCost || currentQuotation.perPersonAdultCost, currentQuotation.standardChildCost || currentQuotation.perPersonChildCost, currentQuotation.standardMattressCost || currentQuotation.perPersonMattressCost),
+      );
+      const dTotal = resolveQuickTierTotal(
+        currentQuotation,
+        "deluxe",
+        calcTier(currentQuotation.deluxeAdultCost, currentQuotation.deluxeChildCost, currentQuotation.deluxeMattressCost),
+      );
+      const supTotal = resolveQuickTierTotal(
+        currentQuotation,
+        "superior",
+        calcTier(currentQuotation.superiorAdultCost, currentQuotation.superiorChildCost, currentQuotation.superiorMattressCost),
+      );
 
       const opts = [];
       if (sTotal > 0) opts.push({ label: "Standard", hotel: String(title), cost: fmt(tierPayable(sTotal)) });
@@ -2397,9 +2418,17 @@ const QuickFinalize = () => {
       const selectedCompany =
         mailCompanies.find((c) => c?._id === values?.companyId) || null;
 
+      const recipientList = (value) => {
+        const list = (Array.isArray(value) ? value : String(value || "").split(/[,;]/))
+          .map((item) => String(item).trim())
+          .filter(Boolean);
+        return list;
+      };
+      const toList = recipientList(values?.to);
+      const ccList = recipientList(values?.cc);
       const payload = {
-        to: String(values?.to || "").trim(),
-        cc: String(values?.cc || "").trim() || undefined,
+        to: toList,
+        cc: ccList.length ? ccList : undefined,
         type: isBookingMail ? "booking" : "normal",
         subject: values?.subject || undefined,
         bodyHtml: isBookingMail ? undefined : values?.message || undefined,

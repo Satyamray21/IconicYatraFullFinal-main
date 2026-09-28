@@ -13,6 +13,7 @@ import {
   Box,
   Alert,
   CircularProgress,
+  Chip,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -20,6 +21,110 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
 import { Formik, Form, Field } from "formik";
 import * as Yup from "yup";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
+function emailTokens(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => emailTokens(item));
+  }
+  return String(value || "")
+    .split(/[,;\n]+/)
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function mergeEmails(existing, raw) {
+  const next = [];
+  const invalid = [];
+  emailTokens([...(Array.isArray(existing) ? existing : []), raw]).forEach((token) => {
+    if (!EMAIL_RE.test(token)) {
+      if (!invalid.includes(token)) invalid.push(token);
+      return;
+    }
+    if (!next.includes(token)) next.push(token);
+  });
+  return { next, invalid };
+}
+
+function EmailChipField({
+  label,
+  emails,
+  error,
+  helperText,
+  onEmailsChange,
+  onDraftChange,
+  onBlur,
+}) {
+  const [draft, setDraft] = React.useState("");
+
+  const setDraftValue = (next) => {
+    setDraft(next);
+    onDraftChange(next);
+  };
+
+  const addDraft = () => {
+    const raw = draft.trim();
+    if (!raw) return;
+    const { next, invalid } = mergeEmails(emails, raw);
+    if (invalid.length) {
+      onEmailsChange(Array.isArray(emails) ? emails : [], invalid);
+      return;
+    }
+    onEmailsChange(next, []);
+    setDraftValue("");
+  };
+
+  return (
+    <TextField
+      label={label}
+      fullWidth
+      value={draft}
+      placeholder={emails?.length ? "" : "Type email and press Enter"}
+      error={Boolean(error)}
+      helperText={helperText || "Press Enter to add each email"}
+      onChange={(event) => setDraftValue(event.target.value)}
+      onBlur={() => {
+        addDraft();
+        onBlur?.();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === ",") {
+          event.preventDefault();
+          event.stopPropagation();
+          addDraft();
+          return;
+        }
+        if (event.key === "Backspace" && draft === "" && emails?.length) {
+          event.preventDefault();
+          onEmailsChange(emails.slice(0, -1), []);
+        }
+      }}
+      slotProps={{
+        input: {
+          startAdornment: emails?.length ? (
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, py: 0.5 }}>
+              {emails.map((email) => (
+                <Chip
+                  key={email}
+                  size="small"
+                  label={email}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onDelete={() =>
+                    onEmailsChange(
+                      emails.filter((item) => item !== email),
+                      [],
+                    )
+                  }
+                />
+              ))}
+            </Box>
+          ) : undefined,
+        },
+      }}
+    />
+  );
+}
 
 const SignatureUpdater = ({ senderAccount, emailAccountOptions, setFieldValue }) => {
   React.useEffect(() => {
@@ -61,8 +166,6 @@ const EmailQuotationDialog = ({
   onReceiptChange = () => { },
 }) => {
   const validationSchema = Yup.object({
-    to: Yup.string().email("Invalid email").required("Required"),
-    cc: Yup.string().email("Invalid email").nullable(),
     subject: Yup.string().required("Required"),
     message: Yup.string().required("Required"),
     companyId:
@@ -73,8 +176,10 @@ const EmailQuotationDialog = ({
   });
 
   const baseInitialValues = {
-    to: "",
-    cc: "",
+    to: [],
+    cc: [],
+    toDraft: "",
+    ccDraft: "",
     recipientName: "",
     salutation: "",
     subject: "",
@@ -88,17 +193,54 @@ const EmailQuotationDialog = ({
     paymentDueDate: null,
     selectedReceiptId: "",
   };
-  const initialValues = { ...baseInitialValues, ...(initialValuesOverride || {}) };
+  const initialValues = {
+    ...baseInitialValues,
+    ...(initialValuesOverride || {}),
+    to: mergeEmails([], initialValuesOverride?.to || "").next,
+    cc: mergeEmails([], initialValuesOverride?.cc || "").next,
+    toDraft: "",
+    ccDraft: "",
+  };
+
+  const validate = async (values) => {
+    const errors = {};
+    const toMerged = mergeEmails(values.to, values.toDraft);
+    const ccMerged = mergeEmails(values.cc, values.ccDraft);
+    if (toMerged.invalid.length) {
+      errors.to = `Invalid email: ${toMerged.invalid[0]}`;
+    } else if (!toMerged.next.length) {
+      errors.to = "Add at least one email";
+    }
+    if (ccMerged.invalid.length) {
+      errors.cc = `Invalid email: ${ccMerged.invalid[0]}`;
+    }
+    try {
+      await validationSchema.validate(
+        { ...values, to: toMerged.next, cc: ccMerged.next },
+        { abortEarly: false },
+      );
+    } catch (err) {
+      (err.inner || []).forEach((item) => {
+        if (item.path && !errors[item.path]) errors[item.path] = item.message;
+      });
+    }
+    return errors;
+  };
 
   const handleSubmit = async (values, { setSubmitting }) => {
     try {
-      // Format date before sending if it exists
+      const toList = mergeEmails(values.to, values.toDraft).next;
+      const ccList = mergeEmails(values.cc, values.ccDraft).next;
       const formattedValues = {
         ...values,
+        to: toList,
+        cc: ccList,
         paymentDueDate: values.paymentDueDate
           ? dayjs(values.paymentDueDate).format("DD/MM/YYYY")
           : "",
       };
+      delete formattedValues.toDraft;
+      delete formattedValues.ccDraft;
       const result = await onSend(formattedValues);
       if (result !== false) {
         onClose();
@@ -114,10 +256,10 @@ const EmailQuotationDialog = ({
         <DialogTitle>Email</DialogTitle>
         <Formik
           initialValues={initialValues}
-          validationSchema={validationSchema}
+          validate={validate}
           onSubmit={handleSubmit}
         >
-          {({ errors, touched, values, setFieldValue, isSubmitting }) => (
+          {({ errors, touched, values, setFieldValue, setFieldError, setFieldTouched, isSubmitting }) => (
             (() => {
               const appendToMessage = (snippet) => {
                 const current = values.message || "";
@@ -266,23 +408,45 @@ const EmailQuotationDialog = ({
                         </Field>
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <Field
-                          as={TextField}
-                          name="to"
+                        <EmailChipField
                           label="To"
-                          fullWidth
-                          error={touched.to && Boolean(errors.to)}
-                          helperText={touched.to && errors.to}
+                          emails={values.to}
+                          error={touched.to && errors.to}
+                          helperText={
+                            (touched.to && errors.to) ||
+                            "Press Enter to add each email"
+                          }
+                          onEmailsChange={(next, invalid) => {
+                            setFieldValue("to", next);
+                            if (invalid?.length) {
+                              setFieldError("to", `Invalid email: ${invalid[0]}`);
+                            } else {
+                              setFieldError("to", undefined);
+                            }
+                          }}
+                          onDraftChange={(nextInput) => setFieldValue("toDraft", nextInput)}
+                          onBlur={() => setFieldTouched("to", true)}
                         />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <Field
-                          as={TextField}
-                          name="cc"
+                        <EmailChipField
                           label="CC"
-                          fullWidth
-                          error={touched.cc && Boolean(errors.cc)}
-                          helperText={touched.cc && errors.cc}
+                          emails={values.cc}
+                          error={touched.cc && errors.cc}
+                          helperText={
+                            (touched.cc && errors.cc) ||
+                            "Press Enter to add each email"
+                          }
+                          onEmailsChange={(next, invalid) => {
+                            setFieldValue("cc", next);
+                            if (invalid?.length) {
+                              setFieldError("cc", `Invalid email: ${invalid[0]}`);
+                            } else {
+                              setFieldError("cc", undefined);
+                            }
+                          }}
+                          onDraftChange={(nextInput) => setFieldValue("ccDraft", nextInput)}
+                          onBlur={() => setFieldTouched("cc", true)}
                         />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>

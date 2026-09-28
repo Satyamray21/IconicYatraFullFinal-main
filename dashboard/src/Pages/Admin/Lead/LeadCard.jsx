@@ -90,8 +90,12 @@ const FOLLOW_UP_STATUS_COLORS = {
 
 const getFollowUps = (lead) => {
   const fu = lead?.followUps || {};
+  let currentStatus = fu.status || "Pending";
+  if (lead?.status === "Confirmed" || lead?.status === "Completed") {
+    currentStatus = "Completed";
+  }
   return {
-    status: fu.status || "Pending",
+    status: currentStatus,
     maxAllowed: Number(fu.maxAllowed) > 0 ? Number(fu.maxAllowed) : 5,
     count: Number(fu.count) || 0,
     nextFollowUpAt: fu.nextFollowUpAt || null,
@@ -1687,3 +1691,4 @@ const LeadCard = () => {
 };
 
 export default LeadCard;
+

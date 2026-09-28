@@ -1435,9 +1435,17 @@ useEffect(() => {
             const selectedCompany =
                 mailCompanies.find((c) => c?._id === values?.companyId) || null;
 
+            const recipientList = (value) => {
+                const list = (Array.isArray(value) ? value : String(value || "").split(/[,;]/))
+                    .map((item) => String(item).trim())
+                    .filter(Boolean);
+                return list;
+            };
+            const toList = recipientList(values?.to);
+            const ccList = recipientList(values?.cc);
             const payload = {
-                to: String(values?.to || "").trim(),
-                cc: String(values?.cc || "").trim() || undefined,
+                to: toList,
+                cc: ccList.length ? ccList : undefined,
                 type: isBookingMail ? "booking" : "normal",
                 subject: values?.subject || undefined,
                 bodyHtml: isBookingMail ? undefined : values?.message || undefined,

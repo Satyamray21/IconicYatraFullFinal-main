@@ -62,10 +62,23 @@ const emailWorker = new Worker(
                 });
             }
             
-            console.log(`[EmailQueue] Sending email to ${mailOptions.to}`);
+            const asRecipientList = (value) => {
+                if (value == null || value === "") return undefined;
+                const list = (Array.isArray(value) ? value : String(value).split(/[,;]/))
+                    .map((item) => String(item).trim())
+                    .filter(Boolean);
+                return list.length ? list : undefined;
+            };
+            mailOptions.to = asRecipientList(mailOptions.to);
+            mailOptions.cc = asRecipientList(mailOptions.cc);
+            mailOptions.bcc = asRecipientList(mailOptions.bcc);
+
+            console.log(`[EmailQueue] Sending email to ${(mailOptions.to || []).join(", ")}`);
             const info = await currentTransporter.sendMail(mailOptions);
+            const accepted = [].concat(info.accepted || []).join(", ") || "none";
+            const rejected = [].concat(info.rejected || []).join(", ") || "none";
             
-            console.log(`[EmailQueue] Job ${job.id} completed. Message sent: ${info.messageId}`);
+            console.log(`[EmailQueue] Job ${job.id} completed. Accepted: ${accepted}. Rejected: ${rejected}. Message sent: ${info.messageId}`);
             return info;
         } catch (error) {
             console.error(`[EmailQueue] Job ${job.id} failed:`, error);
