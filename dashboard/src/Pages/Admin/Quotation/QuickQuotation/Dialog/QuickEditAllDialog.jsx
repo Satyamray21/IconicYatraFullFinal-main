@@ -94,6 +94,40 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
         }
     };
 
+    const syncPerPersonRates = (total, prefix) => {
+        const adults = Math.max(0, Number(quotation?.adults) || 0);
+        const children = Math.max(0, Number(quotation?.children) || 0);
+        const mattresses = Math.max(0, Number(quotation?.noOfMattress) || 0);
+        const adultKey = `${prefix}AdultCost`;
+        const childKey = `${prefix}ChildCost`;
+        const mattressKey = `${prefix}MattressCost`;
+        const adult = Number(quotation?.[adultKey]) || 0;
+        const child = Number(quotation?.[childKey]) || 0;
+        const mattress = Number(quotation?.[mattressKey]) || 0;
+        const rounded = Math.round(Number(total) || 0);
+        const old = adult * adults + child * children + mattress * mattresses;
+
+        if (rounded <= 0) {
+            return { [adultKey]: 0, [childKey]: 0, [mattressKey]: 0 };
+        }
+        if (old > 0 && (child * children > 0 || mattress * mattresses > 0)) {
+            const scale = rounded / old;
+            return {
+                [adultKey]: Math.round(adult * scale),
+                [childKey]: Math.round(child * scale),
+                [mattressKey]: Math.round(mattress * scale),
+            };
+        }
+        if (adults > 0) {
+            return {
+                [adultKey]: Math.round(rounded / adults),
+                [childKey]: 0,
+                [mattressKey]: 0,
+            };
+        }
+        return { [adultKey]: rounded, [childKey]: 0, [mattressKey]: 0 };
+    };
+
     const handleSave = () => {
         const snap = quotation.packageSnapshot || {};
         const finalizedTier = String(quotation.finalizedPackage || "Standard").toLowerCase();
@@ -102,6 +136,9 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
         const deluxeVals = getCalculatedValues(formData.deluxeCost);
         const superiorVals = getCalculatedValues(formData.superiorCost);
         const transportVals = getCalculatedValues(formData.transportationCost);
+        const standardRates = syncPerPersonRates(standardVals.total, "standard");
+        const deluxeRates = syncPerPersonRates(deluxeVals.total, "deluxe");
+        const superiorRates = syncPerPersonRates(superiorVals.total, "superior");
 
         let newTotalCost = 0;
         if (finalizedTier === "standard") newTotalCost = standardVals.total;
@@ -125,9 +162,19 @@ const QuickEditAllDialog = ({ open, onClose, quotation, onSave }) => {
 
         const updatePayload = {
             totalCost: Math.round(newTotalCost),
+            ...standardRates,
+            ...deluxeRates,
+            ...superiorRates,
             packageSnapshot: {
                 ...snap,
                 destinationNights: updatedDestinationNights,
+                standardCost: Math.round(standardVals.total),
+                deluxeCost: Math.round(deluxeVals.total),
+                superiorCost: Math.round(superiorVals.total),
+                totalCost: Math.round(newTotalCost),
+                ...standardRates,
+                ...deluxeRates,
+                ...superiorRates,
                 finalStandardCost: Math.round(standardVals.total),
                 finalDeluxeCost: Math.round(deluxeVals.total),
                 finalSuperiorCost: Math.round(superiorVals.total),
