@@ -172,6 +172,16 @@ const splitAdditionalServicePolicyLines = (additionalServices = []) => {
 const stripHtmlText = (value = "") =>
   decodeBasicHtmlEntities(String(value || "")).replace(/<[^>]+>/g, " ");
 
+const isGstIncludedInFinalAmount = (quotation = {}) => {
+  const taxes = quotation?.tourDetails?.quotationDetails?.taxes || {};
+  if (taxes.gstIncludedInFinalAmount === false) return false;
+  if (String(taxes.gstMode || "").toLowerCase() === "without_gst") return false;
+  if (taxes.applyGST === false || taxes.gstOn === "None") return false;
+  if (taxes.gstIncludedInFinalAmount === true) return true;
+  if (String(taxes.gstMode || "").toLowerCase() === "with_gst") return true;
+  return taxes.applyGST === true && toNum(taxes.taxPercent) > 0;
+};
+
 const removeGstExtraExclusionLine = (lines = [], quotation = {}) => {
   const qd = quotation?.tourDetails?.quotationDetails || {};
   const taxes = qd?.taxes || {};
@@ -628,9 +638,6 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
   const key = pkgKey(quotation);
   const totals = packageTotals(quotation);
   const total = totals.total;
-  const taxPercent = totals.taxPercent;
-  const beforeTax = totals.beforeTax;
-  const taxAmount = totals.taxAmount;
   const receivedAmount = toNum(customText.receivedAmount);
   const dueAmount =
     customText.dueAmount !== undefined
@@ -733,9 +740,11 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         <p><b>Meal Plan:</b> ${safe(qd.mealPlan, "CP Plan")}</p>
         <br/>
         <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">PAYMENT STATUS:</p>
-        <p><b>Package Cost (excluding GST):</b> INR ${INR.format(beforeTax)}</p>
-        <p><b>Goods & Services Tax (${taxPercent}%) on Package Cost:</b> INR ${INR.format(taxAmount)}</p>
-        <p><b>Package Cost (including 5% GST):</b> INR ${INR.format(total)}</p>
+        ${
+          isGstIncludedInFinalAmount(quotation)
+            ? `<p><b>Package Cost (Inclusive of GST):</b> INR ${INR.format(total)}</p>`
+            : `<p><b>Package Cost:</b> INR ${INR.format(total)}</p>`
+        }
         <p><b>Payment received:</b> INR ${INR.format(receivedAmount)}${customText.receivedDate ? ` (paid on ${customText.receivedDate})` : ""}</p>
         <p><b>The remaining payment for the tour package:</b> INR ${INR.format(dueAmount)}</p>
         <p><b>Next Payable Amount:</b> INR ${INR.format(nextPayableAmount)}</p>

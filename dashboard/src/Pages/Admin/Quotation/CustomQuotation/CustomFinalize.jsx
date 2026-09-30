@@ -1177,6 +1177,7 @@ useEffect(() => {
                 gst: `₹ ${quotationDetails.taxes?.applyGST ? 'Calculated' : 0}`,
                 total: `₹ ${quotationCostNumber.toLocaleString("en-IN")}`,
             },
+            taxes: quotationDetails.taxes || {},
             packageCalculations: quotationDetails.packageCalculations || {},
             additionalServices: quotationDetails.additionalServices || [],
             policies: {

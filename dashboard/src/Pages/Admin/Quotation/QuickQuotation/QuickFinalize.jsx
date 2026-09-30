@@ -1344,6 +1344,9 @@ function transformQuickApiToDisplay(apiData, company) {
           ? `₹ ${Math.round(totalCost).toLocaleString("en-IN")}`
           : "—",
     },
+    taxes: apiData?.packageSnapshot?.quotationDetails?.taxes || null,
+    packageCalculations:
+      apiData?.packageSnapshot?.quotationDetails?.packageCalculations || null,
     policies: {
       inclusions: policy.inclusionPolicy || [],
       exclusions:

@@ -24,7 +24,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Link,
   FormControlLabel,
   Switch,
 } from "@mui/material";
@@ -391,6 +390,17 @@ const QuotationPDFDialog = ({
   const standardTotal = toNumber(totalCostRow?.standard);
   const deluxeTotal = toNumber(totalCostRow?.deluxe);
   const superiorTotal = toNumber(totalCostRow?.superior);
+  const taxes = getRawValue(quotationData, "taxes") || {};
+  const gstExcluded =
+    taxes?.gstIncludedInFinalAmount === false ||
+    String(taxes?.gstMode || "").toLowerCase() === "without_gst" ||
+    taxes?.applyGST === false ||
+    taxes?.gstOn === "None";
+  const gstIncludedInTotal =
+    !gstExcluded &&
+    (taxes?.gstIncludedInFinalAmount === true ||
+      String(taxes?.gstMode || "").toLowerCase() === "with_gst" ||
+      taxes?.applyGST === true);
 
   const perPersonAdultCost = toNumber(getValue(quotationData, "perPersonAdultCost"));
   const perPersonChildCost = toNumber(getValue(quotationData, "perPersonChildCost"));
@@ -898,32 +908,31 @@ const QuotationPDFDialog = ({
           }
         }
 
-        const linkRectToMm = (anchorEl) => {
-          if (!anchorEl) return null;
-          const rect = anchorEl.getBoundingClientRect();
-          const pageRect = page.getBoundingClientRect();
-          return {
-            x: (rect.left - pageRect.left) * 0.264583,
-            y: (rect.top - pageRect.top) * 0.264583,
-            width: rect.width * 0.264583,
-            height: rect.height * 0.264583,
-          };
+        // Measure links on the off-screen clone (same layout that html2canvas captures).
+        const collectPdfLinks = (rootEl) => {
+          if (!rootEl) return [];
+          const rootRect = rootEl.getBoundingClientRect();
+          if (!rootRect.width || !rootRect.height) return [];
+          return Array.from(rootEl.querySelectorAll("a[data-pdf-link]"))
+            .map((anchor) => {
+              const href = String(anchor.getAttribute("href") || "").trim();
+              if (!href || href === "#") return null;
+              const rect = anchor.getBoundingClientRect();
+              if (rect.width < 2 || rect.height < 2) return null;
+              return {
+                url: href,
+                x: (rect.left - rootRect.left) / rootRect.width,
+                y: (rect.top - rootRect.top) / rootRect.height,
+                w: rect.width / rootRect.width,
+                h: rect.height / rootRect.height,
+              };
+            })
+            .filter(Boolean);
         };
-
-        const termsLinkEl =
-          i === pageElements.length - 1
-            ? clone.querySelector('a[data-pdf-link="terms"]')
-            : null;
-        const cancellationLinkEl =
-          i === pageElements.length - 1
-            ? clone.querySelector('a[data-pdf-link="cancellation"]')
-            : null;
-
-        const termsLinkPosition = linkRectToMm(termsLinkEl);
-        const cancellationLinkPosition = linkRectToMm(cancellationLinkEl);
 
         // reduced delay for rendering
         await new Promise((resolve) => setTimeout(resolve, 100));
+        const pdfLinks = collectPdfLinks(clone);
 
         const canvas = await html2canvas(tempContainer, {
           scale: 1.5, // Reduced scale for smaller size
@@ -955,30 +964,15 @@ const QuotationPDFDialog = ({
           "FAST",
         );
 
-        if (i === pageElements.length - 1) {
-          if (termsLinkPosition) {
-            const termsUrl =
-              companyTermsUrl !== "#"
-                ? companyTermsUrl
-                : "https://www.iconicyatra.com";
-            pdf.link(
-              termsLinkPosition.x,
-              termsLinkPosition.y,
-              termsLinkPosition.width,
-              termsLinkPosition.height,
-              { url: termsUrl },
-            );
-          }
-          if (cancellationLinkPosition && companyCancellationUrl) {
-            pdf.link(
-              cancellationLinkPosition.x,
-              cancellationLinkPosition.y,
-              cancellationLinkPosition.width,
-              cancellationLinkPosition.height,
-              { url: companyCancellationUrl },
-            );
-          }
-        }
+        pdfLinks.forEach((link) => {
+          pdf.link(
+            link.x * imgWidth,
+            link.y * imgHeight,
+            Math.max(link.w * imgWidth, 8),
+            Math.max(link.h * imgHeight, 4),
+            { url: link.url },
+          );
+        });
       }
 
       for (let i = 1; i <= pageElements.length; i++) {
@@ -1649,7 +1643,7 @@ const QuotationPDFDialog = ({
                     <>
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Cost (Standard)
+                          Per Person Cost (Standard){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(standardTotal / totalGuestsCount)}
@@ -1657,7 +1651,7 @@ const QuotationPDFDialog = ({
                       </tr>
                       <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Package Cost (Standard)
+                          Package Cost (Standard){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(standardTotal)}
@@ -1669,7 +1663,7 @@ const QuotationPDFDialog = ({
                     <>
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Cost (Deluxe)
+                          Per Person Cost (Deluxe){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(deluxeTotal / totalGuestsCount)}
@@ -1677,7 +1671,7 @@ const QuotationPDFDialog = ({
                       </tr>
                       <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Package Cost (Deluxe)
+                          Package Cost (Deluxe){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(deluxeTotal)}
@@ -1689,7 +1683,7 @@ const QuotationPDFDialog = ({
                     <>
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Cost (Superior)
+                          Per Person Cost (Superior){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(superiorTotal / totalGuestsCount)}
@@ -1697,7 +1691,7 @@ const QuotationPDFDialog = ({
                       </tr>
                       <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Package Cost (Superior)
+                          Package Cost (Superior){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(superiorTotal)}
@@ -1711,7 +1705,9 @@ const QuotationPDFDialog = ({
                   <>
                     {showPerPersonBreakdown && (perPersonAdultCost > 0 || standardAdultCost > 0) && (
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
-                        <td style={{ padding: "12px" }}>Per Person Adult Cost</td>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Adult Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                        </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(perPersonAdultCost || standardAdultCost)}
                         </td>
@@ -1719,7 +1715,9 @@ const QuotationPDFDialog = ({
                     )}
                     {showPerPersonBreakdown && (perPersonChildCost > 0 || standardChildCost > 0) && (
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
-                        <td style={{ padding: "12px" }}>Per Person Child Cost</td>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Child Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                        </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(perPersonChildCost || standardChildCost)}
                         </td>
@@ -1727,7 +1725,9 @@ const QuotationPDFDialog = ({
                     )}
                     {showPerPersonBreakdown && (perPersonMattressCost > 0 || standardMattressCost > 0) && (
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
-                        <td style={{ padding: "12px" }}>Per Person Mattress Cost</td>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Mattress Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                        </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(perPersonMattressCost || standardMattressCost)}
                         </td>
@@ -1735,14 +1735,18 @@ const QuotationPDFDialog = ({
                     )}
                     {(!showPerPersonBreakdown || (!perPersonAdultCost && !perPersonChildCost && !perPersonMattressCost)) && (
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
-                        <td style={{ padding: "12px" }}>Per Person Cost</td>
+                        <td style={{ padding: "12px" }}>
+                          Per Person Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                        </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(effectiveTotal / totalGuestsCount)}
                         </td>
                       </tr>
                     )}
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                      <td style={{ padding: "12px" }}>Package Cost</td>
+                      <td style={{ padding: "12px" }}>
+                        Package Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                      </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(effectiveTotal)}
                       </td>
@@ -1828,15 +1832,20 @@ const QuotationPDFDialog = ({
             {companyPaymentLink && (
               <div style={{ marginTop: "12px" }}>
                 <span style={{ fontWeight: "600" }}>Online payment: </span>
-                <Link
+                <a
+                  data-pdf-link="payment"
                   href={companyPaymentLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  underline="hover"
-                  sx={{ fontWeight: "bold", wordBreak: "break-all" }}
+                  style={{
+                    color: "#1565c0",
+                    fontWeight: "bold",
+                    wordBreak: "break-all",
+                    textDecoration: "underline",
+                  }}
                 >
                   {companyPaymentLink}
-                </Link>
+                </a>
               </div>
             )}
           </div>
@@ -2099,7 +2108,11 @@ const QuotationPDFDialog = ({
             <a
               data-pdf-link="terms"
               href={
-                companyTermsUrl !== "#" ? companyTermsUrl : companyWebsiteUrl
+                companyTermsUrl !== "#"
+                  ? companyTermsUrl
+                  : companyWebsiteUrl !== "#"
+                    ? companyWebsiteUrl
+                    : "https://www.iconicyatra.com"
               }
               target="_blank"
               rel="noopener noreferrer"
@@ -2150,7 +2163,22 @@ const QuotationPDFDialog = ({
           {footerPhone && footerPhone !== "N/A" && <div>📞 {footerPhone}</div>}
           {footerEmail && footerEmail !== "N/A" && <div>✉️ {footerEmail}</div>}
           {footerWebsite && footerWebsite !== "N/A" && (
-            <div>🌐 {footerWebsite}</div>
+            <div>
+              🌐{" "}
+              <a
+                data-pdf-link="website"
+                href={
+                  /^https?:\/\//i.test(String(footerWebsite))
+                    ? footerWebsite
+                    : `https://${String(footerWebsite).replace(/^\/+/, "")}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#1565c0", textDecoration: "underline" }}
+              >
+                {footerWebsite}
+              </a>
+            </div>
           )}
         </div>
         {footerContact && footerContact !== "N/A" && (

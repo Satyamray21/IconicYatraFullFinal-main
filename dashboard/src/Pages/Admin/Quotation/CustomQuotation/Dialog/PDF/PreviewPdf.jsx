@@ -24,7 +24,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Link,
 } from "@mui/material";
 import {
   Download,
@@ -385,9 +384,23 @@ const QuotationPDFDialog = ({
   const standardAfterDiscount = toNumber(packageCalculations?.standard?.afterDiscount);
   const deluxeAfterDiscount = toNumber(packageCalculations?.deluxe?.afterDiscount);
   const superiorAfterDiscount = toNumber(packageCalculations?.superior?.afterDiscount);
-  const standardGst = toNumber(packageCalculations?.standard?.gstAmount) || 0;
-  const deluxeGst = toNumber(packageCalculations?.deluxe?.gstAmount) || 0;
-  const superiorGst = toNumber(packageCalculations?.superior?.gstAmount) || 0;
+  const taxes = getRawValue(quotationData, "taxes") || {};
+  const gstIncludedInTotal =
+    taxes?.gstIncludedInFinalAmount === true ||
+    String(taxes?.gstMode || "").toLowerCase() === "with_gst" ||
+    (taxes?.applyGST === true &&
+      taxes?.gstIncludedInFinalAmount !== false &&
+      String(taxes?.gstMode || "").toLowerCase() !== "without_gst" &&
+      taxes?.gstOn !== "None");
+  const standardGst = gstIncludedInTotal
+    ? toNumber(packageCalculations?.standard?.gstAmount) || 0
+    : 0;
+  const deluxeGst = gstIncludedInTotal
+    ? toNumber(packageCalculations?.deluxe?.gstAmount) || 0
+    : 0;
+  const superiorGst = gstIncludedInTotal
+    ? toNumber(packageCalculations?.superior?.gstAmount) || 0
+    : 0;
   const standardFinalTotal = toNumber(packageCalculations?.standard?.finalTotal);
   const deluxeFinalTotal = toNumber(packageCalculations?.deluxe?.finalTotal);
   const superiorFinalTotal = toNumber(packageCalculations?.superior?.finalTotal);
@@ -718,32 +731,30 @@ const QuotationPDFDialog = ({
           }
         }
 
-        const linkRectToMm = (anchorEl) => {
-          if (!anchorEl) return null;
-          const rect = anchorEl.getBoundingClientRect();
-          const pageRect = page.getBoundingClientRect();
-          return {
-            x: (rect.left - pageRect.left) * 0.264583,
-            y: (rect.top - pageRect.top) * 0.264583,
-            width: rect.width * 0.264583,
-            height: rect.height * 0.264583,
-          };
+        const collectPdfLinks = (rootEl) => {
+          if (!rootEl) return [];
+          const rootRect = rootEl.getBoundingClientRect();
+          if (!rootRect.width || !rootRect.height) return [];
+          return Array.from(rootEl.querySelectorAll("a[data-pdf-link]"))
+            .map((anchor) => {
+              const href = String(anchor.getAttribute("href") || "").trim();
+              if (!href || href === "#") return null;
+              const rect = anchor.getBoundingClientRect();
+              if (rect.width < 2 || rect.height < 2) return null;
+              return {
+                url: href,
+                x: (rect.left - rootRect.left) / rootRect.width,
+                y: (rect.top - rootRect.top) / rootRect.height,
+                w: rect.width / rootRect.width,
+                h: rect.height / rootRect.height,
+              };
+            })
+            .filter(Boolean);
         };
-
-        const termsLinkEl =
-          i === pageElements.length - 1
-            ? clone.querySelector('a[data-pdf-link="terms"]')
-            : null;
-        const cancellationLinkEl =
-          i === pageElements.length - 1
-            ? clone.querySelector('a[data-pdf-link="cancellation"]')
-            : null;
-
-        const termsLinkPosition = linkRectToMm(termsLinkEl);
-        const cancellationLinkPosition = linkRectToMm(cancellationLinkEl);
 
         // Reduced delay for rendering
         await new Promise((resolve) => setTimeout(resolve, 100));
+        const pdfLinks = collectPdfLinks(clone);
 
         const canvas = await html2canvas(tempContainer, {
           scale: 1.5, // Reduced scale for smaller size
@@ -775,30 +786,15 @@ const QuotationPDFDialog = ({
           "FAST",
         );
 
-        if (i === pageElements.length - 1) {
-          if (termsLinkPosition) {
-            const termsUrl =
-              companyTermsUrl !== "#"
-                ? companyTermsUrl
-                : "https://www.iconicyatra.com";
-            pdf.link(
-              termsLinkPosition.x,
-              termsLinkPosition.y,
-              termsLinkPosition.width,
-              termsLinkPosition.height,
-              { url: termsUrl },
-            );
-          }
-          if (cancellationLinkPosition && companyCancellationUrl) {
-            pdf.link(
-              cancellationLinkPosition.x,
-              cancellationLinkPosition.y,
-              cancellationLinkPosition.width,
-              cancellationLinkPosition.height,
-              { url: companyCancellationUrl },
-            );
-          }
-        }
+        pdfLinks.forEach((link) => {
+          pdf.link(
+            link.x * imgWidth,
+            link.y * imgHeight,
+            Math.max(link.w * imgWidth, 8),
+            Math.max(link.h * imgHeight, 4),
+            { url: link.url },
+          );
+        });
       }
 
       for (let i = 1; i <= pageElements.length; i++) {
@@ -1558,12 +1554,24 @@ const QuotationPDFDialog = ({
                 </>
               ) : (
                 effectiveTotal > 0 && (
-                  <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>Total Package Cost</td>
-                    <td style={{ padding: "12px", textAlign: "right" }}>
-                      {formatCurrency(effectiveTotal)}
-                    </td>
-                  </tr>
+                  <>
+                    <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                      <td style={{ padding: "12px" }}>Total Package Cost</td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {formatCurrency(effectiveTotal)}
+                      </td>
+                    </tr>
+                    {gstIncludedInTotal && (standardGst || deluxeGst || superiorGst) > 0 && (
+                      <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
+                        <td style={{ padding: "12px" }}>
+                          GST ({taxes?.taxPercent || 5}%) included
+                        </td>
+                        <td style={{ padding: "12px", textAlign: "right" }}>
+                          {formatCurrency(standardGst || deluxeGst || superiorGst)}
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 )
               )}
               {discountAmount > 0 && (
@@ -1580,9 +1588,11 @@ const QuotationPDFDialog = ({
                     </td>
                   </tr>
                 )}
-              {gstAmount > 0 && (
+              {gstIncludedInTotal && gstAmount > 0 && (
                   <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                    <td style={{ padding: "12px" }}>GST</td>
+                    <td style={{ padding: "12px" }}>
+                      GST ({taxes?.taxPercent || 5}%) included
+                    </td>
                     <td style={{ padding: "12px", textAlign: "right" }}>
                       {formatCurrency(gstAmount)}
                     </td>
@@ -1662,15 +1672,20 @@ const QuotationPDFDialog = ({
             {companyPaymentLink && (
               <div style={{ marginTop: "12px" }}>
                 <span style={{ fontWeight: "600" }}>Online payment: </span>
-                <Link
+                <a
+                  data-pdf-link="payment"
                   href={companyPaymentLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  underline="hover"
-                  sx={{ fontWeight: "bold", wordBreak: "break-all" }}
+                  style={{
+                    color: "#1565c0",
+                    fontWeight: "bold",
+                    wordBreak: "break-all",
+                    textDecoration: "underline",
+                  }}
                 >
                   {companyPaymentLink}
-                </Link>
+                </a>
               </div>
             )}
           </div>
@@ -1932,7 +1947,11 @@ const QuotationPDFDialog = ({
             <a
               data-pdf-link="terms"
               href={
-                companyTermsUrl !== "#" ? companyTermsUrl : companyWebsiteUrl
+                companyTermsUrl !== "#"
+                  ? companyTermsUrl
+                  : companyWebsiteUrl !== "#"
+                    ? companyWebsiteUrl
+                    : "https://www.iconicyatra.com"
               }
               target="_blank"
               rel="noopener noreferrer"
@@ -1982,7 +2001,22 @@ const QuotationPDFDialog = ({
           {footerPhone && footerPhone !== "N/A" && <div>📞 {footerPhone}</div>}
           {footerEmail && footerEmail !== "N/A" && <div>✉️ {footerEmail}</div>}
           {footerWebsite && footerWebsite !== "N/A" && (
-            <div>🌐 {footerWebsite}</div>
+            <div>
+              🌐{" "}
+              <a
+                data-pdf-link="website"
+                href={
+                  /^https?:\/\//i.test(String(footerWebsite))
+                    ? footerWebsite
+                    : `https://${String(footerWebsite).replace(/^\/+/, "")}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#1565c0", textDecoration: "underline" }}
+              >
+                {footerWebsite}
+              </a>
+            </div>
           )}
         </div>
         {footerContact && footerContact !== "N/A" && (
