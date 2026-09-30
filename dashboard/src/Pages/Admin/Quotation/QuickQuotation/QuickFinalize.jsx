@@ -2383,7 +2383,7 @@ const QuickFinalize = () => {
     return nextTemplates;
   };
 
-  const handleEmailOpen = async () => {
+  const handleEmailOpen = async (templateType = "booking") => {
     if (!apiEntityId) {
       setSnackbar({
         open: true,
@@ -2392,7 +2392,8 @@ const QuickFinalize = () => {
       });
       return;
     }
-    setEmailTemplateType("booking");
+    // Booking Confirmation uses booking mail. Send Quotation in Pdf uses normal + PDF.
+    setEmailTemplateType(templateType === "normal" ? "normal" : "booking");
     // Prefer the company chosen at finalization
     const defaultCompanyId = currentQuotation?.companyId || company?._id || mailCompanies?.[0]?._id;
     try {
@@ -4870,7 +4871,7 @@ const QuickFinalize = () => {
             return templates?.[type] || { subject: "", message: "" };
           }}
           initialValuesOverride={emailInitialValues}
-          
+          templateBodies={emailTemplateBodies}
           companyOptions={mailCompanies}
           emailAccountOptions={emailAccounts}
           hasPdfAttachment={!!pdfAttachmentForMail}
@@ -4914,8 +4915,7 @@ const QuickFinalize = () => {
             setPdfAttachmentForMail(attachment);
             setPreviewPdfModeForMail(Boolean(payload?.previewPdfMode));
             handleClosePdfDialog();
-            setEmailTemplateType("booking");
-            handleEmailOpen();
+            handleEmailOpen("normal");
           }}
         />
       )}
