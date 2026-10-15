@@ -363,15 +363,30 @@ const QuotationPDFDialog = ({
         .toLowerCase()
         .includes("quotation cost"),
     );
-  const totalFromHotelRow =
-    toNumber(totalCostRow?.standard) ||
-    toNumber(totalCostRow?.deluxe) ||
-    toNumber(totalCostRow?.superior);
+  const taxes = getRawValue(quotationData, "taxes") || {};
+  const gstExcluded =
+    taxes?.gstIncludedInFinalAmount === false ||
+    String(taxes?.gstMode || "").toLowerCase() === "without_gst" ||
+    taxes?.applyGST === false ||
+    taxes?.gstOn === "None";
+  const gstNotApplied = taxes?.applyGST === false || taxes?.gstOn === "None";
+  const gstPercent = toNumber(taxes?.taxPercent) || 5;
+  // Package totals always carry GST; strip it when the quote is "GST extra".
+  const withoutGst = (tier, amount) => {
+    if (!gstExcluded || !(amount > 0)) return amount;
+    const afterDiscount = toNumber(packageCalculations?.[tier]?.afterDiscount);
+    if (afterDiscount > 0) return afterDiscount;
+    if (gstNotApplied) return amount;
+    return Math.round(amount / (1 + gstPercent / 100));
+  };
+  const standardTotal = withoutGst("standard", toNumber(totalCostRow?.standard));
+  const deluxeTotal = withoutGst("deluxe", toNumber(totalCostRow?.deluxe));
+  const superiorTotal = withoutGst("superior", toNumber(totalCostRow?.superior));
+  const totalFromHotelRow = standardTotal || deluxeTotal || superiorTotal;
   const effectiveTotal =
-    totalFromHotelRow ?? totalFromPricing ?? totalFromFooter ?? 0;
-  const standardTotal = toNumber(totalCostRow?.standard);
-  const deluxeTotal = toNumber(totalCostRow?.deluxe);
-  const superiorTotal = toNumber(totalCostRow?.superior);
+    totalFromHotelRow ||
+    withoutGst("standard", totalFromPricing ?? totalFromFooter ?? 0) ||
+    0;
   const discountAmount = toNumber(pricingDiscount) || 0;
   const gstAmount = toNumber(pricingGst) || 0;
   const parsedArrivalDate = arrivalDateRaw ? new Date(arrivalDateRaw) : null;
@@ -384,7 +399,6 @@ const QuotationPDFDialog = ({
   const standardAfterDiscount = toNumber(packageCalculations?.standard?.afterDiscount);
   const deluxeAfterDiscount = toNumber(packageCalculations?.deluxe?.afterDiscount);
   const superiorAfterDiscount = toNumber(packageCalculations?.superior?.afterDiscount);
-  const taxes = getRawValue(quotationData, "taxes") || {};
   const gstIncludedInTotal =
     taxes?.gstIncludedInFinalAmount === true ||
     String(taxes?.gstMode || "").toLowerCase() === "with_gst" ||
@@ -401,9 +415,10 @@ const QuotationPDFDialog = ({
   const superiorGst = gstIncludedInTotal
     ? toNumber(packageCalculations?.superior?.gstAmount) || 0
     : 0;
-  const standardFinalTotal = toNumber(packageCalculations?.standard?.finalTotal);
-  const deluxeFinalTotal = toNumber(packageCalculations?.deluxe?.finalTotal);
-  const superiorFinalTotal = toNumber(packageCalculations?.superior?.finalTotal);
+  const standardFinalTotal = gstExcluded ? null : toNumber(packageCalculations?.standard?.finalTotal);
+  const deluxeFinalTotal = gstExcluded ? null : toNumber(packageCalculations?.deluxe?.finalTotal);
+  const superiorFinalTotal = gstExcluded ? null : toNumber(packageCalculations?.superior?.finalTotal);
+  const gstLabel = gstExcluded ? " (Excluding GST)" : "";
   const getItineraryDisplayDate = (day, dayIndex) => {
     if (canUseArrivalDate) {
       const d = new Date(parsedArrivalDate);
@@ -1450,7 +1465,7 @@ const QuotationPDFDialog = ({
             <tbody>
               {visiblePackageColumns > 1 ? (
                 <>
-                  {showStandardCol &&
+                  {showStandardCol && !gstExcluded &&
                     (standardAfterDiscount > 0 || standardTotal > 0) && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
@@ -1472,7 +1487,7 @@ const QuotationPDFDialog = ({
                   {showStandardCol &&
                     (standardFinalTotal > 0 || standardTotal > 0) && (
                     <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
-                      <td style={{ padding: "12px" }}>Grand Total - Standard</td>
+                      <td style={{ padding: "12px" }}>Grand Total - Standard{gstLabel}</td>
                       <td
                         style={{
                           padding: "12px",
@@ -1484,7 +1499,7 @@ const QuotationPDFDialog = ({
                       </td>
                     </tr>
                   )}
-                  {showDeluxeCol &&
+                  {showDeluxeCol && !gstExcluded &&
                     (deluxeAfterDiscount > 0 || deluxeTotal > 0) && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
@@ -1505,7 +1520,7 @@ const QuotationPDFDialog = ({
                   )}
                   {showDeluxeCol && (deluxeFinalTotal > 0 || deluxeTotal > 0) && (
                     <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
-                      <td style={{ padding: "12px" }}>Grand Total - Deluxe</td>
+                      <td style={{ padding: "12px" }}>Grand Total - Deluxe{gstLabel}</td>
                       <td
                         style={{
                           padding: "12px",
@@ -1517,7 +1532,7 @@ const QuotationPDFDialog = ({
                       </td>
                     </tr>
                   )}
-                  {showSuperiorCol &&
+                  {showSuperiorCol && !gstExcluded &&
                     (superiorAfterDiscount > 0 || superiorTotal > 0) && (
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
@@ -1539,7 +1554,7 @@ const QuotationPDFDialog = ({
                   {showSuperiorCol &&
                     (superiorFinalTotal > 0 || superiorTotal > 0) && (
                     <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
-                      <td style={{ padding: "12px" }}>Grand Total - Superior</td>
+                      <td style={{ padding: "12px" }}>Grand Total - Superior{gstLabel}</td>
                       <td
                         style={{
                           padding: "12px",
@@ -1556,7 +1571,7 @@ const QuotationPDFDialog = ({
                 effectiveTotal > 0 && (
                   <>
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
-                      <td style={{ padding: "12px" }}>Total Package Cost</td>
+                      <td style={{ padding: "12px" }}>Total Package Cost{gstLabel}</td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(effectiveTotal)}
                       </td>
@@ -1600,7 +1615,7 @@ const QuotationPDFDialog = ({
                 )}
               {visiblePackageColumns <= 1 && (
                 <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
-                  <td style={{ padding: "14px", fontSize: "16px" }}>Grand Total</td>
+                  <td style={{ padding: "14px", fontSize: "16px" }}>Grand Total{gstLabel}</td>
                   <td
                     style={{
                       padding: "14px",

@@ -126,13 +126,28 @@ export const packageTotals = (q = {}, tierKey) => {
     const taxMultiplier = 1 + (taxPercent / 100);
     beforeTax = total > 0 ? Math.round((total / taxMultiplier) * 100) / 100 : 0;
   }
+  const afterDiscount = toNum(calc?.[key]?.afterDiscount);
+  const totalWithoutGst =
+    afterDiscount > 0 && extras === 0 ? afterDiscount : beforeTax;
 
   return {
     total,
     beforeTax,
+    totalWithoutGst,
     taxPercent,
     taxAmount: Math.max(0, total - beforeTax),
   };
+};
+
+/** Quote says GST is charged on top, so prices are shown without it. */
+const isGstExcluded = (q = {}) => {
+  const taxes = q?.tourDetails?.quotationDetails?.taxes || {};
+  return (
+    taxes.gstIncludedInFinalAmount === false ||
+    String(taxes.gstMode || "").toLowerCase() === "without_gst" ||
+    taxes.applyGST === false ||
+    taxes.gstOn === "None"
+  );
 };
 
 const nightsAndDays = (destinations = []) => {
@@ -184,16 +199,22 @@ const itineraryLines = (itinerary = []) =>
     )
     .join("");
 
-const packageCostHtml = (quotation, tiers, singleTotal) => {
+const packageCostHtml = (quotation, tiers, singleKey) => {
+  const excluded = isGstExcluded(quotation);
+  const amount = (k) => {
+    const t = packageTotals(quotation, k);
+    return excluded ? t.totalWithoutGst : t.total;
+  };
+  const suffix = excluded ? " (Excluding GST)" : "";
   if (tiers.length <= 1) {
     return `<p style="color:#003366; font-weight:bold; font-size: 16px;">
-    ##PACKAGE COST FOR ALL PERSON = INR ${INR.format(singleTotal)} As of now
+    ##PACKAGE COST FOR ALL PERSON${suffix} = INR ${INR.format(amount(singleKey))} As of now
 </p>`;
   }
   return tiers
     .map(
       (k) => `<p style="color:#003366; font-weight:bold; font-size: 16px;">
-    ##${TIER_LABELS[k].toUpperCase()} PACKAGE COST FOR ALL PERSON = INR ${INR.format(packageTotals(quotation, k).total)} As of now
+    ##${TIER_LABELS[k].toUpperCase()} PACKAGE COST FOR ALL PERSON${suffix} = INR ${INR.format(amount(k))} As of now
 </p>`,
     )
     .join("");
@@ -467,7 +488,6 @@ export const buildCustomQuotationNormalEmail = (
   const duration = nightsAndDays(destinations);
   const tiers = pricedTiers(quotation);
   const singleKey = tiers.length === 1 ? tiers[0] : pkgKey(quotation);
-  const totals = packageTotals(quotation, singleKey);
   const companyName = safe(options?.companyName, "Iconic Travel");
   const companyWebsite = safe(options?.companyWebsite);
   const paymentCombined = quotationPoliciesOrGlobal(
@@ -536,7 +556,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
        
 
         <br/>
-        ${packageCostHtml(quotation, tiers, totals.total)}
+        ${packageCostHtml(quotation, tiers, singleKey)}
 
 <p style="color:#000; font-weight:bold;">
     SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only..
@@ -648,10 +668,7 @@ export const buildCustomQuotationPdfPreviewEmail = (
 ) => {
   const td = quotation?.tourDetails || {};
   const tiers = pricedTiers(quotation);
-  const totals = packageTotals(
-    quotation,
-    tiers.length === 1 ? tiers[0] : undefined,
-  );
+  const singleKey = tiers.length === 1 ? tiers[0] : pkgKey(quotation);
   const companyName = safe(options?.companyName, "Iconic Travel");
   const companyWebsite = safe(options?.companyWebsite);
 
@@ -685,7 +702,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 </span>. It is my pleasure to have this opportunity to serve you. We are always here to assist you. The brief itinerary of your tour would like to as follows: please have a look...
 </p>
         <br/>
-        ${packageCostHtml(quotation, tiers, totals.total)}
+        ${packageCostHtml(quotation, tiers, singleKey)}
 
 <p style="color:#000; font-weight:bold;">
     SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only..

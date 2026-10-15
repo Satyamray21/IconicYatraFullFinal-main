@@ -381,15 +381,6 @@ const QuotationPDFDialog = ({
         .toLowerCase()
         .includes("quotation cost"),
     );
-  const totalFromHotelRow =
-    toNumber(totalCostRow?.standard) ||
-    toNumber(totalCostRow?.deluxe) ||
-    toNumber(totalCostRow?.superior);
-  const effectiveTotal =
-    totalFromHotelRow ?? totalFromPricing ?? totalFromFooter ?? 0;
-  const standardTotal = toNumber(totalCostRow?.standard);
-  const deluxeTotal = toNumber(totalCostRow?.deluxe);
-  const superiorTotal = toNumber(totalCostRow?.superior);
   const taxes = getRawValue(quotationData, "taxes") || {};
   const gstExcluded =
     taxes?.gstIncludedInFinalAmount === false ||
@@ -401,6 +392,39 @@ const QuotationPDFDialog = ({
     (taxes?.gstIncludedInFinalAmount === true ||
       String(taxes?.gstMode || "").toLowerCase() === "with_gst" ||
       taxes?.applyGST === true);
+  const gstLabel = gstIncludedInTotal
+    ? " (Inclusive of GST)"
+    : gstExcluded
+      ? " (Excluding GST)"
+      : "";
+  const packageCalcs = getRawValue(quotationData, "packageCalculations") || {};
+  const gstNotApplied = taxes?.applyGST === false || taxes?.gstOn === "None";
+  const gstPercent = toNumber(taxes?.taxPercent) || 5;
+  // Package totals always carry GST; strip it when the quote is "GST extra".
+  const withoutGst = (tier, amount) => {
+    if (!gstExcluded || !(amount > 0)) return amount;
+    const afterDiscount = toNumber(packageCalcs?.[tier]?.afterDiscount);
+    if (afterDiscount > 0) return afterDiscount;
+    if (gstNotApplied) return amount;
+    return Math.round(amount / (1 + gstPercent / 100));
+  };
+  const standardTotal = withoutGst("standard", toNumber(totalCostRow?.standard));
+  const deluxeTotal = withoutGst("deluxe", toNumber(totalCostRow?.deluxe));
+  const superiorTotal = withoutGst("superior", toNumber(totalCostRow?.superior));
+  const totalFromHotelRow = standardTotal || deluxeTotal || superiorTotal;
+  const rawEffectiveTotal =
+    toNumber(totalCostRow?.standard) ||
+    toNumber(totalCostRow?.deluxe) ||
+    toNumber(totalCostRow?.superior) ||
+    totalFromPricing ||
+    totalFromFooter ||
+    0;
+  const effectiveTotal =
+    totalFromHotelRow ||
+    withoutGst("standard", totalFromPricing ?? totalFromFooter ?? 0) ||
+    0;
+  const gstRatio =
+    gstExcluded && rawEffectiveTotal > 0 ? effectiveTotal / rawEffectiveTotal : 1;
 
   const perPersonAdultCost = toNumber(getValue(quotationData, "perPersonAdultCost"));
   const perPersonChildCost = toNumber(getValue(quotationData, "perPersonChildCost"));
@@ -1643,7 +1667,7 @@ const QuotationPDFDialog = ({
                     <>
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Cost (Standard){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Per Person Cost (Standard){gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(standardTotal / totalGuestsCount)}
@@ -1651,7 +1675,7 @@ const QuotationPDFDialog = ({
                       </tr>
                       <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Package Cost (Standard){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Package Cost (Standard){gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(standardTotal)}
@@ -1663,7 +1687,7 @@ const QuotationPDFDialog = ({
                     <>
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Cost (Deluxe){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Per Person Cost (Deluxe){gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(deluxeTotal / totalGuestsCount)}
@@ -1671,7 +1695,7 @@ const QuotationPDFDialog = ({
                       </tr>
                       <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Package Cost (Deluxe){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Package Cost (Deluxe){gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(deluxeTotal)}
@@ -1683,7 +1707,7 @@ const QuotationPDFDialog = ({
                     <>
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Cost (Superior){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Per Person Cost (Superior){gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(superiorTotal / totalGuestsCount)}
@@ -1691,7 +1715,7 @@ const QuotationPDFDialog = ({
                       </tr>
                       <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Package Cost (Superior){gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Package Cost (Superior){gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(superiorTotal)}
@@ -1706,37 +1730,37 @@ const QuotationPDFDialog = ({
                     {showPerPersonBreakdown && (perPersonAdultCost > 0 || standardAdultCost > 0) && (
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Adult Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Per Person Adult Cost{gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
-                          {formatCurrency(perPersonAdultCost || standardAdultCost)}
+                          {formatCurrency((perPersonAdultCost || standardAdultCost) * gstRatio)}
                         </td>
                       </tr>
                     )}
                     {showPerPersonBreakdown && (perPersonChildCost > 0 || standardChildCost > 0) && (
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Child Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Per Person Child Cost{gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
-                          {formatCurrency(perPersonChildCost || standardChildCost)}
+                          {formatCurrency((perPersonChildCost || standardChildCost) * gstRatio)}
                         </td>
                       </tr>
                     )}
                     {showPerPersonBreakdown && (perPersonMattressCost > 0 || standardMattressCost > 0) && (
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Mattress Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Per Person Mattress Cost{gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
-                          {formatCurrency(perPersonMattressCost || standardMattressCost)}
+                          {formatCurrency((perPersonMattressCost || standardMattressCost) * gstRatio)}
                         </td>
                       </tr>
                     )}
                     {(!showPerPersonBreakdown || (!perPersonAdultCost && !perPersonChildCost && !perPersonMattressCost)) && (
                       <tr style={{ borderBottom: "1px dashed #e0e0e0" }}>
                         <td style={{ padding: "12px" }}>
-                          Per Person Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                          Per Person Cost{gstLabel}
                         </td>
                         <td style={{ padding: "12px", textAlign: "right" }}>
                           {formatCurrency(effectiveTotal / totalGuestsCount)}
@@ -1745,7 +1769,7 @@ const QuotationPDFDialog = ({
                     )}
                     <tr style={{ borderBottom: "1px solid #e0e0e0" }}>
                       <td style={{ padding: "12px" }}>
-                        Package Cost{gstIncludedInTotal ? " (Inclusive of GST)" : ""}
+                        Package Cost{gstLabel}
                       </td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         {formatCurrency(effectiveTotal)}
