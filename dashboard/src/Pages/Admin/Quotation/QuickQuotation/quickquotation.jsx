@@ -119,6 +119,24 @@ const QuickQuotationForm = () => {
         calculatedTotal = s > 0 ? s : (d > 0 ? d : sup);
       }
 
+      const mealPlanPerLocation =
+        finalData.clientDetails?.mealPlanSameOrDifferent === "Different" &&
+        Array.isArray(finalData.packageDetails?.locationMealPlans) &&
+        finalData.packageDetails.locationMealPlans.length > 0;
+      const locationMealPlans = mealPlanPerLocation
+        ? finalData.packageDetails.locationMealPlans.map((l) => ({
+            city: l.city,
+            nights: Number(l.nights) || 0,
+            mealPlan: String(l.mealPlan || "").trim(),
+          }))
+        : [];
+      // Single text kept for mailers/PDFs that read one meal plan.
+      const mealPlanText = mealPlanPerLocation
+        ? locationMealPlans
+            .map((l) => `${l.city}: ${/plan\b/i.test(l.mealPlan) ? l.mealPlan : `${l.mealPlan} Plan`}`)
+            .join(", ")
+        : finalData.packageDetails?.mealPlan || "";
+
       const apiData = {
         leadId: finalData.clientDetails?.leadId || undefined,
         customerName: finalData.clientDetails?.customerName || "",
@@ -172,7 +190,9 @@ const QuickQuotationForm = () => {
         standardCost: calculatedStandard,
         deluxeCost: calculatedDeluxe,
         superiorCost: calculatedSuperior,
-        mealPlan: finalData.packageDetails?.mealPlan || "",
+        mealPlan: mealPlanText,
+        mealPlanSameOrDifferent: mealPlanPerLocation ? "Different" : "Same",
+        locationMealPlans,
         multipleVehicles: Array.isArray(finalData.clientDetails?.multipleVehicles) ? finalData.clientDetails.multipleVehicles : [],
 
         // Package Snapshot (unchanged)
@@ -188,7 +208,7 @@ const QuickQuotationForm = () => {
           nights: parseInt(finalData.packageDetails?.nights) || 0,
           hotelType: finalData.packageDetails?.hotelType || "",
           transportMode: finalData.packageDetails?.transportMode || "",
-          mealPlan: finalData.packageDetails?.mealPlan || "",
+          mealPlan: mealPlanText,
           activities: Array.isArray(finalData.packageDetails?.activities)
             ? finalData.packageDetails.activities.filter(
                 (activity) => activity && activity.trim() !== "",

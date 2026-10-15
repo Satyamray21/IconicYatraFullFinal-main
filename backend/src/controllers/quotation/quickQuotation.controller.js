@@ -168,6 +168,8 @@ export const createQuickQuotation = async (req, res) => {
       deluxeCost,
       superiorCost,
       mealPlan,
+      mealPlanSameOrDifferent,
+      locationMealPlans,
       packageSnapshot: packageSnapshotInput,
     } = req.body;
 
@@ -242,6 +244,12 @@ export const createQuickQuotation = async (req, res) => {
       noOfVehicles: noOfVehicles ?? 0,
       roomType: roomType || "",
       message,
+      mealPlanSameOrDifferent:
+        mealPlanSameOrDifferent === "Different" ? "Different" : "Same",
+      locationMealPlans:
+        mealPlanSameOrDifferent === "Different" && Array.isArray(locationMealPlans)
+          ? locationMealPlans
+          : [],
 
       pickupPoint: pickupPoint || "",
       dropPoint: dropPoint || "",

@@ -33,6 +33,9 @@ import {
   Alert,
   Divider,
   Autocomplete,
+  RadioGroup,
+  Radio,
+  FormControlLabel,
 } from "@mui/material";
 import {
   FormatQuote as FormatQuoteIcon,
@@ -879,6 +882,44 @@ function mealPlanForEditor(raw) {
   return s.replace(/\s+plan$/i, "").trim() || s;
 }
 
+function getQuickStayLocations(apiData) {
+  if (!apiData) return [];
+  const pkg = mergeQuickPackageForDisplay(apiData);
+  const source =
+    Array.isArray(pkg.stayLocations) && pkg.stayLocations.length
+      ? pkg.stayLocations.map((l) => ({ city: l.city, nights: l.nights }))
+      : Array.isArray(pkg.destinationNights)
+        ? pkg.destinationNights.map((d) => ({ city: d.destination, nights: d.nights }))
+        : [];
+  return source
+    .map((l) => ({
+      city: String(l.city || "").trim(),
+      nights: Number(l.nights) || 0,
+    }))
+    .filter((l) => l.city);
+}
+
+function isQuickMealPlanPerLocation(apiData) {
+  return (
+    apiData?.mealPlanSameOrDifferent === "Different" &&
+    Array.isArray(apiData?.locationMealPlans) &&
+    apiData.locationMealPlans.some((l) => String(l?.mealPlan || "").trim())
+  );
+}
+
+function withPlanSuffix(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  return /plan\b/i.test(s) ? s : `${s} Plan`;
+}
+
+function formatQuickLocationMealPlans(apiData) {
+  return (apiData?.locationMealPlans || [])
+    .filter((l) => String(l?.mealPlan || "").trim())
+    .map((l) => `${l.city}: ${withPlanSuffix(l.mealPlan)}`)
+    .join(", ");
+}
+
 function formatQuickMealPlan(pkg) {
   const qd = pkg?.quotationDetails || {};
   const fromQd =
@@ -1306,7 +1347,9 @@ function transformQuickApiToDisplay(apiData, company) {
     hotel: {
       guests: formatQuickGuestsLine(adults, children, kids, infants),
       rooms: formatQuickRooms(pkg),
-      mealPlan: formatQuickMealPlan(pkg),
+      mealPlan: isQuickMealPlanPerLocation(apiData)
+        ? formatQuickLocationMealPlans(apiData)
+        : formatQuickMealPlan(pkg),
       hotelType: inferQuickHotelType(pkg, policy),
       destination: destLine,
       itinerary:
@@ -1587,6 +1630,8 @@ const QuickFinalize = () => {
   const [mealPlanDialog, setMealPlanDialog] = useState({
     open: false,
     mealPlan: "",
+    mode: "Same",
+    locations: [],
   });
 
   const mealPlanOptions = useMemo(() => {
@@ -1594,7 +1639,9 @@ const QuickFinalize = () => {
       .filter((opt) => opt.fieldName === "mealPlan")
       .map((opt) => opt.value)
       .filter(Boolean);
-    const current = mealPlanForEditor(getQuickMealPlanRaw(currentQuotation));
+    const current = isQuickMealPlanPerLocation(currentQuotation)
+      ? ""
+      : mealPlanForEditor(getQuickMealPlanRaw(currentQuotation));
     return [...new Set([current, ...fromApi, "CP", "MAP", "AP", "EP"].filter(Boolean))];
   }, [leadOptions, currentQuotation]);
   const [bannerUploading, setBannerUploading] = useState(false);
@@ -1882,14 +1929,55 @@ const QuickFinalize = () => {
   const openMealPlanDialog = () => {
     const q = currentQuotation;
     if (!q) return;
+    const perLocation = isQuickMealPlanPerLocation(q);
+    const saved = Array.isArray(q.locationMealPlans) ? q.locationMealPlans : [];
+    const sameValue = mealPlanForEditor(getQuickMealPlanRaw(q));
+    const locations = getQuickStayLocations(q).map((loc, i) => {
+      const match =
+        saved.find(
+          (s) =>
+            String(s?.city || "").trim().toLowerCase() ===
+            loc.city.toLowerCase(),
+        ) || saved[i];
+      return {
+        ...loc,
+        mealPlan: mealPlanForEditor(match?.mealPlan) || (perLocation ? "" : sameValue),
+      };
+    });
     setMealPlanDialog({
       open: true,
-      mealPlan: mealPlanForEditor(getQuickMealPlanRaw(q)),
+      mealPlan: perLocation
+        ? mealPlanForEditor(saved[0]?.mealPlan) || sameValue
+        : sameValue,
+      mode: perLocation ? "Different" : "Same",
+      locations,
     });
   };
 
   const handleSaveMealPlan = async () => {
-    const mealPlan = String(mealPlanDialog.mealPlan || "").trim();
+    const isDifferent =
+      mealPlanDialog.mode === "Different" && mealPlanDialog.locations.length > 0;
+    const locationMealPlans = isDifferent
+      ? mealPlanDialog.locations.map((l) => ({
+          city: l.city,
+          nights: l.nights,
+          mealPlan: String(l.mealPlan || "").trim(),
+        }))
+      : [];
+    if (isDifferent && locationMealPlans.some((l) => !l.mealPlan)) {
+      setSnackbar({
+        open: true,
+        message: "Meal plan is required for every stay location",
+        severity: "warning",
+      });
+      return;
+    }
+    // Keep a single plan on the snapshot too; mailers and PDFs read it.
+    const mealPlan = isDifferent
+      ? locationMealPlans
+          .map((l) => `${l.city}: ${withPlanSuffix(l.mealPlan)}`)
+          .join(", ")
+      : String(mealPlanDialog.mealPlan || "").trim();
     if (!mealPlan) {
       setSnackbar({
         open: true,
@@ -1913,6 +2001,8 @@ const QuickFinalize = () => {
         updateQuickQuotation({
           id: apiEntityId,
           formData: {
+            mealPlanSameOrDifferent: isDifferent ? "Different" : "Same",
+            locationMealPlans,
             packageSnapshot: {
               mealPlan:
                 existingMealPlan && typeof existingMealPlan === "object"
@@ -4720,22 +4810,74 @@ const QuickFinalize = () => {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Update the meal plan shown on this quick quotation.
           </Typography>
-          <Autocomplete
-            freeSolo
-            fullWidth
-            options={mealPlanOptions}
-            inputValue={mealPlanDialog.mealPlan || ""}
-            onInputChange={(_event, newInputValue) =>
-              setMealPlanDialog((s) => ({ ...s, mealPlan: newInputValue }))
+          <Typography variant="subtitle2">Meal plan for stay locations</Typography>
+          <RadioGroup
+            row
+            value={mealPlanDialog.mode}
+            onChange={(e) =>
+              setMealPlanDialog((s) => ({ ...s, mode: e.target.value }))
             }
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Meal Plan"
-                placeholder="e.g. CP, MAP, AP, EP"
-              />
-            )}
-          />
+            sx={{ mb: 1 }}
+          >
+            <FormControlLabel value="Same" control={<Radio />} label="Same" />
+            <FormControlLabel
+              value="Different"
+              control={<Radio />}
+              label="Different"
+              disabled={mealPlanDialog.locations.length < 2}
+            />
+          </RadioGroup>
+          {mealPlanDialog.locations.length < 2 && (
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+              Different meal plans need at least two stay locations.
+            </Typography>
+          )}
+          {mealPlanDialog.mode === "Different" &&
+          mealPlanDialog.locations.length > 1 ? (
+            <Box display="flex" flexDirection="column" gap={2}>
+              {mealPlanDialog.locations.map((loc, idx) => (
+                <Autocomplete
+                  key={`${loc.city}-${idx}`}
+                  freeSolo
+                  fullWidth
+                  options={mealPlanOptions}
+                  inputValue={loc.mealPlan || ""}
+                  onInputChange={(_event, newInputValue) =>
+                    setMealPlanDialog((s) => ({
+                      ...s,
+                      locations: s.locations.map((l, i) =>
+                        i === idx ? { ...l, mealPlan: newInputValue } : l,
+                      ),
+                    }))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label={`${loc.city} (${loc.nights}N)`}
+                      placeholder="e.g. CP, MAP, AP, EP"
+                    />
+                  )}
+                />
+              ))}
+            </Box>
+          ) : (
+            <Autocomplete
+              freeSolo
+              fullWidth
+              options={mealPlanOptions}
+              inputValue={mealPlanDialog.mealPlan || ""}
+              onInputChange={(_event, newInputValue) =>
+                setMealPlanDialog((s) => ({ ...s, mealPlan: newInputValue }))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Meal Plan"
+                  placeholder="e.g. CP, MAP, AP, EP"
+                />
+              )}
+            />
+          )}
         </DialogContent>
         <DialogActions>
           <Button

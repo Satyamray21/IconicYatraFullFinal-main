@@ -164,6 +164,16 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {}, convertPackage
       if (selectedPkg.mealPlan?.planType) {
         setFieldValue("mealPlan", selectedPkg.mealPlan.planType);
       }
+      setFieldValue(
+        "locationMealPlans",
+        (selectedPkg.stayLocations || [])
+          .filter((loc) => String(loc?.city || "").trim())
+          .map((loc) => ({
+            city: String(loc.city).trim(),
+            nights: Number(loc.nights) || 0,
+            mealPlan: selectedPkg.mealPlan?.planType || "",
+          })),
+      );
 
       // Activities Auto-fill
       if (selectedPkg.days?.length > 0) {
@@ -376,6 +386,7 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {}, convertPackage
         hotelType: "",
         transportMode: "",
         mealPlan: "",
+        locationMealPlans: [],
         activities: [""],
         itinerary: [{ title: "", description: "", activities: "" }],
         // Additional fields
@@ -432,6 +443,15 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {}, convertPackage
 
         if (!values.selectedPackage) {
           errors.selectedPackage = "Please select a package";
+        }
+
+        if (
+          clientDetails?.mealPlanSameOrDifferent === "Different" &&
+          (values.locationMealPlans || []).some(
+            (l) => !String(l?.mealPlan || "").trim(),
+          )
+        ) {
+          errors.locationMealPlans = "Meal plan is required for every stay location";
         }
 
         // Optional: Add validation for total cost if needed
@@ -898,6 +918,51 @@ const StepPackageDetails = ({ onNext, onBack, clientDetails = {}, convertPackage
                 }}
               />
             </Grid>
+
+            {clientDetails?.mealPlanSameOrDifferent === "Different" &&
+              (values.locationMealPlans || []).length > 0 && (
+                <Grid size={{ xs: 12 }}>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    Meal Plan for Each Stay Location
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {values.locationMealPlans.map((loc, idx) => (
+                      <Grid size={{ xs: 12, md: 6 }} key={`${loc.city}-${idx}`}>
+                        <Autocomplete
+                          freeSolo
+                          fullWidth
+                          options={getOptionsForField("mealPlan").filter(
+                            (o) => o !== "__add_new",
+                          )}
+                          inputValue={loc.mealPlan || ""}
+                          onInputChange={(e, newValue) =>
+                            setFieldValue(
+                              `locationMealPlans.${idx}.mealPlan`,
+                              newValue || "",
+                            )
+                          }
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label={`${loc.city} (${loc.nights}N)`}
+                              placeholder="e.g. CP, MAP, AP, EP"
+                              error={
+                                Boolean(errors.locationMealPlans) &&
+                                !String(loc.mealPlan || "").trim()
+                              }
+                            />
+                          )}
+                        />
+                      </Grid>
+                    ))}
+                  </Grid>
+                  {errors.locationMealPlans && (
+                    <Typography variant="caption" color="error">
+                      {errors.locationMealPlans}
+                    </Typography>
+                  )}
+                </Grid>
+              )}
 
             {/* Room Type - UPDATED with Add/Delete */}
             {/* <Grid size={{ xs: 12, md: 6 }}>

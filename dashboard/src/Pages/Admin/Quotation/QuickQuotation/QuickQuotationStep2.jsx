@@ -89,6 +89,7 @@ const StepClientDetails = ({ onNext, convertSector, convertNights, initialClient
       noOfMattress: initialClientDetails.noOfMattress ?? "",
       noOfVehicles: initialClientDetails.noOfVehicles ?? 0,
       vehiclesSameOrDifferent: initialClientDetails.vehiclesSameOrDifferent || "Same",
+      mealPlanSameOrDifferent: initialClientDetails.mealPlanSameOrDifferent || "Same",
       multipleVehicles: Array.isArray(initialClientDetails.multipleVehicles)
         ? initialClientDetails.multipleVehicles
         : [
@@ -511,6 +512,25 @@ const StepClientDetails = ({ onNext, convertSector, convertNights, initialClient
                 onChange={handleChange}
                 inputProps={{ min: 0 }}
               />
+            </Grid>
+
+            <Grid size={{ xs: 12 }}>
+              <FormControl component="fieldset">
+                <FormLabel component="legend">
+                  Meal plan same or different for each stay location?
+                </FormLabel>
+                <RadioGroup
+                  row
+                  name="mealPlanSameOrDifferent"
+                  value={values.mealPlanSameOrDifferent}
+                  onChange={(e) =>
+                    setFieldValue("mealPlanSameOrDifferent", e.target.value)
+                  }
+                >
+                  <FormControlLabel value="Same" control={<Radio />} label="Same" />
+                  <FormControlLabel value="Different" control={<Radio />} label="Different" />
+                </RadioGroup>
+              </FormControl>
             </Grid>
 
             {/* Vehicles Same or Different Options */}

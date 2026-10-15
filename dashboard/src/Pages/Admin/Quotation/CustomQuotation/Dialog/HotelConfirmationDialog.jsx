@@ -524,6 +524,20 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                 const pkg = quotation.packageSnapshot || quotation.tourDetails || {};
                 const qd = pkg.quotationDetails || quotation.tourDetails?.quotationDetails || {};
                 const destinations = qd.destinations || pkg.destinationNights || pkg.stayLocations || [];
+                const locationMealPlans =
+                    quotation.mealPlanSameOrDifferent === "Different" &&
+                    Array.isArray(quotation.locationMealPlans)
+                        ? quotation.locationMealPlans
+                        : [];
+                const mealPlanForStay = (cityName, index) => {
+                    const match =
+                        locationMealPlans.find(
+                            (l) =>
+                                String(l?.city || "").trim().toLowerCase() ===
+                                String(cityName || "").trim().toLowerCase(),
+                        ) || locationMealPlans[index];
+                    return String(match?.mealPlan || "").trim();
+                };
 
                 let initialHotels = destinations.map((d, i) => {
                     const cityName = d.cityName || d.destination || d.city || "";
@@ -545,7 +559,7 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
                         checkInTime: "12:00",
                         checkOutDate: "",
                         checkOutTime: "10:00",
-                        mealPlan: qd.mealPlan || "CP Plan",
+                        mealPlan: mealPlanForStay(cityName, i) || qd.mealPlan || "CP Plan",
                         contactNo: "",
                         bookingPnr: "",
                     };
@@ -650,6 +664,17 @@ const HotelConfirmationDialog = ({ open, onClose, quotation, type = "quick", quo
 
                 if (field === "city" && value) {
                     fetchHotelsForCity(value);
+                    if (
+                        !String(h.mealPlan || "").trim() &&
+                        quotation?.mealPlanSameOrDifferent === "Different"
+                    ) {
+                        const match = (quotation.locationMealPlans || []).find(
+                            (l) =>
+                                String(l?.city || "").trim().toLowerCase() ===
+                                String(value).trim().toLowerCase(),
+                        );
+                        if (match?.mealPlan) updated.mealPlan = match.mealPlan;
+                    }
                 }
 
                 if (field === "hotelName") {

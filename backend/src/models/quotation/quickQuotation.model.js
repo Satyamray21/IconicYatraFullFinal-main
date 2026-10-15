@@ -47,6 +47,17 @@ const quickQuotationSchema = new mongoose.Schema(
 
         message: { type: String },
 
+        mealPlanSameOrDifferent: { type: String, enum: ["Same", "Different"], default: "Same" },
+        /** Used when mealPlanSameOrDifferent is "Different": one entry per stay location. */
+        locationMealPlans: [
+            {
+                _id: false,
+                city: { type: String, trim: true, default: "" },
+                nights: { type: Number, default: 0 },
+                mealPlan: { type: String, trim: true, default: "" },
+            }
+        ],
+
         transportation: {
             type: String,
             default: "",
