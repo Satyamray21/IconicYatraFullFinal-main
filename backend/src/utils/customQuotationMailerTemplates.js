@@ -25,6 +25,44 @@ const fmtDate = (iso) => {
   });
 };
 
+const IGNORED_TIMES = new Set(["", "00:00", "12:00 AM", "05:30", "05:30 AM"]);
+
+const fmtTime = (value) => {
+  if (value === undefined || value === null || value === "") return "";
+
+  const raw = value instanceof Date ? "" : String(value).trim();
+  const plain = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?$/);
+  let out = "";
+
+  if (plain) {
+    let hh = Number(plain[1]);
+    const mm = plain[2];
+    const meridiem = plain[3]?.toUpperCase();
+    if (meridiem) {
+      out = `${String(hh).padStart(2, "0")}:${mm} ${meridiem}`;
+    } else {
+      const suffix = hh >= 12 ? "PM" : "AM";
+      hh = hh % 12 || 12;
+      out = `${String(hh).padStart(2, "0")}:${mm} ${suffix}`;
+    }
+  } else {
+    const d = value instanceof Date ? value : new Date(raw);
+    if (Number.isNaN(d.getTime())) return raw;
+    // Date-only values are stored as midnight UTC and carry no real time.
+    if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) return "";
+    out = d
+      .toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Kolkata",
+      })
+      .toUpperCase();
+  }
+
+  return IGNORED_TIMES.has(out) ? "" : out;
+};
+
 const guestSummary = (qd = {}) => {
   const adults = toNum(qd.adults);
   const children = toNum(qd.children);
@@ -488,12 +526,12 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 
         
 
-        <p><b>Arrival Date:</b> ${fmtDate(td.arrivalDate)} ${
-          pd.pickupTime ? `, Time: ${pd.pickupTime}` : ""
+        <p><b>Arrival Date:</b> ${fmtDate(td.arrivalDate)}${
+          fmtTime(pd.pickupTime) ? `, Time: ${fmtTime(pd.pickupTime)}` : ""
         }</p>
 
-        <p><b>Departure Date:</b> ${fmtDate(td.departureDate)} ${
-          pd.dropTime ? `, Time: ${pd.dropTime}` : ""
+        <p><b>Departure Date:</b> ${fmtDate(td.departureDate)}${
+          fmtTime(pd.dropTime) ? `, Time: ${fmtTime(pd.dropTime)}` : ""
         }</p>
         <p><b>Pick Up Point:</b> ${safe(pd.pickupLocation, "As per itinerary")}</p>
         <p><b>Drop Point:</b> ${safe(pd.dropLocation, "As per itinerary")}</p>
@@ -733,8 +771,8 @@ export function buildCustomQuotationBookingEmail(quotation, customText = {}) {
         )}${toNum(rooms.numberOfMattress) > 0 ? ` + ${toNum(rooms.numberOfMattress)} Extra Mattress(es)` : ""}</p>
         <p><b>Transportation:</b> ${safe(vehicle?.basicsDetails?.vehicleType, "As per itinerary")}</p>
         <p><b>Tour Duration:</b> ${duration.nights} Nights ${duration.days} Days</p>
-        <p><b>Arrival Date:</b> ${fmtDate(td.arrivalDate)} ${(pd.pickupTime && pd.pickupTime !== "05:30" && pd.pickupTime !== "05:30 AM") ? `, Time: ${pd.pickupTime}` : ""}</p>
-        <p><b>Departure Date:</b> ${fmtDate(td.departureDate)} ${(pd.dropTime && pd.dropTime !== "05:30" && pd.dropTime !== "05:30 AM") ? `, Time: ${pd.dropTime}` : ""}</p>
+        <p><b>Arrival Date:</b> ${fmtDate(td.arrivalDate)}${fmtTime(pd.pickupTime) ? `, Time: ${fmtTime(pd.pickupTime)}` : ""}</p>
+        <p><b>Departure Date:</b> ${fmtDate(td.departureDate)}${fmtTime(pd.dropTime) ? `, Time: ${fmtTime(pd.dropTime)}` : ""}</p>
         <p><b>Pick Up Point:</b> ${safe(pd.pickupLocation, "As per itinerary")}</p>
         <p><b>Drop Point:</b> ${safe(pd.dropLocation, "As per itinerary")}</p>
         <p><b>Meal Plan:</b> ${safe(qd.mealPlan, "CP Plan")}</p>
@@ -878,14 +916,8 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     pkg.validFrom ||
     quick.createdAt;
   const deriveTimeFromDate = (value) => {
-    const raw = String(value || "");
-    if (!raw) return "";
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return "";
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    // Keep time blank for date-only values that default to midnight.
-    return hh === "00" && mm === "00" ? "" : `${hh}:${mm}`;
+    if (!value || Number.isNaN(new Date(value).getTime())) return "";
+    return fmtTime(value instanceof Date ? value : new Date(value));
   };
   const parseDateAndTimeFromPointText = (value) => {
     const raw = safe(value, "");
@@ -1022,14 +1054,18 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
 
   const arrivalFromText = parseDateAndTimeFromPointText(quick.pickupPoint);
   const departureFromText = parseDateAndTimeFromPointText(quick.dropPoint);
-  const pickupTimeResolved = safe(
-    quick.pickupTime,
-    safe(quick?.packageSnapshot?.quotationDetails?.pickupTime, ""),
-  );
-  const dropTimeResolved = safe(
-    quick.dropTime,
-    safe(quick?.packageSnapshot?.quotationDetails?.dropTime, ""),
-  );
+  const pickupTimeResolved =
+    fmtTime(qdSnap.pickupTime) ||
+    fmtTime(qdSnap.arrivalTime) ||
+    fmtTime(snap.pickupTime) ||
+    fmtTime(snap.arrivalTime) ||
+    fmtTime(quick.pickupTime);
+  const dropTimeResolved =
+    fmtTime(qdSnap.dropTime) ||
+    fmtTime(qdSnap.departureTime) ||
+    fmtTime(snap.dropTime) ||
+    fmtTime(snap.departureTime) ||
+    fmtTime(quick.dropTime);
 
   return {
     quotationId: String(quick.quickQuotationId || quick._id || ""),

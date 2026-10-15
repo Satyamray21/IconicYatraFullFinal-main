@@ -701,6 +701,10 @@ const formatDateWithOptionalTime = (dateValue, timeValue) => {
 
   const timeAsDate = new Date(rawTime);
   if (!Number.isNaN(timeAsDate.getTime())) {
+    // Date-only values are stored as midnight UTC and carry no real time.
+    if (timeAsDate.getUTCHours() === 0 && timeAsDate.getUTCMinutes() === 0) {
+      return formatDate(dateValue);
+    }
     baseDate.setHours(timeAsDate.getHours(), timeAsDate.getMinutes(), 0, 0);
     return formatDateTime(baseDate.toISOString());
   }
