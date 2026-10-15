@@ -1590,9 +1590,7 @@ const VehicleQuotationPage = () => {
       text:
         pickupDropDetails.pickupArrivalNote ||
         `Arrival: ${tourPickupDrop.arrivalCity || ""} ${pickupDropDetails.pickupLocation || ""
-        } (${fmtDate(pickupDropDetails.pickupDate)}) (${fmtTime(
-          pickupDropDetails.pickupTime,
-        )})`,
+        } (${fmtDate(pickupDropDetails.pickupDate)})${pickupDropDetails.pickupTime ? ` (${fmtTime(pickupDropDetails.pickupTime)})` : ""}`,
       editable: true,
       field: "pickup",
       nestedKey: "arrival",
@@ -1602,9 +1600,7 @@ const VehicleQuotationPage = () => {
       text:
         pickupDropDetails.pickupDepartureNote ||
         `Departure: ${tourPickupDrop.departureCity || ""} ${pickupDropDetails.dropLocation || ""
-        } (${fmtDate(pickupDropDetails.dropDate)}) (${fmtTime(
-          pickupDropDetails.dropTime,
-        )})`,
+        } (${fmtDate(pickupDropDetails.dropDate)})${pickupDropDetails.dropTime ? ` (${fmtTime(pickupDropDetails.dropTime)})` : ""}`,
       editable: true,
       field: "pickup",
       nestedKey: "departure",
@@ -1922,15 +1918,17 @@ const VehicleQuotationPage = () => {
                               Pickup :{" "}
                               {tourPickupDrop.arrivalCity || ""}{" "}
                               {pickupDropDetails.pickupLocation || ""}{" "}
-                              ({fmtDate(pickupDropDetails.pickupDate)}) (
-                              {fmtTime(pickupDropDetails.pickupTime)})
+                              ({fmtDate(pickupDropDetails.pickupDate)})
+                              {pickupDropDetails.pickupTime &&
+                                ` (${fmtTime(pickupDropDetails.pickupTime)})`}
                             </Typography>
 
                             <Typography variant="body1">
                               Drop : {tourPickupDrop.departureCity || ""}{" "}
                               {pickupDropDetails.dropLocation || ""}{" "}
-                              ({fmtDate(pickupDropDetails.dropDate)}) (
-                              {fmtTime(pickupDropDetails.dropTime)})
+                              ({fmtDate(pickupDropDetails.dropDate)})
+                              {pickupDropDetails.dropTime &&
+                                ` (${fmtTime(pickupDropDetails.dropTime)})`}
                             </Typography>
 
                             <Typography

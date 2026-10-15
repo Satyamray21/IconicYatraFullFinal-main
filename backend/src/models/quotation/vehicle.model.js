@@ -55,7 +55,7 @@ const vehicleSchema = mongoose.Schema({
         },
         pickupTime: {
             type: String,
-            required: true
+            default: ""
         },
         pickupLocation: {
             type: String,
@@ -67,7 +67,7 @@ const vehicleSchema = mongoose.Schema({
         },
         dropTime: {
             type: String,
-            required: true
+            default: ""
         },
         dropLocation: {
             type: String,

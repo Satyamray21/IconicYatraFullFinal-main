@@ -65,7 +65,7 @@ const VehicleQuotationStep2 = ({ step1Data, onBack }) => {
         multipleVehicles: step1Data.multipleVehicles,
         costDetails: {
           totalCost: step1Data.totalCost,
-          discount: values.discount,
+          discount: String(values.discount ?? "").trim() || "0",
           gstOn: values.gstOption,          // ✅ FIXED
           applyGst: values.taxPercent,
         },
@@ -358,7 +358,7 @@ const VehicleQuotationStep2 = ({ step1Data, onBack }) => {
               <Typography>
                 <strong>Discount</strong>
               </Typography>
-              <Typography>₹{formik.values.discount}</Typography>
+              <Typography>₹{formik.values.discount || 0}</Typography>
             </Grid>
 
             <Grid size={{ xs: 6 }}>

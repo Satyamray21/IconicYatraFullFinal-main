@@ -103,10 +103,8 @@ export const createVehicle = asyncHandler(async (req, res) => {
     (vehiclesSameOrDifferent === "Different" && (!multipleVehicles || multipleVehicles.length === 0)) ||
     !totalCost ||
     !pickupDate ||
-    !pickupTime ||
     !pickupLocation ||
     !dropDate ||
-    !dropTime ||
     !dropLocation ||
     !gstOn ||
     !applyGst
@@ -132,13 +130,13 @@ export const createVehicle = asyncHandler(async (req, res) => {
     },
     pickupDropDetails: {
       pickupDate,
-      pickupTime,
+      pickupTime: pickupTime || "",
       pickupLocation,
       dropDate,
-      dropTime,
+      dropTime: dropTime || "",
       dropLocation,
     },
-    discount,
+    discount: String(discount ?? "").trim() || "0",
     tax: {
       gstOn,
       applyGst,

@@ -65,6 +65,11 @@ const fmtTime = (iso) => {
   });
 };
 
+const timeOrStandard = (value) => {
+  const t = fmtTime(value);
+  return t && t.toLowerCase() !== "05:30 am" ? t : "Standard";
+};
+
 const summarizeGuests = (lead = {}) => {
   const members = lead?.tourDetails?.members || {};
   const adults = toNum(members.adults);
@@ -401,12 +406,12 @@ export function buildVehicleQuotationBookingEmail(vehicleData, customText = {}) 
       <p><b>Arrival Date:</b> ${
         pickupDrop?.pickupArrivalNote
           ? safe(pickupDrop.pickupArrivalNote.replace(/^(Arrival|Arrival Date):\s*/i, ""))
-          : `${safe(tourPickupDrop?.arrivalCity)} ${safe(pickupDrop?.pickupLocation)} (${fmtDate(pickupDrop?.pickupDate)}) ${(pickupDrop?.pickupTime && fmtTime(pickupDrop.pickupTime).toLowerCase() !== "05:30 am") ? `, Time: ${fmtTime(pickupDrop.pickupTime)}` : ""}`
+          : `${safe(tourPickupDrop?.arrivalCity)} ${safe(pickupDrop?.pickupLocation)} (${fmtDate(pickupDrop?.pickupDate)}), Time: ${timeOrStandard(pickupDrop?.pickupTime)}`
       }</p>
       <p><b>Departure Date:</b> ${
         pickupDrop?.pickupDepartureNote
           ? safe(pickupDrop.pickupDepartureNote.replace(/^(Departure|Departure Date):\s*/i, ""))
-          : `${safe(tourPickupDrop?.departureCity)} ${safe(pickupDrop?.dropLocation)} (${fmtDate(pickupDrop?.dropDate)}) ${(pickupDrop?.dropTime && fmtTime(pickupDrop.dropTime).toLowerCase() !== "05:30 am") ? `, Time: ${fmtTime(pickupDrop.dropTime)}` : ""}`
+          : `${safe(tourPickupDrop?.departureCity)} ${safe(pickupDrop?.dropLocation)} (${fmtDate(pickupDrop?.dropDate)}), Time: ${timeOrStandard(pickupDrop?.dropTime)}`
       }</p>
       <br/>
       <br/>

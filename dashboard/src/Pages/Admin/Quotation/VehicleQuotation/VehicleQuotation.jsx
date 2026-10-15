@@ -542,9 +542,10 @@ const VehicleQuotationStep1 = () => {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <TimePicker
-                    label="Pickup Time"
+                    label="Pickup Time (Optional)"
                     value={formik.values.pickupTime}
                     onChange={(val) => formik.setFieldValue("pickupTime", val)}
+                    slotProps={{ field: { clearable: true } }}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>
@@ -566,9 +567,10 @@ const VehicleQuotationStep1 = () => {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <TimePicker
-                    label="Drop Time"
+                    label="Drop Time (Optional)"
                     value={formik.values.dropTime}
                     onChange={(val) => formik.setFieldValue("dropTime", val)}
+                    slotProps={{ field: { clearable: true } }}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>
