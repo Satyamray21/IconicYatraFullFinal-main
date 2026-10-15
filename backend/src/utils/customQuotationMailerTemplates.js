@@ -98,10 +98,19 @@ const guestGreeting = (quotation = {}, customGreeting) => {
   return title ? `Dear ${title}. ${name},` : `Dear ${name},`;
 };
 
-export const packageTotals = (q = {}) => {
+const TIER_KEYS = ["standard", "deluxe", "superior"];
+const TIER_LABELS = { standard: "Standard", deluxe: "Deluxe", superior: "Superior" };
+
+/** Every package tier that has a non-zero price. */
+const pricedTiers = (q = {}) => {
+  const calc = q?.tourDetails?.quotationDetails?.packageCalculations || {};
+  return TIER_KEYS.filter((k) => toNum(calc?.[k]?.finalTotal) > 0);
+};
+
+export const packageTotals = (q = {}, tierKey) => {
   const qd = q?.tourDetails?.quotationDetails || {};
   const calc = qd.packageCalculations || {};
-  const key = pkgKey(q);
+  const key = TIER_KEYS.includes(tierKey) ? tierKey : pkgKey(q);
 
   const packageFinal = toNum(calc?.[key]?.finalTotal);
   const extras = sumBillableAdditionalServices(qd.additionalServices);
@@ -174,6 +183,36 @@ const itineraryLines = (itinerary = []) =>
             `,
     )
     .join("");
+
+const packageCostHtml = (quotation, tiers, singleTotal) => {
+  if (tiers.length <= 1) {
+    return `<p style="color:#003366; font-weight:bold; font-size: 16px;">
+    ##PACKAGE COST FOR ALL PERSON = INR ${INR.format(singleTotal)} As of now
+</p>`;
+  }
+  return tiers
+    .map(
+      (k) => `<p style="color:#003366; font-weight:bold; font-size: 16px;">
+    ##${TIER_LABELS[k].toUpperCase()} PACKAGE COST FOR ALL PERSON = INR ${INR.format(packageTotals(quotation, k).total)} As of now
+</p>`,
+    )
+    .join("");
+};
+
+const hotelSectionsHtml = (destinations, tiers, singleKey) => {
+  const heading = (label) =>
+    `<p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">${label}</p>`;
+  if (tiers.length <= 1) {
+    return `${heading("HOTEL NAMES/SIMILAR")}
+        <p><b>${hotelLines(destinations, singleKey).replace(/\n/g, "<br/>")}</b></p><br/>`;
+  }
+  return tiers
+    .map(
+      (k) => `${heading(`HOTEL NAMES/SIMILAR - ${TIER_LABELS[k].toUpperCase()} PACKAGE`)}
+        <p><b>${hotelLines(destinations, k).replace(/\n/g, "<br/>")}</b></p><br/>`,
+    )
+    .join("");
+};
 
 const policyLines = (arr = []) =>
   (arr || [])
@@ -426,8 +465,9 @@ export const buildCustomQuotationNormalEmail = (
     safe(options?.globalTermsAndConditions),
   );
   const duration = nightsAndDays(destinations);
-  const totals = packageTotals(quotation);
-  const key = pkgKey(quotation);
+  const tiers = pricedTiers(quotation);
+  const singleKey = tiers.length === 1 ? tiers[0] : pkgKey(quotation);
+  const totals = packageTotals(quotation, singleKey);
   const companyName = safe(options?.companyName, "Iconic Travel");
   const companyWebsite = safe(options?.companyWebsite);
   const paymentCombined = quotationPoliciesOrGlobal(
@@ -496,9 +536,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
        
 
         <br/>
-        <p style="color:#003366; font-weight:bold; font-size: 16px;">
-    ##PACKAGE COST FOR ALL PERSON = INR ${INR.format(totals.total)} As of now
-</p>
+        ${packageCostHtml(quotation, tiers, totals.total)}
 
 <p style="color:#000; font-weight:bold;">
     SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only..
@@ -543,8 +581,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
         <br/>
 
        
-       <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">HOTEL NAMES/SIMILAR</p>
-        <p><b>${hotelLines(destinations, key).replace(/\n/g, "<br/>")}</b></p><br/>
+       ${hotelSectionsHtml(destinations, tiers, singleKey)}
 
         <p style="color:#003366; font-weight:bold; font-size: 15px; border-bottom: 2px solid #003366; display: inline-block;">
     DAY WISE ITINERARY
@@ -610,7 +647,11 @@ export const buildCustomQuotationPdfPreviewEmail = (
   options = {},
 ) => {
   const td = quotation?.tourDetails || {};
-  const totals = packageTotals(quotation);
+  const tiers = pricedTiers(quotation);
+  const totals = packageTotals(
+    quotation,
+    tiers.length === 1 ? tiers[0] : undefined,
+  );
   const companyName = safe(options?.companyName, "Iconic Travel");
   const companyWebsite = safe(options?.companyWebsite);
 
@@ -644,9 +685,7 @@ This is referenced in our discussion regarding your forthcoming Tour to the
 </span>. It is my pleasure to have this opportunity to serve you. We are always here to assist you. The brief itinerary of your tour would like to as follows: please have a look...
 </p>
         <br/>
-        <p style="color:#003366; font-weight:bold; font-size: 16px;">
-    ##PACKAGE COST FOR ALL PERSON = INR ${INR.format(totals.total)} As of now
-</p>
+        ${packageCostHtml(quotation, tiers, totals.total)}
 
 <p style="color:#000; font-weight:bold;">
     SPECIAL DISCOUNTED TOUR PACKAGE VALID FOR 24Hrs only..
@@ -892,6 +931,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
   const additionalServicesFromSnapshot = Array.isArray(qdSnap.additionalServices)
     ? qdSnap.additionalServices
     : [];
+  const isFinalized = Boolean(safe(quick.finalizedPackage, ""));
   const finalizedPackage = safe(quick.finalizedPackage, "Standard");
   const finalizedKey = ["standard", "deluxe", "superior"].includes(
     String(finalizedPackage).toLowerCase(),
@@ -959,41 +999,35 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
     resolvedTierFinalTotal > 0
       ? Math.round((resolvedTierFinalTotal / taxMultiplier) * 100) / 100
       : 0;
-  const normalizedCalcSnap = {
-    standard: {
-      ...(calcSnap?.standard || {}),
-      finalTotal:
-        finalizedKey === "standard"
-          ? resolvedTierFinalTotal
-          : toNum(calcSnap?.standard?.finalTotal),
-      afterDiscount:
-        finalizedKey === "standard"
-          ? toNum(calcSnap?.standard?.afterDiscount) || resolvedTierAfterDiscount
-          : toNum(calcSnap?.standard?.afterDiscount),
-    },
-    deluxe: {
-      ...(calcSnap?.deluxe || {}),
-      finalTotal:
-        finalizedKey === "deluxe"
-          ? resolvedTierFinalTotal
-          : toNum(calcSnap?.deluxe?.finalTotal),
-      afterDiscount:
-        finalizedKey === "deluxe"
-          ? toNum(calcSnap?.deluxe?.afterDiscount) || resolvedTierAfterDiscount
-          : toNum(calcSnap?.deluxe?.afterDiscount),
-    },
-    superior: {
-      ...(calcSnap?.superior || {}),
-      finalTotal:
-        finalizedKey === "superior"
-          ? resolvedTierFinalTotal
-          : toNum(calcSnap?.superior?.finalTotal),
-      afterDiscount:
-        finalizedKey === "superior"
-          ? toNum(calcSnap?.superior?.afterDiscount) || resolvedTierAfterDiscount
-          : toNum(calcSnap?.superior?.afterDiscount),
-    },
-  };
+  const draftTierTotals = Object.fromEntries(
+    TIER_KEYS.map((k) => [
+      k,
+      toNum(calcSnap?.[k]?.finalTotal) ||
+        toNum(qdSnap?.[`${k}Cost`]) ||
+        toNum(snap?.[`${k}Cost`]),
+    ]),
+  );
+  if (!TIER_KEYS.some((k) => draftTierTotals[k] > 0)) {
+    draftTierTotals.standard = resolvedTierFinalTotal;
+  }
+  const normalizedCalcSnap = Object.fromEntries(
+    TIER_KEYS.map((k) => {
+      const isSelectedTier = isFinalized && finalizedKey === k;
+      const finalTotal = isSelectedTier
+        ? resolvedTierFinalTotal
+        : isFinalized
+          ? toNum(calcSnap?.[k]?.finalTotal)
+          : draftTierTotals[k];
+      const afterDiscount =
+        toNum(calcSnap?.[k]?.afterDiscount) ||
+        (isSelectedTier
+          ? resolvedTierAfterDiscount
+          : finalTotal > 0
+            ? Math.round((finalTotal / taxMultiplier) * 100) / 100
+            : 0);
+      return [k, { ...(calcSnap?.[k] || {}), finalTotal, afterDiscount }];
+    }),
+  );
   const stdSnap = Number(calcSnap.standard?.finalTotal);
   const hasDetailedPricing =
     Number.isFinite(stdSnap) ||
@@ -1075,7 +1109,7 @@ export function adaptQuickQuotationForCustomMailer(quick = {}) {
       clientName: safe(quick.customerName, "Guest"),
       title: safe(quick.title, ""),
     },
-    finalizedPackage,
+    finalizedPackage: isFinalized ? finalizedPackage : "",
     confirmedHotels: quick.confirmedHotels || [],
     tourDetails: {
       quotationTitle: safe(
